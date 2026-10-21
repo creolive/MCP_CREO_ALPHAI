@@ -400,9 +400,9 @@ async def creo_erase_session_models(
 
 
 @mcp.tool(annotations=READ)
-async def creo_registry_health() -> dict[str, Any]:
-    """Report the managed-model registry's health without connecting Toolkit (FEAT-047). Lists every models/<id>/model.json entry with its byte size, share of the 16 MiB read budget, revision/status, per-detail form (inline/reference/absent for aliases, inspection, last_live_inspection) and state: ok, warning (>=80% of budget), over_budget, corrupt or legacy_inline. Single-entry errors never end the report. Summaries count each state, oversized/near-budget/corrupt entries are listed separately, and the migration section says how many entries still need creo_migrate_registry. Read-only: no file is modified and no Creo connection is made."""
-    return await invoke(registry_health)
+async def creo_registry_health(limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
+    """Report the managed-model registry's health without connecting Toolkit (FEAT-047). Lists every models/<id>/model.json entry with its byte size, share of the 16 MiB read budget, revision/status, per-detail form (inline/reference/absent for aliases, inspection, last_live_inspection) and state: ok, warning (>=80% of budget), over_budget, corrupt or legacy_inline. Single-entry errors never end the report. Summaries count each state, oversized/near-budget/corrupt entries are listed separately (up to 50 each), the migration section says how many entries still need creo_migrate_registry, and the per-entry listing is paginated with limit/next_cursor so a large registry never returns an unbounded response. Read-only: no file is modified and no Creo connection is made."""
+    return await invoke(registry_health, limit, cursor)
 
 
 @mcp.tool(annotations=CREATE)

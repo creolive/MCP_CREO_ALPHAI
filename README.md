@@ -89,6 +89,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 保存与导出 | `creo_regenerate`、`creo_save_model`、`creo_export_model`：保存原生 PRT/ASM，导出 STEP、IGES、STL、JPEG；装配的所有导出格式组合未验证 |
 | 环境与任务 | `creo_check_environment`、`creo_session_status`、`creo_capabilities`、`creo_get_job`、`creo_list_jobs`：环境、实际 Toolkit 连接、能力和任务进度 |
 | 磁盘模型打开 | `creo_open_file`：只读检索并显示磁盘既有 `.prt`/`.asm`（显式 `.N` 版本或目录内最高数字版本）；同名同类型会话模型与非空会话装配拒绝，冲突提示含装配依赖加载来源；缺件装配报残留对象、缺件清单标记未知；不保存、不擦除、不接管，成功返回 `model_id=null`，并附有界 `loaded_session_models` 摘要（区分会话模型数与组件实例数） |
+| 注册表维护 | `creo_registry_health`：只读报告每个模型登记的字节数、16 MiB 读取预算占比、详情（别名/检查资料）形态与状态（正常/接近预算/超限/损坏/旧内联格式），单条异常不终止整份报告，不连接 Toolkit。`creo_migrate_registry`：`inspect` 列出仍内联详情的条目（含超限项）及其作业证据链；`apply(idempotency_key)` 先备份原始字节为 `*.pre-split-bak`，把详情写入内容寻址 sidecar 后原子发布控制记录，并把每个动作追加到 `models/registry-migration.jsonl`。重复执行幂等、中断可续作；不提高预算、不删除文件，原始原生结果保持原样 |
 | 会话模型擦除 | `creo_erase_session_models`：显式擦除选定的会话模型清单。`inspect(targets)` 返回每项目标身份、阻断原因、装配先于组件的擦除顺序、预期剩余对象和 600 秒令牌；`apply(evidence_token, idempotency_key)` 只执行令牌中的清单并返回 `job_id`。仅限有盘、未修改、非受管、无清单外引用与依赖环的对象；逐项复核后经两次独立查询确认消失；中途失败停止并明确报告已完成/未确认清单。不保存模型、不删除磁盘文件 |
 | 快捷底板 | `creo_create_plate`：兼容此前矩形底板、角圆角、独立通孔接口 |
 

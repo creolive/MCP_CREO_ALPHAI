@@ -298,15 +298,18 @@ class Health(RegistryBase):
         self.assertEqual(report["summary"]["warning"], 1)
         self.assertEqual(report["summary"]["over_budget"], 1)
         self.assertEqual(report["summary"]["corrupt"], 1)
-        self.assertEqual(len(report["over_budget"]), 1)
-        self.assertEqual(report["over_budget"][0]["model_id"], "b" * 32)
-        self.assertEqual(report["over_budget"][0]["state"], "over_budget")
+        self.assertEqual(report["over_budget"]["count"], 1)
+        self.assertTrue(report["over_budget"]["complete"])
+        self.assertEqual(report["over_budget"]["entries"][0]["model_id"], "b" * 32)
+        self.assertEqual(report["over_budget"]["entries"][0]["state"], "over_budget")
         self.assertGreater(
-            report["over_budget"][0]["model_json_bytes"], model_registry.BUDGET_BYTES
+            report["over_budget"]["entries"][0]["model_json_bytes"], model_registry.BUDGET_BYTES
         )
         self.assertTrue(report["migration"]["needed"] >= 1)
         # A corrupt entry never ends the report; ok entry is still present.
         self.assertEqual(report["entries"][0]["model_id"], "a" * 32)
+        self.assertIsNone(report["next_cursor"])
+        self.assertEqual(report["corrupt"]["count"], 1)
 
     def test_migrated_entry_reports_reference_forms(self):
         directory = self.legacy_entry("e" * 32)
@@ -320,6 +323,26 @@ class Health(RegistryBase):
         self.assertEqual(entry["details"]["aliases"]["form"], "reference")
         self.assertEqual(entry["details"]["inspection"]["form"], "reference")
         self.assertEqual(entry["details"]["last_live_inspection"]["form"], "absent")
+
+
+class Pagination(RegistryBase):
+    def test_entry_listing_is_bounded_and_pages_through_every_entry(self):
+        for index in range(7):
+            model_registry.write_model(general.MODELS / f"{index:032d}", _model(f"{index:032d}"))
+        first = registry_ops.health(limit=3)
+        self.assertEqual(len(first["entries"]), 3)
+        self.assertTrue(first["has_more"])
+        self.assertEqual(first["entry_count"], 7)
+        seen = [e["model_id"] for e in first["entries"]]
+        cursor = first["next_cursor"]
+        while cursor:
+            page = registry_ops.health(limit=3, cursor=cursor)
+            seen.extend(e["model_id"] for e in page["entries"])
+            cursor = page["next_cursor"]
+        self.assertEqual(seen, [f"{i:032d}" for i in range(7)])
+        self.assertEqual(len(set(seen)), 7)
+        with self.assertRaises(ValueError):
+            registry_ops.health(limit=0)
 
 
 if __name__ == "__main__":

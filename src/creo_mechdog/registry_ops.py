@@ -20,9 +20,10 @@ from pathlib import Path
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import model_registry
+from creo_mechdog import model_queries, model_registry
 
 WARNING_RATIO = 0.8
+PROBLEM_LIMIT = 50
 MIGRATION_LOG = "registry-migration.jsonl"
 MODEL_BACKUP = "model.json.pre-split-bak"
 JOB_BACKUP_SUFFIX = ".pre-split-bak"
@@ -108,8 +109,15 @@ def _entry(directory: Path) -> dict:
     return entry
 
 
-def health() -> dict:
-    """Read-only whole-registry report; one broken entry never ends the scan."""
+def health(limit: int = 20, cursor: str | None = None) -> dict:
+    """Read-only whole-registry report; one broken entry never ends the scan.
+
+    Problem lists (over-budget, near-budget, corrupt) are reported in full up
+    to a bounded cap; the per-entry listing is paginated so a large registry
+    never produces an unbounded response (BUG-077).
+    """
+    if not 1 <= limit <= 50:
+        raise ValueError("limit must be 1–50")
     entries = []
     over = warning = corrupt = legacy = 0
     total = 0
@@ -134,6 +142,18 @@ def health() -> dict:
             warning += state == "warning"
             corrupt += state == "corrupt"
             legacy += state == "legacy_inline"
+
+    def _problems(state: str) -> dict:
+        rows = [e for e in entries if e["state"] == state]
+        return {
+            "count": len(rows),
+            "entries": rows[:PROBLEM_LIMIT],
+            "complete": len(rows) <= PROBLEM_LIMIT,
+        }
+
+    offset = model_queries.decode_cursor(cursor) or {"offset": 0}
+    window = entries[offset["offset"] : offset["offset"] + limit]
+    more = offset["offset"] + len(window) < len(entries)
     return {
         "entry_count": len(entries),
         "total_model_json_bytes": total,
@@ -146,16 +166,24 @@ def health() -> dict:
             "over_budget": over,
             "corrupt": corrupt,
         },
-        "over_budget": [e for e in entries if e["state"] == "over_budget"],
-        "warning": [e for e in entries if e["state"] == "warning"],
-        "corrupt": [e for e in entries if e["state"] == "corrupt"],
+        "over_budget": _problems("over_budget"),
+        "warning": _problems("warning"),
+        "corrupt": _problems("corrupt"),
         "legacy_inline_count": legacy,
         "migration": {
             "needed": over + legacy,
             "tool": "creo_migrate_registry",
             "usage": "inspect first, then apply with an idempotency_key",
         },
-        "entries": entries,
+        "entries": window,
+        "entry_offset": offset["offset"],
+        "limit": limit,
+        "has_more": more,
+        "next_cursor": (
+            model_queries.encode_cursor({"offset": offset["offset"] + len(window)})
+            if more
+            else None
+        ),
         "generated_at": bridge.now(),
     }
 
