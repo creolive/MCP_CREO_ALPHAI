@@ -1,0 +1,33 @@
+{
+  "source": "2026-10-21_CREO10_v0.4.5_注册表条目膨胀阻断收养且reconcile死锁.md",
+  "archived_as": "report-registry-bloat.md",
+  "report_sha256": "7e34a411a9e06285454f5e0f9753a5b9751aaacdd0cd15a6251ef696fb55f1b7",
+  "archived_from": "用户提供的 Downloads/0.4.4 原件（2026-10-21 归档时与原件逐字节一致）",
+  "reported_version": "0.4.5",
+  "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 (release_numeric 42)；会话延续多轮验收（ASM_MX + 依赖组件 + P02_HUOSAI_GAN 当前窗口）；注册表 212 个模型目录共 357MB",
+  "mapping": {
+    "§1/§3 BUG-076 结构化诊断按规格交付": "BUG-076 外部正例（0.4.5 交付项的外部确认）",
+    "§3.2/§3.3 根因定位：超限文件为注册表条目 models\\c437cace…\\model.json（track_p01b，21,472,751 B，origin_conflict_scan 阶段）": "BUG-076 原环境证据补录（此前'尚未取得文件类别和字节数'的开放项闭环）；膨胀治理进入 BUG-077",
+    "§4.1 P0 死锁：同一文件阻断 creo_reconcile_model（裸 16 MiB 错误，无结构化字段）": "BUG-077（本次登记，P0：reconcile 预算错误结构化 + 注册表条目拆分与迁移）",
+    "§4.2 P2 opened_session_model 字段未在原环境观察到": "FEAT-043/044 核对项（0.4.6 已交付 loaded_session_models 摘要与快照年龄；opened_session_model 行为核对后定论）",
+    "§4.3 P1 会话擦除另期": "FEAT-046（0.4.6 已交付 creo_erase_session_models，实机矩阵开放）",
+    "§5 P1 全量注册表健康检查（第二名 hull 3.4MB 预警）": "FEAT-047（本次登记，P1）"
+  },
+  "additional_note": "处理方案见 docs/development/0.4.4-FEEDBACK-PLAN-2026-10-21.md。报告 §3.2 中'别名与几何映射无界累积'的推断、同目录 operator-reconcile-bak（8,381,628 B）与 hull（3.4MB）接近预算的观察保留为 BUG-077 膨胀来源核对线索；超限文件按 recovery 指引原样保留（未删改）。",
+  "related_report": {
+    "source": "2026-10-21CREO10.0.0.0-0.4.4两项多轮遗留正式闭环DEV027与DEV030落地实测通过.md",
+    "archived_as": "report-dev027-030.md",
+    "report_sha256": "8ecec1e110c7a5b29c24ebc05ce4734af6aaac3425deff0341808874801b5629",
+    "archived_from": "用户提供的 Downloads/0.4.4 原件（2026-10-21 归档时与原件逐字节一致）",
+    "reported_version": "0.4.4",
+    "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 / VS2022 BuildTools 14.44.35207 / Windows SDK 10.0.26100.0 / Python 3.13（未发起 Creo 连接；源码校验、编译与文件层对比）",
+    "mapping": {
+      "§1 DEV-027 指纹归一化落地实测（json.hpp 换行翻转场景：DLL/protk.dat/目录数全部稳定，旧世代键保留）": "DEV-027 外部 Win10/Creo 10 通过证据（指纹稳定化子项关闭；二进制可复现性与目录回收继续开放）",
+      "§2 DEV-030 vcvars64_env 七键输入构建成功（多余键忽略，stderr 只列键名）": "DEV-030 三键放宽子项外部闭环确认",
+      "§3 升级与静态验证（87 工具/9 种子/新模块 build_fingerprints.py）": "0.4.4 发布外部确认",
+      "§4.1 Release body 未直接给出两包 SHA256": "DEV-045（本次登记：固化 Release body 两包 SHA256 检查）",
+      "§4.2 payload/loader 目录清理仍未实施（7/2）": "DEV-027 剩余范围（世代盘点 dry-run 已随 0.4.6 交付，安全回收继续开放）"
+    },
+    "additional_note": "报告 §1.2 的迁移场景（旧格式缓存迁移 + json.hpp 换行翻转双重场景）与 §5.3 表示可提供完整证据包（各阶段指纹、protk.dat、缓存戳、build 日志）；本轮先按报告正文补录，如作者需要再向反馈人索取。"
+  }
+}
