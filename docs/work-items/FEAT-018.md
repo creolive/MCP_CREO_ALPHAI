@@ -65,3 +65,7 @@
 [外部 Creo 9 / 0.3.4 报告](../validation/FEEDBACK-0.3.4-2026-10-17.md)称 inspect 正确区分无基线模型、owner、可用动作和 600 秒 evidence_token；MCP apply 与直接 Python 的差异另登记 [BUG-055](BUG-055.md)，本项仍验收中，不把 Python 绕行成功算成 MCP 恢复通过。
 
 新增时效体验建议：明确剩余有效期/过期原因与重新 inspect 的指引，评估按动作确定时效或刷新证据。刷新前须重新核对 revision、pending_job、所有者与可用动作，并由操作者复核；不能自动续用旧 token、绕过 stale 校验或把过期 apply 自动执行。本次未修改 600 秒、令牌或协调实现，未知结果保护保持。
+
+## 2026-10-21 0.4.7 黑盒inspect正例
+
+[本轮用户报告](../validation/WORKBUDDY-0.4.7-2026-10-21.md)对新受管圆盘A执行reconcile inspect/live=false：baseline verified、owners stopped、restore_baseline资格为true、其余动作按证据条件拒绝，未执行任何apply。仅补公开只读协调证据；不能据此关闭四动作、恢复中断或实际回滚矩阵。
