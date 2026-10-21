@@ -12,6 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
+from creo_mechdog import model_registry
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -28,17 +29,30 @@ def model_path(model_id: str) -> Path:
 
 
 def model_info(model_id: str) -> dict:
-    path = model_path(model_id) / "model.json"
-    if not path.is_file():
-        raise ValueError("Unknown model_id; use creo_new_part or creo_execute_plan")
-    return bridge.read_json(path)
+    return model_registry.read_control(model_path(model_id))
 
 
 def list_models(limit: int = 10, detail: str = "compact", cursor: str | None = None) -> dict:
     if not 1 <= limit <= 50:
         raise ValueError("limit must be 1–50")
     paths = sorted(MODELS.glob("*/model.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    models = [model_summary(bridge.read_json(p)) for p in paths]
+    models = []
+    for path in paths:
+        # A single broken entry must not hide the registry listing; show a
+        # placeholder pointing at the maintenance tools instead (BUG-077).
+        try:
+            if path.stat().st_size > model_registry.BUDGET_BYTES:
+                raise model_registry.RegistryBudgetExceeded(file=path, failed_stage="list_models")
+            model = bridge.read_json(path)
+            if not isinstance(model, dict):
+                raise ValueError("not an object")
+        except (ValueError, OSError) as error:
+            model = {
+                "model_id": path.parent.name,
+                "status": "registry_entry_unreadable",
+                "registry_error": str(error),
+            }
+        models.append(model_summary(model))
     return list_page(models, model_info, detail, limit, cursor)
 
 
@@ -66,11 +80,25 @@ def component_graph(source: dict, target_id: str, seen: set[str] | None = None) 
     if not source.get("part_file") or not Path(source["part_file"]).is_file():
         raise ValueError("Every component source needs a verified saved native file")
     result = {sid: source}
-    for alias in source.get("aliases", {}).values():
+    for alias in model_registry.aliases_of(source).values():
         child = alias.get("source_model_id")
         if child:
             result.update(component_graph(model_info(child), target_id, seen))
     return result
+
+
+def _request_view(model: dict) -> dict:
+    """The model form sent to the native executor: references over payloads.
+
+    A record with a controlled reference drops its inline payload (native
+    resolves the reference); a legacy inline record keeps it, so an empty
+    ``aliases`` object always reaches the executor as an object (BUG-077).
+    """
+    view = dict(model)
+    for key in model_registry.DETAIL_KEYS:
+        if f"{key}_ref" in view:
+            view.pop(key, None)
+    return view
 
 
 def new_loft_part(
@@ -260,14 +288,13 @@ def submit(
                     raise ValueError(
                         "Nested assembly copying is not yet supported; insert owned part/sheetmetal models"
                     )
-        duplicate = set(model["aliases"]).intersection(
-            op["label"] for op in operations if "label" in op
-        )
+        aliases = model_registry.aliases_of(model) if not new else {}
+        duplicate = set(aliases).intersection(op["label"] for op in operations if "label" in op)
         if duplicate:
             raise ValueError(f"Feature labels already exist: {sorted(duplicate)}")
         from creo_mechdog import airfoil
 
-        operations = airfoil.prepare(operations, model["aliases"])
+        operations = airfoil.prepare(operations, aliases)
         # Initialize from a solid template. Native first-wall conversion creates
         # the sheetmetal body; the stock empty SMT body breaks attached walls.
         templates = {
@@ -317,13 +344,15 @@ def submit(
             shutil.copyfile(source, snapshot)
             operations[index]["file_path"] = str(snapshot)
         model["pending_job"] = job_id
-        bridge.write_json(path / "model.json", model)
+        # Splitting at reservation time also lazily migrates a legacy inline
+        # record, so request.json never carries an unbounded payload (BUG-077).
+        model_registry.write_model(path, model)
         request = {
             "new": new,
-            "model": model,
+            "model": _request_view(model),
             "operations": operations,
             "readonly": readonly,
-            "components": components,
+            "components": {sid: _request_view(source) for sid, source in components.items()},
             "template_file": str(template),
             "assertions": assertions or {},
         }
@@ -358,7 +387,7 @@ def submit(
                 )
         except Exception as exc:
             model.update(status="failed" if new else "ready", pending_job=None)
-            bridge.write_json(path / "model.json", model)
+            model_registry.write_model(path, model)
             manifest.update(status="failed", message=str(exc), finished_at=bridge.now())
             bridge.write_json(directory / "job.json", manifest)
             raise
@@ -408,6 +437,10 @@ def run_generic_job(job_id: str, manifest: dict):
                     model["status"] = "unknown_outcome"
                 else:
                     result = bridge.read_json(result_file)
+                    # Job manifests keep only summaries and controlled references;
+                    # a repeated full-payload result would regrow the read budget
+                    # problem inside job.json (BUG-077).
+                    model_registry.split_job_result(result, directory)
                     manifest["result"] = result
                     if request.get("loft_seed"):
                         from creo_mechdog.seed_compatibility import observe_load
@@ -435,22 +468,39 @@ def run_generic_job(job_id: str, manifest: dict):
                             raise RuntimeError("Unexpected native output file")
                         result["sha256"] = hashlib.sha256(part.read_bytes()).hexdigest()
                         if request["readonly"]:
-                            model.update(
-                                status="ready",
-                                last_live_inspection=result["inspection"],
-                                last_query_at=bridge.now(),
-                            )
+                            model.update(status="ready", last_query_at=bridge.now())
+                            # The result was split above; keep whichever live
+                            # detail form exists under the last_live_* names.
+                            model.pop("last_live_inspection", None)
+                            model.pop("last_live_inspection_ref", None)
+                            if "inspection" in result:
+                                model["last_live_inspection"] = result["inspection"]
+                            if "inspection_ref" in result:
+                                model["last_live_inspection_ref"] = result["inspection_ref"]
                         else:
                             model["revision"] += 1
                             model.update(
                                 status="ready",
-                                aliases=result["aliases"],
-                                inspection=result["inspection"],
                                 part_file=result["part_file"],
                                 part_sha256=result["sha256"],
                                 updated_at=bridge.now(),
                                 last_job=job_id,
                             )
+                            # Detail references come straight from the split
+                            # result; stale legacy inline keys never survive an
+                            # edit (BUG-077).
+                            for key in model_registry.DETAIL_KEYS:
+                                model.pop(key, None)
+                                model.pop(f"{key}_ref", None)
+                            for key in (
+                                "aliases",
+                                "aliases_ref",
+                                "inspection",
+                                "inspection_ref",
+                                "inspection_summary",
+                            ):
+                                if key in result:
+                                    model[key] = result[key]
                         manifest.update(
                             status="succeeded",
                             stage="verified",
@@ -502,7 +552,7 @@ def run_generic_job(job_id: str, manifest: dict):
             model["pending_job"] = job_id if manifest["status"] == "unknown_outcome" else None
             model["last_job"] = job_id
             bridge.note_native_outcome(manifest)
-            bridge.write_json(path / "model.json", model)
+            model_registry.write_model(path, model)
     except bridge.ToolkitBusy as exc:
         # No worker ran. Never rewrite a model while another owner holds the channel.
         manifest.update(

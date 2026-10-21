@@ -169,6 +169,27 @@ def families() -> dict:
                 "widening, mid-manifest failures stop and report without resubmitting"
             ),
         },
+        "registry_maintenance": {
+            "enabled": True,
+            "tools": ["creo_registry_health", "creo_migrate_registry"],
+            "scope": (
+                "Read-only registry health report (entry sizes, budget usage, "
+                "corruption and migration state; 80% warning threshold) plus the "
+                "explicit migration that splits legacy inline registry records and "
+                "job-evidence manifests into content-addressed detail sidecars"
+            ),
+            "guarantees": (
+                "original bytes are backed up before any rewrite; details persist "
+                "before the control record publishes atomically; reruns are "
+                "idempotent and interrupted migrations resume; model identity, "
+                "revision and history conclusions never change"
+            ),
+            "limits": (
+                "the unified 16 MiB read budget is never raised; neither tool "
+                "connects Toolkit; migration never deletes files and leaves "
+                "oversized raw native results untouched on disk"
+            ),
+        },
         "seed_library": {
             "enabled": True,
             "scope": "MIT native seeds bundled with source; SHA256 validation, local registration and automatic count/mode selection",

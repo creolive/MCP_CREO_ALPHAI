@@ -1316,6 +1316,10 @@ def compact_job(manifest: dict) -> dict:
             native["inspection_summary"] = result["inspection_summary"]
         if "inspection_ref" in result:
             native["inspection_ref"] = result["inspection_ref"]
+        if "aliases_ref" in result:
+            # Split job results carry a controlled aliases reference (BUG-077).
+            native["aliases_ref"] = result["aliases_ref"]
+            native["alias_count"] = result.get("alias_count")
         live = result.get("live")
         if isinstance(live, dict):
             visible = dict(live)
