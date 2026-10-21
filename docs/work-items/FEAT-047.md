@@ -41,6 +41,7 @@
 
 - `src/creo_mechdog/registry_ops.py::health`：逐条目 model_id/model_name/status/revision/model_json 字节数与预算比、详情三族形态（inline/reference/absent）、状态五分（ok / warning ≥80% / over_budget / corrupt / legacy_inline）；汇总计数 + 超限/预警/损坏单列；迁移段给出待迁移数量与 `creo_migrate_registry` 用法；单条目读取异常标记 corrupt 后继续；不写文件、不连接 Toolkit。
 - `server.py` 注册 `creo_registry_health`（READ），`capabilities.py` 新增 `registry_maintenance` family（含 guarantees 与 limits）。
-- 验证：`tests/unit/test_model_registry.py::Health` 2 项（混合正常/预警/超限/损坏分类、单条损坏不中断整份报告、迁移后引用形态）；515 项全量单测与 dev_check 通过，SDK 构建通过。
+- 验证：`tests/unit/test_model_registry.py::Health`+`Pagination` 4 项（混合正常/预警/超限/损坏分类、单条损坏不中断整份报告、迁移后引用形态、分页遍历无重无漏）；516 项全量单测与 dev_check 通过，SDK 构建通过。
+- **实机（MCP 黑盒，本机 dev 服务已重启加载本批代码）**：返回 526 条：ok 41 / legacy_inline 485 / 超限 0 / 损坏 0 / 预警 0，model.json 合计 12,705,876 B（最大 329,383 B，usage_ratio 0.0196），迁移段给出 485 条待迁移。首次实机调用暴露真实缺陷——无分页时响应 574,710 字节，远超项目 32 KiB 响应预算约定，随即加分页（limit 默认 20、上限 50；超限/预警/损坏清单各上限 50）并补单元回归。
 
-未测：实机（真实注册表调用）、WorkBuddy 黑盒。
+未测：WorkBuddy 黑盒。
