@@ -39,6 +39,7 @@ from creo_mechdog.build_support import (
     validate_compiler_env,
     validate_local_path,
 )
+from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.recovery import job_evidence, process_identity
 
 ROOT = Path(__file__).resolve().parent
@@ -313,24 +314,9 @@ def toolkit_owner() -> dict:
 
 
 def _open_toolkit_lock(path: Path) -> BinaryIO:
-    """Open once without CRT append/create handling or permission to replace the lock."""
-    # OPEN_ALWAYS does not truncate existing bytes. Excluding FILE_SHARE_DELETE
-    # keeps all contenders on the same file identity while any handle is open.
-    handle = _create_file(str(path), 0x80000000 | 0x40000000, 0x1 | 0x2, None, 4, 0x80, None)
-    if handle == ctypes.c_void_p(-1).value:
-        error = ctypes.WinError(ctypes.get_last_error())
-        error.filename = str(path)
-        raise error
-    try:
-        descriptor = msvcrt.open_osfhandle(handle, os.O_RDWR | os.O_BINARY)
-    except BaseException:
-        _close_handle(handle)
-        raise
-    try:
-        return os.fdopen(descriptor, "r+b", buffering=0)
-    except BaseException:
-        os.close(descriptor)
-        raise
+    """Open via the shared lock-file discipline (BUG-057: OPEN_EXISTING, then
+    CREATE_NEW, one shared-open fallback on the first-create race)."""
+    return open_lock_file(path)
 
 
 @contextmanager
@@ -818,7 +804,7 @@ setlocal DisableDelayedExpansion
 if errorlevel 1 exit /b 4
 cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
 if errorlevel 1 exit /b 2
-link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{exe}" "{build / "worker.obj"}" {libs} kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
+link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{exe}" "{build / "worker.obj"}" {libs} bcrypt.lib kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
 {callback_script}
 {loader_script}
@@ -1078,6 +1064,11 @@ def run_job(job_id: str) -> None:
 
         run(job_id, manifest)
         return
+    if manifest.get("kind") == "session_erase":
+        from creo_mechdog.session_erase import run
+
+        run(job_id, manifest)
+        return
     if manifest.get("kind") == "generic":
         from generic_bridge import run_generic_job
 
@@ -1311,13 +1302,27 @@ def compact_job(manifest: dict) -> dict:
             "adoption",
             "adopted",
             "open_file",
+            "session_erase",
             "loaded",
             "session_fingerprint",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary
 
+        # Legacy results inline a full inspection; split results carry only a
+        # summary plus a controlled reference (BUG-076). Both stay small here.
         native["inspection"] = inspection_summary(result.get("inspection"))
+        if "inspection_summary" in result:
+            native["inspection_summary"] = result["inspection_summary"]
+        if "inspection_ref" in result:
+            native["inspection_ref"] = result["inspection_ref"]
+        live = result.get("live")
+        if isinstance(live, dict):
+            visible = dict(live)
+            inline = visible.pop("inspection", None)
+            if inline is not None:
+                visible.setdefault("inspection_summary", inspection_summary(inline))
+            native["live"] = visible
         native["operations"] = [
             {
                 key: op[key]

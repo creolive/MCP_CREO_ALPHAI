@@ -4,6 +4,12 @@
 
 来源：[v0.4.1 / Creo 10 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md)（P0）及关联 v0.4.0 报告。属新增能力需求，非回归修复。实施安排见[处理计划](../development/CREO10-0.4.1-FEEDBACK-PLAN.md)。
 
+## 当前进度（2026-10-21）
+
+0.4.2磁盘打开及WorkBuddy黑盒16/16已交付，0.4.4补钣金件、显式.asm.N与窗口目视验收；0.4.5新增opened_session_model单句柄观察，开发者实机通过，见[实施证据](../validation/BUG076-FEEDBACK042-2026-10-21.md)。下方早期“钣金/数字版本/WorkBuddy待执行”仅属当时状态。
+
+仍需asm_mx.asm.16原环境复验、显示失败/unknown/真实并发，以及新增打开结果字段的WorkBuddy复核；不以已发布替代这些验收。
+
 ## 目标与范围
 
 提供 `creo_open_file(file_path, idempotency_key)`：把磁盘既有 `.prt` / `.asm`（含 `.prt.N` / `.asm.N` 数字版本）检索进当前 Creo 会话并显示激活。这是**只读检入显示**，不建立受管关系：成功返回 `model_id=null`、`adopted=false`，不创建受管 revision。托管收养仍走 `creo_adopt_current_model` 既有契约；装配受管编辑与 reconcile 另期（FEAT-045）。
@@ -62,3 +68,7 @@
 - **显式 `.asm.N`**：`wbopen_asmv.asm.4`=2 组件、`.asm.6`=3 组件，均 succeeded/displayed=true/origin_matches_selected_file=true，打开前后副本 SHA 不变。
 - **窗口目视**：PrintWindow 只读截图，窗口标题 "WBOPEN_ASMV (启用的) - Creo Parametric 12"，图存 `build/dev044_visual_final.bmp`。
 - 残留：SM_FLANGE1 两个 section 对象（失败 plan 遗留，非 PART/ASM 不阻塞）；`asm_mx.asm.16` 原环境、显示失败注入、unknown/并发维持未测。详见[验证记录](../validation/DEV-027-030-IMPROVEMENT-2026-10-21.md)。
+
+### 2026-10-21 loaded_session_models 摘要
+
+按[0.4.3 反馈完善计划](../development/0.4.3-feedback-improvement-plan-2026-10-21.md)实施（分支 `codex/dev-043-ledger-simplification`，[实施记录](../validation/FEEDBACK-0.4.3-IMPLEMENTATION-2026-10-21.md)）：`creo_open_file` 成功结果新增 `open_file.loaded_session_models`（会话模型数、本次装配打开的组件实例数及统计口径、有界 20 条页、has_more 与 `creo_list_session_models` 详情入口），显示成功后一次全量枚举生成；`SESSION_NAME_CONFLICT` 消息补充装配依赖加载来源提示。既有测试通过；剩余实机装配打开观察与原环境验收。

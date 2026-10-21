@@ -14,8 +14,8 @@ from pathlib import Path
 
 import bridge
 import generic_bridge as general
+from creo_mechdog import inspection_refs
 from creo_mechdog.legacy_recovery import previous_boot_evidence
-from creo_mechdog.model_queries import inspection_summary
 from creo_mechdog.recovery import process_identity
 from creo_mechdog.windows_boot import boot_info
 
@@ -315,7 +315,7 @@ def _snapshot(model_id: str) -> dict:
                 and result.get("success")
                 and result.get("saved_file_reloaded_and_verified")
                 and result.get("part_file")
-                and result.get("inspection")
+                and (result.get("inspection") or result.get("inspection_ref"))
             ):
                 try:
                     file = owned_file(model, result["part_file"])
@@ -323,7 +323,11 @@ def _snapshot(model_id: str) -> dict:
                         "job_id": job_id,
                         "evidence": name,
                         "identity": identity(file, deadline),
-                        "inspection": result["inspection"],
+                        # New results carry a controlled reference (BUG-076);
+                        # legacy results inline the payload. Keep whichever
+                        # form exists; consumers resolve both.
+                        "inspection": result.get("inspection"),
+                        "inspection_ref": result.get("inspection_ref"),
                         "aliases": result.get("aliases", {}),
                     }
                 except (OSError, ValueError) as error:
@@ -358,10 +362,11 @@ def _actions(snapshot: dict, live: dict | None) -> dict:
     stopped = bool(snapshot["owners"]) and all(o["stopped"] for o in snapshot["owners"])
     baseline = snapshot["baseline"] or {}
     candidate = snapshot["candidate"] or {}
-    health = (live or {}).get("inspection", {}).get("healthy") is True
+    health = inspection_refs.summary_of(live).get("healthy") is True
     supported = model.get("model_type", "part") in ("part", "sheetmetal")
     conditions = {
-        "restore_baseline": baseline.get("verified") and bool(model.get("inspection")),
+        "restore_baseline": baseline.get("verified")
+        and bool(model.get("inspection") or model.get("inspection_ref")),
         "accept_saved": bool(candidate.get("identity"))
         and candidate.get("identity", {}).get("path") != model.get("part_file"),
         "accept_live": live
@@ -478,18 +483,24 @@ def inspect(model_id: str, live: bool = False) -> dict:
     bridge.write_json(directory / f"evidence-{token}.json", record)
     model = snapshot["model"]
     candidate = snapshot["candidate"]
-    if candidate and candidate.get("inspection"):
+    if candidate and (candidate.get("inspection") or candidate.get("inspection_ref")):
         candidate = {
             **{
                 key: value
                 for key, value in candidate.items()
-                if key not in ("inspection", "aliases")
+                if key not in ("inspection", "inspection_ref", "aliases")
             },
-            "inspection": inspection_summary(candidate["inspection"]),
+            "inspection": inspection_refs.summary_of(candidate),
         }
     visible_live = realtime
-    if realtime and realtime.get("inspection"):
-        visible_live = {**realtime, "inspection": inspection_summary(realtime["inspection"])}
+    if realtime and (realtime.get("inspection") or realtime.get("inspection_ref")):
+        # The visible copy is a summary; the evidence record keeps the full
+        # payload (or its controlled reference) for a later apply.
+        visible_live = {
+            **realtime,
+            "inspection_summary": inspection_refs.summary_of(realtime),
+        }
+        visible_live.pop("inspection", None)
     return {
         "model_id": model_id,
         "status": model["status"],
@@ -687,16 +698,15 @@ def apply(
             if session:
                 choice["session_fingerprint"] = session
             if action == "restore_baseline":
-                choice.update(source_file=model["part_file"], source_inspection=model["inspection"])
+                choice.update(source_file=model["part_file"])
+                choice.update(inspection_refs.request_field(model, "source_inspection"))
             elif action == "accept_saved":
                 candidate = record["snapshot"]["candidate"]
-                choice.update(
-                    source_file=candidate["identity"]["path"],
-                    source_inspection=candidate["inspection"],
-                )
+                choice.update(source_file=candidate["identity"]["path"])
+                choice.update(inspection_refs.request_field(candidate, "source_inspection"))
                 model = {**model, "aliases": candidate["aliases"]}
             elif action == "accept_live":
-                choice["live_inspection"] = record["live"]["inspection"]
+                choice.update(inspection_refs.request_field(record["live"], "live_inspection"))
             manifest = {
                 "job_id": job_id,
                 "recovery_id": job_id,
@@ -809,9 +819,16 @@ def _run_locked(job_id: str, manifest: dict, intent: dict, file: Path) -> dict:
             status="ready",
             part_file=result["part_file"],
             part_sha256=source["sha256"],
-            inspection=result["inspection"],
             aliases=result["aliases"],
             updated_at=bridge.now(),
+        )
+        # Registry keeps the summary plus the controlled reference (BUG-076).
+        after.update(
+            {
+                key: result[key]
+                for key in ("inspection_ref", "inspection_summary", "inspection")
+                if key in result
+            }
         )
         if action != "restore_baseline":
             after["revision"] += 1
@@ -837,6 +854,25 @@ def _run_locked(job_id: str, manifest: dict, intent: dict, file: Path) -> dict:
         finished_at=bridge.now(),
         message="Explicit recovery committed; original job history preserved",
     )
+    # Recovery displayed or erased a model; keep the session record accurate
+    # (FEAT-043). Informational only, never a condition of the commit.
+    try:
+        from creo_mechdog.session_models import record_session_change
+
+        if action == "abandon_new":
+            record_session_change(
+                "creo_reconcile_model",
+                f"abandon_new erased unproven copy {manifest.get('model_id')}",
+                {"action": action, "model_id": manifest.get("model_id")},
+            )
+        else:
+            record_session_change(
+                "creo_reconcile_model",
+                f"{action} displayed {manifest.get('model_id')}",
+                {"action": action, "model_id": manifest.get("model_id")},
+            )
+    except (OSError, ValueError):
+        pass
     intent.update(
         state="verified",
         model_after=after,

@@ -149,6 +149,84 @@ def prepare_callback(build: Path, dll_sha256: str, loader_fingerprint: str) -> d
     return metadata
 
 
+def generation_inventory(build: Path) -> dict:
+    """Read-only dry-run inventory of loader generations (DEV-027).
+
+    Identifies the current generation (build stamp), the registered one
+    (setup metadata / registry exec_file) and every remaining generation
+    directory as a reclaim candidate. Nothing is deleted; reclamation is a
+    separate, explicitly reviewed operation.
+    """
+
+    def _sha(path: Path) -> str | None:
+        try:
+            return _digest(path)
+        except OSError:
+            return None
+
+    stamp = {}
+    try:
+        stamp = json.loads((build / "blend_loader_build.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        pass
+    current_key = stamp.get("generation_key") if isinstance(stamp, dict) else None
+    setup = {}
+    try:
+        setup = json.loads((build / "blend_callback_setup.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        pass
+    registered_loader = setup.get("loader_file") if isinstance(setup, dict) else None
+    registry_loader = None
+    try:
+        for line in (build / REGISTRY_FILENAME).read_text(encoding="utf-8-sig").splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2 and parts[0] == "exec_file":
+                registry_loader = parts[1].strip()
+    except OSError:
+        pass
+
+    generations = []
+    candidates = []
+    root = build / "blend_loader"
+    if root.is_dir():
+        for directory in sorted(root.iterdir()):
+            if not directory.is_dir():
+                continue
+            loader = directory / "loader.dll"
+            sha = _sha(loader)
+            is_current = directory.name == current_key
+            is_registered = any(
+                registered and loader.is_file() and Path(registered).resolve() == loader.resolve()
+                for registered in (registered_loader, registry_loader)
+            )
+            entry = {
+                "generation_key": directory.name,
+                "loader_sha256": sha,
+                "current": is_current,
+                "registered": is_registered,
+                "bytes": loader.stat().st_size if loader.is_file() else None,
+            }
+            generations.append(entry)
+            if not is_current and not is_registered:
+                candidates.append(entry["generation_key"])
+    return {
+        "dry_run": True,
+        "deleted": False,
+        "note": (
+            "Reclaim candidates are not deleted by this inventory; loaded "
+            "modules and valid registrations are never candidates. Actual "
+            "reclamation is a separate reviewed operation"
+        ),
+        "current_generation_key": current_key,
+        "current_loader_sha256": stamp.get("sha256") if isinstance(stamp, dict) else None,
+        "registered_loader_file": registered_loader,
+        "registry_exec_file": registry_loader,
+        "generation_count": len(generations),
+        "generations": generations,
+        "reclaim_candidates": candidates,
+    }
+
+
 def callback_setup_status(build: Path) -> dict:
     """Artifact inspection is separate from a live, nonce-verified session probe."""
     base = {

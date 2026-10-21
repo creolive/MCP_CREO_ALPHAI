@@ -232,15 +232,21 @@ except bridge.ToolkitBusy as exc:
             self.assertEqual(lock.stat().st_ino, identity)
 
     def test_open_failure_is_not_retried_or_reported_busy(self):
+        from creo_mechdog import lock_files
+
         with (
-            patch.object(bridge, "_create_file", return_value=ctypes.c_void_p(-1).value) as opened,
-            patch.object(bridge.ctypes, "get_last_error", return_value=5),
+            patch.object(
+                lock_files, "_create_file", return_value=ctypes.c_void_p(-1).value
+            ) as opened,
+            patch.object(lock_files.ctypes, "get_last_error", return_value=5),
             patch.object(bridge.time, "sleep") as slept,
         ):
             with self.assertRaises(PermissionError) as failure, bridge.toolkit_lock():
                 self.fail("Open failure must not admit native work")
         self.assertNotIsInstance(failure.exception, bridge.ToolkitBusy)
         self.assertEqual(failure.exception.winerror, 5)
+        # The unified discipline opens once on an existing-file access denial
+        # (ERROR_ACCESS_DENIED on OPEN_EXISTING raises without any fallback).
         opened.assert_called_once()
         slept.assert_not_called()
 

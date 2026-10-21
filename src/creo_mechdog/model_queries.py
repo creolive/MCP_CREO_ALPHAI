@@ -37,6 +37,21 @@ def serialized_size(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=True, indent=2).encode("utf-8"))
 
 
+def summary_of_model(model: dict[str, Any]) -> dict[str, Any]:
+    # Deferred import: inspection_refs reads this module for the summary shape.
+    from creo_mechdog.inspection_refs import summary_of
+
+    return summary_of(model)
+
+
+def full_inspection_of_model(model: dict[str, Any]) -> dict[str, Any]:
+    """Adopted models may carry a controlled reference instead of an inline
+    payload (BUG-076); both resolve here, tampered references refuse."""
+    from creo_mechdog.inspection_refs import full_inspection
+
+    return full_inspection(model) or {}
+
+
 def inspection_summary(inspection: Any) -> dict[str, Any]:
     state = inspection if isinstance(inspection, dict) else {}
     supplied = state.get("counts") or {}
@@ -93,8 +108,10 @@ def model_summary(model: dict[str, Any]) -> dict[str, Any]:
         )
         if key in model
     }
-    result["inspection"] = inspection_summary(model.get("inspection"))
-    saved = bool(model.get("inspection")) and bool(model.get("part_file"))
+    result["inspection"] = summary_of_model(model)
+    saved = bool(model.get("inspection") or model.get("inspection_ref")) and bool(
+        model.get("part_file")
+    )
     result["snapshot"] = {
         "source": "saved_verified" if saved else "unavailable",
         "revision": model.get("revision"),
@@ -132,7 +149,7 @@ def decode_cursor(cursor: str | None) -> dict[str, Any] | None:
 
 
 def section_records(model: dict[str, Any], section: str) -> list[Any] | None:
-    state = model.get("inspection") or {}
+    state = full_inspection_of_model(model)
     if section == "metadata":
         excluded = set(SECTIONS) | set(inspection_summary(state)) | {"counts"}
         return [{"name": key, "value": val} for key, val in state.items() if key not in excluded]

@@ -15,6 +15,61 @@ from creo_mechdog.reconciliation import identity, owned_file
 
 SNAPSHOT_SECONDS = 600
 PAGE_BYTES = 32 * 1024
+ACTIVITY_LIMIT = 50
+REFRESH_GUIDANCE = (
+    "Omit cursor to re-collect the live session inventory; a query carrying a "
+    "cursor keeps reading its frozen snapshot and never reflects later session "
+    "changes. service_session_changes lists only changes this service caused "
+    "since the snapshot; manual GUI changes are not re-checked in real time"
+)
+
+
+def record_session_change(tool: str, summary: str, detail: dict | None = None) -> None:
+    """Record a session-content change this service caused (FEAT-043).
+
+    Cross-process, bounded, and only written under the Toolkit channel lock by
+    callers, so one writer at a time. Purely informational: entries never
+    authorize anything and never replace a fresh live inventory.
+    """
+    file = bridge.ROOT / "session_activity.json"
+    try:
+        activity = bridge.read_json(file)
+    except (OSError, ValueError):
+        activity = {"entries": []}
+    entries = activity.get("entries")
+    if not isinstance(entries, list):
+        entries = []
+    entries.append({"at": bridge.now(), "tool": tool, "summary": summary, "detail": detail or {}})
+    bridge.write_json(file, {"entries": entries[-ACTIVITY_LIMIT:]}, durable=True)
+
+
+def _activity_since(created: float) -> list[dict]:
+    """Bounded entries recorded after a snapshot was created (never a proof)."""
+    try:
+        activity = bridge.read_json(bridge.ROOT / "session_activity.json")
+    except (OSError, ValueError):
+        return []
+    entries = activity.get("entries")
+    if not isinstance(entries, list):
+        return []
+    selected = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        recorded = entry.get("at")
+        if not isinstance(recorded, str) or recorded <= "":
+            continue
+        try:
+            from datetime import datetime, timezone
+
+            moment = datetime.fromisoformat(recorded)
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)
+            if moment.timestamp() >= created:
+                selected.append(entry)
+        except ValueError:
+            continue
+    return selected[-10:]
 
 
 def _selection() -> str:
@@ -184,7 +239,14 @@ def list_session_models(limit: int = 20, cursor: str | None = None) -> dict:
         "type_errors": snapshot["type_errors"],
         "next_cursor": None,
         "snapshot_only": True,
+        "snapshot_age_seconds": max(0, int(time.time() - snapshot["created"])),
         "expires_in_seconds": max(0, int(SNAPSHOT_SECONDS - (time.time() - snapshot["created"]))),
+        "refresh_guidance": REFRESH_GUIDANCE,
+        "service_session_changes": _activity_since(snapshot["created"]),
+        "service_session_changes_note": (
+            "changes this service recorded since the snapshot; GUI changes are "
+            "not re-checked in real time"
+        ),
     }
     for item in models[offset : offset + limit]:
         response["models"].append(item)

@@ -1,0 +1,63 @@
+{
+  "entries": [
+    {
+      "at": "2026-10-21T08:29:28.761977+00:00",
+      "tool": "creo_adopt_current_model",
+      "summary": "displayed managed copy e4a8f008250a466a8238db1c13bcbfae",
+      "detail": {
+        "job_id": "53c7b57fb9f84aa497e25a5cd1c2ac91",
+        "model_id": "e4a8f008250a466a8238db1c13bcbfae"
+      }
+    },
+    {
+      "at": "2026-10-21T08:32:20.327424+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed mechdog_smooth_reference",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-21T08:33:10.469033+00:00",
+      "tool": "creo_adopt_current_model",
+      "summary": "displayed managed copy e792a88e674f4112ac04b82349ae4446",
+      "detail": {
+        "job_id": "5734961a2d204b769637ee1d1c300abc",
+        "model_id": "e792a88e674f4112ac04b82349ae4446"
+      }
+    },
+    {
+      "at": "2026-10-21T08:35:18.787161+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed mechdog_multi5_reference",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-21T08:35:34.573307+00:00",
+      "tool": "creo_adopt_current_model",
+      "summary": "displayed managed copy ad623d808a624152a537b08728d84e29",
+      "detail": {
+        "job_id": "a8e2a53bc2ac484b85138bce352f3d1a",
+        "model_id": "ad623d808a624152a537b08728d84e29"
+      }
+    },
+    {
+      "at": "2026-10-21T08:35:53.958980+00:00",
+      "tool": "creo_erase_session_models",
+      "summary": "erased mechdog_multi5_reference (part)",
+      "detail": {
+        "job_id": "f55ec61657534d919b49d13bd07df0a0"
+      }
+    },
+    {
+      "at": "2026-10-21T08:36:07.108857+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed mechdog_multi5_reference",
+      "detail": {
+        "model_type": "part"
+      }
+    }
+  ]
+}

@@ -4,6 +4,12 @@
 
 来源：现有模型无法纳管反馈第5项；关联 FEAT-042、FEAT-023。
 
+## 当前进度（2026-10-21）
+
+会话枚举已交付；0.4.5在磁盘打开成功结果复用单模型观察字段opened_session_model及observed_at，直接查询已打开句柄，不额外全量枚举。实机两作业核对is_current/origin/query_codes及compact/full一致性，见[实施证据](../validation/BUG076-FEEDBACK042-2026-10-21.md)。README已明确省略cursor实时重采、携cursor冻结快照；快照过期显式提示尚未实现。
+
+剩余unknown、其他类型、真实并发枚举及新增打开结果字段的WorkBuddy复核；已有9模型/5页遍历不能代表这些范围通过。
+
 ## 目标与范围
 
 新增 creo_list_session_models(limit=20, cursor=None)，最大50条；返回名称、类型、是否当前、origin、有无保存来源、未保存修改状态及可证明的受管关联。分页绑定同一快照，无法确认的字段为 null。查询不加载、保存或切换模型，不自动接管；用户在 Creo 切到目标后使用现有接管工具。通道 busy 立即拒绝，无自动重试。
@@ -19,3 +25,7 @@
 ## 2026-10-20：session_model_id 取 0 与重复的再确认
 
 [0.5.0 open-file 黑盒验收](../validation/WORKBUDDY-0.5.0-open-file-2026-10-20.md)附带发现：重启后的新会话中 WBOPEN_V1 与残留 WBOPEN_ASM2 同时返回 session_model_id=0，上一会话也出现过装配与子件同值——与既有定性一致（Creo 会话内整数 ID 可为 0 且跨类型重复，仅作临时发现提示）。工具描述已补写"可能取 0 或跨类型重复，定位模型用 name+model_type"；session_fingerprint 标识连接/进程会话、不随会话内容变化这一语义也已写入描述，避免以指纹判断会话内容。不改字段行为。
+
+### 2026-10-21 快照年龄与会话变化记录
+
+按[0.4.3 反馈完善计划](../development/0.4.3-feedback-improvement-plan-2026-10-21.md)实施（分支 `codex/dev-043-ledger-simplification`，[实施记录](../validation/FEEDBACK-0.4.3-IMPLEMENTATION-2026-10-21.md)）：`creo_list_session_models` 响应新增 `snapshot_age_seconds`、`refresh_guidance` 与 `service_session_changes`（自快照创建起、有界、跨进程 `session_activity.json`）；`creo_open_file`/收养 apply/confirm/恢复各动作/擦除成功后记录服务引起的会话内容变化，GUI 手工变化明确标注未实时复核。省略 cursor 实时重采、携 cursor 冻结快照语义不变；既有测试 44 项通过。剩余实机复核与 WorkBuddy。

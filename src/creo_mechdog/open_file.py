@@ -276,6 +276,19 @@ def run(job_id: str, manifest: dict) -> None:
                         "no managed model was created and the source file was not modified"
                     ),
                 )
+                # This open changed the session content; record it for the
+                # session inventory (FEAT-043). Written under the channel lock.
+                try:
+                    from creo_mechdog.session_models import record_session_change
+
+                    report = result.get("open_file", {})
+                    record_session_change(
+                        "creo_open_file",
+                        f"displayed {report.get('model_name') or report.get('selected_file')}",
+                        {"model_type": report.get("model_type")},
+                    )
+                except (OSError, ValueError):
+                    pass  # Informational only; never fail a successful open.
     except subprocess.TimeoutExpired:
         manifest.update(
             status="unknown_outcome",

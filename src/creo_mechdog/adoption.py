@@ -21,6 +21,7 @@ from pathlib import Path
 
 import bridge
 import generic_bridge as general
+from creo_mechdog import inspection_refs
 from creo_mechdog.model_queries import inspection_summary
 from creo_mechdog.reconciliation import identity, owned_file
 
@@ -132,6 +133,22 @@ def _native_request(model: dict, choice: dict) -> dict:
     }
 
 
+def _split_result(result: dict, directory: Path) -> dict:
+    """Keep full inspection payloads out of control metadata (BUG-076).
+
+    The native side already writes controlled references; this closeout also
+    splits a legacy inline payload (older executor binary) into a sidecar so
+    every consumer downstream — evidence tokens, requests, registries and the
+    job manifest — only ever carries a summary plus a reference.
+    """
+    live = result.get("live")
+    if isinstance(live, dict):
+        inspection_refs.split(live, directory, "live")
+    if isinstance(result.get("inspection"), dict) and result["inspection"]:
+        inspection_refs.split(result, directory, "verified")
+    return result
+
+
 def _native(directory: Path, manifest: dict) -> dict:
     manifest["worker_started"] = False
     exe = bridge.build_native()
@@ -157,6 +174,7 @@ def _native(directory: Path, manifest: dict) -> dict:
         model_id=manifest.get("model_id"),
     )
     if result:
+        _split_result(result, directory)
         manifest["result"] = result
     if (
         not result
@@ -384,6 +402,9 @@ def inspect(model_id: str | None = None) -> dict:
             bridge.write_json(probe / "request.json", _native_request(model, {"action": "inspect"}))
             try:
                 live = _native(probe, manifest)["live"]
+                # Defense in depth: split even when the executor boundary was
+                # substituted or predates reference splitting (BUG-076).
+                inspection_refs.split(live, probe, "live")
                 manifest["status"] = "succeeded"
             except RuntimeError as error:
                 manifest["status"] = "failed"
@@ -677,15 +698,17 @@ def apply(
                 "origin": record["file"]["path"],
                 "origin_sha256": record["file"]["sha256"],
                 "session_fingerprint": record["live"]["session_fingerprint"],
-                "live_inspection": record["live"]["inspection"],
             }
+            choice.update(inspection_refs.request_field(record["live"], "live_inspection"))
             if record.get("snapshot"):
                 choice = {
                     "action": "confirm_snapshot",
                     "source_file": record["file"]["path"],
                     "source_identity": record["file"],
-                    "source_inspection": model["prepared_snapshot"]["inspection"],
                 }
+                choice.update(
+                    inspection_refs.request_field(model["prepared_snapshot"], "source_inspection")
+                )
             if record["live"].get("display_name"):
                 choice["display_name"] = record["live"]["display_name"]
             manifest = {
@@ -745,8 +768,12 @@ def apply(
 
 
 def _summary_only(record: dict) -> dict:
-    live = {key: value for key, value in record["live"].items() if key != "inspection"}
-    live["inspection"] = inspection_summary(record["live"]["inspection"])
+    live = dict(record.get("live") or {})
+    inline = live.pop("inspection", None)
+    if inline is not None:
+        live.setdefault("inspection_summary", inspection_summary(inline))
+    # A split record already carries inspection_summary plus the small
+    # controlled inspection_ref; both stay visible to the caller.
     return live
 
 
@@ -865,6 +892,9 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
                 "snapshot_changed", "Prepared snapshot changed before native dispatch"
             )
     result = _native(directory, manifest)
+    # Defense in depth for substituted/older executor boundaries: every
+    # downstream consumer (registry, journal, manifest) sees references only.
+    _split_result(result, directory)
     current = general.model_info(manifest["model_id"])
     if current.get("pending_job") != job_id:
         raise AdoptionRefused("reservation_changed", "Adoption reservation changed during apply")
@@ -887,7 +917,6 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
         revision=1,
         part_file=result["part_file"],
         part_sha256=file_identity["sha256"],
-        inspection=result["inspection"],
         aliases=result.get("aliases", {}),
         pending_job=None,
         updated_at=bridge.now(),
@@ -898,6 +927,15 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
             "source_display_name": request["adoption"].get("display_name"),
             "adopted_at": bridge.now(),
         },
+    )
+    # The registry keeps only the summary plus the controlled reference; the
+    # full baseline stays in the job directory bound by SHA256 (BUG-076).
+    after.update(
+        {
+            key: result[key]
+            for key in ("inspection_ref", "inspection_summary", "inspection")
+            if key in result
+        }
     )
     manifest.update(
         status="succeeded",
@@ -919,7 +957,22 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
     intent["state"] = "committed"  # Durable decision precedes materialization.
     bridge.write_json(file, intent, durable=True)
     _finish(intent)
+    _record_session_change(job_id, manifest)
     return manifest
+
+
+def _record_session_change(job_id: str, manifest: dict) -> None:
+    """Adoption displayed a managed copy; keep the session record accurate."""
+    try:
+        from creo_mechdog.session_models import record_session_change
+
+        record_session_change(
+            "creo_adopt_current_model",
+            f"displayed managed copy {manifest.get('model_id')}",
+            {"job_id": job_id, "model_id": manifest.get("model_id")},
+        )
+    except (OSError, ValueError):
+        pass  # Informational only; never fail a committed adoption.
 
 
 def _commit_prepared(
@@ -933,9 +986,15 @@ def _commit_prepared(
         "prepare_job_id": job_id,
         "file": snapshot_file,
         "live": live,
-        "inspection": result["inspection"],
         "aliases": result.get("aliases", {}),
     }
+    snapshot.update(
+        {
+            key: result[key]
+            for key in ("inspection_ref", "inspection_summary", "inspection")
+            if key in result
+        }
+    )
     after = {
         **current,
         "model_type": live["model_type"],

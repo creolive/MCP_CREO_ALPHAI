@@ -1,0 +1,20 @@
+{
+  "created": 1792571746.9120152,
+  "token": "229814995cbc4125b466aee0c33ccb7c",
+  "targets": [
+    {
+      "name": "mechdog_multi5_reference",
+      "model_type": "part"
+    }
+  ],
+  "erase_order": [
+    {
+      "model_type": "part",
+      "modified": false,
+      "name": "mechdog_multi5_reference",
+      "origin": "E:\\Projects\\MCP_CREO_MechDog\\seed_library\\seeds\\five_smooth\\mechdog_multi5_reference.prt.1"
+    }
+  ],
+  "result_digest": "9c012a7ab17e2b75e05dcda11a28cb25060b6d59a32aa30164e025e2c91f0a58",
+  "job_id": "a3e92b307cb748f5b3117a1df427c241"
+}

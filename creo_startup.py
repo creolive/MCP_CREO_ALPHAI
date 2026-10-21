@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import hashlib
 import logging
 import msvcrt
@@ -24,6 +25,7 @@ import win32process
 import win32security
 
 import bridge
+from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.startup_state import StartupStateError, archive_preboot_state, read_startup_state
 from creo_mechdog.window_observations import connection_guidance, window_observations
 from creo_mechdog.windows_boot import BOOT_QUERY_BUDGET_SECONDS, boot_info
@@ -314,16 +316,56 @@ class CoordinatorBusy(RuntimeError):
     pass
 
 
+class CoordinatorLockError(RuntimeError):
+    """The startup lock file could not be opened (BUG-057).
+
+    An open failure is a lock access error, never channel contention and never
+    a configuration verdict; ``payload`` keeps the original OS error code.
+    """
+
+    def __init__(self, payload: dict):
+        super().__init__(
+            f"Startup coordination lock could not be opened ({payload.get('phase')}, "
+            f"winerror={payload.get('winerror')}); this is a lock access error, not a "
+            "configuration error and not another coordinator holding the lock"
+        )
+        self.payload = payload
+
+
 @contextmanager
 def coordination_lock(directory: Path) -> Iterator[None]:
     directory.mkdir(parents=True, exist_ok=True)
-    with (directory / "startup.lock").open("a+b") as stream:
+    try:
+        stream = open_lock_file(directory / "startup.lock")
+    except OSError as exc:
+        raise CoordinatorLockError(
+            {
+                "kind": "lock_access_error",
+                "phase": "open",
+                "winerror": getattr(exc, "winerror", None),
+                "errno": exc.errno,
+                "filename": str(directory / "startup.lock"),
+                "message": str(exc),
+            }
+        ) from exc
+    with stream:
         # Windows permits locking past EOF. Writing an initial byte before the
         # lock races with another first-time coordinator already holding it.
         stream.seek(0)
         try:
             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError as exc:
+            if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                raise CoordinatorLockError(
+                    {
+                        "kind": "lock_access_error",
+                        "phase": "byte_lock",
+                        "winerror": getattr(exc, "winerror", None),
+                        "errno": exc.errno,
+                        "filename": str(stream.name),
+                        "message": str(exc),
+                    }
+                ) from exc
             raise CoordinatorBusy(
                 "Another MCP process is checking/starting this Creo target"
             ) from exc
@@ -658,6 +700,20 @@ class CreoStartup:
                     self._stop.wait(0.5)
         except StartupStateError as exc:
             self._recheck_untrusted_state(settings, exc)
+        except CoordinatorLockError as exc:
+            # A lock access error is neither channel contention nor a
+            # configuration verdict; classify it explicitly instead of letting
+            # it fall into the generic configuration_error branch (BUG-057).
+            LOG.warning("Startup coordination lock access failed")
+            self._publish(
+                "lock_error",
+                "The startup coordination lock could not be opened; this is a "
+                "lock access error (check directory permissions and antivirus "
+                "locks), not a configuration error. Retry after the lock "
+                "becomes accessible; existing Creo and startup history were preserved",
+                shared=False,
+                coordination_error=exc.payload,
+            )
         except subprocess.TimeoutExpired as exc:
             self._publish(
                 "timeout",

@@ -363,9 +363,12 @@ class AdoptionMcpContract(unittest.IsolatedAsyncioTestCase):
                         )
                         evidence = await self.call(client, "creo_adopt_current_model", {})
                         live = evidence["current_model"]
-                        self.assertEqual(live["inspection"]["units"], units)
-                        self.assertEqual(live["inspection"]["units_query_code"], code)
-                        self.assertEqual(live["inspection"]["volume_mm3"], volume)
+                        # Full payloads live behind inspection_ref; the visible
+                        # live entry carries the summary (BUG-076).
+                        summary = live["inspection_summary"]
+                        self.assertEqual(summary["units"], units)
+                        self.assertEqual(summary["units_query_code"], code)
+                        self.assertEqual(summary["volume_mm3"], volume)
                         self.assertEqual(live["volume_mm3"], volume)
                         self.assertEqual(evidence["available"], units == "mm")
                         if units != "mm":

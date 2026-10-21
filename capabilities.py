@@ -149,6 +149,26 @@ def families() -> dict:
                 "separately from retrieval"
             ),
         },
+        "session_erase": {
+            "enabled": True,
+            "tool": "creo_erase_session_models",
+            "actions": ["inspect", "apply"],
+            "scope": (
+                "Explicit, evidence-bound erasure of selected session models; the "
+                "manifest erases assembly-before-components; nothing is saved and no "
+                "disk file is deleted; apply holds one channel lock per job"
+            ),
+            "supported": (
+                "saved (has origin), unmodified, non-managed part/sheetmetal/assembly "
+                "session models; targets not referenced outside the manifest and free "
+                "of manifest dependency cycles; the current window model may qualify"
+            ),
+            "limits": (
+                "incomplete session enumeration refuses; managed models stay with "
+                "creo_reconcile_model; no global/recursive erase, no manifest "
+                "widening, mid-manifest failures stop and report without resubmitting"
+            ),
+        },
         "seed_library": {
             "enabled": True,
             "scope": "MIT native seeds bundled with source; SHA256 validation, local registration and automatic count/mode selection",

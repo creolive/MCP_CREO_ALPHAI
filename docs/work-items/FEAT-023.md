@@ -1,6 +1,12 @@
 # FEAT-023：控制工具返回体积——capabilities 摘要与分页实施卡
 
-日期：2026-10-20 细化（原为统一台账条目）。类型：功能。优先级：P2。状态：验收中（capabilities 部分）。目标版本：0.4.2（用户指定 PATCH 例外，同 FEAT-044）。
+日期：2026-10-20 细化（原为统一台账条目）。类型：功能。优先级：P2。状态：验收中（capabilities子项已闭环，其余体积议题未完成）。目标版本：0.4.2（用户指定 PATCH 例外，同 FEAT-044）。
+
+## 当前剩余范围（2026-10-21）
+
+capabilities摘要/分页已随0.4.2交付、0.4.4补验收闭环；0.4.5的README摘要接口用法已交付，见[发布记录](../validation/RELEASE-0.4.5.md)。旧实施段中的“过期/跨实例未实测”仅描述早期阶段，不再是当前缺口。
+
+剩余jobs compact日志、组件清单内联业务label及source_model_id/source_revision、翼型/履带请求与日志、union校验错误体量。历史触发量包括jobs日志超过4KiB、两组件列表170512字符、翼型请求/计划超过30KiB、union错误约96KB；0.3.5组件清单model_name仍是C_…_0派生名，业务label需从aliases恢复。后续按UTF-8预算核对，保留job/model/revision、身份/实际矩阵/放置、错误及详情入口，评估truncated/complete；不能用裁剪输出代替BUG-053计算优化，也不能把自动命名直接认定为数据丢失。
 
 来源：多轮能力边界反馈；最新 [v0.4.1 / Creo 10 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P2-1（capabilities 单次 106,380 字符，超宿主单次工具结果上限被截断落盘）。
 

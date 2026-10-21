@@ -1,9 +1,12 @@
 """DEV-040 / BUG-057: isolated Windows file-open and byte-lock diagnostics.
 
-This script uses only the standard library and a TemporaryDirectory. It neither
-imports the service nor reads its configuration, jobs, models, or Toolkit data.
-Each attempt opens once and locks once; repeated iterations are independent
-observations, not retries. Controlled failures do not establish BUG-057's cause.
+This script uses the standard library and a TemporaryDirectory plus, for the
+production path only, ``creo_mechdog.lock_files.open_lock_file``. It reads no
+service configuration, jobs, models, or Toolkit data. Each attempt opens once
+and locks once; repeated iterations are independent observations, not retries.
+The CRT ``open("a+b")`` route stays as a control and the production open route
+(OPEN_EXISTING -> CREATE_NEW -> one shared-open fallback, BUG-057) are run and
+reported separately. Controlled failures do not establish BUG-057's cause.
 """
 
 import argparse
@@ -21,6 +24,12 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from creo_mechdog.lock_files import open_lock_file  # noqa: E402
 
 if os.name == "nt":
     import msvcrt
@@ -154,11 +163,21 @@ class WindowsFiles:
         return {"api": "CreateFileW", "opened": True, "winerror": None}
 
 
-def attempt(path: Path, errors: WindowsErrors) -> dict[str, Any]:
-    """One a+b open and one LK_NBLCK attempt, with no service imports or retries."""
+def crt_open(path: Path):
+    """Control route: the CRT append/create open the pre-0.4.6 code used."""
+    return path.open("a+b")
+
+
+def production_open(path: Path):
+    """Production route: the shared lock-file open discipline (BUG-057)."""
+    return open_lock_file(path)
+
+
+def attempt(path: Path, errors: WindowsErrors, opener=crt_open) -> dict[str, Any]:
+    """One open and one LK_NBLCK attempt, with no retries."""
     errors.reset()
     try:
-        stream = path.open("a+b")
+        stream = opener(path)
     except OSError as exc:
         return {"outcome": "open_error", "error": errors.capture(exc, "open")}
     with stream:
@@ -179,7 +198,7 @@ def attempt(path: Path, errors: WindowsErrors) -> dict[str, Any]:
 
 
 def compete(
-    path: Path, errors: WindowsErrors, executor: ThreadPoolExecutor
+    path: Path, errors: WindowsErrors, executor: ThreadPoolExecutor, opener=crt_open
 ) -> list[dict[str, Any]]:
     start = threading.Barrier(2, timeout=10)
     attempted = threading.Barrier(2, timeout=10)
@@ -192,7 +211,7 @@ def compete(
             start.wait()
             errors.reset()
             try:
-                stream = path.open("a+b")
+                stream = opener(path)
             except OSError as exc:
                 result.update(outcome="open_error", error=errors.capture(exc, "open"))
             if stream is not None:
@@ -227,9 +246,15 @@ def compete(
 
 
 def competition_case(
-    root: Path, name: str, initial: bytes | None, iterations: int, errors: WindowsErrors
+    root: Path,
+    name: str,
+    initial: bytes | None,
+    iterations: int,
+    errors: WindowsErrors,
+    opener=crt_open,
+    label: str = "crt_a_plus_b",
 ) -> dict[str, Any]:
-    directory = root / name
+    directory = root / f"{name}-{label}"
     directory.mkdir()
     persistent = directory / "toolkit.lock"
     if initial is not None:
@@ -242,7 +267,7 @@ def competition_case(
     with ThreadPoolExecutor(max_workers=2) as executor:
         for iteration in range(iterations):
             path = directory / f"toolkit-{iteration}.lock" if initial is None else persistent
-            results = compete(path, errors, executor)
+            results = compete(path, errors, executor, opener)
             pair = "+".join(sorted(result["outcome"] for result in results))
             pairs[pair] += 1
             if pair != "acquired+lock_busy":
@@ -267,6 +292,7 @@ def competition_case(
     remaining = list(directory.iterdir())
     return {
         "name": name,
+        "open_route": label,
         "iterations": iterations,
         "initial_state": "absent" if initial is None else f"existing_{len(initial)}_bytes",
         "outcomes": dict(outcomes),
@@ -293,7 +319,10 @@ def controls(root: Path, errors: WindowsErrors) -> dict[str, Any]:
         msvcrt.locking(holder.fileno(), msvcrt.LK_NBLCK, 1)
         try:
             with ThreadPoolExecutor(max_workers=1) as executor:
-                held_byte = executor.submit(attempt, locked, errors).result(timeout=30)
+                held_byte_crt = executor.submit(attempt, locked, errors).result(timeout=30)
+                held_byte_production = executor.submit(
+                    attempt, locked, errors, production_open
+                ).result(timeout=30)
             errors.reset()
             try:
                 locked.unlink()
@@ -309,6 +338,7 @@ def controls(root: Path, errors: WindowsErrors) -> dict[str, Any]:
     exclusive.touch()
     with windows.handle(exclusive, sharing=0):
         share_conflict = attempt(exclusive, errors)
+        share_conflict_production = attempt(exclusive, errors, production_open)
         native_share = windows.native_open_error(exclusive)
 
     deleted = root / "deletefile-held-open.lock"
@@ -322,6 +352,7 @@ def controls(root: Path, errors: WindowsErrors) -> dict[str, Any]:
             raise ctypes.WinError(ctypes.get_last_error())
         deletefile_info = windows.standard_info(handle)
         deletefile_attempt = attempt(deleted, errors)
+        deletefile_attempt_production = attempt(deleted, errors, production_open)
         native_deletefile = windows.native_open_error(deleted)
 
     pending = root / "delete-pending.lock"
@@ -334,30 +365,35 @@ def controls(root: Path, errors: WindowsErrors) -> dict[str, Any]:
         windows.mark_delete_pending(handle)
         pending_info = windows.standard_info(handle)
         delete_pending = attempt(pending, errors)
+        delete_pending_production = attempt(pending, errors, production_open)
         native_pending = windows.native_open_error(pending)
     return {
         "held_byte_lock": {
-            "attempt": held_byte,
+            "attempt_crt": held_byte_crt,
+            "attempt_production": held_byte_production,
             "unlink_while_handle_open": unlink,
             "file_retained_after_release": locked.exists(),
         },
         "controlled_share_conflict": {
             "holder_share_mode": 0,
-            "attempt": share_conflict,
+            "attempt_crt": share_conflict,
+            "attempt_production": share_conflict_production,
             "native_open_control": native_share,
             "after_holder_closed": attempt(exclusive, errors),
         },
         "deletefile_with_delete_shared_handle": {
             "marked_by": "DeleteFileW while FILE_SHARE_DELETE handle remains open",
             "original_handle_state": deletefile_info,
-            "attempt": deletefile_attempt,
+            "attempt_crt": deletefile_attempt,
+            "attempt_production": deletefile_attempt_production,
             "native_open_control": native_deletefile,
             "path_exists_after_holder_closed": deleted.exists(),
         },
         "controlled_delete_pending": {
             "marked_by": "SetFileInformationByHandle(FileDispositionInfo, DeleteFile=TRUE)",
             "original_handle_state": pending_info,
-            "attempt": delete_pending,
+            "attempt_crt": delete_pending,
+            "attempt_production": delete_pending_production,
             "native_open_control": native_pending,
             "file_deleted_after_holder_closed": not pending.exists(),
         },
@@ -389,10 +425,15 @@ def main() -> int:
         },
         "scope": {
             "filesystem_only": True,
-            "service_imported": False,
+            "service_imported": "production route only (creo_mechdog.lock_files)",
             "toolkit_connected": False,
             "repository_runtime_data_accessed": False,
             "attempts_retried": False,
+            "open_routes": (
+                "crt_a_plus_b (control) and production_open_lock_file "
+                "(OPEN_EXISTING -> CREATE_NEW -> one shared-open fallback) run "
+                "separately for every case"
+            ),
             "doserrno_source": "ucrtbase._get_doserrno on the failing thread",
             "lock_busy_basis": "locking phase and UCRT doserrno 33 (ERROR_LOCK_VIOLATION)",
         },
@@ -409,8 +450,11 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="dev040-lock-") as directory:
             root = Path(directory)
             report["competition"] = [
-                competition_case(root, name, initial, args.iterations, errors)
+                competition_case(
+                    root, name, initial, args.iterations, errors, opener=opener, label=label
+                )
                 for name, initial in (("absent", None), ("empty", b""), ("one_byte", b"\0"))
+                for label, opener in (("crt_a_plus_b", crt_open), ("production", production_open))
             ]
             report["controls"] = controls(root, errors)
         report["temporary_directory_cleaned_after_all_handles_and_threads_closed"] = True

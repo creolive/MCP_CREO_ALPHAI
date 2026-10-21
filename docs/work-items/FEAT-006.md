@@ -2,6 +2,14 @@
 
 日期：2026-10-16 补全。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
 
+## 当前进度（2026-10-21）
+
+接管空窗口NO_CURRENT_MODEL的Python结构化转换与预检全阶段诊断已随0.4.5交付，实机空窗口保留ProMdlCurrentGet调用及-8原码；native结果/来源核验/冲突扫描/令牌发布失败记录failed_stage，超限收尾不覆盖原始诊断。见[本次实施证据](../validation/BUG076-FEEDBACK042-2026-10-21.md)，预算阻断本身仍由BUG-076继续定位。
+
+其余诊断仍需规划：union长错误、body/plane/fixed_surface候选与查询指引，轮廓/约束及创建返回0但再生status6的原生详情、过期surface的-23提示。自交轮廓预检仅为待评估建议；原生失败特征名/ID、ProFeatureError与冲突面边、min_wall等只在SDK可可靠取得时返回，不能从-1或日志中成功调用回显猜根因。失败操作结果与模型清理/恢复尚需各自验收。
+
+历史定位样例见[曲面反馈原件](../validation/feedback-0.3.5-surface-2026-10-18/report.md)：shell两次失败时native_log_tail只有成功调用回显，报告后续定位到0.357mm刀口尺寸链；这支持补最小壁厚/冲突面提示的需求，不作为任意shell失败的通用根因。自交轮廓O(n²)预检同样只保留为方案建议。
+
 来源：既有统一错误与诊断项；新增[履带反馈](../validation/TRACK-FEEDBACK-2026-10-16.md)第一、七、十、十二和十八节。关联 BUG-018、BUG-030、BUG-031、BUG-049～051、FEAT-007、FEAT-023。
 
 ## 目标与范围

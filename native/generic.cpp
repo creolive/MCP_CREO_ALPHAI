@@ -1,5 +1,6 @@
 // Composable Creo feature operations, using the installed Creo 10 Toolkit.
 #include "third_party/json.hpp"
+#include "callback_identity.h"
 #include "recovery_deadline.h"
 #include "inspection_units.h"
 #include <algorithm>
@@ -2046,6 +2047,92 @@ static bool recovery_dependency_free() {
     return dependency_free(board);
 }
 
+// Controlled inspection references (BUG-076): full payloads stay next to the
+// job as sidecar files; control results carry only {file, sha256, bytes} and
+// the Python closeout adds a small summary. Legacy inline payloads inside
+// requests keep working through choice_inspection.
+static J write_inspection_ref(const J &value, const char *stem) {
+    const std::string data = value.dump(2);
+    std::filesystem::path directory(folder);
+    std::filesystem::path temp = directory / ("inspection-" + std::string(stem) + "-" +
+                                              std::to_string(GetCurrentProcessId()) + "-" +
+                                              std::to_string(GetTickCount()) + ".tmp");
+    {
+        std::ofstream output(temp, std::ios::binary | std::ios::trunc);
+        output << data;
+        output.flush();
+        if (!output.good())
+            throw std::runtime_error("Cannot write the inspection sidecar file");
+    }
+    // Content-addressed name: identical payloads reuse one file, a different
+    // payload never overwrites a reference an earlier record still points to.
+    const std::string digest = mechdog_callback::sha256(temp);
+    std::filesystem::path file =
+        directory / ("inspection-" + std::string(stem) + "-" + digest.substr(0, 16) + ".json");
+    std::error_code rename_error;
+    std::filesystem::rename(temp, file, rename_error);
+    if (rename_error) {
+        if (std::filesystem::exists(file))
+            std::filesystem::remove(temp); // Same content is already stored.
+        else {
+            std::filesystem::remove(temp);
+            throw std::runtime_error("Cannot publish the inspection sidecar file");
+        }
+    }
+    return {{"file", utf8(file.wstring())}, {"sha256", digest}, {"bytes", (long long)data.size()}};
+}
+
+static J read_inspection_ref(const J &ref) {
+    if (!ref.is_object() || !ref.contains("file") || !ref.contains("sha256"))
+        throw std::runtime_error("Inspection reference is malformed");
+    const std::filesystem::path file(wide(ref.at("file").get<std::string>()));
+    if (mechdog_callback::sha256(file) != ref.at("sha256").get<std::string>())
+        throw std::runtime_error(
+            "Inspection reference hash mismatch: the referenced full inspection "
+            "changed since it was recorded");
+    std::ifstream input(file, std::ios::binary);
+    if (!input)
+        throw std::runtime_error("Inspection reference file is missing");
+    J value;
+    input >> value;
+    return value;
+}
+
+static J choice_inspection(const J &holder, const char *key) {
+    const std::string ref_key = std::string(key) + "_ref";
+    if (holder.contains(ref_key))
+        return read_inspection_ref(holder.at(ref_key));
+    if (holder.contains(key))
+        return holder.at(key);
+    throw std::runtime_error(std::string("Request is missing ") + key);
+}
+
+static void split_report_inspections(const J &request, J &report) {
+    // Keep full inspection payloads out of adoption/reconciliation control
+    // results: move them into controlled sidecars and leave references
+    // (BUG-076). Ordinary modeling plans keep their inline inspection: the
+    // registry/query snapshot contract for created models is unchanged. Any
+    // sidecar failure keeps the inline payload; the Python closeout splits
+    // it again.
+    if (!request.contains("adoption") && !request.contains("reconciliation"))
+        return;
+    try {
+        if (report.contains("live") && report["live"].contains("inspection") &&
+            report["live"]["inspection"].is_object() && !report["live"]["inspection"].empty()) {
+            report["live"]["inspection_ref"] =
+                write_inspection_ref(report["live"]["inspection"], "live");
+            report["live"].erase("inspection");
+        }
+        if (report.contains("inspection") && report["inspection"].is_object() &&
+            !report["inspection"].empty()) {
+            report["inspection_ref"] = write_inspection_ref(report["inspection"], "verified");
+            report.erase("inspection");
+        }
+    } catch (const std::exception &error) {
+        log("INSPECTION_SPLIT_FAILED=%s\n", error.what());
+    }
+}
+
 static bool millimeter_units(ProMdl mdl) {
     ProUnitsystem us;
     ProUnititem unit;
@@ -2090,8 +2177,10 @@ static void reconcile_native(const J &request, J &report) {
             report["live"]["millimeter_units"] = !wcscmp(unit.name, L"mm");
             report["live"]["dependency_free"] = recovery_dependency_free();
             try {
-                if (request["model"].contains("inspection")) {
-                    verify_recovery(request["model"]["inspection"], report["live"]["inspection"]);
+                if (request["model"].contains("inspection") ||
+                    request["model"].contains("inspection_ref")) {
+                    verify_recovery(choice_inspection(request["model"], "inspection"),
+                                    report["live"]["inspection"]);
                     report["live"]["matches_baseline"] = true;
                 }
             } catch (const std::exception &error) {
@@ -2113,10 +2202,11 @@ static void reconcile_native(const J &request, J &report) {
         return;
     }
     if (action == "accept_live") {
-        if (!loaded || !choice.contains("live_inspection"))
+        if (!loaded ||
+            (!choice.contains("live_inspection") && !choice.contains("live_inspection_ref")))
             throw std::runtime_error(
                 "accept_live requires an owned loaded model and live evidence");
-        verify_recovery(choice["live_inspection"], inspection());
+        verify_recovery(choice_inspection(choice, "live_inspection"), inspection());
     } else if (action == "restore_baseline" || action == "accept_saved") {
         if (loaded) {
             CK(ProMdlErase(board));
@@ -2140,7 +2230,7 @@ static void reconcile_native(const J &request, J &report) {
     CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
     J before = inspection();
     if (action != "accept_live")
-        verify_recovery(choice.at("source_inspection"), before);
+        verify_recovery(choice_inspection(choice, "source_inspection"), before);
     report["loft_checks"]["recovery_source"] = verify_loft_settings(L"recovery_source");
     std::wstring saved = action == "restore_baseline" ? wide(choice.at("source_file")) : L"";
     if (action != "restore_baseline") {
@@ -2198,7 +2288,7 @@ static void confirm_adoption_snapshot(const J &choice, J &report) {
         if (_wcsicmp(origin, saved.c_str()))
             throw std::runtime_error("Prepared snapshot name conflicts with another session model");
         // Refuse rather than discard manual changes to the staged copy.
-        verify_recovery(choice.at("source_inspection"), inspection(false));
+        verify_recovery(choice_inspection(choice, "source_inspection"), inspection(false));
         CK(ProMdlErase(board));
         board = nullptr;
     } else if (found != PRO_TK_E_NOT_FOUND)
@@ -2210,7 +2300,7 @@ static void confirm_adoption_snapshot(const J &choice, J &report) {
     if (!millimeter_units(board) || !dependency_free(board))
         throw std::runtime_error("Prepared snapshot units or dependencies changed");
     J after = inspection();
-    verify_recovery(choice.at("source_inspection"), after);
+    verify_recovery(choice_inspection(choice, "source_inspection"), after);
     after["inspection_source"] = "adoption_snapshot_verified";
     after["inspection_available"] = true;
     display_adopted_model();
@@ -2318,6 +2408,396 @@ static void session_models_native(J &report) {
                    {"current_model_code", inventory.current_code}});
 }
 
+// FEAT-046: explicit, evidence-bound erasure of selected session models.
+// No saves and no disk deletion; assemblies erase before their components;
+// every item re-verifies identity, modification state and references, and
+// each erasure is confirmed absent through two independent queries before
+// success is reported. The whole job runs under one Toolkit channel lock.
+struct EraseModel {
+    std::wstring name;
+    std::string model_type;
+    std::string key; // lowercase name + "|" + family (part|assembly)
+    ProMdl mdl = nullptr;
+    ProPath origin = {};
+    bool modified = false;
+    bool has_origin = false;
+};
+
+static std::string erase_family(const std::string &model_type) {
+    return model_type == "assembly" ? "assembly" : "part";
+}
+
+static std::string erase_key(const std::wstring &name, const std::string &model_type) {
+    std::string lowered;
+    for (wchar_t c : name)
+        lowered += static_cast<char>(towlower(c));
+    return lowered + "|" + erase_family(model_type);
+}
+
+// One dependency enumeration over every session part/assembly: each entry maps
+// a session key to the set of session keys it depends on.
+static std::map<std::string, std::vector<std::string>> session_dependency_graph(
+    const std::vector<EraseModel> &models, J &query_errors) {
+    std::map<std::string, std::vector<std::string>> graph;
+    for (const auto &model : models) {
+        ProMdlnameShortdata *names = nullptr;
+        ProMdlfileType *types = nullptr;
+        int count = 0;
+        ProError code = ProMdlDependenciesDataList(model.mdl, &names, &types, &count);
+        if (code == PRO_TK_E_NOT_FOUND) {
+            graph[model.key] = {};
+            continue;
+        }
+        if (code != PRO_TK_NO_ERROR) {
+            query_errors.push_back({{"key", model.key}, {"code", code}});
+            graph[model.key] = {};
+            continue;
+        }
+        try {
+            std::vector<std::string> dependencies;
+            for (int i = 0; i < count; ++i) {
+                std::string family = types[i] == PRO_MDLFILE_ASSEMBLY ? "assembly" : "part";
+                dependencies.push_back(erase_key(std::wstring(names[i].name), family));
+            }
+            graph[model.key] = dependencies;
+        } catch (...) {
+            ProArrayFree((ProArray *)&names);
+            ProArrayFree((ProArray *)&types);
+            throw;
+        }
+        ProArrayFree((ProArray *)&names);
+        ProArrayFree((ProArray *)&types);
+    }
+    return graph;
+}
+
+static void session_erase_native(const J &request, J &report) {
+    const J &choice = request.at("session_erase");
+    const std::string action = choice.at("action");
+    if (action != "inspect" && action != "apply")
+        throw std::runtime_error("Unknown session-erase action");
+    generic_stage("session_erase_inventory");
+    SessionInventory inventory;
+    collect_session_models(inventory);
+    if (!inventory.type_errors.empty() || inventory.truncated)
+        throw std::runtime_error(
+            "SESSION_ENUMERATION_INCOMPLETE: the session inventory could not be "
+            "completed, so erase preconditions cannot be proven; nothing was erased");
+    // Fresh handles for every session part/assembly (the inventory above only
+    // keeps names).
+    ProMdl current = nullptr;
+    int current_code = ProMdlCurrentGet(&current);
+    std::vector<EraseModel> session;
+    std::vector<std::wstring> managed_roots;
+    if (choice.contains("managed_roots"))
+        for (const auto &root : choice.at("managed_roots"))
+            managed_roots.push_back(wide(root.get<std::string>()));
+    for (const auto &pair : std::initializer_list<std::pair<ProMdlType, const char *>>{
+             {PRO_MDL_PART, "part"}, {PRO_MDL_ASSEMBLY, "assembly"}}) {
+        ProMdl *list = nullptr;
+        int count = 0;
+        ProError listed = ProSessionMdlList(pair.first, &list, &count);
+        if (listed == PRO_TK_E_NOT_FOUND)
+            continue;
+        check(listed, "ProSessionMdlList(erase)");
+        try {
+            for (int i = 0; i < count; ++i) {
+                EraseModel model;
+                model.model_type = pair.second;
+                if (pair.first == PRO_MDL_PART) {
+                    ProMdlsubtype subtype;
+                    if (!ProMdlSubtypeGet(list[i], &subtype) &&
+                        subtype == PROMDLSTYPE_PART_SHEETMETAL)
+                        model.model_type = "sheetmetal";
+                }
+                ProMdlName name = {};
+                if (!ProMdlMdlnameGet(list[i], name))
+                    model.name = name;
+                ProError oc = ProMdlOriginGet(list[i], model.origin);
+                model.has_origin = !oc && model.origin[0] != 0;
+                ProBoolean modified = PRO_B_FALSE;
+                model.modified =
+                    !ProMdlModificationVerify(list[i], &modified) && modified == PRO_B_TRUE;
+                model.mdl = list[i];
+                model.key = erase_key(model.name, model.model_type);
+                session.push_back(model);
+            }
+        } catch (...) {
+            if (list)
+                ProArrayFree((ProArray *)&list);
+            throw;
+        }
+        if (list)
+            CK(ProArrayFree((ProArray *)&list));
+    }
+    auto find = [&](const std::wstring &name, const std::string &model_type) {
+        std::string wanted = erase_key(name, model_type);
+        const EraseModel *found = nullptr;
+        for (const auto &model : session)
+            if (model.key == wanted) {
+                if (found)
+                    throw std::runtime_error(
+                        "SESSION_ERASE_AMBIGUOUS: more than one session model matches a "
+                        "target; refuse instead of picking one");
+                found = &model;
+            }
+        return found;
+    };
+    auto is_managed = [&](const EraseModel &model) {
+        for (const auto &root : managed_roots) {
+            std::wstring prefix = root;
+            if (!prefix.empty() && prefix.back() != L'\\')
+                prefix += L"\\";
+            if (!_wcsnicmp(model.origin, prefix.c_str(), prefix.size()))
+                return true;
+        }
+        return false;
+    };
+
+    J targets = J::array();
+    std::vector<const EraseModel *> manifest;
+    for (const auto &target : choice.at("targets")) {
+        std::wstring name = wide(target.at("name").get<std::string>());
+        std::string model_type = target.value("model_type", "part");
+        const EraseModel *model = find(name, model_type);
+        J entry = {{"name", utf8(name)}, {"model_type", model_type}};
+        if (!model) {
+            entry["blocked"] = {{"reason", "not_in_session"},
+                                {"message", "No session model matches this name and type"}};
+        } else {
+            int id = -1;
+            ProMdlIdGet(model->mdl, &id);
+            entry.update({
+                {"session_model_id", id},
+                {"origin", model->has_origin ? J(utf8(model->origin)) : J(nullptr)},
+                {"modified", model->modified},
+                {"is_current", current_code ? J(nullptr) : J(model->mdl == current)},
+            });
+            if (!model->has_origin)
+                entry["blocked"] = {{"reason", "never_saved"},
+                                    {"message",
+                                     "The model has no saved origin; explicit erase covers "
+                                     "saved session objects only"}};
+            else if (model->modified)
+                entry["blocked"] = {{"reason", "modified"},
+                                    {"message", "The model has unsaved changes; save or "
+                                                "discard them in Creo first"}};
+            else if (is_managed(*model))
+                entry["blocked"] = {{"reason", "managed"},
+                                    {"message",
+                                     "The model belongs to this service's managed output; use "
+                                     "creo_reconcile_model instead of erasing it here"}};
+            else
+                manifest.push_back(model);
+        }
+        targets.push_back(entry);
+    }
+    // Bind a reference: json value semantics would detach every later update
+    // of the summary from the report.
+    report["session_erase"] = {{"targets", targets}, {"action", action}};
+    J &summary = report["session_erase"];
+    if (action == "inspect") {
+        // Reference graph over the whole session: an outside model referencing
+        // a manifest target, or a cycle inside the manifest, blocks erasure.
+        generic_stage("session_erase_reference_check");
+        J query_errors = J::array();
+        auto graph = session_dependency_graph(session, query_errors);
+        if (!query_errors.empty())
+            throw std::runtime_error(
+                "SESSION_ERASE_DEPENDENCY_QUERY_FAILED: dependency enumeration "
+                "failed for at least one session model; preconditions cannot be "
+                "proven; nothing was erased");
+        std::set<std::string> manifest_keys;
+        for (const EraseModel *model : manifest)
+            manifest_keys.insert(model->key);
+        bool blocked = false;
+        for (auto &entry : targets)
+            if (!entry.contains("blocked")) {
+                std::string key = erase_key(wide(entry["name"].get<std::string>()),
+                                            entry["model_type"].get<std::string>());
+                for (const auto &[holder, dependencies] : graph) {
+                    if (manifest_keys.count(holder))
+                        continue;
+                    for (const auto &dependency : dependencies)
+                        if (dependency == key) {
+                            blocked = true;
+                            entry["blocked"] = {
+                                {"reason", "referenced_outside_manifest"},
+                                {"message",
+                                 "A session model outside the erase manifest references "
+                                 "this target; add it to the manifest or erase it in Creo"}};
+                        }
+                }
+            }
+        // Topological erase order: a model no in-manifest model depends on
+        // goes first; dependents always erase before their dependencies.
+        std::map<std::string, int> dependents;
+        for (const auto &key : manifest_keys)
+            dependents[key] = 0;
+        for (const auto &key : manifest_keys)
+            for (const auto &dependency : graph[key])
+                if (dependents.count(dependency))
+                    dependents[dependency] += 1;
+        std::vector<std::string> order;
+        std::set<std::string> placed;
+        while (order.size() < manifest_keys.size()) {
+            bool progressed = false;
+            for (const auto &key : manifest_keys) {
+                if (placed.count(key) || dependents[key] > 0)
+                    continue;
+                placed.insert(key);
+                order.push_back(key);
+                for (const auto &dependency : graph[key])
+                    if (dependents.count(dependency))
+                        dependents[dependency] -= 1;
+                progressed = true;
+            }
+            if (!progressed) {
+                summary.update({
+                    {"available", false},
+                    {"reason_code", "dependency_cycle"},
+                    {"message", "The manifest contains a dependency cycle; no erase order "
+                                "exists; nothing was erased"},
+                });
+                return;
+            }
+        }
+        J erase_order = J::array();
+        for (const auto &key : order) {
+            for (const auto &entry : targets)
+                if (!entry.contains("blocked") &&
+                    erase_key(wide(entry["name"].get<std::string>()),
+                              entry["model_type"].get<std::string>()) == key)
+                    erase_order.push_back({{"name", entry["name"]},
+                                           {"model_type", entry["model_type"]},
+                                           {"origin", entry["origin"]},
+                                           {"modified", entry["modified"]}});
+        }
+        J remaining = J::array();
+        for (const auto &model : session) {
+            if (!manifest_keys.count(model.key))
+                remaining.push_back({{"name", utf8(model.name)},
+                                     {"model_type", model.model_type},
+                                     {"modified", model.modified}});
+        }
+        bool any_blocked = false;
+        for (const auto &entry : targets)
+            if (entry.contains("blocked"))
+                any_blocked = true;
+        summary.update({
+            {"available", !any_blocked},
+            {"reason_code", any_blocked ? J("blocked_targets") : J(nullptr)},
+            {"erase_order", erase_order},
+            {"remaining_after", remaining},
+            {"message", any_blocked ? "One or more targets are blocked; nothing was erased; "
+                                      "resolve the blocking reasons and inspect again"
+                                    : "Erase plan verified; apply with the evidence token to "
+                                      "execute exactly this manifest"},
+        });
+        report["success"] = true;
+        return;
+    }
+
+    // apply: execute exactly the manifest from the token, one item at a time.
+    generic_stage("session_erase_apply");
+    J erased = J::array();
+    J unconfirmed = nullptr;
+    std::set<std::string> done;
+    for (const auto &item : choice.at("erase_order")) {
+        std::wstring name = wide(item.at("name").get<std::string>());
+        std::string model_type = item.at("model_type");
+        std::string key = erase_key(name, model_type);
+        const EraseModel *model = find(name, model_type);
+        if (!model) {
+            if (done.empty())
+                throw std::runtime_error(
+                    "SESSION_ERASE_IDENTITY_CHANGED: the first manifest item is no "
+                    "longer in the session; refuse instead of erasing a changed "
+                    "session; nothing was erased");
+            unconfirmed = {{"name", item.at("name")},
+                           {"stage", "relocate"},
+                           {"message", "The item disappeared from the session before its "
+                                       "turn; earlier items stay erased"}};
+            break;
+        }
+        if (model->modified) {
+            unconfirmed = {{"name", item.at("name")},
+                           {"stage", "modification_recheck"},
+                           {"message", "The item reports unsaved changes now; it was not "
+                                       "erased; earlier items stay erased"}};
+            break;
+        }
+        std::wstring expected = wide(item.at("origin").get<std::string>());
+        if (model->has_origin && _wcsicmp(model->origin, expected.c_str())) {
+            unconfirmed = {{"name", item.at("name")},
+                           {"stage", "origin_recheck"},
+                           {"message", "The item's origin changed since the token was "
+                                       "issued; it was not erased; earlier items stay "
+                                       "erased"}};
+            break;
+        }
+        if (is_managed(*model)) {
+            unconfirmed = {{"name", item.at("name")},
+                           {"stage", "managed_recheck"},
+                           {"message", "The item now looks managed by this service; it "
+                                       "was not erased; earlier items stay erased"}};
+            break;
+        }
+        CK(ProMdlErase(model->mdl));
+        // Confirm absence through two independent queries; a zero return from
+        // ProMdlErase alone never reports success.
+        ProMdl probe = nullptr;
+        ProName locate = {};
+        wcsncpy_s(locate, model->name.c_str(), _TRUNCATE);
+        ProError first =
+            ProMdlInit(locate, model_type == "assembly" ? PRO_MDL_ASSEMBLY : PRO_MDL_PART, &probe);
+        ProMdl *residue = nullptr;
+        int residue_count = 0;
+        ProError listed = ProSessionMdlList(
+            model_type == "assembly" ? PRO_MDL_ASSEMBLY : PRO_MDL_PART, &residue, &residue_count);
+        bool absent = first == PRO_TK_E_NOT_FOUND;
+        if (listed == PRO_TK_NO_ERROR) {
+            for (int i = 0; i < residue_count && absent; ++i) {
+                ProMdlName other = {};
+                if (!ProMdlMdlnameGet(residue[i], other) && !_wcsicmp(other, model->name.c_str()))
+                    absent = false;
+            }
+            ProArrayFree((ProArray *)&residue);
+        } else if (listed != PRO_TK_E_NOT_FOUND) {
+            check(listed, "ProSessionMdlList(erase-confirm)");
+        }
+        if (!absent) {
+            unconfirmed = {{"name", item.at("name")},
+                           {"stage", "absence_confirmation"},
+                           {"message", "ProMdlErase returned success but the model is "
+                                       "still observable in the session; it stays listed "
+                                       "as not confirmed erased"}};
+            break;
+        }
+        done.insert(key);
+        erased.push_back({{"name", item.at("name")}, {"model_type", model_type}});
+    }
+    SessionInventory after;
+    collect_session_models(after);
+    J remaining_after = J::array();
+    for (const auto &item2 : after.models)
+        remaining_after.push_back(item2);
+    summary.update({
+        {"erased", erased},
+        {"unconfirmed", unconfirmed},
+        {"remaining_after", remaining_after},
+        {"stopped_early", !unconfirmed.is_null()},
+        {"message", unconfirmed.is_null()
+                        ? "Manifest erased and confirmed absent; nothing was saved and "
+                          "no disk file was deleted"
+                        : "Erasure stopped at an item; erased items stay erased; "
+                          "unconfirmed and remaining items are listed explicitly"},
+    });
+    report["success"] = unconfirmed.is_null();
+    if (!unconfirmed.is_null())
+        report["message"] = summary["message"];
+}
+
 static int components_total = 0;
 static int components_missing = 0;
 static ProError component_probe(ProFeature *feature, ProError status, ProAppData) {
@@ -2386,7 +2866,9 @@ static void open_file_native(const J &request, J &report) {
                 "SESSION_NAME_CONFLICT: a " + kind +
                 " model with this name is already in the Creo session; the file was "
                 "not retrieved. Close or erase it in Creo first, or switch to it "
-                "directly");
+                "directly. A previously retrieved assembly may have loaded this "
+                "name as a dependency (check creo_list_session_models; assembly "
+                "components stay in the session even after their window closes)");
         }
     }
     if (assembly) {
@@ -2528,6 +3010,33 @@ static void open_file_native(const J &request, J &report) {
     int window_code = ProMdlCurrentGet(&window_model);
     report["open_file"]["opened_session_model"] =
         observe_session_model(opened, model_type.c_str(), window_model, window_code);
+    // Bounded post-open session summary (FEAT-044): one full enumeration
+    // distinguishes session model objects from the component instances an
+    // assembly retrieval brings in. The bounded page is a summary; the
+    // complete, refreshable inventory is creo_list_session_models.
+    {
+        SessionInventory after;
+        collect_session_models(after);
+        J page = J::array();
+        constexpr size_t page_limit = 20;
+        for (const auto &item : after.models) {
+            if (page.size() >= page_limit)
+                break;
+            page.push_back(item);
+        }
+        report["open_file"]["loaded_session_models"] = {
+            {"session_model_count", after.models.size()},
+            {"component_instance_count", assembly ? J(components_total) : J(nullptr)},
+            {"component_instance_scope",
+             assembly ? "component features of the assembly opened by this job"
+                      : "not an assembly open"},
+            {"models", page},
+            {"page_limit", page_limit},
+            {"complete", after.models.size() <= page_limit},
+            {"has_more", after.models.size() > page_limit},
+            {"detail", "creo_list_session_models without cursor re-collects the live "
+                       "inventory; its cursor pages read a frozen snapshot"}};
+    }
     report["success"] = true;
 }
 
@@ -2593,8 +3102,8 @@ static void adopt_native(const J &request, J &report) {
     }
     if (action != "apply" && !preparing)
         throw std::runtime_error("Unknown adoption action");
-    if (choice.contains("live_inspection"))
-        verify_recovery(choice.at("live_inspection"), live);
+    if (choice.contains("live_inspection") || choice.contains("live_inspection_ref"))
+        verify_recovery(choice_inspection(choice, "live_inspection"), live);
     board = nullptr; // The user's model is never the managed target again past this point.
     if (preparing && !origin_text.empty())
         throw std::runtime_error(
@@ -2745,6 +3254,9 @@ static int run_generic(const std::wstring &job) {
         } else if (request.contains("open_file")) {
             generic_stage("open_file_" + request["open_file"]["model_kind"].get<std::string>());
             open_file_native(request, report);
+        } else if (request.contains("session_erase")) {
+            generic_stage("session_erase_" + request["session_erase"]["action"].get<std::string>());
+            session_erase_native(request, report);
         } else if (request.contains("adoption")) {
             generic_stage("adoption_" + request["adoption"]["action"].get<std::string>());
             adopt_native(request, report);
@@ -2969,6 +3481,7 @@ static int run_generic(const std::wstring &job) {
     generic_stage("disconnect");
     if (recovery_deadline)
         recovery_deadline->complete();
+    split_report_inspections(request, report);
     int delivered = deliver_native_result(job, report, connected, [&]() {
         int code = ProEngineerDisconnect(&process, 15);
         log("DISCONNECT=%d\n", code);

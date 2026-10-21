@@ -40,6 +40,7 @@ from creo_mechdog.schema import (
     SketchDimension,
     SketchOp,
 )
+from creo_mechdog.session_erase import erase_session_models
 from creo_mechdog.session_models import list_session_models
 from version import VERSION
 
@@ -69,7 +70,10 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/reconciliation.py",
     "src/creo_mechdog/legacy_recovery.py",
     "src/creo_mechdog/adoption.py",
+    "src/creo_mechdog/inspection_refs.py",
+    "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
+    "src/creo_mechdog/session_erase.py",
     "src/creo_mechdog/open_file.py",
     "src/creo_mechdog/capability_pages.py",
     "src/creo_mechdog/model_queries.py",
@@ -223,6 +227,12 @@ async def creo_callback_status() -> dict[str, Any]:
         "source_fingerprints_at_startup": dict(_LOADED_FINGERPRINTS),
         "source_changed_since_startup": _source_fingerprints() != _LOADED_FINGERPRINTS,
     }
+    try:
+        from creo_mechdog.blend_callback import generation_inventory
+
+        result["generation_inventory"] = generation_inventory(bridge.ROOT / "build")
+    except (OSError, ValueError) as error:
+        result["generation_inventory"] = {"available": False, "reason": str(error)}
     if result["service"]["source_changed_since_startup"]:
         result.update(
             readiness="unknown",
@@ -372,6 +382,17 @@ async def creo_open_file(
 ) -> dict[str, Any]:
     """Retrieve an existing on-disk .prt/.asm into the connected Creo session and display it, read-only. file_path is a Windows absolute path; append an explicit numeric version (e.g. .prt.3) to open exactly that file, otherwise the highest numeric version in the directory is selected and only the extension-only file is used when no numeric version exists. idempotency_key (8-80 letters/digits/underscores/hyphens) replays the same job for the same path and rejects a different path. Submission returns a job_id; poll creo_get_job. The file is never saved, erased, renamed or adopted: a successful open returns model_id=null/adopted=false and creates no managed revision. Same-name/same-type session models cause rejection, and assemblies additionally require a session without parts/assemblies; both checks and the retrieval share one Toolkit channel. An incomplete assembly fails with any residual session objects reported and missing components marked unknown; a display failure is reported separately from retrieval. Source-file identity is recorded at submit and after the job. Opened models are not MCP-managed: adopt with creo_adopt_current_model first if managed editing is needed."""
     return await invoke(submit_open_file, file_path, idempotency_key)
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_erase_session_models(
+    mode: Literal["inspect", "apply"] = "inspect",
+    targets: list[dict[str, Any]] | None = None,
+    evidence_token: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Explicitly erase selected models from the connected Creo session (FEAT-046). Never saves models and never deletes disk files. inspect(targets=[{name, model_type}]) verifies a manifest and returns per-target identity, blocking reasons, the assembly-before-components erase order, the expected remaining session objects and a 600-second evidence_token; targets qualify only when saved (has origin), unmodified, not MCP-managed, not referenced by session models outside the manifest and free of manifest dependency cycles; incomplete session enumeration refuses. apply(evidence_token, idempotency_key) executes exactly the token's manifest under one Toolkit channel lock and returns a job_id; poll creo_get_job. Each item re-verifies identity, modification state and origin before ProMdlErase, and absence is confirmed through two independent queries; a mid-manifest failure stops remaining items and reports erased, unconfirmed and remaining lists without resubmitting. The currently displayed model may be erased when it qualifies. Managed models stay with creo_reconcile_model; pass a session inventory from creo_list_session_models to choose targets."""
+    return await invoke(erase_session_models, mode, targets, evidence_token, idempotency_key)
 
 
 @mcp.tool(annotations=READ)

@@ -268,3 +268,45 @@ FEAT-042首阶段历史：显式接管用户已打开模型的受控入口 `creo
 | ID | 优先级 | 状态 | 目标版本 | 已验证范围 |
 | --- | --- | --- | --- | --- |
 | [BUG-071](work-items/BUG-071.md) | P1 | 已完成 | 未排期 | 预检来源/哈希/冲突/令牌写入统一收尾，登记最后发布；隔离故障回归和403项全量单元/开发检查通过。未合入main，FEAT-042/043实机因首次就绪超时仍未验收。见[本轮证据](validation/ADOPTION-COMPLETION-2026-10-18.md)。 |
+
+
+## 2026-10-21：DEV-043 台账精简归档
+
+本轮把已完成BUG的展示移出当前台账，不新增建模验收结论。下列BUG已随0.4.1交付；原台账详细叙述归档于此。
+
+文档整理本身的验收范围如下，开发分支完成不表示已合入或发布。
+
+| ID | 优先级 | 状态 | 目标版本 | 已验证范围 |
+| --- | --- | --- | --- | --- |
+| [DEV-043](work-items/DEV-043.md) | P2 | 已完成（开发分支文档整理） | 未排期 | 重读0.4.5新文档后精简台账与入口；完成项移出，未完成ID/状态/优先级/目标版本及37项无卡任务的唯一信息保留。当前104项含102未完成与2观察；本地链接、表格、数量、diff及283份历史验收原件哈希核对通过，独立审查通过。未改代码/版本，未连接Creo或重跑建模验收，未提交/合入/发布。 |
+
+| ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
+| --- | --- | --- | --- | --- |
+| [BUG-073](work-items/BUG-073.md) | P2 | 已完成 | 0.4.1 | WorkBuddy黑盒：接管模型上 `sketch=40`/`"48"`/`features`段`RECT_40X30` 三种写法均 `Unknown feature label` 并正确回滚，仅 `aliases` 小写 `rect_40x30` 成功，与 `creo_loft` 数字串规范化规则矛盾。定位闭环：服务端序列化无缺陷（stdio整数保真，改写发生在LLM客户端对anyOf整数分支加引号）；`feature_id` 大小写敏感且 Creo 将特征名统一大写致 features/aliases 两段名不自洽；aliases 由 `remember()` 统一登记、快照初始为空是设计语义。已实现：schema 层 `SketchRef` 数字串规范化（六处 sketch 字段）+native digit 串/大小写回退/错误候选（`alias_entry` 统一元数据读取，顺带修复大写引用在执行段 null `.value()` 崩溃）。411项单测（新增5）、dev_check、实机四写法/错误候选/回滚（自建+接管模型）通过；WorkBuddy公开复验同轮通过（四写法/候选/重复标签/受管对照，回显归一为整数即规范化生效的公开证据）。实机loft对照未测（单测覆盖无回归）。随0.4.1交付，见[发布记录](validation/RELEASE-0.4.1.md)。 |
+
+<details>
+<summary>整理前的各轮当前安排（历史快照，包含尚未完成事项）</summary>
+
+以下保留 `e3848f0` / 0.4.5 下各轮次的原叙述，其中“当前”“本轮”“未发布”等字样只属于原记录时点。涉及未完成事项，以[主台账](BACKLOG.md)和各工作卡当前摘要为准；不因收入本档案而转为完成。
+
+- 2026-10-21 实施用户确认的[0.4.2 反馈首批处理计划](development/CREO10-0.4.2-FEEDBACK-PLAN-2026-10-21.md)：两份反馈原件归档（[feedback-0.4.2-creo10-2026-10-21](validation/feedback-0.4.2-creo10-2026-10-21/report.md)，主报告 SHA256 `59832348…`、构建侧 `72c1a634…`，均与原件逐字节一致）；新增 [BUG-076](work-items/BUG-076.md)（收养 16 MiB 预算阻断定位诊断，P1，首批交付 `ADOPTION_METADATA_BUDGET_EXCEEDED` 结构化诊断与四类超限隔离用例，不预定全量证据存储重构）；FEAT-006/008 补收养预检全阶段诊断与空窗口 `NO_CURRENT_MODEL` Python 结构化转换；FEAT-043/044 打开成功结果增加 `opened_session_model`；FEAT-008/023 README 汇总默认摘要接口用法。481 项单元+dev_check+实机（Creo 12.4 空窗口/open_file/正常预检，[验证记录](validation/BUG076-FEEDBACK042-2026-10-21.md)）；既有边界观察：inspect-only staging 无 MCP 清理路径（0.4.4 同行为，reconcile 另期）。DEV-027/030 已随 0.4.4 交付不在本轮范围；会话擦除、FEAT-045、装配接管/reconcile、旧 DLL 目录回收另期。已随 0.4.5 发版（main `9b7358d`，tag v0.4.5，[Release 419181692](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.4.5) 双附件核对一致，见[发布核对](validation/RELEASE-0.4.5.md)）。BUG-076/FEAT-043/044 转验收中，WorkBuddy 黑盒待复核。
+
+- 2026-10-21 实施用户确认的[IMPROVEMENT 完善计划](development/CREO10-0.4.1-FEEDBACK-IMPROVEMENT-PLAN-2026-10-20.md)（0.4.3 后的下一项工作）：第二份构建侧反馈原件归档（[feedback-0.4.1-creo10-build-2026-10-20](validation/feedback-0.4.1-creo10-build-2026-10-20/report.md)，SHA256 `92590f8c…`）；**DEV-027 指纹稳定化**（保留 json.hpp 于清单、CRLF→LF 归一化算法 `sha256-repo-lf-v1`、缓存 algorithm/generation_key、旧缓存三形式等价复用、元数据先发布后写标记、派生世代键解非确定性冲突死锁）与 **DEV-030 vcvars64_env 放宽**（必须含大写三键、其余键接受并忽略、回写规范化三键）已实现，469 项单元+dev_check+实机迁移/翻转/重建/额外键构建全过；FEAT-044 补验收（钣金件 sheetmetal/displayed、显式 `.asm.4`=2 组件与 `.asm.6`=3 组件、PrintWindow 目视"WBOPEN_ASMV (启用的)"）；FEAT-023 补过期/跨实例 cursor/大内容分页。证据见[验证记录](validation/DEV-027-030-IMPROVEMENT-2026-10-21.md)，随 0.4.4 发版。旧计划补第二份报告修订（第 6 节）、CODING_STANDARD 明确构建依赖按实际引用确定。
+
+- 2026-10-20 按用户要求先拉取 main cfcea22（0.4.2），实施[0.3.7 剩余计划](development/0.3.7-feedback-remaining-plan-2026-10-20.md)：BUG-057/074、BUG-058观测、FEAT-030首批及BUG-036查询修复已实现，458项单元、增量检查、SDK构建与7项SDK契约检查通过，另补齐仅有PID的历史身份恢复保护及九种子元数据公开复验，见[本轮验证记录](validation/FEEDBACK-0.3.7-IMPLEMENTATION-2026-10-20.md)。FEAT-023 capabilities已交付部分直接沿用。原生验收在会话门槛前失败，无建模作业或故障注入；用户授权仅清理指定三个进程的操作已逐项核对完成，后续未擅自处置进程或清保护。用户确认外部原始JSON/Creo9完整请求不在本机；剩余验收和原环境失败保持开放。同日16:10会话恢复后三项原生驱动串行通过：`tools.test_feedback037_modeling` 26作业全过（BUG-036约束求解+重载、FEAT-030两截面种子实机加载、BUG-019三入口size回显与别名冲突拒绝）、`tools/test_general.py` GENERAL_CORE_SUCCESS=1、ribs四组合保存重载全过（BUG-017本机对照），证据见验证记录新增小节；WorkBuddy黑盒与原环境复验仍开放。
+
+- 2026-10-20 v0.4.1/Creo 10 反馈按用户确认[处理计划](development/CREO10-0.4.1-FEEDBACK-PLAN.md)开始实施：核对结论与归档见[反馈核对](validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md)（准确缺口是缺少 `.prt/.asm` 磁盘打开入口，属新增能力需求而非 0.4.1 回归；capabilities 顶层已有 version 字段）。登记 [FEAT-044](work-items/FEAT-044.md)（creo_open_file 磁盘检索显示，P1，当日实现并实机验收转验收中，随 0.4.2 交付）、[FEAT-045](work-items/FEAT-045.md)（外部装配只读检查，待规划）；FEAT-023 细化出[capabilities 分页实施卡](work-items/FEAT-023.md)（compact 默认+section/cursor、32KiB、600s 快照）；FEAT-006/008 补接管空窗口 NO_CURRENT_MODEL、顶层支持状态与拒绝稳定原因；FEAT-022 补 session_status 各分支 server_version。当日 WorkBuddy 黑盒 16/16 通过（[报告](validation/WORKBUDDY-0.5.0-open-file-2026-10-20.md)）；其遗留五项已跟进：version.py 定版 0.4.2（弃用开发期 0.5.0 编号）、缺件错误码/幂等键提示同步、接管 native 前缀拒绝转结构化 refusal_details（实机验证）、session_model_id 语义补写（FEAT-043）。本轮不扩展装配接管及 reconcile；同日另一份构建侧反馈（json.hpp 指纹清单、vcvars64_env 键集）不在计划范围，待后续登记。0.4.2 已交付 main（`24fc3d5`，tag v0.4.2，[Release 418039183](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.4.2) 双附件核对一致，见[发布核对](validation/RELEASE-0.4.2.md)）。
+
+- 2026-10-19 WorkBuddy 公开黑盒复验新增 [BUG-073](work-items/BUG-073.md)（P2，现验收中）：同一接管模型上 `creo_extrude.sketch` 以整数 `40`、数字串 `"48"`、`features` 段大写名 `RECT_40X30` 提交均返回 `Unknown feature label` 并正确回滚，仅 `aliases` 段小写 `rect_40x30` 成功，与 `creo_loft` 公开的“整数 ID / 纯数字串即特征 ID”规则矛盾。回滚、revision 与几何均未受损，故列 P2。同日晚开发者定位闭环（服务端序列化无缺陷，改写发生在LLM客户端；native大小写敏感+Creo特征名大写化）并实现修复：schema 层六处 sketch 字段数字串规范化、native digit串/大小写回退与可用候选提示，顺带修复大写引用在执行段对 null 调 `.value()` 的崩溃；411项单测、dev_check 与实机四写法（自建+接管模型）通过；同日第三轮 WorkBuddy 公开复验通过（四写法/候选标签/重复标签保护/受管对照），随 0.4.1 交付，卡转已完成。同轮“判别联合数组参数在 ZCode 客户端被拒、开发者通道与 WorkBuddy 宿主同载荷成功”判定为调用方环境问题，不登记为服务缺陷。
+
+- 现有模型纳管第二阶段：FEAT-042 无盘冻结快照接管、BUG-071 预检失败收尾、FEAT-043 只读会话枚举，FEAT-022 补重启指引。本轮按用户确认计划实施，保留0.4.0首阶段交付与未测边界；原反馈见[原件](validation/feedback-0.3.7-adoption-2026-10-18/report.md)。
+
+- 2026-10-19用户转贴WorkBuddy无盘接管主链通过：revision0→1→2、24000→7152 mm³、保存重载、原件保留及幂等保护；后续过期拒绝、同身份续签确认、修改原件后副本仍20000 mm³/同哈希，以及独立快照abandon_new→abandoned/revision0→普通编辑拒绝与原件保留亦有通过报告，见[黑盒补录](validation/ADOPTION-WorkBuddy-2026-10-19.md)。外部clean和独立平板钣金接管亦通过（分别6000/2400 mm³、ready/revision1、保存重载与原件关联）。sheets指工程图图纸页，不作为钣金展开查询；钣金专有语义仍未验证。dirty接管亦通过（6750 mm³、35×20×10尺寸、5×5贯穿方孔、参数WB_DIRTY_CHECK=42.0逐项核对及保存重载）。装配/非毫米/外部依赖/含抑制特征拒绝与9模型/5页同快照遍历通过；BUG-072非毫米单位/体积摘要已修正，转P2验收中；FEAT-042/043保持验收中，关闭原件、真实再生失败和实际并发仍待验收。prepare的result.adopted=false修正已实现；续签摘要和放弃时省略null参数的指引已补文档，空值问题映射既有BUG-055；字段修正已通过406项单元、统一检查、8例隔离C++及匹配SDK构建。2026-10-19晚连接器重启（部署指纹一致）后开发者实机复验通过：BUG-072英寸inspect返回units="in"/volume_mm3=null（双层一致、毫米准入拒绝保持）；prepare full/compact顶层adopted=false、apply对照true、副本续作24000 mm³/revision2/保存重载verified、原件无盘保留。同轮记录一次-11连接事故（Creo停拉伸Dashboard模态叠加警告框循环，ESC取消后恢复，未结束Creo/未清unknown）；WorkBuddy公开复验仍待操作者执行。
+
+- 0.3.7旋转与接管反馈的首阶段已随0.4.0交付；BUG-067～070已归档，FEAT-042因本次新增无盘范围重入验收。历史环境及未测事实见[0.4.0发布记录](validation/RELEASE-0.4.0.md)。
+
+- 0.3.6 已由 [DEV-041](work-items/DEV-041.md) 交付（PR #11 合并 `ca105b9`，tag `v0.3.6` → `1f38069`，[Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.3.6) 附件核对一致）：BUG-059/DEV-040 的恢复执行前拒绝修复、BUG-057 随版隔离诊断脚本 `tools/reproduce_toolkit_lock.py`、六份 0.3.5 反馈补录与台账重构；无 C++ 改动故无原生回归，未测范围见[版本记录](validation/RELEASE-0.3.6.md)。[BUG-057](work-items/BUG-057.md) 待原环境用诊断脚本取证，[BUG-058](work-items/BUG-058.md) 待实机定位 -11；BUG-059 修复的真实会话/并发验收未执行，继续保留联调限制及实际 unknown 保护。
+- [FEAT-018](work-items/FEAT-018.md) 与 [FEAT-029](work-items/FEAT-029.md) 继续补验收。[BUG-056](work-items/BUG-056.md)/[DEV-036](work-items/DEV-036.md) 已完成，M2 已收尾；证据见[核实记录](validation/BUG-056-DEV-036-investigation-2026-10-17.md)和[WorkBuddy 验收](validation/DEV-036-WorkBuddy-acceptance-2026-10-17.md)。其他 unknown/recovery_pending 保护仍保留。
+- 0.3.5 已由 [DEV-035](work-items/DEV-035.md) 交付，见[版本记录](validation/RELEASE-0.3.5.md)。最新七份反馈分别记录[安装与锁文件测试](validation/FEEDBACK-0.3.5-2026-10-17.md)、[Creo 10 文件层升级检查](validation/FEEDBACK-0.3.5-CREO10-2026-10-18.md)、[Creo 9 有限建模测试](validation/FEEDBACK-0.3.5-CREO9-2026-10-18.md)、[Creo 10 实机验收](validation/FEEDBACK-0.3.5-CREO10-2026-10-18-2.md)（BUG-054 六用例与 BUG-022/013 复测通过；弧方向 P1 见 FEAT-034）、[钣金第四轮回归](validation/FEEDBACK-0.3.5-SHEETMETAL-2026-10-18.md)（S1/S3/S5 四轮未修，S6/P3 新登记 BUG-060/061）、[曲面链路缺口](validation/feedback-0.3.5-surface-2026-10-18/report.md)（FEAT-039 曲面算子、BUG-062 回转草图不可就地编辑）和[建模能力边界](validation/FEEDBACK-0.3.5-CAPABILITY-2026-10-18.md)（虹膜机构全量重建：BUG-049 扩展至不相交多环，新登记 BUG-063 非原点轴阵列静默错误、BUG-064 基准面草图硬失败、BUG-065 轴求交退化、BUG-066 预览失真）。BUG-054/055 在外部 Creo 9 与 Creo 10 的已测范围通过；种子、筋、装配约束、弧方向、钣金链路、纯曲面法及多环/偏心阵列仍有失败或缺口反馈；各环境的已测和未测范围见[兼容矩阵](COMPATIBILITY.md)，不推定该环境整体通过。
+
+</details>
