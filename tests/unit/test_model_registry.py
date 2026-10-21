@@ -10,6 +10,7 @@ backups and an append-only log. FEAT-047 health reporting is covered here too.
 """
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,7 +18,7 @@ from unittest.mock import patch
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import model_registry, registry_ops
+from creo_mechdog import model_queries, model_registry, registry_ops
 
 ALIASES = {
     "sk_big": {
@@ -343,6 +344,211 @@ class Pagination(RegistryBase):
         self.assertEqual(len(set(seen)), 7)
         with self.assertRaises(ValueError):
             registry_ops.health(limit=0)
+
+
+class MigrationSafety(RegistryBase):
+    def test_linked_model_directory_and_registry_file_are_rejected(self):
+        foreign = self.root / "foreign"
+        foreign.mkdir()
+        (foreign / "model.json").write_text(json.dumps(_model("7" * 32)), encoding="utf-8")
+        link = general.MODELS / ("7" * 32)
+        try:
+            os.symlink(foreign, link, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"Directory symlinks unavailable: {error}")
+        for mode in ("inspect", "apply"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                registry_ops.migrate(mode, [link.name], "linked-target-01")
+        link.unlink()
+        link.mkdir()
+        os.symlink(foreign / "model.json", link / "model.json")
+        for mode in ("inspect", "apply"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                registry_ops.migrate(mode, [link.name], "linked-target-02")
+        self.assertFalse((foreign / registry_ops.MODEL_BACKUP).exists())
+
+    def test_busy_channel_refuses_apply_without_touching_model_or_job(self):
+        directory = self.legacy_entry("1" * 32)
+        original = (directory / "model.json").read_bytes()
+        with bridge.toolkit_lock(operation="other-edit", job_id="a" * 32):
+            with self.assertRaises(bridge.ToolkitBusy) as caught:
+                registry_ops.migrate("apply", idempotency_key="busy-migration-01")
+        self.assertEqual(caught.exception.payload["blocking_job_id"], "a" * 32)
+        self.assertEqual((directory / "model.json").read_bytes(), original)
+        self.assertEqual(list(directory.iterdir()), [directory / "model.json"])
+
+    def test_paths_outside_registry_are_rejected_in_both_modes(self):
+        foreign = self.root / "foreign"
+        foreign.mkdir()
+        (foreign / "model.json").write_text(json.dumps(_model("foreign")), encoding="utf-8")
+        for mode in ("inspect", "apply"):
+            for target in ("../foreign", str(foreign), "FOREIGN", "a" * 31, "a" * 32 + "/.."):
+                with self.subTest(mode=mode, target=target), self.assertRaises(ValueError):
+                    registry_ops.migrate(mode, [target], "invalid-target-01")
+        self.assertFalse((foreign / registry_ops.MODEL_BACKUP).exists())
+
+    def test_record_identity_mismatch_is_refused_before_writes(self):
+        directory = self.legacy_entry("2" * 32)
+        bridge.write_json(directory / "model.json", _model("3" * 32))
+        with self.assertRaises(ValueError):
+            registry_ops.migrate("apply", [directory.name], "wrong-model-01")
+        self.assertFalse((directory / registry_ops.MODEL_BACKUP).exists())
+
+    def test_pending_runner_is_not_migrated_during_submission_gap(self):
+        directory = self.legacy_entry("4" * 32, pending_job="a" * 32, last_job="a" * 32)
+        job = bridge.job_path("a" * 32)
+        job.mkdir()
+        bridge.write_json(job / "job.json", {"status": "queued", "model_id": directory.name})
+        bridge.write_json(job / "request.json", {"model": _model(directory.name)})
+        with self.assertRaises(bridge.ToolkitBusy):
+            registry_ops.migrate("apply", [directory.name], "queued-migration-01")
+        self.assertFalse((directory / registry_ops.MODEL_BACKUP).exists())
+        self.assertFalse((job / "request.json.pre-split-bak").exists())
+
+    def test_live_or_unknown_owners_are_refused_and_stopped_protection_is_preserved(self):
+        directory = self.legacy_entry(
+            "8" * 32, pending_job="a" * 32, last_job="a" * 32, status="unknown_outcome"
+        )
+        job = bridge.job_path("a" * 32)
+        job.mkdir()
+        bridge.write_json(
+            job / "job.json",
+            {
+                "status": "unknown_outcome",
+                "model_id": directory.name,
+                "runner_identity": {"pid": 123, "created": 456},
+                "worker_started": False,
+            },
+        )
+        bridge.write_json(job / "request.json", {"model": _model(directory.name)})
+        for observed in ({"alive": True, "created": 456}, {"alive": None}):
+            with patch("creo_mechdog.reconciliation.process_identity", return_value=observed):
+                with self.assertRaises(bridge.ToolkitBusy):
+                    registry_ops.migrate("apply", [directory.name], "protected-target-01")
+            self.assertFalse((directory / registry_ops.MODEL_BACKUP).exists())
+        with patch("creo_mechdog.reconciliation.process_identity", return_value={"alive": False}):
+            report = registry_ops.migrate("apply", [directory.name], "protected-target-01")
+        self.assertEqual(report["migrated"], 1)
+        control = model_registry.read_control(directory)
+        self.assertEqual(control["status"], "unknown_outcome")
+        self.assertEqual(control["pending_job"], "a" * 32)
+        self.assertEqual(control["revision"], 3)
+
+    def test_foreign_job_binding_is_refused_before_any_backup(self):
+        directory = self.legacy_entry("9" * 32, last_job="a" * 32)
+        job = bridge.job_path("a" * 32)
+        job.mkdir()
+        bridge.write_json(job / "job.json", {"status": "succeeded", "model_id": "b" * 32})
+        with self.assertRaises(ValueError):
+            registry_ops.migrate("apply", [directory.name], "foreign-job-01")
+        self.assertFalse((directory / registry_ops.MODEL_BACKUP).exists())
+
+    def test_oversized_migration_preserves_revision_aliases_and_original_bytes(self):
+        model_id = "5" * 32
+        aliases = {"large": {"geometry": "x" * (17 * 1024 * 1024)}}
+        directory = self.legacy_entry(model_id, aliases=aliases, revision=16)
+        before = (directory / "model.json").read_bytes()
+        with self.assertRaises(model_registry.RegistryBudgetExceeded):
+            model_registry.read_control(directory)
+        report = registry_ops.migrate("apply", [model_id], "oversized-migration-01")
+        self.assertEqual(report["migrated"], 1)
+        model = model_registry.read_control(directory)
+        self.assertEqual(model["revision"], 16)
+        self.assertEqual(model["model_id"], model_id)
+        self.assertEqual(model_registry.aliases_of(model), aliases)
+        self.assertEqual((directory / registry_ops.MODEL_BACKUP).read_bytes(), before)
+
+    def test_interrupted_control_publication_can_resume(self):
+        directory = self.legacy_entry("6" * 32)
+        before = (directory / "model.json").read_bytes()
+        write = bridge.write_json
+
+        def fail_control(path, value, **kwargs):
+            if Path(path) == directory / "model.json":
+                raise OSError("injected control publication interruption")
+            return write(path, value, **kwargs)
+
+        with patch.object(bridge, "write_json", side_effect=fail_control):
+            with self.assertRaises(OSError):
+                registry_ops.migrate("apply", [directory.name], "resume-migration-01")
+        self.assertEqual((directory / "model.json").read_bytes(), before)
+        self.assertEqual((directory / registry_ops.MODEL_BACKUP).read_bytes(), before)
+        report = registry_ops.migrate("apply", [directory.name], "resume-migration-01")
+        self.assertEqual(report["migrated"], 1)
+        self.assertEqual(model_registry.aliases_of(model_registry.read_control(directory)), ALIASES)
+
+
+class ResponseBudget(RegistryBase):
+    def assert_bounded(self, report):
+        self.assertLessEqual(model_queries.serialized_size(report), model_queries.RESPONSE_BUDGET)
+
+    def test_health_with_fifty_corrupt_entries_stays_bounded_and_complete(self):
+        for index in range(50):
+            directory = general.MODELS / f"{index:032x}"
+            directory.mkdir()
+            (directory / "model.json").write_text("invalid JSON", encoding="utf-8")
+        seen = []
+        cursor = None
+        while True:
+            report = registry_ops.health(limit=50, cursor=cursor)
+            self.assert_bounded(report)
+            self.assertEqual(report["summary"]["corrupt"], 50)
+            seen.extend(row["model_id"] for row in report["entries"])
+            cursor = report["next_cursor"]
+            if not cursor:
+                break
+        self.assertEqual(seen, [f"{index:032x}" for index in range(50)])
+
+    def test_migration_inspect_and_apply_replay_page_all_485_entries(self):
+        for index in range(485):
+            self.legacy_entry(f"{index:032x}", aliases={"a": {"id": 1}}, inspection={})
+        seen = []
+        cursor = None
+        while True:
+            report = registry_ops.migrate("inspect", limit=50, cursor=cursor)
+            self.assert_bounded(report)
+            self.assertEqual(report["entries_needing_migration"], 485)
+            seen.extend(row["model_id"] for row in report["entries"])
+            cursor = report["next_cursor"]
+            if not cursor:
+                break
+        self.assertEqual(len(set(seen)), 485)
+        seen = []
+        report = registry_ops.migrate("apply", idempotency_key="paged-apply-485", limit=50)
+        while True:
+            self.assert_bounded(report)
+            self.assertEqual(report["migrated"], 485)
+            seen.extend(row["model_id"] for row in report["actions"])
+            if not report["next_cursor"]:
+                break
+            report = registry_ops.migrate(
+                "apply", idempotency_key="paged-apply-485", limit=50, cursor=report["next_cursor"]
+            )
+            self.assertTrue(report["replayed"])
+        self.assertEqual(len(set(seen)), 485)
+
+    def test_health_cursor_rejects_registry_changes(self):
+        self.legacy_entry("1" * 32)
+        self.legacy_entry("2" * 32)
+        first = registry_ops.health(limit=1)
+        self.legacy_entry("3" * 32)
+        with self.assertRaises(ValueError):
+            registry_ops.health(cursor=first["next_cursor"])
+
+    def test_large_error_rows_are_bounded_without_losing_entry_identifiers(self):
+        self.legacy_entry("a" * 32)
+        with patch.object(bridge, "read_json", side_effect=ValueError("错误" * 20000)):
+            result = registry_ops.health(limit=50)
+        self.assert_bounded(result)
+        self.assertEqual(result["entries"][0]["model_id"], "a" * 32)
+        self.assertEqual(result["summary"]["corrupt"], 1)
+
+    def test_foreign_or_invalid_apply_cursor_cannot_start_a_migration(self):
+        directory = self.legacy_entry("b" * 32)
+        for cursor in ("invalid", model_queries.encode_cursor({"offset": 1})):
+            with self.assertRaises(ValueError):
+                registry_ops.migrate("apply", [directory.name], "invalid-cursor-01", cursor=cursor)
+            self.assertFalse((directory / registry_ops.MODEL_BACKUP).exists())
 
 
 if __name__ == "__main__":

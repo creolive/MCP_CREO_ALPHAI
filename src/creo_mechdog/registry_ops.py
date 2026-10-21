@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -28,6 +29,91 @@ MIGRATION_LOG = "registry-migration.jsonl"
 MODEL_BACKUP = "model.json.pre-split-bak"
 JOB_BACKUP_SUFFIX = ".pre-split-bak"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
+
+
+def _read_object(file: Path) -> dict:
+    """Maintenance may read oversized legacy files, but never follow links."""
+    if file.is_symlink() or file.is_junction():
+        raise ValueError("Registry maintenance files cannot be links")
+    if bridge.ROOT.resolve() not in file.resolve().parents:
+        raise ValueError("Registry maintenance file is outside this service")
+    value = bridge.read_json(file)
+    if not isinstance(value, dict):
+        raise ValueError("Registry maintenance file must contain an object")
+    return value
+
+
+def _model_directory(model_id: str) -> Path:
+    if not isinstance(model_id, str):
+        raise ValueError("targets must contain model_ids")
+    directory = general.model_path(model_id)
+    if directory.resolve().parent != general.MODELS.resolve() or not directory.is_dir():
+        raise ValueError("Migration target must be an existing direct model directory")
+    for file in (directory / "model.json", directory / "details"):
+        if file.is_symlink() or file.is_junction():
+            raise ValueError("Migration target files and detail directories cannot be links")
+    return directory
+
+
+def _page(
+    report: dict, key: str, rows: list[dict], limit: int, cursor: str | None, scope: str
+) -> dict:
+    """Fit the entire serialized response, including problem previews, in 32 KiB."""
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError("limit must be 1–50")
+    snapshot = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+    position = model_queries.decode_cursor(cursor)
+    if position and (position.get("scope") != scope or position.get("snapshot") != snapshot):
+        raise ValueError(
+            "Registry report changed or cursor belongs elsewhere; restart without cursor"
+        )
+    offset = position["offset"] if position else 0
+    if offset > len(rows):
+        raise ValueError("Invalid registry cursor offset")
+    window = rows[offset : offset + limit]
+    result = {**report, key: window, "entry_offset": offset, "limit": limit}
+    result["response_budget_bytes"] = model_queries.RESPONSE_BUDGET
+
+    def update_cursor() -> None:
+        more = offset + len(window) < len(rows)
+        result["has_more"] = more
+        result["next_cursor"] = (
+            model_queries.encode_cursor(
+                {"offset": offset + len(window), "scope": scope, "snapshot": snapshot}
+            )
+            if more
+            else None
+        )
+
+    update_cursor()
+    while model_queries.serialized_size(result) > model_queries.RESPONSE_BUDGET:
+        previews = [
+            result[name]
+            for name in ("over_budget", "warning", "corrupt")
+            if isinstance(result.get(name), dict) and result[name].get("entries")
+        ]
+        if previews:
+            preview = max(previews, key=lambda item: len(item["entries"]))
+            preview["entries"].pop()
+            preview["complete"] = False
+        elif len(window) > 1:
+            window.pop()
+            update_cursor()
+        elif window:
+            row = window[0]
+            window[0] = {
+                name: str(row[name])[:128]
+                for name in ("model_id", "job_id", "state", "result", "file")
+                if name in row
+            }
+            window[0]["details_omitted"] = (
+                "Entry exceeds the response budget; inspect local evidence"
+            )
+            if model_queries.serialized_size(result) > model_queries.RESPONSE_BUDGET:
+                raise ValueError("Registry response metadata exceeds the response budget")
+        else:
+            raise ValueError("Registry response metadata exceeds the response budget")
+    return result
 
 
 def _job_chain(model: dict) -> list[str]:
@@ -49,7 +135,7 @@ def _job_chain(model: dict) -> list[str]:
             chain.append(job_id)
         directory = bridge.job_path(job_id)
         try:
-            request = bridge.read_json(directory / "request.json")
+            request = _read_object(directory / "request.json")
             current = request.get("model", {}) if isinstance(request, dict) else {}
         except (OSError, ValueError):
             break
@@ -75,7 +161,7 @@ def _entry(directory: Path) -> dict:
     error = None
     if file.is_file():
         try:
-            model = bridge.read_json(file)
+            model = _read_object(file)
             if not isinstance(model, dict):
                 model, error = None, "entry is not a JSON object"
         except (OSError, ValueError) as exc:
@@ -151,10 +237,7 @@ def health(limit: int = 20, cursor: str | None = None) -> dict:
             "complete": len(rows) <= PROBLEM_LIMIT,
         }
 
-    offset = model_queries.decode_cursor(cursor) or {"offset": 0}
-    window = entries[offset["offset"] : offset["offset"] + limit]
-    more = offset["offset"] + len(window) < len(entries)
-    return {
+    report = {
         "entry_count": len(entries),
         "total_model_json_bytes": total,
         "budget_bytes": model_registry.BUDGET_BYTES,
@@ -175,17 +258,9 @@ def health(limit: int = 20, cursor: str | None = None) -> dict:
             "tool": "creo_migrate_registry",
             "usage": "inspect first, then apply with an idempotency_key",
         },
-        "entries": window,
-        "entry_offset": offset["offset"],
-        "limit": limit,
-        "has_more": more,
-        "next_cursor": (
-            model_queries.encode_cursor({"offset": offset["offset"] + len(window)})
-            if more
-            else None
-        ),
         "generated_at": bridge.now(),
     }
+    return _page(report, "entries", entries, limit, cursor, "registry_health")
 
 
 def _log(action: dict) -> None:
@@ -193,6 +268,8 @@ def _log(action: dict) -> None:
     path.parent.mkdir(exist_ok=True)
     with path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps({**action, "ts": bridge.now()}, ensure_ascii=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def _backup(file: Path) -> str | None:
@@ -200,10 +277,20 @@ def _backup(file: Path) -> str | None:
     backup = file.with_name(file.name + JOB_BACKUP_SUFFIX)
     if file.name == "model.json":
         backup = file.with_name(MODEL_BACKUP)
+    if backup.is_symlink() or backup.is_junction():
+        raise ValueError("Migration backup cannot be a link")
     if backup.is_file():
+        _read_object(backup)
         return None
     data = file.read_bytes()
-    backup.write_bytes(data)
+    temporary = backup.with_name(backup.name + ".tmp")
+    if temporary.is_symlink() or temporary.is_junction():
+        raise ValueError("Migration temporary backup cannot be a link")
+    with temporary.open("wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, backup)
     return hashlib.sha256(data).hexdigest()
 
 
@@ -264,7 +351,7 @@ def _migrate_job(job_id: str, report: list) -> None:
         if not file.is_file():
             continue
         try:
-            document = bridge.read_json(file)
+            document = _read_object(file)
         except (OSError, ValueError):
             continue  # Foreign or corrupt evidence is never rewritten.
         changed = False
@@ -280,7 +367,7 @@ def _migrate_job(job_id: str, report: list) -> None:
         if not changed:
             continue
         backup_sha = _backup(file)
-        bridge.write_json(file, document)
+        bridge.write_json(file, document, durable=True)
         report.append(
             {
                 "job_id": job_id,
@@ -292,8 +379,88 @@ def _migrate_job(job_id: str, report: list) -> None:
         )
 
 
+def _pending(directories: list[Path]) -> list[dict]:
+    pending = []
+    for directory in directories:
+        file = directory / "model.json"
+        try:
+            model = _read_object(file)
+        except (OSError, ValueError):
+            pending.append({"model_id": directory.name, "state": "corrupt", "action": "refused"})
+            continue
+        if model.get("model_id") != directory.name:
+            raise ValueError("Migration record identity does not match its model directory")
+        if model_registry.inline_detail_bytes(model):
+            pending.append(
+                {
+                    "model_id": directory.name,
+                    "model_json_bytes": file.stat().st_size,
+                    "inline_details": sorted(model_registry.inline_detail_bytes(model)),
+                    "job_chain": _job_chain(model),
+                }
+            )
+    return pending
+
+
+def _check_owners(pending: list[dict]) -> None:
+    """The OS lock excludes workers; reservations also exclude runners about to start."""
+    from creo_mechdog import reconciliation
+
+    for item in pending:
+        if item.get("state") == "corrupt":
+            continue
+        model_id = item["model_id"]
+        model = _read_object(_model_directory(model_id) / "model.json")
+        protected = {model.get("pending_job"), model.get("recovery_pending")} - {None}
+        for job_id in item["job_chain"]:
+            directory = bridge.job_path(job_id)
+            for name in ("details", "details/details"):
+                if (directory / name).is_symlink() or (directory / name).is_junction():
+                    raise ValueError("Job detail directories cannot be links")
+            manifest_file = directory / "job.json"
+            job = _read_object(manifest_file) if manifest_file.is_file() else {}
+            if job.get("model_id", model_id) != model_id:
+                raise ValueError("Migration job belongs to a different model")
+            request_file = directory / "request.json"
+            if request_file.is_file():
+                request = _read_object(request_file)
+                if request.get("model", {}).get("model_id") != model_id:
+                    raise ValueError("Migration request belongs to a different model")
+            # A reserved/queued runner can start as soon as this lock is released;
+            # migration is not permission to rewrite its captured request.
+            active = job.get("status") in ("queued", "waiting_for_channel", "running")
+            identities = [job.get("runner_identity")]
+            owner_file = directory / "native_owner.json"
+            if owner_file.is_file():
+                identities.append(_read_object(owner_file))
+            owner_uncertain = any(
+                identity is not None and not reconciliation._stopped(identity)["stopped"]
+                for identity in identities
+            )
+            if active or owner_uncertain:
+                raise bridge.ToolkitBusy(
+                    "Registry migration cannot rewrite an active or unproven job",
+                    holder={"job_id": job_id, "model_id": model_id, "operation": "registry_owner"},
+                )
+            if job_id in protected:
+                evidence = reconciliation._owners(job_id, read_metadata=_read_object)
+                if not evidence["stopped"]:
+                    raise bridge.ToolkitBusy(
+                        "Registry migration requires proof that protected owners stopped",
+                        holder={
+                            "job_id": job_id,
+                            "model_id": model_id,
+                            "operation": "registry_owner",
+                        },
+                    )
+
+
 def migrate(
-    mode: str = "inspect", targets: list[str] | None = None, idempotency_key: str | None = None
+    mode: str = "inspect",
+    targets: list[str] | None = None,
+    idempotency_key: str | None = None,
+    limit: int = 20,
+    cursor: str | None = None,
 ) -> dict:
     """Inspect or apply the registry migration (BUG-077).
 
@@ -303,61 +470,74 @@ def migrate(
     """
     if mode not in ("inspect", "apply"):
         raise ValueError("mode must be inspect or apply")
-    if targets is not None and (
-        not isinstance(targets, list)
-        or not targets
-        or not all(isinstance(t, str) and general.MODELS.joinpath(t).is_dir() for t in targets)
-    ):
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError("limit must be 1–50")
+    if targets is not None and (not isinstance(targets, list) or not targets):
         raise ValueError("targets must be a non-empty list of existing model_ids")
+    if targets is not None:
+        for target in targets:
+            _model_directory(target)
+        targets = sorted(set(targets))
     if mode == "apply":
         if not idempotency_key or not KEY_PATTERN.fullmatch(idempotency_key):
             raise ValueError("apply requires an idempotency_key of 8-80 letters/digits/_/-")
-        fingerprint = hashlib.sha256(
-            json.dumps({"targets": targets}, sort_keys=True).encode()
-        ).hexdigest()[:16]
-        key = hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]
-        record_file = general.MODELS / f"registry-migration-{key}.json"
-        if record_file.is_file():
-            record = bridge.read_json(record_file)
-            if record.get("fingerprint") == fingerprint:
-                return {**record, "replayed": True}
+        with bridge.toolkit_lock(operation="migrate_registry"):
+            return _apply(targets, idempotency_key, limit, cursor)
+    directories = _directories(targets)
+    pending = _pending(directories)
+    return _page(
+        {
+            "mode": "inspect",
+            "entries_needing_migration": len(pending),
+            "apply_usage": "rerun with mode=apply, the same targets (or none) and a fresh idempotency_key",
+            "budget_bytes": model_registry.BUDGET_BYTES,
+        },
+        "entries",
+        pending,
+        limit,
+        cursor,
+        "registry_migration_inspect:" + hashlib.sha256(json.dumps(targets).encode()).hexdigest(),
+    )
+
+
+def _directories(targets: list[str] | None) -> list[Path]:
+    if targets is not None:
+        return [_model_directory(target) for target in targets]
+    if not general.MODELS.is_dir():
+        return []
+    return [
+        _model_directory(d.name)
+        for d in sorted(general.MODELS.iterdir())
+        if (d / "model.json").is_file()
+    ]
+
+
+def _apply(targets: list[str] | None, idempotency_key: str, limit: int, cursor: str | None) -> dict:
+    fingerprint = hashlib.sha256(
+        json.dumps({"targets": targets}, sort_keys=True).encode()
+    ).hexdigest()[:16]
+    key = hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]
+    record_file = general.MODELS / f"registry-migration-{key}.json"
+    scope = "registry_migration_apply:" + key
+    if record_file.is_file():
+        record = _read_object(record_file)
+        if record.get("fingerprint") != fingerprint:
             raise ValueError(
                 "This idempotency_key was used for a different target set; use a new key"
             )
-    directories = []
-    if targets:
-        directories = [general.MODELS / t for t in targets]
-    elif general.MODELS.is_dir():
-        directories = sorted(d for d in general.MODELS.iterdir() if (d / "model.json").is_file())
-    pending = []
-    for directory in directories:
-        file = directory / "model.json"
-        try:
-            model = bridge.read_json(file)
-        except (OSError, ValueError):
-            pending.append({"model_id": directory.name, "state": "corrupt", "action": "refused"})
-            continue
-        if isinstance(model, dict) and model_registry.inline_detail_bytes(model):
-            pending.append(
-                {
-                    "model_id": directory.name,
-                    "model_json_bytes": file.stat().st_size,
-                    "inline_details": sorted(model_registry.inline_detail_bytes(model)),
-                    "job_chain": _job_chain(model),
-                }
-            )
-    if mode == "inspect":
-        return {
-            "mode": "inspect",
-            "entries_needing_migration": len(pending),
-            "entries": pending,
-            "apply_usage": "rerun with mode=apply, the same targets (or none) and a fresh idempotency_key",
-            "budget_bytes": model_registry.BUDGET_BYTES,
-        }
+        return _page(
+            {**record, "replayed": True}, "actions", record["actions"], limit, cursor, scope
+        )
+    if cursor is not None:
+        raise ValueError(
+            "Apply cursors require an existing idempotent result; start without cursor"
+        )
+    pending = _pending(_directories(targets))
+    _check_owners(pending)
     report: list[dict] = []
     jobs_done: set[str] = set()
     for item in pending:
-        directory = general.MODELS / item["model_id"]
+        directory = _model_directory(item["model_id"])
         if item.get("state") == "corrupt":
             report.append({"model_id": item["model_id"], "result": "refused", "reason": "corrupt"})
             continue
@@ -377,8 +557,5 @@ def migrate(
         "migration_log": str(general.MODELS / MIGRATION_LOG),
         "completed_at": bridge.now(),
     }
-    record_file.write_text(
-        json.dumps({**result, "fingerprint": fingerprint, "replayed": False}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    return result
+    bridge.write_json(record_file, {**result, "fingerprint": fingerprint}, durable=True)
+    return _page({**result, "replayed": False}, "actions", report, limit, None, scope)

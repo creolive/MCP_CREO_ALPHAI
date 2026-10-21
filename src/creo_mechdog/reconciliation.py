@@ -255,12 +255,26 @@ def _legacy_identity_incomplete(recorded: dict | None) -> bool:
     )
 
 
-def _owners(job_id: str, boot_reader: Callable[[], dict | None] | None = None) -> dict:
+def _owners(
+    job_id: str,
+    boot_reader: Callable[[], dict | None] | None = None,
+    *,
+    read_metadata: Callable[[Path], dict | None] | None = None,
+) -> dict:
     directory = bridge.job_path(job_id)
-    job = _read(directory / "job.json") or {}
+    reader = read_metadata or _read
+    job = reader(directory / "job.json") or {}
     runner = _stopped(job.get("runner_identity"))
-    owner = _read(directory / "native_owner.json")
-    checkpoint = _read(directory / "native_checkpoint.json") or {}
+    owner = (
+        reader(directory / "native_owner.json")
+        if (directory / "native_owner.json").is_file()
+        else None
+    )
+    checkpoint = (
+        (reader(directory / "native_checkpoint.json") or {})
+        if (directory / "native_checkpoint.json").is_file()
+        else {}
+    )
     worker_identity = owner or (
         {"pid": checkpoint["native_pid"]} if checkpoint.get("native_pid") else None
     )

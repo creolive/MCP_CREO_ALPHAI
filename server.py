@@ -401,7 +401,7 @@ async def creo_erase_session_models(
 
 @mcp.tool(annotations=READ)
 async def creo_registry_health(limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
-    """Report the managed-model registry's health without connecting Toolkit (FEAT-047). Lists every models/<id>/model.json entry with its byte size, share of the 16 MiB read budget, revision/status, per-detail form (inline/reference/absent for aliases, inspection, last_live_inspection) and state: ok, warning (>=80% of budget), over_budget, corrupt or legacy_inline. Single-entry errors never end the report. Summaries count each state, oversized/near-budget/corrupt entries are listed separately (up to 50 each), the migration section says how many entries still need creo_migrate_registry, and the per-entry listing is paginated with limit/next_cursor so a large registry never returns an unbounded response. Read-only: no file is modified and no Creo connection is made."""
+    """Report registry health without Toolkit (FEAT-047): sizes, 16 MiB budget usage, revision/status, detail forms and ok/warning/over_budget/corrupt/legacy_inline states. Single-entry errors do not end the scan. Whole responses fit 32 KiB, including problem previews; complete counts are retained when previews are shortened. Use limit (1-50, default 20) and next_cursor to traverse all entries. A registry change invalidates its cursor: restart without cursor. Read-only; no files are changed or Creo connection made."""
     return await invoke(registry_health, limit, cursor)
 
 
@@ -410,9 +410,11 @@ async def creo_migrate_registry(
     mode: Literal["inspect", "apply"] = "inspect",
     targets: list[str] | None = None,
     idempotency_key: str | None = None,
+    limit: int = 20,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Split legacy inline registry records into small control records plus content-addressed detail sidecars (BUG-077). inspect (no side effects) lists entries that still inline aliases/inspection payloads — including over-budget ones — with their sizes, inline detail keys and the job-evidence chain that will be migrated with them. apply requires a fresh idempotency_key (8-80 letters/digits/underscores/hyphens; the same key replays the recorded result, a different target set with the same key is refused) and for each entry: preserves original bytes as model.json.pre-split-bak (job files as *.pre-split-bak), persists detail sidecars first, then publishes the control record atomically, and appends every action to models/registry-migration.jsonl. job.json result payloads and request.json model/component details on the entry's evidence chain are split the same way, so recovery reads stay inside the 16 MiB budget. Reruns are idempotent and interrupted migrations resume; model identity, revision and history conclusions never change; the read budget is never raised; nothing is deleted and raw native results stay untouched on disk. targets optionally narrows the migration to specific model_ids; omit it for the whole registry."""
-    return await invoke(registry_migrate, mode, targets, idempotency_key)
+    """Split legacy registry details into controlled sidecars (BUG-077), without Toolkit. inspect is read-only; apply backs up original model/job bytes, writes details first, then atomically publishes controls and an idempotent result. targets contains existing 32-hex model_ids only (omit for all); linked paths and mismatched job/model identities are refused. apply holds the common channel lock and immediately returns busy on contention, queued/running jobs or unproven owners; pending/unknown protections are never cleared. apply requires an 8-80 character idempotency_key: same key and target set replay, changed targets refuse. Every response fits 32 KiB. Use limit (1-50, default 20) and next_cursor with the same mode/targets/key for subsequent pages; apply cursors only read an existing saved result, never start another migration. Registry changes invalidate inspect cursors. Interrupted migrations can resume; no files are deleted, raw native results stay unchanged, and identity/revision/history/read budgets remain intact."""
+    return await invoke(registry_migrate, mode, targets, idempotency_key, limit, cursor)
 
 
 @mcp.tool(annotations=READ)

@@ -182,12 +182,16 @@ def families() -> dict:
                 "original bytes are backed up before any rewrite; details persist "
                 "before the control record publishes atomically; reruns are "
                 "idempotent and interrupted migrations resume; model identity, "
-                "revision and history conclusions never change"
+                "revision and history conclusions never change; apply holds the "
+                "common nonblocking channel lock and refuses active or unproven owners; "
+                "targets are validated owned model_ids, never arbitrary paths"
             ),
             "limits": (
                 "the unified 16 MiB read budget is never raised; neither tool "
                 "connects Toolkit; migration never deletes files and leaves "
-                "oversized raw native results untouched on disk"
+                "oversized raw native results untouched on disk; health, migration "
+                "inspect and apply/replay responses use limit/cursor under a whole-response "
+                "32 KiB budget, with complete counts and bounded previews"
             ),
         },
         "seed_library": {
