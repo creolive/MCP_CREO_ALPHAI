@@ -1,0 +1,19 @@
+{
+  "received_date": "2026-10-21",
+  "source_attachment": "C:\\Users\\Administrator\\.codex\\attachments\\496214f3-5f8e-44a2-99a0-55d27bdd7d5e\\已粘贴的文本.txt",
+  "archived_as": "report.md",
+  "report_bytes": 7658,
+  "report_sha256": "bad2923da5ffd4cf06a43818db58c2abe6d66328bbc3cba2234f9da5ecfbd313",
+  "archive_byte_identical_to_attachment": true,
+  "reported_server_version": "0.4.7",
+  "reported_environment": "MCP_CREO_MechDog_dev / E drive / Creo 12.4.0.0 / 90 tools",
+  "evidence_type": "user-provided WorkBuddy public-MCP report; independent developer persisted-file check in developer-check.json",
+  "tested_source_commit": null,
+  "receipt_repository_commit": "0d0462681672d487e8c1da301394c561a6f73a79",
+  "limits": [
+    "Raw MCP transcript not attached; some repeated IDs are abbreviated in narrative",
+    "No oversized migration, recovery apply, rollback, or concurrency in this run",
+    "No batch migration of 485 historical records; no Creo 10 retest",
+    "Developer backup-byte and file checks are separate from WorkBuddy black-box conclusions"
+  ]
+}

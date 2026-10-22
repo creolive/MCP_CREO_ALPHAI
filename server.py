@@ -29,6 +29,8 @@ from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
 from creo_mechdog.references import PatternAxis, reference_capabilities
+from creo_mechdog.registry_ops import health as registry_health
+from creo_mechdog.registry_ops import migrate as registry_migrate
 from creo_mechdog.schema import (
     AirfoilProfile,
     AirfoilSketchOp,
@@ -74,6 +76,8 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
     "src/creo_mechdog/session_erase.py",
+    "src/creo_mechdog/model_registry.py",
+    "src/creo_mechdog/registry_ops.py",
     "src/creo_mechdog/open_file.py",
     "src/creo_mechdog/capability_pages.py",
     "src/creo_mechdog/model_queries.py",
@@ -393,6 +397,24 @@ async def creo_erase_session_models(
 ) -> dict[str, Any]:
     """Explicitly erase selected models from the connected Creo session (FEAT-046). Never saves models and never deletes disk files. inspect(targets=[{name, model_type}]) verifies a manifest and returns per-target identity, blocking reasons, the assembly-before-components erase order, the expected remaining session objects and a 600-second evidence_token; targets qualify only when saved (has origin), unmodified, not MCP-managed, not referenced by session models outside the manifest and free of manifest dependency cycles; incomplete session enumeration refuses. apply(evidence_token, idempotency_key) executes exactly the token's manifest under one Toolkit channel lock and returns a job_id; poll creo_get_job. Each item re-verifies identity, modification state and origin before ProMdlErase, and absence is confirmed through two independent queries; a mid-manifest failure stops remaining items and reports erased, unconfirmed and remaining lists without resubmitting. The currently displayed model may be erased when it qualifies. Managed models stay with creo_reconcile_model; pass a session inventory from creo_list_session_models to choose targets."""
     return await invoke(erase_session_models, mode, targets, evidence_token, idempotency_key)
+
+
+@mcp.tool(annotations=READ)
+async def creo_registry_health(limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
+    """Report registry health without Toolkit (FEAT-047): sizes, 16 MiB budget usage, revision/status, detail forms and ok/warning/over_budget/corrupt/legacy_inline states. Single-entry errors do not end the scan. Whole responses fit 32 KiB, including problem previews; complete counts are retained when previews are shortened. Use limit (1-50, default 20) and next_cursor to traverse all entries. A registry change invalidates its cursor: restart without cursor. Read-only; no files are changed or Creo connection made."""
+    return await invoke(registry_health, limit, cursor)
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_migrate_registry(
+    mode: Literal["inspect", "apply"] = "inspect",
+    targets: list[str] | None = None,
+    idempotency_key: str | None = None,
+    limit: int = 20,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Split legacy registry details into controlled sidecars (BUG-077), without Toolkit. inspect is read-only; apply backs up original model/job bytes, writes details first, then atomically publishes controls and an idempotent result. targets contains existing 32-hex model_ids only (omit for all); linked paths and mismatched job/model identities are refused. apply holds the common channel lock and immediately returns busy on contention, queued/running jobs or unproven owners; pending/unknown protections are never cleared. apply requires an 8-80 character idempotency_key: same key and target set replay, changed targets refuse. Every response fits 32 KiB. Use limit (1-50, default 20) and next_cursor with the same mode/targets/key for subsequent pages; apply cursors only read an existing saved result, never start another migration. Registry changes invalidate inspect cursors. Interrupted migrations can resume; no files are deleted, raw native results stay unchanged, and identity/revision/history/read budgets remain intact."""
+    return await invoke(registry_migrate, mode, targets, idempotency_key, limit, cursor)
 
 
 @mcp.tool(annotations=READ)
@@ -1617,14 +1639,16 @@ async def creo_remove_component(
 @mcp.tool(annotations=READ)
 async def creo_list_components(model_id: str) -> dict[str, Any]:
     """Read the last verified assembly component list, native transforms and placement status."""
+    from creo_mechdog import model_registry
+
     model = await invoke(general.model_info, model_id)
     if model.get("model_type") != "assembly":
         raise ToolError("Assembly model required")
     return {
         "model_id": model_id,
         "revision": model["revision"],
-        "components": model.get("inspection", {}).get("components", []),
-        "aliases": model["aliases"],
+        "components": (model_registry.inspection_of(model) or {}).get("components", []),
+        "aliases": model_registry.aliases_of(model),
     }
 
 

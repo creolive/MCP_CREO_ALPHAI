@@ -47,6 +47,29 @@ async def job(client, name, args, expect_success=True):
     return result
 
 
+async def snapshot_inspection(client, model_id):
+    """Verified model snapshot: jobs carry a summary plus a reference (0.4.7
+    registry split), so volume and counts come from the saved model record."""
+    snap = await call(client, "creo_inspect_model", {"model_id": model_id, "detail": "compact"})
+    return snap["inspection"]
+
+
+async def snapshot_bodies(client, model_id):
+    payload = await call(
+        client, "creo_inspect_model", {"model_id": model_id, "detail": "full", "section": "bodies"}
+    )
+    return (payload.get("data") or {}).get("bodies") or []
+
+
+async def snapshot_features(client, model_id):
+    payload = await call(
+        client,
+        "creo_inspect_model",
+        {"model_id": model_id, "detail": "full", "section": "features"},
+    )
+    return (payload.get("data") or {}).get("features") or []
+
+
 def rectangle(name, x0, y0, x1, y1):
     return {"type": "rectangle", "name": name, "min": [x0, y0], "max": [x1, y1]}
 
@@ -97,10 +120,11 @@ async def main():
                 "depth": 10,
             },
         )
-        volume = ex["result"]["inspection"]["volume_mm3"]
+        volume = ex["result"]["inspection_summary"]["volume_mm3"]
         assert abs(volume - math.pi * 64 * 10) < 0.01, volume
-        assert abs(ex["result"]["inspection"]["bodies"][0]["bbox"][0][2]) < 1e-6
-        assert abs(ex["result"]["inspection"]["bodies"][0]["bbox"][1][2] - 10) < 1e-6
+        bodies = await snapshot_bodies(client, mid)
+        assert abs(bodies[0]["bbox"][0][2]) < 1e-6
+        assert abs(bodies[0]["bbox"][1][2] - 10) < 1e-6
         edited = await job(
             client,
             "creo_set_sketch_dimensions",
@@ -111,7 +135,7 @@ async def main():
                 "values": {"diameter": 20},
             },
         )
-        assert abs(edited["result"]["inspection"]["volume_mm3"] - math.pi * 100 * 10) < 0.01
+        assert abs(edited["result"]["inspection_summary"]["volume_mm3"] - math.pi * 100 * 10) < 0.01
         # A non-rectangular L profile and additive extrusion on another principal plane.
         lprofile = [[-20, -15], [20, -15], [20, 0], [0, 0], [0, 15], [-20, 15]]
         bracket_ops = [
@@ -138,8 +162,9 @@ async def main():
             "creo_execute_plan",
             {"operations": bracket_ops, "assertions": {"volume_mm3": 10600, "require_solid": True}},
         )
-        print("BRACKET_VOLUME=" + str(bracket["result"]["inspection"]["volume_mm3"]), flush=True)
-        print("BRACKET_BBOX=" + str(bracket["result"]["inspection"]["bodies"]), flush=True)
+        bracket_inspection = await snapshot_inspection(client, bracket["model_id"])
+        print("BRACKET_VOLUME=" + str(bracket_inspection["volume_mm3"]), flush=True)
+        print("BRACKET_BBOX=" + str(await snapshot_bodies(client, bracket["model_id"])), flush=True)
         # A stepped turned part, axial through hole, blind hole and revolved groove.
         turn_ops = [
             {
@@ -212,6 +237,8 @@ async def main():
                 "holes": [{"x": 0, "y": 0, "diameter": 6}],
             },
         )
+        # The plate tool is a standalone native builder: its job result keeps
+        # the full inline inspection (not the generic split-registry summary).
         assert abs(plate["result"]["inspection"]["volume_mm3"] - (7200 - 54 * math.pi)) < 0.01
         assert plate["result"]["inspection"]["verified_feature_counts"]["hole"] == 1
         report["main_models"] = {

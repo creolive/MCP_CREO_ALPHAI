@@ -318,13 +318,13 @@ server.mcp.run()
         real_write = bridge.write_json
         observed = []
 
-        def write(path, value):
+        def write(path, value, **kwargs):
             if path.name == "model.json" and value.get("pending_job") is None:
                 # Separate interpreter, so the test does not confuse a thread mutex with OS exclusion.
                 observed.append(("model", self.contender()))
             if path.name == "job.json" and value["status"] == "succeeded":
                 observed.append(("terminal", self.contender()))
-            real_write(path, value)
+            real_write(path, value, **kwargs)
 
         # The contender itself uses subprocess.run; keep the native stub specific to worker calls.
         native = self.worker(first)

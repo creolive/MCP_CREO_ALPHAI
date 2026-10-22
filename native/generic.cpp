@@ -1694,6 +1694,10 @@ static J populate_profile(ProSection section, const J &op) {
     return {{"entity_ids", ids}, {"dimension_ids", dims}, {"solver", solver_info}};
 }
 #include "component_transform.h"
+// Result split helpers are defined after the feature modules; forward declared
+// here so component sources can resolve controlled detail references (BUG-077).
+static J read_inspection_ref(const J &ref);
+static J choice_inspection(const J &holder, const char *key);
 #include "advanced.cpp"
 #include "surfaces.cpp"
 #include "udf.cpp"
@@ -3222,8 +3226,17 @@ static int run_generic(const std::wstring &job) {
         auto model = request.at("model");
         model_name = wide(model.at("model_name"));
         folder = wide(model.at("output_directory"));
-        aliases = model.at("aliases");
+        // Split registry records pass a controlled reference instead of an
+        // inline aliases payload; legacy requests keep the inline dict (BUG-077).
+        aliases = model.contains("aliases_ref") ? read_inspection_ref(model.at("aliases_ref"))
+                                                : model.at("aliases");
         component_sources = request.value("components", J::object());
+        for (auto item = component_sources.begin(); item != component_sources.end(); ++item) {
+            if (item.value().contains("aliases_ref"))
+                item.value()["aliases"] = read_inspection_ref(item.value().at("aliases_ref"));
+            if (item.value().contains("inspection_ref"))
+                item.value()["inspection"] = read_inspection_ref(item.value().at("inspection_ref"));
+        }
         template_file = wide(request.at("template_file"));
         if (!model["part_file"].is_null())
             checkpoint = wide(model["part_file"]);
@@ -3325,9 +3338,10 @@ static int run_generic(const std::wstring &job) {
                 if (_wcsnicmp(actual.c_str(), prefix.c_str(), prefix.size()))
                     throw std::runtime_error(
                         "Loaded model origin does not match this MCP model's output directory");
-                if (model.contains("inspection") && !request.value("readonly", false)) {
+                if ((model.contains("inspection") || model.contains("inspection_ref")) &&
+                    !request.value("readonly", false)) {
                     try {
-                        verify_saved(model["inspection"], inspection());
+                        verify_saved(choice_inspection(model, "inspection"), inspection());
                     } catch (const std::exception &error) {
                         throw std::runtime_error(std::string("model_reconciliation_required: ") +
                                                  error.what());
@@ -3458,8 +3472,14 @@ static int run_generic(const std::wstring &job) {
             try {
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 J restored = inspection();
-                verify_saved(request["model"]["inspection"], restored);
-                aliases = request["model"]["aliases"];
+                const J &rollback_model = request["model"];
+                verify_saved(rollback_model.contains("inspection_ref")
+                                 ? read_inspection_ref(rollback_model.at("inspection_ref"))
+                                 : rollback_model["inspection"],
+                             restored);
+                aliases = rollback_model.contains("aliases_ref")
+                              ? read_inspection_ref(rollback_model.at("aliases_ref"))
+                              : rollback_model["aliases"];
                 report["loft_checks"]["rollback"] = verify_loft_settings(L"rollback");
                 CK(ProMdlDisplay(board));
                 restored["inspection_source"] = "rollback_verified";

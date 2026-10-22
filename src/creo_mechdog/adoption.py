@@ -21,7 +21,7 @@ from pathlib import Path
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import inspection_refs
+from creo_mechdog import inspection_refs, model_registry
 from creo_mechdog.model_queries import inspection_summary
 from creo_mechdog.reconciliation import identity, owned_file
 
@@ -190,7 +190,13 @@ def _native(directory: Path, manifest: dict) -> dict:
 
 
 def _origin_conflict(origin: Path, exclude: str | None = None) -> dict | None:
-    """One managed identity per source file; a second adoption is a clear refusal."""
+    """One managed identity per source file; a second adoption is a clear refusal.
+
+    The scan reads control records only (BUG-077): a migrated registry keeps
+    ownership fields small, and an entry that cannot be read — oversized or
+    corrupt — is a structured refusal pointing at migration, never a silent
+    skip that would hide a real historical registration.
+    """
     try:
         resolved = origin.resolve()
     except OSError:
@@ -200,12 +206,25 @@ def _origin_conflict(origin: Path, exclude: str | None = None) -> dict | None:
     for directory in sorted(general.MODELS.iterdir()):
         if exclude and directory.name == exclude:
             continue
-        model = _read(
-            directory / "model.json",
-            metadata_kind="model_registry",
-            failed_stage="origin_conflict_scan",
-        )
-        if not model:
+        file = directory / "model.json"
+        if not file.is_file():
+            continue
+        if file.stat().st_size > BUDGET_BYTES:
+            raise AdoptionMetadataBudgetExceeded(
+                metadata_kind="model_registry",
+                file=file,
+                failed_stage="origin_conflict_scan",
+            )
+        try:
+            model = bridge.read_json(file)
+        except (OSError, ValueError) as error:
+            raise AdoptionRefused(
+                "registry_entry_unreadable",
+                f"A model registry entry could not be read during the conflict scan: "
+                f"{error}; run creo_registry_health and creo_migrate_registry before "
+                "adopting",
+            ) from error
+        if not isinstance(model, dict) or not model.get("model_id"):
             continue
         output = model.get("output_directory")
         if output:
@@ -477,7 +496,7 @@ def inspect(model_id: str | None = None) -> dict:
                 evidence = _evidence(model, live, file)
                 # Publish the registry last: source/hash/token failures cannot leave
                 # a visible model even if cleanup of staging files is unavailable.
-                bridge.write_json(path / "model.json", model, durable=True)
+                model_registry.write_model(path, model)
                 return evidence
             except AdoptionMetadataBudgetExceeded as error:
                 manifest.update(
@@ -607,7 +626,7 @@ def prepare(model_name: str | None, idempotency_key: str) -> dict:
         }
         try:
             (path / "output").mkdir(parents=True)
-            bridge.write_json(path / "model.json", model, durable=True)
+            model_registry.write_model(path, model)
             (directory / "output").mkdir(parents=True)
             bridge.write_json(
                 directory / "request.json",
@@ -627,7 +646,7 @@ def prepare(model_name: str | None, idempotency_key: str) -> dict:
                 durable=True,
             )
             model.update(pending_job=job_id, last_job=job_id)
-            bridge.write_json(path / "model.json", model, durable=True)
+            model_registry.write_model(path, model)
             with (directory / "runner.log").open("ab") as log:
                 subprocess.Popen(
                     [sys.executable, str(bridge.ROOT / "bridge.py"), "run-job", job_id],
@@ -742,7 +761,7 @@ def apply(
             reserved["model_name"] = chosen
             reserved["pending_job"] = job_id
             reserved["last_job"] = job_id
-            bridge.write_json(general.model_path(model_id) / "model.json", reserved, durable=True)
+            model_registry.write_model(general.model_path(model_id), reserved)
             with (directory / "runner.log").open("ab") as log:
                 try:
                     subprocess.Popen(
@@ -793,9 +812,7 @@ def _finish(record: dict) -> dict:
             and identity(owned_file(after, expected_output["path"])) != expected_output
         ):
             raise ValueError("Committed snapshot file changed; keep adoption protection")
-        bridge.write_json(
-            general.model_path(record["model_id"]) / "model.json", after, durable=True
-        )
+        model_registry.write_model(general.model_path(record["model_id"]), after)
     elif (
         model.get("adopted_from", {}).get("adoption_id") != record["job_id"]
         and model.get("prepared_snapshot", {}).get("prepare_job_id") != record["job_id"]
@@ -1089,9 +1106,7 @@ def _record_failure(
             if model.get("pending_job") == job_id:
                 model["pending_job"] = None
                 model["last_job"] = job_id
-                bridge.write_json(
-                    general.model_path(manifest["model_id"]) / "model.json", model, durable=True
-                )
+                model_registry.write_model(general.model_path(manifest["model_id"]), model)
                 manifest["recovery_pending_released"] = True
         except (OSError, ValueError) as cleanup_error:
             manifest["recovery_pending_cleanup_error"] = str(cleanup_error)

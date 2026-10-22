@@ -48,3 +48,6 @@ docs/validation/adoption-completion-2026-10-18/*.json -text
 
 # DEV-035: preserve the historical user plan as supplied.
 docs/DEV-026_0_3_2_三份反馈补录与_Creo_9_SDK_文档口径.md -text
+
+# BUG-077: preserve the nonempty migration black-box report byte for byte.
+docs/validation/workbuddy-0.4.7-nonempty-2026-10-21/report.md -text

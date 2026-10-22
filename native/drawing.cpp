@@ -674,8 +674,17 @@ static int run_drawing(const std::wstring &job) {
         std::ifstream input(job + L"\\request.json");
         input >> request;
         J model = request["model"];
-        aliases = model["aliases"];
+        // Split registry records pass controlled references instead of inline
+        // payloads; legacy requests keep the inline dicts (BUG-077).
+        aliases = model.contains("aliases_ref") ? read_inspection_ref(model.at("aliases_ref"))
+                                                : model["aliases"];
         component_sources = request.value("components", J::object());
+        for (auto item = component_sources.begin(); item != component_sources.end(); ++item) {
+            if (item.value().contains("aliases_ref"))
+                item.value()["aliases"] = read_inspection_ref(item.value().at("aliases_ref"));
+            if (item.value().contains("inspection_ref"))
+                item.value()["inspection"] = read_inspection_ref(item.value().at("inspection_ref"));
+        }
         model_name = wide(model["model_name"]);
         folder = wide(model["output_directory"]);
         if (!model["part_file"].is_null())
@@ -723,7 +732,10 @@ static int run_drawing(const std::wstring &job) {
         }
         drawing_display();
         if (!request["new"].get<bool>() && !request.value("readonly", false))
-            verify_drawing(model["inspection"], drawing_inspection());
+            verify_drawing(model.contains("inspection_ref")
+                               ? read_inspection_ref(model.at("inspection_ref"))
+                               : model["inspection"],
+                           drawing_inspection());
         for (auto op : request["operations"]) {
             if (!request.value("readonly", false))
                 mutated = true;
@@ -770,10 +782,16 @@ static int run_drawing(const std::wstring &job) {
             ProPath file;
             path(file, checkpoint);
             CK(ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board));
-            aliases = request["model"]["aliases"];
+            const J &rollback_model = request["model"];
+            aliases = rollback_model.contains("aliases_ref")
+                          ? read_inspection_ref(rollback_model.at("aliases_ref"))
+                          : rollback_model["aliases"];
             drawing_display();
             drawing_regenerate();
-            verify_drawing(request["model"]["inspection"], drawing_inspection());
+            verify_drawing(rollback_model.contains("inspection_ref")
+                               ? read_inspection_ref(rollback_model.at("inspection_ref"))
+                               : rollback_model["inspection"],
+                           drawing_inspection());
             report["rollback_succeeded"] = true;
         } catch (...) {
             report["rollback_message"] = "Drawing checkpoint could not be restored and verified";

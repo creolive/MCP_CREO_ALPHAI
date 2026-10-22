@@ -29,3 +29,13 @@
 ### 2026-10-21 快照年龄与会话变化记录
 
 按[0.4.3 反馈完善计划](../development/0.4.3-feedback-improvement-plan-2026-10-21.md)实施（分支 `codex/dev-043-ledger-simplification`，[实施记录](../validation/FEEDBACK-0.4.3-IMPLEMENTATION-2026-10-21.md)）：`creo_list_session_models` 响应新增 `snapshot_age_seconds`、`refresh_guidance` 与 `service_session_changes`（自快照创建起、有界、跨进程 `session_activity.json`）；`creo_open_file`/收养 apply/confirm/恢复各动作/擦除成功后记录服务引起的会话内容变化，GUI 手工变化明确标注未实时复核。省略 cursor 实时重采、携 cursor 冻结快照语义不变；既有测试 44 项通过。剩余实机复核与 WorkBuddy。
+
+### 2026-10-21 opened_session_model 行为核对（FEAT-043/044）
+
+[0.4.5/Creo 10 反馈](../validation/feedback-0.4.4-2026-10-21/report-registry-bloat.md) §4.2 报告"Creo 10 环境 open_file 成功结果中没有 `opened_session_model` 字段"。2026-10-21 源码核对结论（三个场景逐一对照）：
+
+- **显示成功后必生成**：`native/generic.cpp` 仅在 `displayed == true` 之后才写 `open_file.opened_session_model`（单句柄观测，不做全量枚举），Python closeout 补 `observed_at`/`observed_at_source`。
+- **同名已驻留模型不会走到该分支**：预检阶段按 name+model_type 命中即 `SESSION_NAME_CONFLICT` 拒绝并返回 `conflicting_session_model`，文件未取回。反馈方的会话正是延续多轮验收（部件已驻留），最可能是该路径而非字段缺失。
+- **显示失败同样不生成**：显示失败时只返回 `displayed=false`+`display_message`，模型仍在会话中（0.4.6 的 `loaded_session_models` 在显示成功后补充会话概览）。
+
+结论：**字段缺失不等于实现缺陷**，符合计划"确认新成功作业确有缺失后再修复"的前置条件——源码核对未发现成功打开却缺字段的路径。本条不改代码；原环境复测（明确区分冲突拒绝/显示失败/成功三类结果的字段完整性）继续开放，与 FEAT-044 的剩余矩阵一并验证。

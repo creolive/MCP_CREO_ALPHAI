@@ -154,7 +154,14 @@ def section_records(model: dict[str, Any], section: str) -> list[Any] | None:
         excluded = set(SECTIONS) | set(inspection_summary(state)) | {"counts"}
         return [{"name": key, "value": val} for key, val in state.items() if key not in excluded]
     if section in ("aliases", "parameters"):
-        values = model.get("aliases") if section == "aliases" else state.get("parameters")
+        if section == "aliases":
+            # Split registry records keep aliases in a controlled sidecar
+            # (BUG-077); resolve on demand, never inline into every page read.
+            from creo_mechdog.model_registry import aliases_of
+
+            values = aliases_of(model)
+        else:
+            values = full_inspection_of_model(model).get("parameters")
         return (
             [{"name": key, "value": val} for key, val in (values or {}).items()]
             if isinstance(values, dict)

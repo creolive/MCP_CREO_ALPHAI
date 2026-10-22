@@ -1,0 +1,67 @@
+{
+  "checked_at": "2026-10-21T14:35:46.844697+00:00",
+  "evidence_type": "developer read-only persisted-file verification; no Toolkit or public MCP call",
+  "receipt_repository_commit": "0d0462681672d487e8c1da301394c561a6f73a79",
+  "tested_public_source_commit": null,
+  "model_id": "7efb4e2646464e44a5fc8a86b89c0ee9",
+  "creation_job_id": "9065e89d354448adb765f69bedaf5e6b",
+  "edit_job_id": "bc100ebc75aa4c1bbebaf1ced97c2d6b",
+  "migration_backups": [
+    {
+      "file": "models\\7efb4e2646464e44a5fc8a86b89c0ee9\\model.json.pre-split-bak",
+      "sha256": "dd40b15c9d4d7ed3c75b7587a5b816c33950d528a632a7471cfa703b23fdc858",
+      "byte_equal_to_reconstructed_fixture": true
+    },
+    {
+      "file": "jobs\\9065e89d354448adb765f69bedaf5e6b\\job.json.pre-split-bak",
+      "sha256": "b4fd5b744d4f97c84ea9dbc89ded8c299e5a3b0129e6e965de55c4136ace9099",
+      "byte_equal_to_reconstructed_fixture": true
+    }
+  ],
+  "migration_record": {
+    "mode": "apply",
+    "migrated": 1,
+    "job_files_split": 1,
+    "already_migrated": 0,
+    "refused": 0,
+    "actions": [
+      {
+        "job_id": "9065e89d354448adb765f69bedaf5e6b",
+        "result": "job_file_split",
+        "file": "job.json",
+        "backup": "job.json.pre-split-bak",
+        "backup_sha256": "b4fd5b744d4f97c84ea9dbc89ded8c299e5a3b0129e6e965de55c4136ace9099"
+      },
+      {
+        "model_id": "7efb4e2646464e44a5fc8a86b89c0ee9",
+        "result": "migrated",
+        "backup": "model.json.pre-split-bak",
+        "backup_sha256": "dd40b15c9d4d7ed3c75b7587a5b816c33950d528a632a7471cfa703b23fdc858",
+        "control_sha256": "bf0045390b8f7a1e77d2e7675bb98fccd584a98cec54d3f0730ed8327fca1c03"
+      }
+    ],
+    "migration_log": "E:\\Projects\\MCP_CREO_MechDog\\models\\registry-migration.jsonl",
+    "completed_at": "2026-10-21T14:04:02.009319+00:00",
+    "fingerprint": "1d27d06387b7c8d5"
+  },
+  "migration_log_matching_entries": [
+    {
+      "action": "migrate",
+      "model_id": "7efb4e2646464e44a5fc8a86b89c0ee9",
+      "mode": "apply",
+      "ts": "2026-10-21T14:04:01.954796+00:00"
+    }
+  ],
+  "other_preexisting_metadata_checked": 3862,
+  "other_preexisting_metadata_unchanged": true,
+  "original_native_evidence_checked": 12,
+  "original_native_evidence_unchanged": true,
+  "revision": 2,
+  "status": "ready",
+  "volume_mm3": 3141.5926535897925,
+  "part_sha256": "eac91ead42ae087e8a885f9403108b40566d20fbb2d07f6ff713fc61d94cb875",
+  "saved_file_reloaded_and_verified": true,
+  "current_model_json_bytes": 1624,
+  "aliases_sha256": "a0583c6f3a86ce0c58e6162848b61d1bdd2bb0fc31d4da3d67e84870ed6a917b",
+  "legacy_alias_geometry_unchanged": true
+}

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import inspection_refs
+from creo_mechdog import inspection_refs, model_registry
 from creo_mechdog.legacy_recovery import previous_boot_evidence
 from creo_mechdog.recovery import process_identity
 from creo_mechdog.windows_boot import boot_info
@@ -85,15 +85,77 @@ def owned_file(model: dict, value: str) -> Path:
     file = Path(value)
     if not file.is_absolute() or file.parent.resolve() != output.resolve():
         raise ValueError("Selected source is outside this model's managed output")
-    extension = "asm" if model.get("model_type") == "assembly" else "prt"
+    extension = {"assembly": "asm", "drawing": "drw"}.get(model.get("model_type"), "prt")
     if not re.fullmatch(re.escape(model["model_name"]) + rf"\.{extension}\.\d+", file.name, re.I):
         raise ValueError("Selected source does not match the owned native model name")
     return file
 
 
-def _read(file: Path) -> dict | None:
-    if file.is_file() and file.stat().st_size > 16 * 1024 * 1024:
-        raise ValueError("Recovery metadata exceeds the 16 MiB read budget")
+READ_BUDGET_BYTES = 16 * 1024 * 1024
+
+# File families this module reads under one budget (BUG-077): job manifests,
+# request manifests, native results/checkpoints and recovery side records.
+_READ_KINDS = {
+    "job.json": "job_manifest",
+    "request.json": "request_manifest",
+    "native_result.json": "native_result",
+    "native_checkpoint.json": "native_checkpoint",
+    "native_owner.json": "native_owner",
+}
+
+
+class RecoveryMetadataBudgetExceeded(ValueError):
+    """A recovery metadata read exceeded its budget; the error text is JSON."""
+
+    def __init__(
+        self,
+        *,
+        file: Path,
+        failed_stage: str,
+        metadata_kind: str,
+        job_id: str | None = None,
+        model_id: str | None = None,
+    ):
+        actual = file.stat().st_size if file.is_file() else None
+        try:
+            shown = str(file.resolve().relative_to(bridge.ROOT))
+        except (OSError, ValueError):
+            shown = str(file)
+        self.payload = {
+            "reason_code": "RECOVERY_METADATA_BUDGET_EXCEEDED",
+            "metadata_kind": metadata_kind,
+            "path": shown,
+            "actual_bytes": actual,
+            "budget_bytes": READ_BUDGET_BYTES,
+            "failed_stage": failed_stage,
+            "job_id": job_id,
+            "model_id": model_id,
+            "recovery": (
+                "Keep the oversized file unchanged for diagnosis; run "
+                "creo_registry_health to list oversized or unmigrated entries, then "
+                "creo_migrate_registry (inspect, then apply) to split legacy inline "
+                "records into detail sidecars. Do not delete the file, edit it by "
+                "hand, or raise the budget to hide the error"
+            ),
+        }
+        super().__init__(json.dumps(self.payload, ensure_ascii=False))
+
+
+def _read(
+    file: Path,
+    *,
+    failed_stage: str = "recovery_metadata_read",
+    job_id: str | None = None,
+    model_id: str | None = None,
+) -> dict | None:
+    if file.is_file() and file.stat().st_size > READ_BUDGET_BYTES:
+        raise RecoveryMetadataBudgetExceeded(
+            file=file,
+            failed_stage=failed_stage,
+            metadata_kind=_READ_KINDS.get(file.name, "recovery_metadata"),
+            job_id=job_id,
+            model_id=model_id,
+        )
     return bridge.read_json(file) if file.is_file() else None
 
 
@@ -111,17 +173,34 @@ def _baseline_hash(model: dict) -> str | None:
         return model["part_sha256"]
     current = model
     seen = set()
+    model_id = model.get("model_id")
     for _ in range(16):
         job_id = current.get("last_job")
         if not job_id or job_id in seen:
             break
         seen.add(job_id)
         directory = bridge.job_path(job_id)
-        job = _read(directory / "job.json") or {}
+        job = (
+            _read(
+                directory / "job.json",
+                failed_stage="baseline_history_read",
+                job_id=job_id,
+                model_id=model_id,
+            )
+            or {}
+        )
         result = job.get("result") or {}
         if job.get("status") == "succeeded" and result.get("part_file") == model.get("part_file"):
             return result.get("sha256")
-        current = (_read(directory / "request.json") or {}).get("model", {})
+        current = (
+            _read(
+                directory / "request.json",
+                failed_stage="baseline_history_read",
+                job_id=job_id,
+                model_id=model_id,
+            )
+            or {}
+        ).get("model", {})
     return None
 
 
@@ -176,12 +255,26 @@ def _legacy_identity_incomplete(recorded: dict | None) -> bool:
     )
 
 
-def _owners(job_id: str, boot_reader: Callable[[], dict | None] | None = None) -> dict:
+def _owners(
+    job_id: str,
+    boot_reader: Callable[[], dict | None] | None = None,
+    *,
+    read_metadata: Callable[[Path], dict | None] | None = None,
+) -> dict:
     directory = bridge.job_path(job_id)
-    job = _read(directory / "job.json") or {}
+    reader = read_metadata or _read
+    job = reader(directory / "job.json") or {}
     runner = _stopped(job.get("runner_identity"))
-    owner = _read(directory / "native_owner.json")
-    checkpoint = _read(directory / "native_checkpoint.json") or {}
+    owner = (
+        reader(directory / "native_owner.json")
+        if (directory / "native_owner.json").is_file()
+        else None
+    )
+    checkpoint = (
+        (reader(directory / "native_checkpoint.json") or {})
+        if (directory / "native_checkpoint.json").is_file()
+        else {}
+    )
     worker_identity = owner or (
         {"pid": checkpoint["native_pid"]} if checkpoint.get("native_pid") else None
     )
@@ -293,8 +386,24 @@ def _snapshot(model_id: str) -> dict:
 
     for job_id in job_ids:
         directory = bridge.job_path(job_id)
-        job = _read(directory / "job.json") or {}
-        request = _read(directory / "request.json") or {}
+        job = (
+            _read(
+                directory / "job.json",
+                failed_stage="recovery_snapshot",
+                job_id=job_id,
+                model_id=model_id,
+            )
+            or {}
+        )
+        request = (
+            _read(
+                directory / "request.json",
+                failed_stage="recovery_snapshot",
+                job_id=job_id,
+                model_id=model_id,
+            )
+            or {}
+        )
         if job.get("model_id") != model_id or request.get("model", {}).get("model_id") != model_id:
             raise ValueError("Job evidence is not bound to this model")
         owners.append(_owners(job_id, verified_boot))
@@ -309,29 +418,50 @@ def _snapshot(model_id: str) -> dict:
             if file.is_file():
                 files.append(identity(file, deadline))
         for name in ("native_result.json", "native_checkpoint.json"):
-            result = _read(directory / name) or {}
-            if (
-                candidate is None
-                and result.get("success")
-                and result.get("saved_file_reloaded_and_verified")
-                and result.get("part_file")
-                and (result.get("inspection") or result.get("inspection_ref"))
-            ):
-                try:
-                    file = owned_file(model, result["part_file"])
-                    candidate = {
-                        "job_id": job_id,
-                        "evidence": name,
-                        "identity": identity(file, deadline),
-                        # New results carry a controlled reference (BUG-076);
-                        # legacy results inline the payload. Keep whichever
-                        # form exists; consumers resolve both.
-                        "inspection": result.get("inspection"),
-                        "inspection_ref": result.get("inspection_ref"),
-                        "aliases": result.get("aliases", {}),
-                    }
-                except (OSError, ValueError) as error:
-                    candidate = {"error": str(error)}
+            # Oversized raw native files are skipped, not fatal: the split job
+            # manifest result (references only) can still supply the candidate
+            # (BUG-077). Both sources are checked below in order.
+            try:
+                raw_results = [
+                    _read(
+                        directory / name,
+                        failed_stage="recovery_snapshot",
+                        job_id=job_id,
+                        model_id=model_id,
+                    )
+                ]
+            except RecoveryMetadataBudgetExceeded:
+                raw_results = []
+            sources = []
+            if isinstance(job.get("result"), dict):
+                sources.append(("job.json", job["result"]))
+            sources.extend((name, value) for value in raw_results if value is not None)
+            for evidence_name, result in sources:
+                if not isinstance(result, dict):
+                    continue
+                if (
+                    candidate is None
+                    and result.get("success")
+                    and result.get("saved_file_reloaded_and_verified")
+                    and result.get("part_file")
+                    and (result.get("inspection") or result.get("inspection_ref"))
+                ):
+                    try:
+                        file = owned_file(model, result["part_file"])
+                        candidate = {
+                            "job_id": job_id,
+                            "evidence": evidence_name,
+                            "identity": identity(file, deadline),
+                            # New results carry a controlled reference (BUG-076);
+                            # legacy results inline the payload. Keep whichever
+                            # form exists; consumers resolve both.
+                            "inspection": result.get("inspection"),
+                            "inspection_ref": result.get("inspection_ref"),
+                            "aliases": result.get("aliases", {}),
+                            "aliases_ref": result.get("aliases_ref"),
+                        }
+                    except (OSError, ValueError) as error:
+                        candidate = {"error": str(error)}
     baseline = None
     if model.get("part_file"):
         try:
@@ -402,9 +532,16 @@ def _actions(snapshot: dict, live: dict | None) -> dict:
 
 
 def _native_request(model: dict, choice: dict) -> dict:
+    # Reference-first view: a split registry record sends aliases/inspection
+    # as controlled references; a legacy inline record keeps its payload
+    # (BUG-077).
+    view = dict(model)
+    for key in model_registry.DETAIL_KEYS:
+        if f"{key}_ref" in view:
+            view.pop(key, None)
     return {
         "new": False,
-        "model": model,
+        "model": view,
         "operations": [],
         "readonly": True,
         "template_file": "",
@@ -545,9 +682,7 @@ def _finish(record: dict) -> dict:
         source = after["reconciliation"].get("source_identity")
         if source and identity(Path(source["path"])) != source:
             raise ValueError("Committed saved model changed; keep recovery protection")
-        bridge.write_json(
-            general.model_path(record["model_id"]) / "model.json", after, durable=True
-        )
+        model_registry.write_model(general.model_path(record["model_id"]), after)
     elif (model.get("reconciliation") or {}).get("recovery_id") != record["job_id"]:
         raise ValueError("Committed recovery conflicts with current registry; preserve audit")
     return record["job_after"]
@@ -704,7 +839,16 @@ def apply(
                 candidate = record["snapshot"]["candidate"]
                 choice.update(source_file=candidate["identity"]["path"])
                 choice.update(inspection_refs.request_field(candidate, "source_inspection"))
-                model = {**model, "aliases": candidate["aliases"]}
+                # The accepted candidate's aliases may be a controlled reference
+                # (split job result) or a legacy inline payload; exactly one
+                # form travels to the executor (BUG-077).
+                model = {**model}
+                model.pop("aliases", None)
+                model.pop("aliases_ref", None)
+                if candidate.get("aliases_ref"):
+                    model["aliases_ref"] = candidate["aliases_ref"]
+                elif candidate.get("aliases"):
+                    model["aliases"] = candidate["aliases"]
             elif action == "accept_live":
                 choice.update(inspection_refs.request_field(record["live"], "live_inspection"))
             manifest = {
@@ -734,7 +878,7 @@ def apply(
             bridge.write_json(file, intent, durable=True)
             reserved = general.model_info(model_id)
             reserved["recovery_pending"] = job_id  # Original pending_job remains unchanged.
-            bridge.write_json(general.model_path(model_id) / "model.json", reserved, durable=True)
+            model_registry.write_model(general.model_path(model_id), reserved)
             try:
                 with (directory / "runner.log").open("ab") as log:
                     subprocess.Popen(
@@ -819,10 +963,16 @@ def _run_locked(job_id: str, manifest: dict, intent: dict, file: Path) -> dict:
             status="ready",
             part_file=result["part_file"],
             part_sha256=source["sha256"],
-            aliases=result["aliases"],
             updated_at=bridge.now(),
         )
-        # Registry keeps the summary plus the controlled reference (BUG-076).
+        # Registry keeps the summary plus the controlled reference; the aliases
+        # arrive inline or as a reference and either form persists through
+        # model_registry.write_model (BUG-076/077).
+        after.pop("aliases", None)
+        after.pop("aliases_ref", None)
+        for key in ("aliases", "aliases_ref"):
+            if key in result:
+                after[key] = result[key]
         after.update(
             {
                 key: result[key]
@@ -925,9 +1075,7 @@ def _record_failure(
             model = general.model_info(manifest["model_id"])
             if model.get("recovery_pending") == job_id:
                 model["recovery_pending"] = None
-                bridge.write_json(
-                    general.model_path(manifest["model_id"]) / "model.json", model, durable=True
-                )
+                model_registry.write_model(general.model_path(manifest["model_id"]), model)
                 manifest["recovery_pending_released"] = True
         except (OSError, ValueError) as cleanup_error:
             # The failed attempt never authorizes clearing another reservation,
@@ -945,7 +1093,9 @@ def _check_execution(intent: dict, current: dict) -> None:
     normalized.pop("recovery_pending", None)
     expected = {**original["model"]}
     expected.pop("recovery_pending", None)
-    if normalized != expected:
+    # Compare control semantics, not storage form: a record whose inline
+    # details were split into sidecars is the same record (BUG-077).
+    if model_registry.semantic_view(normalized) != model_registry.semantic_view(expected):
         raise RecoveryRefused("model_changed", "Model changed after recovery admission")
     if _deployment(time.monotonic() + SNAPSHOT_SECONDS) != original["deployment"]:
         raise RecoveryRefused(

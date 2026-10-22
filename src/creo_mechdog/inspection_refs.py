@@ -42,21 +42,32 @@ def _service_file(raw: object) -> Path:
     return resolved
 
 
-def make_ref(value: dict, directory: Path, stem: str) -> dict:
+def content_digest(value: dict) -> str:
+    """The digest :func:`make_ref` would compute for this payload.
+
+    Shared so a record's content can be compared across storage forms:
+    an inline payload and its written sidecar produce the same digest.
+    """
+    content = json.dumps(value, ensure_ascii=False, indent=2)
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def make_ref(value: dict, directory: Path, stem: str, *, prefix: str = "inspection") -> dict:
     """Write a full inspection payload as a controlled sidecar file.
 
     The sidecar keeps the native full baseline bytes intact; only its identity
     (path, size, SHA256) enters control metadata. The name is content
     addressed, so a new payload never overwrites a reference an earlier
-    record still points to.
+    record still points to. ``prefix`` names the payload family (BUG-077
+    reuses this for registry detail sidecars such as aliases).
     """
     directory.mkdir(parents=True, exist_ok=True)
     content = json.dumps(value, ensure_ascii=False, indent=2)
     data = content.encode("utf-8")
     digest = hashlib.sha256(data).hexdigest()
-    file = directory / f"inspection-{stem}-{digest[:16]}.json"
+    file = directory / f"{prefix}-{stem}-{digest[:16]}.json"
     if not file.is_file() or file.stat().st_size != len(data):
-        temp = directory / f"inspection-{stem}-{digest[:16]}.{os.getpid()}.tmp"
+        temp = directory / f"{prefix}-{stem}-{digest[:16]}.{os.getpid()}.tmp"
         temp.write_bytes(data)
         os.replace(temp, file)
     return {"file": str(file), "sha256": digest, "bytes": len(data)}

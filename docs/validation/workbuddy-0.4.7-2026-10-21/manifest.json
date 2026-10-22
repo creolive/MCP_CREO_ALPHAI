@@ -1,0 +1,30 @@
+{
+  "received_date": "2026-10-21",
+  "source_attachment": "993afb82-891a-4a7e-ad54-54d4e55f9bd2/已粘贴的文本.txt",
+  "archived_as": "report.md",
+  "report_bytes": 12529,
+  "report_sha256": "64c284c95a0bd26d1dac946ad3d251099a7b8087a4a235ce2526e075ef3ff7db",
+  "archive_byte_identical_to_attachment": true,
+  "reported_server_version": "0.4.7",
+  "reported_environment": "MCP_CREO_MechDog_dev / E drive code_root / Creo 12.4.0.0 release_numeric 44 / stdio / 90 tools",
+  "evidence_type": "user-provided WorkBuddy public-MCP black-box report; no native calls repeated during receipt",
+  "tested_source_commit": null,
+  "receipt_repository_commit": "435efae405d0e34fb40219b8cad513553e799dad",
+  "mapping": {
+    "health_526_entries_11_pages": "FEAT-047: public pagination positive evidence; abnormal records and raw response bytes not exercised",
+    "migration_inspect_485_entries_10_pages": "BUG-077: public read-only pagination; no historical migration",
+    "invalid_targets_empty_apply_idempotency_target_conflict": "BUG-077: rejection/no-op/replay evidence, not legacy migration",
+    "new_part_alias_dimension_edit_assembly_saved_reload": "BUG-077/DEV-044: normal native consumer regression",
+    "reconcile_inspect": "FEAT-018/BUG-077: inspect only, four apply actions and rollback unverified",
+    "parallel_regenerate_and_migrate_busy": "BUG-077: actual admission rejection; owner snapshot unknown, paired job not proven blocker",
+    "create_plate_no_model_id": "existing FEAT-028: one-shot output boundary, not new 0.4.7 regression",
+    "hidden_parametric_hung_observation": "observation only; no conclusion that historical BUG-001 cause is fixed"
+  },
+  "limits": [
+    "No real legacy/oversized migration or bulk migration of 485 records",
+    "No raw response-byte measurement; 32 KiB field alone is not evidence",
+    "No recovery apply, rollback or fault injection",
+    "Creation jobs 77b10d8e... and 8a412d0e... abbreviated; full IDs unavailable from this artifact",
+    "No external Creo 10/track_p01b retest, DEV-027 reproducibility or reclamation acceptance"
+  ]
+}
