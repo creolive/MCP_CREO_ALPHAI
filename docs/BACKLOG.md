@@ -34,10 +34,10 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
-| [BUG-077](work-items/BUG-077.md) | P0 | 验收中 | 0.4.7 | 530项单测及[0.4.7黑盒](validation/WORKBUDDY-0.4.7-2026-10-21.md)正常主线、分页、拒绝保护和并发busy通过；[小型真实非空迁移、同键回放及后续编辑/保存重载已通过](validation/WORKBUDDY-0.4.7-NONEMPTY-2026-10-21.md)；[>16 MiB超限迁移→收养→编辑实机链路通过](validation/BUG077-OVERSIZE-MIGRATION-2026-10-21.md)；[恢复链路四动作矩阵+restore_baseline/abandon_new通过](validation/BUG077-RECOVERY-2026-10-22.md)，accept两动作被BUG-078阻断。图纸等消费点及原环境继续开放。485条真实旧登记未迁移，不清保护。 |
-| [BUG-078](work-items/BUG-078.md) | P1 | 已复现 | 待排期 | 恢复accept路径ProMdlnameBackup稳定-1（实机0/4，该路径从未实机成功），accept_saved/accept_live不可用；编辑路径同日偶发-1三例待查。三个dirty现场模型保护挂起待修复收尾。不阻断0.4.7发布决策。 |
+| [BUG-077](work-items/BUG-077.md) | P0 | 验收中 | 0.4.7 | 530项单测及[0.4.7黑盒](validation/WORKBUDDY-0.4.7-2026-10-21.md)正常主线、分页、拒绝保护和并发busy通过；[小型真实非空迁移、同键回放及后续编辑/保存重载已通过](validation/WORKBUDDY-0.4.7-NONEMPTY-2026-10-21.md)；[>16 MiB超限迁移→收养→编辑实机链路通过](validation/BUG077-OVERSIZE-MIGRATION-2026-10-21.md)；[恢复链路四动作矩阵+restore_baseline/abandon_new通过](validation/BUG077-RECOVERY-2026-10-22.md)；[图纸消费点+两处拆分遗漏修复随版交付](validation/BUG077-DRAWING-2026-10-22.md)。accept两动作被BUG-078阻断；原环境复测继续开放。485条真实旧登记未迁移，不清保护。 |
+| [BUG-078](work-items/BUG-078.md) | P1 | 已复现 | 待排期 | 恢复accept路径ProMdlnameBackup稳定-1（实机0/4，该路径从未实机成功），accept_saved/accept_live不可用；编辑路径同日偶发-1三例待查；图纸路径4连成支持erase→load邻接嫌疑。三个dirty现场模型保护挂起待修复收尾。不阻断0.4.7发布决策。 |
 | [DEV-044](work-items/DEV-044.md) | P1 | 开发中 | 0.4.7 | 核心实现、安全补修、正常主线及小型真实非空迁移/后续编辑黑盒通过；用户指定PATCH，未合入/发布。继续超限迁移及恢复消费验证，DEV-027可复现性/安全回收另期，不标全计划完成。 |
-| [FEAT-047](work-items/FEAT-047.md) | P1 | 验收中 | 0.4.7 | 正常数据526条/11页公开黑盒无重无漏；开发者530项单测和32KiB测量独立保留。异常条目/超限场景及黑盒原始字节测量未覆盖，按卡保留。 |
+| [FEAT-047](work-items/FEAT-047.md) | P1 | 验收中 | 0.4.7 | 正常数据526条/11页公开黑盒无重无漏；[预警/损坏/超限/32KiB逐页实测通过](validation/BUG077-HEALTH-2026-10-22.md)（单条损坏不中断扫描、最大页19,895B、其他543条登记不变）。原环境异常数据未覆盖，按卡保留。 |
 | [DEV-002](work-items/DEV-002.md) | P2 | 开发中 | 未排期 | 继续Python包迁移，下一批处理seeds/capabilities及后续服务/启动/桥接依赖；前两批证据见卡，安装入口、资源和运行数据定位须同步核对。 |
 | [DEV-030](work-items/DEV-030.md) | P1 | 开发中 | 未排期 | 继续G2底板与编辑、G3履带基础/性能、G4阵列及完整履带分期；恢复与回调剩余验收分别归 FEAT-018/029。三键放宽子项已交付并取得[外部七键复测通过](validation/feedback-0.4.4-2026-10-21/report-dev027-030.md)，不再重复调查。 |
 

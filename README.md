@@ -6,7 +6,7 @@
 
 当前注册 **90 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前开发分支服务／源码版本为 **0.4.7**（用户指定 PATCH，未发布），本批变更与限制见[版本说明](docs/RELEASE_NOTES_0.4.7.md)。最近已交付版本为 0.4.6，见[发布核对](docs/validation/RELEASE-0.4.6.md)。收养链路已把控制元数据与完整检查资料分离（BUG-076 精修）：结果、令牌、请求和登记只保存摘要及受控文件引用（路径/SHA256/字节数），完整几何资料留在所属目录按内容寻址的 sidecar 文件中，源模型、复制后与保存重载的带容差比较保持不变；引用被篡改、缺失或过期时明确拒绝。旧内联记录继续兼容读取；仍有文件超过 16 MiB 预算时返回 `ADOPTION_METADATA_BUDGET_EXCEEDED`（携带 `metadata_kind`、实际字节数、预算、失败阶段和恢复指引），该诊断不提高限额。空窗口收养返回结构化 `NO_CURRENT_MODEL`。原环境复验及 WorkBuddy 黑盒等剩余工作见[统一台账](docs/BACKLOG.md)。
+当前服务／源码版本为 **0.4.7**（用户指定 PATCH，含新增公开工具作为本版例外），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.4.7.md)与[发布核对](docs/validation/RELEASE-0.4.7.md)。本版把模型登记控制信息与 aliases／inspection 详情分离（BUG-077）：详情以内容寻址 sidecar 按需读取，旧内联记录兼容并可经 `creo_migrate_registry` 显式迁移（备份原字节、原子发布控制记录、幂等回放）；注册表整体状态由只读 `creo_registry_health` 报告（80% 预警、超限与损坏单列且不中断扫描，响应按 32 KiB 分页）。超限历史条目阻断收养的死锁已解除（结构化 `ADOPTION_METADATA_BUDGET_EXCEEDED` 指向迁移），>16 MiB 条目迁移后收养与编辑实机验证通过；图纸等引用消费点随版修复覆盖。已知问题：恢复 accept 路径（`accept_saved`／`accept_live`）native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，登记待修，`restore_baseline`／`abandon_new` 不受影响）。原环境复验及 WorkBuddy 黑盒等剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.4.6（收养资料分离精修）见[发布核对](docs/validation/RELEASE-0.4.6.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 

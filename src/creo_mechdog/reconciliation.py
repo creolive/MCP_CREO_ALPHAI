@@ -85,7 +85,7 @@ def owned_file(model: dict, value: str) -> Path:
     file = Path(value)
     if not file.is_absolute() or file.parent.resolve() != output.resolve():
         raise ValueError("Selected source is outside this model's managed output")
-    extension = "asm" if model.get("model_type") == "assembly" else "prt"
+    extension = {"assembly": "asm", "drawing": "drw"}.get(model.get("model_type"), "prt")
     if not re.fullmatch(re.escape(model["model_name"]) + rf"\.{extension}\.\d+", file.name, re.I):
         raise ValueError("Selected source does not match the owned native model name")
     return file
