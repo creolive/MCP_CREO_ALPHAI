@@ -10,8 +10,19 @@ static std::map<int,int> top_feature_order(){
 }
 
 static void generic_reorder(const J& op){
- int anchor=feature_id(op.contains("before")?op["before"]:op["after"]);ProFeature other=feature(anchor);int position=0;CK(ProFeatureNumberGet(&other,&position));if(op.contains("before"))position--;
+ bool before=op.contains("before");
+ int anchor=feature_id(before?op["before"]:op["after"]);ProFeature other=feature(anchor);
  std::set<int> unique;std::vector<int> values;for(auto item:op["features"]){int id=feature_id(item);if(id==anchor||!unique.insert(id).second)throw std::runtime_error("Reorder needs distinct features and a separate anchor");values.push_back(id);}
+ // SDK contract: feat_ids must form one contiguous range, and new_feat_num is
+ // an insertion slot of the tree with the moved features removed.
+ auto ordered=top_feature_order();std::map<int,int> number_of;
+ for(auto& item:ordered)number_of.emplace(item.second,item.first);
+ if(!number_of.count(anchor))throw std::runtime_error("Reorder anchor is not a top-level feature");
+ std::vector<int> slots;for(int id:values){if(!number_of.count(id))throw std::runtime_error("Reorder targets must be top-level features");slots.push_back(number_of[id]);}
+ std::sort(slots.begin(),slots.end());
+ for(size_t i=1;i<slots.size();i++)if(slots[i]!=slots[i-1]+1)throw std::runtime_error("Reorder features must be contiguous in the model tree");
+ int anchor_number=number_of[anchor];int removed_before=0;for(int slot:slots)if(slot<anchor_number)removed_before++;
+ int position=anchor_number-removed_before+(before?0:1);
  int* ids=nullptr;CK(ProArrayAlloc((int)values.size(),sizeof(int),1,(ProArray*)&ids));for(size_t i=0;i<values.size();i++)ids[i]=values[i];ProError code=ProFeatureWithoptionsReorder((ProSolid)board,ids,position,PRO_REGEN_NO_FLAGS);ProArrayFree((ProArray*)&ids);check(code,"ReorderNativeFeatures");
 }
 
