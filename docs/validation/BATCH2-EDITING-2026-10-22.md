@@ -29,10 +29,16 @@
 
 ## 3. BUG-029：特征重排
 
-- **定位**：探针（bug029_probe/pr2）实测 SDK 语义：`ProFeatureWithoptionsReorder` 的 `new_feat_num` 是**移除移动集合后**树中的插入槽位——原实现 `before=number(anchor)-1 / after=number(anchor)` 在两个方向上各有一种情形错位一格（探针中 `[dtp2] before dtp1` 把 dtp2 落到了 disk_solid 之前）。同时 SDK 文档要求 `feat_ids` 为**连续**特征集合；原报告两个拉伸之间隔有特征（草图等），非连续输入直接 `PRO_TK_BAD_INPUTS(-2)`，即原报告的三次 `-2` 失败。
-- **修复（native/placement.cpp）**：`generic_reorder` 基于 `top_feature_order` 做顶层特征连续性校验（非连续、非顶层、锚点重叠、重复目标均前置拒绝）并按缩减树计算槽位（`before=锚点缩减序号`、`after=锚点缩减序号+1`）。
+- **定位**：探针（bug029_probe/pr2）实测发现原实现 `before=number(anchor)-1 / after=number(anchor)` 的换算错位（如 `[dtp2] before dtp1` 把 dtp2 落到了 disk_solid 之前）。首轮修复后发布前复核又发现"缩减树槽位"模型在多特征块后移场景仍错（块后移 `-2` 或落位偏一格），经对照实验矩阵（见收口节）确定真实语义。原报告三次 `-2` 失败的根因**仍未确认**（原始请求与依赖树不完整），本节仅覆盖本机可复现问题。
+- **修复（native/placement.cpp）**：`generic_reorder` 基于 `top_feature_order` 做顶层特征连续性校验（非连续、非顶层、锚点重叠、重复目标均前置拒绝），槽位按方向折算（见收口节公式）。
 - **实机验收**（bug029_ac2：disk 拉伸+三个独立基准面）：5 个正例全部树序精准符合请求（`[dtp2] before dtp1`、`[dtp2] after dtp1`、连续对 `[dtp2,dtp3] before dtp1`、原生 ID 引用、计划入口），体积 `100π` 与 bbox `[10,10,4]` 全程不变、特征 ID 全程保持、每步 rev+1、保存重载通过；6 个负例（草图移到其拉伸后=依赖冲突、未知 label、重复目标、目标=锚点、非连续集合、stale revision）全部准确拒绝，拒绝后树序与 revision 不变，随后合法重排可用。
-- 计划步骤 2（重构原报告两拉伸核对依赖）以等价的"草图→拉伸"依赖冲突负例覆盖（同构依赖关系），原模型输入未交付故不重建原件。
+- 计划步骤 2（重构原报告两拉伸核对依赖）以等价的"草图→拉伸"依赖冲突负例覆盖（同构依赖关系），原模型输入未交付故不重建原件；原三次失败根因未确认。
+
+## 6. 2026-10-22 发布前收口（复核意见补齐）
+
+- **BUG-030 P1 回归**：复核指出跳过条件仅比较历史 `meta.geometry`（尺寸编辑不更新它）。实机复现：创建 d16 → `set_sketch_dimensions` d20 → 提交原 d16 几何，作业成功但模型保留 d20（`build/bug030/regress.json`）；同几何切换 dimensioning 同样被误跳。修复（`native/generic.cpp` + `native/sketch_edit.cpp`）：尺寸/关系编辑（`set_sketch_dimensions`、`set_dimensions`、`set_relations`）对草图登记置 `geometry_stale`，创建与就地编辑记录 `last_dimensioning`；跳过条件加"未 stale 且 dimensioning 未变"守卫。补测通过（`build/bug030/regress2.json`、`dimensioning3.json`）：恢复原几何走完整替换体积回 2010.62；切 coordinates/切回 auto 不跳过并重建尺寸方案；干净同几何仍跳过（`unchanged=true`）。
+- **BUG-029 槽位语义二次修正**：复核后实验矩阵（`bug029_v10..v13`、`bug029_w1..w4`，诊断行 `REORDER_DIAG`）确定 `new_feat_num` 为**原树编号**：块前移落该槽之前、后移落其后，槽位指向移动集合成员时 API 返回 `PRO_TK_BAD_INPUTS`。据此改方向折算公式（before：块在锚后取 `n_A`、在锚前取 `n_A-1`；after：块在锚后取 `n_A+1`、在锚前取 `n_A`），并对计算槽位落入集合范围（必然是相邻原位请求）按 no-op 成功返回。补测三场景通过（`build/bug029/accept2.json`：连续块后移 `[dtp1,dtp2] after dtp3` 序列 `[disk_solid,dtp3,dtp1,dtp2]`、反序列表 `[dtp2,dtp1] before dtp3`、原位 `[dtp2] after dtp1` no-op），首轮 5 正例/6 负例矩阵复验通过（`accept.json` 复跑）。原报告三次失败根因未确认，文档归因已弱化。
+- 回归：BUG-062 复验（`verify3.json`）通过；全量单测 548、`dev_check.py` success、`tools/test_general.py` `GENERAL_CORE_SUCCESS=1`（收口改动格式化重编译后复跑）。
 
 ## 4. 回归与完整性
 
