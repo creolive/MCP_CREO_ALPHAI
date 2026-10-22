@@ -12,6 +12,10 @@ static J expanded_geometry(const J& input){
 
 static void generic_sketch_edit(const J& op){
  std::string label=op.at("sketch");if(!aliases.contains(label))throw std::runtime_error("Sketch alias is missing");J& meta=aliases[label];ProFeature f=feature(label);int original_id=f.id;
+ // A byte-identical replacement would only leave the sketch and its
+ // dependents active-but-unregenerated, a status neither plain nor forced
+ // regeneration clears; skip the rewrite and keep the feature tree intact.
+ if(meta.value("geometry",J())==op["entities"]){operation_results.push_back({{"op",op["op"]},{"sketch",label},{"preserved_feature_id",f.id},{"unchanged",true}});return;}
  J geometry=expanded_geometry(op["entities"]),names=J::object();for(auto e:geometry)names[e["name"].get<std::string>()]=e["type"];
  if(names.size()!=geometry.size()||names.size()!=meta.at("entity_ids").size())throw std::runtime_error("In-place edit must retain every named sketch entity");
  for(auto it=meta["entity_ids"].begin();it!=meta["entity_ids"].end();++it)if(!names.contains(it.key()))throw std::runtime_error("In-place edit cannot rename sketch entities");
