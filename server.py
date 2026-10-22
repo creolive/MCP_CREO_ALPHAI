@@ -42,6 +42,7 @@ from creo_mechdog.schema import (
     SketchDimension,
     SketchOp,
 )
+from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
 from creo_mechdog.session_models import list_session_models
 from version import VERSION
@@ -380,6 +381,16 @@ async def creo_list_session_models(
 ) -> dict[str, Any]:
     """List models already in the connected Creo session without loading, saving, activating or adopting them. Returns names/types/current model, origin, has_saved_origin, modified and proven managed IDs; unknown fields are null with query codes. First page uses the single Toolkit channel (busy rejects immediately); cursor pages read the same frozen ten-minute snapshot. Integer session IDs are transient discovery hints, never adoption identities; they may legitimately be 0 or duplicated across model types, so locate models by name plus model_type. session_fingerprint identifies the connection/process session and does not change when session contents change. Partial type queries report complete=false. Switch to the desired model in Creo before adopting it."""
     return await invoke(list_session_models, limit, cursor)
+
+
+@mcp.tool(annotations=READ)
+async def creo_inspect_session_assembly(
+    name: str,
+    limit: int = Field(default=20, ge=1, le=50),
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Read-only inspection of a resident session assembly (FEAT-045). Select an already-loaded assembly by name from creo_list_session_models; the walk returns components in tree order with occurrence paths (component feature ids from the root), parent paths, name/type/origin/modified, resolved, suppressed and packaged flags, per-constraint snapshots (type, offset, orientation, assembly/component references with raw query codes) and full 4x4 transforms: transform_to_parent maps member coordinates into the owning assembly, transform_to_root into the inspected root; row-vector convention (p' = p * M), translation in the last row, units in millimeters. Missing, suppressed and failed nodes are marked per item instead of failing the report; unresolved components keep their occurrence path. Repeated instances are listed separately. First collection uses the single Toolkit channel (busy rejects immediately); cursor pages read the same frozen ten-minute snapshot within 32 KiB. Inspection never loads components, activates, regenerates, saves, adopts or creates managed revisions. Assembly editing/adoption is not part of this tool."""
+    return await invoke(inspect_session_assembly, name, limit, cursor)
 
 
 @mcp.tool(annotations=CREATE)

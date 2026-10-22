@@ -2412,6 +2412,319 @@ static void session_models_native(J &report) {
                    {"current_model_code", inventory.current_code}});
 }
 
+// FEAT-045: read-only inspection of a resident assembly. The walk selects an
+// already-loaded assembly by name, never loads, activates, regenerates, saves
+// or adopts anything, and reports every node in tree order with occurrence
+// paths, resolved 4x4 transforms and constraint snapshots. Per-node failures
+// are marked with their raw query codes instead of failing the whole report.
+struct AssemblyWalk {
+    J components = J::array();
+    bool truncated = false;
+    bool incomplete = false;
+    int budget = 0;
+};
+
+struct WalkContext {
+    ProSolid owner = nullptr;
+    std::vector<int> path;      // component feature ids from the root assembly
+    ProMatrix accumulated = {}; // this owner's member-to-root transform
+    AssemblyWalk *walk = nullptr;
+    ProMdl current = nullptr;
+    int current_code = -1;
+    int depth = 0;
+};
+
+// Creo ProMatrix is row-major with row-vector convention p' = p * M, so the
+// translation lives in the last row and units follow the owning assembly (mm).
+static J matrix_json(const ProMatrix matrix) {
+    J rows = J::array();
+    for (int r = 0; r < 4; ++r) {
+        J row = J::array();
+        for (int c = 0; c < 4; ++c)
+            row.push_back(matrix[r][c]);
+        rows.push_back(row);
+    }
+    return rows;
+}
+
+static void multiply_row_vector(const ProMatrix a, const ProMatrix b, ProMatrix out) {
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c) {
+            double sum = 0.0;
+            for (int k = 0; k < 4; ++k)
+                sum += a[r][k] * b[k][c];
+            out[r][c] = sum;
+        }
+}
+
+static void copy_matrix(const ProMatrix source, ProMatrix destination) {
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+            destination[r][c] = source[r][c];
+}
+
+static J assembly_selection_json(ProSelection selection) {
+    J reference = J::object();
+    ProAsmcomppath component_path;
+    ProError path_code = ProSelectionAsmcomppathGet(selection, &component_path);
+    reference["comppath_query_code"] = path_code;
+    if (!path_code) {
+        ProMdlName owner_name = {};
+        if (!ProMdlMdlnameGet(component_path.owner, owner_name)) {
+            reference["owner_name"] = utf8(owner_name);
+            J ids = J::array();
+            int levels = component_path.table_num;
+            if (levels > PRO_MAX_ASSEM_LEVEL)
+                levels = PRO_MAX_ASSEM_LEVEL; // clamp a garbage count defensively
+            for (int i = 0; i < levels; ++i)
+                ids.push_back(component_path.comp_id_table[i]);
+            reference["occurrence_path"] = ids;
+        }
+    }
+    ProModelitem item;
+    ProError item_code = ProSelectionModelitemGet(selection, &item);
+    reference["item_query_code"] = item_code;
+    if (!item_code) {
+        reference["item_type"] = item.type;
+        reference["item_id"] = item.id;
+    }
+    return reference;
+}
+
+static J constraint_json(ProAsmcompconstraint constraint) {
+    static const std::map<int, const char *> type_names = {
+        {PRO_ASM_FIX, "fix"},
+        {PRO_ASM_MATE, "mate"},
+        {PRO_ASM_MATE_OFF, "mate_offset"},
+        {PRO_ASM_ALIGN, "align"},
+        {PRO_ASM_ALIGN_OFF, "align_offset"},
+        {PRO_ASM_INSERT, "insert"},
+        {PRO_ASM_ORIENT, "orient"},
+        {PRO_ASM_CSYS, "csys"},
+        {PRO_ASM_TANGENT, "tangent"},
+        {PRO_ASM_PNT_ON_SRF, "pnt_on_srf"},
+        {PRO_ASM_EDGE_ON_SRF, "edge_on_srf"},
+        {PRO_ASM_DEF_PLACEMENT, "default"},
+        {PRO_ASM_AUTO, "auto"},
+    };
+    J item = J::object();
+    J codes = J::object();
+    ProAsmcompConstrType type = PRO_ASM_FIX;
+    int type_code = ProAsmcompconstraintTypeGet(constraint, &type);
+    codes["type"] = type_code;
+    if (!type_code) {
+        auto found = type_names.find(type);
+        item["type"] = found != type_names.end() ? found->second : "unknown";
+        item["type_code"] = (int)type;
+    } else {
+        item["type"] = nullptr;
+    }
+    double offset = 0.0;
+    int offset_code = ProAsmcompconstraintOffsetGet(constraint, &offset);
+    codes["offset"] = offset_code;
+    item["offset"] = offset_code ? J(nullptr) : J(offset);
+    ProSelection selection = nullptr;
+    ProDatumside side = PRO_DATUM_SIDE_NONE;
+    int asm_code = ProAsmcompconstraintAsmreferenceGet(constraint, &selection, &side);
+    codes["asm_reference"] = asm_code;
+    item["asm_reference"] = asm_code ? J(nullptr) : assembly_selection_json(selection);
+    int comp_code = ProAsmcompconstraintCompreferenceGet(constraint, &selection, &side);
+    codes["comp_reference"] = comp_code;
+    item["comp_reference"] = comp_code ? J(nullptr) : assembly_selection_json(selection);
+    static const std::map<int, const char *> side_names = {{PRO_DATUM_SIDE_YELLOW, "yellow"},
+                                                           {PRO_DATUM_SIDE_RED, "red"},
+                                                           {PRO_DATUM_SIDE_NONE, "none"}};
+    if (!asm_code || !comp_code) {
+        auto found = side_names.find(side);
+        item["orientation"] = found != side_names.end() ? found->second : "unknown";
+    }
+    item["query_codes"] = codes;
+    return item;
+}
+
+static J component_constraints_json(ProAsmcomp *component, J &codes) {
+    J constraints = J::array();
+    ProAsmcompconstraint *list = nullptr;
+    // The comppath form with the owning-assembly path is the supported read;
+    // a NULL path crashed native runs on Creo 12, so the path is always built.
+    ProIdTable ids = {};
+    ids[0] = component->id;
+    ProAsmcomppath owner_path;
+    ProError path_code = ProAsmcomppathInit((ProSolid)component->owner, ids, 1, &owner_path);
+    codes["constraint_comppath"] = path_code;
+    ProError code =
+        path_code ? path_code : ProAsmcompConstraintsWithComppathGet(component, &owner_path, &list);
+    codes["constraints"] = code;
+    if (code == PRO_TK_NO_ERROR && list) {
+        int count = 0;
+        if (!ProArraySizeGet((ProArray)list, &count))
+            for (int i = 0; i < count; ++i) {
+                constraints.push_back(constraint_json(list[i]));
+            }
+        ProAsmcompconstraintArrayFree(list);
+    } else if (code == PRO_TK_E_NOT_FOUND) {
+        codes["constraints"] = 0; // no constraints recorded: packaged placement
+    }
+    return constraints;
+}
+
+static ProError assembly_feature_callback(ProFeature *feature, ProError status, ProAppData data) {
+    auto *context = (WalkContext *)data;
+    AssemblyWalk &walk = *context->walk;
+    if (status)
+        return status;
+    if (walk.truncated)
+        return PRO_TK_NO_ERROR;
+    ProFeattype type;
+    if (ProFeatureTypeGet(feature, &type) || type != PRO_FEAT_COMPONENT)
+        return PRO_TK_NO_ERROR;
+    auto *component = (ProAsmcomp *)feature;
+    J item = J::object();
+    J codes = J::object();
+    std::vector<int> occurrence = context->path;
+    occurrence.push_back(feature->id);
+    J path_json = J::array();
+    for (int id : occurrence)
+        path_json.push_back(id);
+    J parent_json = J::array();
+    for (int id : context->path)
+        parent_json.push_back(id);
+    item["component_id"] = feature->id;
+    item["occurrence_path"] = path_json;
+    item["parent_path"] = parent_json;
+    item["depth"] = context->depth;
+    ProFeatStatus feature_status = PRO_FEAT_ACTIVE;
+    int status_code = ProFeatureStatusGet(feature, &feature_status);
+    codes["feature_status"] = status_code;
+    item["feature_status"] = status_code ? J(nullptr) : J((int)feature_status);
+    item["suppressed"] = status_code ? J(nullptr)
+                                     : J(feature_status == PRO_FEAT_SUPPRESSED ||
+                                         feature_status == PRO_FEAT_FAMTAB_SUPPRESSED ||
+                                         feature_status == PRO_FEAT_SIMP_REP_SUPPRESSED ||
+                                         feature_status == PRO_FEAT_PROG_SUPPRESSED);
+    ProBoolean packaged = PRO_B_FALSE;
+    int packaged_code = ProAsmcompIsPackaged(component, &packaged);
+    codes["packaged"] = packaged_code;
+    item["packaged"] = packaged_code ? J(nullptr) : J(packaged == PRO_B_TRUE);
+    ProMdl child = nullptr;
+    ProError model_code = ProAsmcompMdlGet(component, &child);
+    codes["model"] = model_code;
+    if (model_code || !child) {
+        // The component feature exists but its model did not resolve (for
+        // example a missing file); keep the node observable instead of failing.
+        item.update({{"name", nullptr},
+                     {"model_type", nullptr},
+                     {"resolved", false},
+                     {"constraints", J::array()}});
+        item["query_codes"] = codes;
+        walk.components.push_back(item);
+        if ((int)walk.components.size() >= walk.budget)
+            walk.truncated = true;
+        return PRO_TK_NO_ERROR;
+    }
+    item["resolved"] = true;
+    J observed = observe_session_model(child, "", context->current, context->current_code);
+    ProMdlType kind = PRO_MDL_PART;
+    ProError kind_code = ProMdlTypeGet(child, &kind);
+    codes["model_type"] = kind_code;
+    const char *kind_name = kind_code ? "" : kind == PRO_MDL_ASSEMBLY ? "assembly" : "part";
+    observed["model_type"] = kind_code ? J(nullptr) : J(kind_name);
+    ProMdlsubtype subtype = PROMDLSTYPE_PART_SOLID;
+    if (!kind_code && kind == PRO_MDL_PART && !ProMdlSubtypeGet(child, &subtype) &&
+        subtype == PROMDLSTYPE_PART_SHEETMETAL)
+        observed["model_type"] = "sheetmetal";
+    for (auto it = observed.begin(); it != observed.end(); ++it)
+        item[it.key()] = it.value();
+    ProMatrix to_parent = {};
+    ProError transform_code = component_to_assembly_transform(component, to_parent);
+    codes["transform"] = transform_code;
+    item["transform_to_parent"] = transform_code ? J(nullptr) : matrix_json(to_parent);
+    ProMatrix to_root = {};
+    if (!transform_code) {
+        multiply_row_vector(to_parent, context->accumulated, to_root);
+        item["transform_to_root"] = matrix_json(to_root);
+    } else {
+        item["transform_to_root"] = nullptr;
+    }
+    item["constraints"] = component_constraints_json(component, codes);
+    item["query_codes"] = codes;
+    walk.components.push_back(item);
+    if ((int)walk.components.size() >= walk.budget) {
+        walk.truncated = true;
+        return PRO_TK_NO_ERROR;
+    }
+    if (!kind_code && kind == PRO_MDL_ASSEMBLY && context->depth < 32) {
+        WalkContext sub;
+        sub.owner = (ProSolid)child;
+        sub.path = occurrence;
+        copy_matrix(transform_code ? context->accumulated : to_root, sub.accumulated);
+        sub.walk = context->walk;
+        sub.current = context->current;
+        sub.current_code = context->current_code;
+        sub.depth = context->depth + 1;
+        // A failed sub-assembly walk marks this node instead of failing the
+        // whole report; sibling components stay observable.
+        int sub_code =
+            ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr, (ProAppData)&sub);
+        if (sub_code) {
+            item["subassembly_visit_code"] = sub_code;
+            walk.incomplete = true;
+        }
+    }
+    return PRO_TK_NO_ERROR;
+}
+
+static void session_assembly_native(const J &request, J &report) {
+    const J &choice = request.at("session_assembly");
+    std::wstring requested = wide(choice.at("name").get<std::string>());
+    if (requested.empty())
+        throw std::runtime_error("SESSION_ASSEMBLY_NAME_REQUIRED: pass the resident "
+                                 "assembly name from creo_list_session_models");
+    ProName name = {};
+    wcscpy_s(name, requested.c_str());
+    ProMdl mdl = nullptr;
+    ProError found = ProMdlInit(name, PRO_MDL_ASSEMBLY, &mdl);
+    if (found == PRO_TK_E_NOT_FOUND)
+        throw std::runtime_error("SESSION_ASSEMBLY_NOT_FOUND: no resident assembly with that name; "
+                                 "select one from creo_list_session_models");
+    check(found, "ProMdlInit");
+    ProMdlType kind = PRO_MDL_ASSEMBLY;
+    check(ProMdlTypeGet(mdl, &kind), "ProMdlTypeGet");
+    if (kind != PRO_MDL_ASSEMBLY)
+        throw std::runtime_error("SESSION_ASSEMBLY_TYPE_MISMATCH: the resident model "
+                                 "with that name is not an assembly");
+    ProMdl current = nullptr;
+    int current_code = ProMdlCurrentGet(&current);
+    AssemblyWalk walk;
+    walk.budget = 4096;
+    WalkContext context;
+    context.owner = (ProSolid)mdl;
+    ProMatrix identity = {
+        {1.0, 0.0, 0.0, 0.0}, {0.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
+    copy_matrix(identity, context.accumulated);
+    context.walk = &walk;
+    context.current = current;
+    context.current_code = current_code;
+    check(
+        ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context),
+        "ProSolidFeatVisit");
+    J root = observe_session_model(mdl, "assembly", current, current_code);
+    report.update(
+        {{"success", true},
+         {"assembly", root},
+         {"components", walk.components},
+         {"component_count", walk.components.size()},
+         {"truncated", walk.truncated},
+         {"incomplete", walk.incomplete},
+         {"complete", !walk.truncated && !walk.incomplete},
+         {"transform_convention", "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); "
+                                  "translation occupies the last row; units follow the assembly "
+                                  "(mm); transform_to_parent maps member coordinates into the "
+                                  "owning assembly, transform_to_root into the inspected root"},
+         {"readonly_note", "inspection only: no component loading, activation, "
+                           "regeneration, save, adoption or managed revision"}});
+}
+
 // FEAT-046: explicit, evidence-bound erasure of selected session models.
 // No saves and no disk deletion; assemblies erase before their components;
 // every item re-verifies identity, modification state and references, and
@@ -3264,6 +3577,9 @@ static int run_generic(const std::wstring &job) {
         } else if (request.contains("session_models")) {
             generic_stage("list_session_models");
             session_models_native(report);
+        } else if (request.contains("session_assembly")) {
+            generic_stage("inspect_session_assembly");
+            session_assembly_native(request, report);
         } else if (request.contains("open_file")) {
             generic_stage("open_file_" + request["open_file"]["model_kind"].get<std::string>());
             open_file_native(request, report);
