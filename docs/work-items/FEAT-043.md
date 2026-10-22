@@ -39,3 +39,7 @@
 - **显示失败同样不生成**：显示失败时只返回 `displayed=false`+`display_message`，模型仍在会话中（0.4.6 的 `loaded_session_models` 在显示成功后补充会话概览）。
 
 结论：**字段缺失不等于实现缺陷**，符合计划"确认新成功作业确有缺失后再修复"的前置条件——源码核对未发现成功打开却缺字段的路径。本条不改代码；原环境复测（明确区分冲突拒绝/显示失败/成功三类结果的字段完整性）继续开放，与 FEAT-044 的剩余矩阵一并验证。
+
+### 2026-10-22 原环境实测到位（该复测子项关闭）
+
+[0.4.6 验收报告 §3.3](../validation/feedback-0.4.6-2026-10-21/manifest.json)（Windows 10 / Creo 10.0.0.0）实测：会话清零后 `creo_open_file` 打开装配成功，结果含 `opened_session_model`（带 `observed_at` / `observed_at_source: "python_closeout"`，字段与 `creo_list_session_models` 条目同构），且 `loaded_session_models` 完整回读 9 项（8 组件+装配本体，含 origin/session_model_id/is_current）。此前 0.4.5 未观察到字段的原因同时解开：当时零件已驻留会话，走同名冲突拒绝路径而非 file-source 检索。FEAT-043/044 的"原环境 opened_session_model 观察"与 v0.4.3 建议的 `loaded_components`（超预期实现为完整会话清单回读）子项关闭；其余矩阵按卡保留。报告 §4.2 观察到依赖加载组件 `session_model_id` 落入 524288+ 大数段（与直接打开的小数段并存），与既定边界一致（瞬态发现提示、可重复、不作身份键），保留为观察，不按数值范围判断身份。

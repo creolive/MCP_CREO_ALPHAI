@@ -1,12 +1,13 @@
 # 统一开发台账
 
-建立：2026-10-13；最近更新：2026-10-21。当前开发服务/源码版本：0.4.7（未发布）；最近交付 0.4.6，交付范围见[发布核对](validation/RELEASE-0.4.6.md)。
+建立：2026-10-13；最近更新：2026-10-22。当前开发服务/源码版本：0.4.8（未发布）；最近交付 0.4.7，交付范围见[发布核对](validation/RELEASE-0.4.7.md)。
 
 本页只安排未完成工作和单列的历史观察；完成结论见[完成档案](BACKLOG_COMPLETED.md)。各固定 ID 只出现一条任务记录，工作卡和原始证据保存详细输入、历史过程与已测范围。
 
 ## 当前安排
 
-- [0.4.4反馈整合计划](development/0.4.4-FEEDBACK-PLAN-2026-10-21.md)（覆盖 v0.4.4 构建验收与 v0.4.5 运行反馈两份[原件](validation/feedback-0.4.4-2026-10-21/manifest.json)）已登记并开始实施：DEV-027/030/BUG-076 外部证据补录闭环；BUG-077（P0 reconcile 死锁与注册表膨胀治理）、FEAT-047（注册表健康检查）与 DEV-045（Release body SHA256 固化）为新增条目，按三阶段推进。
+- [0.4.6反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)（三份[原件](validation/feedback-0.4.6-2026-10-21/manifest.json)已归档补录，0.4.7 发布后开工）分两批推进：第一批盘点口径补齐与证据收口（DEV-027 loader/payload 盘点区分引用三态、FEAT-046/FEAT-043/044/DEV-027 外部通过子项关闭、DEV-045 附件名 0.4.7 起定名核对通过、BUG-077 原环境复测单列）；第二批 FEAT-045 装配只读检查（新增 `creo_inspect_session_assembly`）按 MINOR 独立交付。矩阵放置、重建编辑与装配整体收养为后续路线不随本轮实施。
+- [0.4.4反馈整合计划](development/0.4.4-FEEDBACK-PLAN-2026-10-21.md)（覆盖 v0.4.4 构建验收与 v0.4.5 运行反馈两份[原件](validation/feedback-0.4.4-2026-10-21/manifest.json)）：BUG-077/FEAT-047/DEV-044 五组验收已随 0.4.7 交付（[发布核对](validation/RELEASE-0.4.7.md)）；BUG-078（恢复 accept 路径 Backup 稳定 -1）自该计划登记待修。
 - [0.4.3反馈完善计划](development/0.4.3-feedback-improvement-plan-2026-10-21.md)两批已随 0.4.6 交付（用户指定 PATCH，含新工具例外；[发布核对](validation/RELEASE-0.4.6.md)）：BUG-076/BUG-057/FEAT-046/FEAT-043/044/DEV-027 的单元、构建与本机实机核心+改动点验收完成；各条剩余原环境、外部锁复验、擦除矩阵与 WorkBuddy 黑盒按卡推进。
 - 恢复、回调生命周期、接管/枚举与磁盘打开仍有验收空缺，按各卡剩余动作推进；已发布不等于整项完成。
 - 其他建模失败先取得最小输入和受测环境再复现；功能候选与工程迁移按下表规划，不增加双版本验收门槛。
@@ -99,17 +100,17 @@
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
 | [FEAT-044](work-items/FEAT-044.md) | P1 | 验收中 | 0.4.6 | 磁盘打开已交付；本轮 `loaded_session_models` 有界摘要（会话模型数/组件实例数/详情入口）与冲突提示装配依赖来源已在[开发分支](validation/FEEDBACK-0.4.3-IMPLEMENTATION-2026-10-21.md)实施；剩余 `asm_mx.asm.16` 原环境、显示失败、unknown、真实并发验收与实机观察。 |
-| [DEV-027](work-items/DEV-027.md) | P2 | 验收中 | 0.4.6 | 指纹稳定化已取得[外部 Win10/Creo 10 实测通过](validation/feedback-0.4.4-2026-10-21/report-dev027-030.md)（json.hpp 换行翻转场景注册/DLL/目录数稳定），该子项关闭；世代盘点 dry-run 已交付；剩余实机复核盘点口径、同源码二进制可复现性及安全回收。 |
+| [DEV-027](work-items/DEV-027.md) | P2 | 验收中 | 0.4.6 | 指纹稳定化已取得[外部 Win10/Creo 10 实测通过](validation/feedback-0.4.4-2026-10-21/report-dev027-030.md)（json.hpp 换行翻转场景注册/DLL/目录数稳定），该子项关闭；0.4.6 外部 dry-run 静态确认+[盘点口径补齐](work-items/DEV-027.md)实施中（loader/payload 双维度、引用三态分类、记录缺失损坏冲突保留+needs_review，回应"记录丢失误列回收"，保持零删除）；剩余盘点实机复核、同源码二进制可复现性及安全回收。 |
 | [BUG-050](work-items/BUG-050.md) | P1 | 验收中 | 未排期 | 中心线轴向漂移主线已修复；仍缺原 Creo 10 切线链0.487mm、0.3.5的22.264mm完整输入及斜中心线验证，取得后复现。成形实体与1e-5守卫阈值保持。 |
 | [BUG-074](work-items/BUG-074.md) | P1 | 验收中 | 未排期 | 历史身份停止证明已实现；剩余真实Windows跨启动四种恢复动作与WorkBuddy验收，同次启动/身份不明继续拒绝，不清unknown或原作业。 |
 | [BUG-076](work-items/BUG-076.md) | P1 | 验收中 | 0.4.6 | 0.4.5诊断与资料分离精修均交付；[原环境根因已取得](validation/feedback-0.4.4-2026-10-21/report-registry-bloat.md)（注册表条目 21,472,751 B、origin_conflict_scan），阻断修复与 reconcile 死锁移交 BUG-077；剩余实机真实零件全链路与 WorkBuddy 复核，不统一提高限额。 |
 | [BUG-057](work-items/BUG-057.md) | P1 | 验收中 | 0.4.6 | 包内统一锁机制（OPEN_EXISTING→CREATE_NEW→一次共享回退）与启动协调lock_error分类已实施，双路径诊断本机三状态60轮全过；剩余双进程200轮与 Win10/Python3.13 原环境重跑。保持忙即拒绝、无重试/排队。 |
-| [FEAT-046](work-items/FEAT-046.md) | P1 | 验收中 | 0.4.6 | `creo_erase_session_models` 已实施（native inspect/apply+令牌+幂等+拓扑序+逐项复核消失确认），单元5项+全量502项+构建过；剩余本机实机装配清单擦除与再次打开、阻断场景及 WorkBuddy 黑盒。 |
+| [FEAT-046](work-items/FEAT-046.md) | P1 | 验收中 | 0.4.6 | `creo_erase_session_models` 已实施（native inspect/apply+令牌+幂等+拓扑序+逐项复核消失确认），单元5项+全量502项+构建过；[外部 Creo 10 实机主链路通过](validation/feedback-0.4.6-2026-10-21/manifest.json)（两轮 inspect→apply、会话归零、擦除后打开装配闭环），该子项关闭；剩余本机 Creo 12.4 矩阵、阻断场景及 WorkBuddy 黑盒。 |
 | [BUG-036](work-items/BUG-036.md) | P1 | 验收中 | 未排期 | 实际组件到装配变换查询已修复并经本机约束/重载对照；仍缺面位置/法向直接量测与Creo9原失败完整输入。 |
 | [FEAT-030](work-items/FEAT-030.md) | P2 | 验收中 | 未排期 | 种子元数据与会话加载观察首批已交付；继续补可追溯生产版本及各环境实际加载证据，available只代表哈希。Creo9兼容加载失败仍由 BUG-034 跟进。 |
 | [FEAT-042](work-items/FEAT-042.md) | P1 | 验收中 | 未排期 | 剩余接管/同模型并发编辑、真实再生失败、钣金专有语义及prepare字段的WorkBuddy复核。原件关闭后副本续作已验证，通道级busy不能代替接管并发验收。 |
 | [BUG-072](work-items/BUG-072.md) | P2 | 验收中 | 未排期 | 非毫米units/体积误标已修复且本机英寸拒绝复验通过；剩余WorkBuddy公开复核，保持毫米准入与原件不变，拒绝格式说明与 FEAT-008 联动。 |
-| [FEAT-043](work-items/FEAT-043.md) | P2 | 验收中 | 0.4.6 | 剩余unknown、其他模型类型及真实并发枚举；本轮快照年龄/刷新指引/`service_session_changes`（跨进程有界记录，GUI变化标未实时复核）已实施，省略cursor实时重采/携cursor冻结语义保持；剩余实机与 WorkBuddy 复核。 |
+| [FEAT-043](work-items/FEAT-043.md) | P2 | 验收中 | 0.4.6 | 剩余unknown、其他模型类型及真实并发枚举；本轮快照年龄/刷新指引/`service_session_changes`（跨进程有界记录，GUI变化标未实时复核）已实施，省略cursor实时重采/携cursor冻结语义保持；`opened_session_model` 原环境观察子项已[外部实测到位关闭](validation/feedback-0.4.6-2026-10-21/manifest.json)（含 loaded_session_models 9 项回读）；session_model_id 524288+ 大数段保留观察不作身份键；剩余实机与 WorkBuddy 复核。 |
 | [FEAT-022](work-items/FEAT-022.md) | P2 | 验收中 | 未排期 | 部署指纹与重启指引已实现；仍需真实连接器升级前后对照，确认路径、启动身份和工具版本一致，不能只看版本号。 |
 | [BUG-019](work-items/BUG-019.md) | P2 | 验收中 | 未排期 | 三入口别名、size回显、冲突拒绝与本机尺寸/重载已通过；剩余WorkBuddy终验，其他环境不据本机成功推定。 |
 | [FEAT-029](work-items/FEAT-029.md) | P1 | 验收中 | 0.3.4 | 首次注册→启动→ready→直接放样→重启后再放样的本机主线已过；剩余不同代际兼容升级、回退、多目录并存及对应公开验收。自动注册、last_known_readiness和签名仍待评估。 |
@@ -162,7 +163,7 @@
 | [FEAT-039](work-items/FEAT-039.md) | P1 | 待规划 | 未排期 | 规划纯曲面最小闭环：常量核对→修剪→缝合→loft曲面模式，再推进G1边界混合、quilt偏置、面积/最小壁厚；定义引用与返回，使用已有STL回归基准，关联 FEAT-009。 |
 | [FEAT-040](work-items/FEAT-040.md) | P2 | 待规划 | 未排期 | 核对SDK后评估变半径表与收尾控制，补真实冲突边/可行半径诊断；恒定半径行为及回滚保持，与 FEAT-039 联动。 |
 | [FEAT-041](work-items/FEAT-041.md) | P3 | 待规划 | 未排期 | 评估可选输出目录与预览/导出视角、正交投影；保持默认行为，输出目录不开放任意写路径。 |
-| [FEAT-045](work-items/FEAT-045.md) | P2 | 待规划 | 未排期 | 规划外部装配只读组件树、变换和约束快照，先核对SDK可得字段，未知如实标记；依赖 FEAT-044，不含装配写路径，写入另须设计reconcile。 |
+| [FEAT-045](work-items/FEAT-045.md) | P2 | 开发中 | 下一MINOR | [0.4.6 反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)第二批：新增 `creo_inspect_session_assembly` 只读检查（树序 occurrence 路径/来源/加载抑制状态/约束欠约束快照、完整 4×4 行向量解算变换含单位与平移末行约定、缺件/抑制/单节点失败逐项标记+原始查询码+整体完整性标志、首采单通道忙拒+分页十分钟冻结快照 32 KiB、五不原则）。矩阵放置、重建编辑与装配整体收养为后续路线单列，不随本轮实施。 |
 
 ## 工程整理（待规划）
 
@@ -170,7 +171,7 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
-| [DEV-045](work-items/DEV-045.md) | P2 | 验收中 | 待定 | RELEASING 发布门槛第 7 项已固化"Release body 必含源码包/种子包文件名及完整 SHA256 并核对远端附件"（0.4.4 漏写引发，[反馈 §4.1](validation/feedback-0.4.4-2026-10-21/report-dev027-030.md)）；剩余下次发布时按清单实际执行核对；发布历史与旧附件保持原样。 |
+| [DEV-045](work-items/DEV-045.md) | P2 | 验收中 | 待定 | RELEASING 发布门槛第 7 项已固化"Release body 必含源码包/种子包文件名及完整 SHA256 并核对远端附件"（0.4.4 漏写引发）；0.4.7 首次按清单执行核对通过（body 双包哈希与远端一致），打包脚本产物名已固定 `MCP_CREO_MechDog-{version}-source.zip`/`-seed-library.zip`（0.4.6 第四种命名变体为历史，不回填旧 Release）；外部环境对 0.4.7+ 命名的确认随下次外部反馈闭环。 |
 | BUG-020 | P2 | 待规划 | 未排期 | STEP 导出会留下 *_out.log.N。需要说明哪些文件是交付产物、哪些是诊断附件，只清理本作业生成的副产物。检查 STEP 仍有效、用户文件未受影响。文件清理由开发者检查，MCP 黑盒只验证返回的文件说明。 |
 | [DEV-031](work-items/DEV-031.md) | P2 | 待规划 | 未排期 | 先澄清履带TXT的相位、闭合、近似与容差，再分步安排63站/90凸台、性能和恢复；报告−1.46%偏差仍未满足±1%，本条不直接建模。 |
 | DEV-003 | P2 | 待规划 | 未排期 | 整理 C++ 的执行上下文、模块接口和资源由谁创建、释放，再用受影响的 SDK 构建并运行原生测试。 |
