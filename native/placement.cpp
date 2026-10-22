@@ -54,11 +54,28 @@ static void generic_reorder(const J &op) {
         if (slots[i] != slots[i - 1] + 1)
             throw std::runtime_error("Reorder features must be contiguous in the model tree");
     int anchor_number = number_of[anchor];
-    int removed_before = 0;
-    for (int slot : slots)
-        if (slot < anchor_number)
-            removed_before++;
-    int position = anchor_number - removed_before + (before ? 0 : 1);
+    // ProFeatureWithoptionsReorder takes new_feat_num in ORIGINAL tree
+    // numbering; the moved block lands before that slot when moving forward
+    // and after it when moving backward, and the slot may not point at a
+    // member of the moved set (observed PRO_TK_BAD_INPUTS otherwise).
+    int first_slot = slots.front();
+    int position;
+    if (before)
+        position = first_slot > anchor_number ? anchor_number : anchor_number - 1;
+    else
+        position = first_slot > anchor_number ? anchor_number + 1 : anchor_number;
+    // A computed slot inside the moved range can only mean the block already
+    // sits at the requested position; the SDK rejects such a call, so answer
+    // the no-op reorder directly and keep the tree untouched.
+    if (position >= slots.front() && position <= slots.back()) {
+        log("REORDER_DIAG noop ids=%d anchor=%d anchor_number=%d slots=%s\n", (int)values.size(),
+            anchor, anchor_number, J(slots).dump().c_str());
+        operation_results.push_back({{"op", op["op"]}, {"reordered", false}, {"unchanged", true}});
+        return;
+    }
+    log("REORDER_DIAG ids=%d anchor=%d anchor_number=%d slots=%s position=%d top=%d\n",
+        (int)values.size(), anchor, anchor_number, J(slots).dump().c_str(), position,
+        (int)ordered.size());
     int *ids = nullptr;
     CK(ProArrayAlloc((int)values.size(), sizeof(int), 1, (ProArray *)&ids));
     for (size_t i = 0; i < values.size(); i++)
@@ -67,6 +84,7 @@ static void generic_reorder(const J &op) {
         ProFeatureWithoptionsReorder((ProSolid)board, ids, position, PRO_REGEN_NO_FLAGS);
     ProArrayFree((ProArray *)&ids);
     check(code, "ReorderNativeFeatures");
+    operation_results.push_back({{"op", op["op"]}, {"reordered", true}});
 }
 
 static void generic_group(const J &op) {
