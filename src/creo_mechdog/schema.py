@@ -269,11 +269,21 @@ class SketchGeometryOp(StrictModel):
     @model_validator(mode="after")
     def supported_entities(self):
         if any(
-            e.type not in {"line", "polyline", "rectangle", "circle", "arc", "ellipse", "spline"}
+            e.type
+            not in {
+                "line",
+                "centerline",
+                "polyline",
+                "rectangle",
+                "circle",
+                "arc",
+                "ellipse",
+                "spline",
+            }
             for e in self.entities
         ):
             raise ValueError(
-                "In-place editing supports line, polyline, rectangle, circle, arc, ellipse and spline"
+                "In-place editing supports line, centerline, polyline, rectangle, circle, arc, ellipse and spline"
             )
         SketchOp(
             op="sketch", label="replacement", entities=self.entities, dimensioning=self.dimensioning
