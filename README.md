@@ -4,9 +4,9 @@
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **90 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前注册 **91 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.4.8**（0.4.6 反馈整合第一批，PATCH，工具数保持 90），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.4.8.md)。本版完成 DEV-027 世代盘点口径补齐：`creo_callback_status` 的 `generation_inventory` 扩展为 loader/payload 双维度、引用三态分类（本地注册引用两来源、运行证据、未知状态），记录缺失／损坏／冲突时保留相关世代进 `needs_review`，回收候选收紧为"每个引用维度均可证明无引用"，保持 dry-run 零删除；0.4.6 三份外部反馈原件已归档并补录外部通过证据（FEAT-046 擦除主链路、FEAT-043/044 `opened_session_model` 等子项关闭，DEV-045 附件命名 0.4.7 起定名核对通过）。已知问题不变：恢复 accept 路径（`accept_saved`／`accept_live`）native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，登记待修，`restore_baseline`／`abandon_new` 不受影响）。装配只读检查（FEAT-045，新增 `creo_inspect_session_assembly`）为下一批次，按 MINOR 规则独立交付。原环境复验等剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.4.7（注册表拆分与迁移）见[版本说明](docs/RELEASE_NOTES_0.4.7.md)与[发布核对](docs/validation/RELEASE-0.4.7.md)。
+当前服务／源码版本为 **0.5.0**（0.4.6 反馈整合第二批，MINOR，新增工具 `creo_inspect_session_assembly`，工具数 90→91），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.5.0.md)。本版交付 FEAT-045 装配只读检查：按名称选定已驻留装配（外部经 `creo_open_file` 载入或受管装配均可），只读返回树序组件清单（occurrence 路径、来源/加载/抑制/封装状态、约束快照含引用与原始查询码）与完整 4×4 行向量解算变换（到父级与到根、平移末行、毫米）；首采单通道忙拒+十分钟冻结快照 32 KiB 分页；检查不加载组件、不切窗、不再生、不保存、不收养。嵌套/重复实例/抑制/缺件四场景实机触发与外部 Creo 10 复核、WorkBuddy 黑盒按卡开放；装配编辑与整体收养为后续路线。已知问题不变：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，登记待修，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.4.8（0.4.6 反馈第一批：世代盘点口径补齐+归档补录）见[版本说明](docs/RELEASE_NOTES_0.4.8.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 

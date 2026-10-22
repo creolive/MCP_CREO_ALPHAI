@@ -129,6 +129,22 @@ def families() -> dict:
             "automatic_activation": False,
             "automatic_adoption": False,
         },
+        "session_assembly": {
+            "enabled": True,
+            "tool": "creo_inspect_session_assembly",
+            "scope": (
+                "Read-only inspection of a resident session assembly by name: "
+                "tree-order components with occurrence paths, transforms "
+                "(row-vector 4x4, translation last row, mm) and constraint "
+                "snapshots; frozen pagination"
+            ),
+            "limit": {"default": 20, "maximum": 50, "page_bytes": 32768},
+            "supported": "resident assemblies selected by name; nested assemblies, repeated instances, suppressed and unresolved components",
+            "limits": (
+                "no writes: no loading, activation, regeneration, save, adoption "
+                "or managed revision; assembly editing/adoption not included"
+            ),
+        },
         "disk_open": {
             "enabled": True,
             "tool": "creo_open_file",
