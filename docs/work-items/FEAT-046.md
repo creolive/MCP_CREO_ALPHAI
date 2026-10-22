@@ -38,3 +38,7 @@
 - 注册：`server.py` `creo_erase_session_models`（工具数 88）、`capabilities.py` `session_erase` 家族、README 用法与运行目录说明。
 - 验证：`tests/unit/test_session_erase.py` 5 项（令牌签发条件、非法 targets 不建 job、令牌缺失/过期拒绝、幂等重放与跨键拒绝、成功记录会话变化）；全量 502 项单测与 dev_check 通过；SDK 构建通过。
 - 开放：本机 Creo 12.4 实机（装配+组件清单 inspect→apply、擦除后再次 `creo_open_file`、dirty/托管/清单外引用/环阻断场景）、WorkBuddy 黑盒。
+
+### 2026-10-22 外部实机主链路证据补录（0.4.6 反馈）
+
+[0.4.6 验收报告 §3.1/§3.2](../validation/feedback-0.4.6-2026-10-21/manifest.json)（Windows 10 / Creo 10.0.0.0）实测 inspect→apply 两轮全过：第一轮 10 目标（ASM_MX + 8 组件 + P02/P06）全部 `erased`、`stopped_early=false`、`remaining_after` 与计划一致、当前窗口模型正常纳入；第二轮 UP_MX 单目标后会话归零。装配先序、逐项重验、双查询确认、源文件 sha256 无变化与托管模型隔离均按契约兑现；随后 `creo_open_file(asm_mx.asm.16)` 干净会话一次成功（8 组件加载、sha256 双审计一致），"擦除→干净会话→打开装配→组件回读"链路外部闭环。本条关闭**外部实机主链路**子项；本机 Creo 12.4 矩阵、阻断场景（dirty/未保存/清单外引用/环）与 WorkBuddy 黑盒仍开放，外部通过不外推本机。

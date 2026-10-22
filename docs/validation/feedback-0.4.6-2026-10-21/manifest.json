@@ -1,0 +1,49 @@
+{
+  "source": "2026-10-21_CREO10_v0.4.6_死锁第三轮未解但会话擦除交付打通装配链路.md",
+  "report_sha256": "235e5137011a75c2ec83e08479fc92ce38c5b83378eac18cd10f247e23747528",
+  "archived_from": "用户提供的 Downloads/0.4.6 原件（2026-10-22 归档时与原件逐字节一致）",
+  "reported_version": "0.4.6",
+  "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0（release_numeric 42）；初始会话 ASM_MX + 8 依赖组件 + P02/P06（共 11 模型）；超限条目 models\\c437cace0625425496fec62d8c14743a\\model.json（track_p01b，21,472,751 B）原样保留",
+  "mapping": {
+    "§3.1 FEAT-046 creo_erase_session_models inspect→apply 两轮全过（10 目标全 erased、UP_MX 单目标后 remaining_after=[]、erase_order 装配先序、源文件 sha256 无变化、托管模型正确隔离）": "FEAT-046 外部实机通过证据（本轮补录：擦除实机链子项关闭；阻断场景矩阵与 WorkBuddy 黑盒仍按卡保留）",
+    "§3.2 擦除→干净会话→creo_open_file(asm_mx.asm.16) 一次成功、8 组件依赖加载、sha256 双审计一致": "FEAT-044/FEAT-046 组合链路外部确认（清场→打开装配自动化工作流闭环）",
+    "§3.3 opened_session_model 兑现（observed_at/observed_at_source）且 loaded_session_models 完整回读 9 项（8 组件+装配本体）": "FEAT-043/044 外部实测到位（本轮补录：opened_session_model 原环境观察子项关闭；loaded_components 建议超预期实现）",
+    "§4.1【P0 第三轮】reconcile 死锁：track_p01b 21.4MB 裸 16 MiB 错误阻断 reconcile 与 adopt（0.4.6 时点）": "BUG-077（0.4.7 已交付注册表拆分/迁移/健康工具与本机超限迁移链路；本报告为 0.4.6 时点的原环境证据，迁移后复测仍开放）",
+    "§4.2【P2 观察】loaded_session_models 的 session_model_id 出现 524288+ 大数段（依赖加载组件与直接打开的句柄来源不同）": "观察记录：工具文档已声明 id 为瞬态发现提示、可合法重复，行为不违规；保留为观察，不按数值范围判断身份",
+    "§4.3【P1 维持】注册表健康度：track_p01b 之外 hull 3.4MB 逼近预算，建议健康检查工具": "FEAT-047（0.4.7 已交付 creo_registry_health；原环境异常数据未覆盖按卡保留）",
+    "§5 上轮问题闭环追踪 / §8 亮点（擦除工具交付质量、loaded_session_models 采纳扩展）": "FEAT-046/FEAT-043 正面验收结论记录"
+  },
+  "additional_note": "处理方案见 docs/development/0.4.6-FEEDBACK-PLAN-2026-10-21.md。报告 §7 复测方法中的第 4/5 步（reconcile 复现裸错误、21,472,751 B 未动）构成 BUG-077 原环境迁移复测的现成脚本，随 0.4.7 迁移工具在外部环境执行后定论。超限文件按 recovery 指引原样保留（未删改）。",
+  "related_reports": [
+    {
+      "source": "2026-10-21CREO10.0.0.0-0.4.6世代盘点dryrun落地注册连续五版稳定.md",
+      "report_sha256": "b112783174ae63c1bb4aa4992e3be53ee1b726ad33ccc7bae5f75d4a21371a65",
+      "reported_version": "0.4.6",
+      "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 / VS2022 BuildTools 14.44.35207 / Windows SDK 10.0.26100.0 / Python 3.13（沿用 2026-10-17 冻结约束，未发起任何 Creo 连接；源码校验、编译与文件层对比）",
+      "mapping": {
+        "§0/§1 升级全部成功、回调注册连续第五版未失效（0.4.1→0.4.6 六版无需重新注册，五项指纹全 SAME）": "DEV-027 指纹稳定化外部持续确认（该子项此前已关闭，本报告为延续证据）",
+        "§0/§2 DEV-027 世代盘点 dry-run 落地（generation_inventory：当前/注册世代、目录 SHA256、reclaim_candidates；读码静态确认）": "DEV-027 世代盘点 dry-run 子项外部静态确认（实机字段输出与 reclaim_candidates 判定未验证，见 §3 未验证声明）",
+        "§3 升级执行：源码/种子包 sha256 与 Release body 一致、覆盖 706 文件、editable 安装、编译一次成功": "0.4.6 发布外部确认",
+        "§3 未验证声明（generation_inventory 实机输出、BUG-076 实机、擦除实机链、BUG-057 双进程均需 Creo 连接）": "各对应条目未验证范围记录（其中擦除实机链由本目录验收报告 §3.1 实测补上）",
+        "§4.1/§5.1 附件命名第四种变体（MCP_CREO_MechDog-seeds-0.4.6.zip，第四次提出建议固化）": "DEV-045（0.4.7 起打包脚本已固定 MCP_CREO_MechDog-{version}-source.zip / -seed-library.zip 并随发布核对；外部确认仍开放）",
+        "§5.2 reclaim_candidates 依赖注册世代记录：Creo 注册跨重启持久而 callback 记录随目录重建时，是否存在已注册但记录丢失→误列回收": "DEV-027 本轮盘点补齐的直接输入（本地记录缺失/损坏/冲突时保留相关世代并进入待复核清单，不再仅凭记录缺失判候选）"
+      },
+      "additional_note": "报告 §5.3 BUG-001/056 实机冻结仍待用户解除，为外部环境约束记录。"
+    },
+    {
+      "source": "2026-10-21_CREO10_v0.4.6_功能建议_MCP编辑任意装配体路线图.md",
+      "report_sha256": "6bab9472e8e8eb25587f77d376c320c8d6a88f06f7f75ea1b32764cbb6ed72a6",
+      "reported_version": "0.4.6",
+      "reported_environment": "基于 v0.4.0→v0.4.6 七轮实测验收的架构理解（功能需求文档，非缺陷报告）",
+      "mapping": {
+        "§1/§2 装配编辑两层需求（结构级编辑/装配托管编辑）与现状积木盘点（open_file、会话清场、loaded_session_models、零件收养、装配积木，唯一硬缺口=装配只读检查）": "FEAT-045 需求输入与现状核对",
+        "§3 路线A 提取→重建管线（FEAT-045 读组件树+transform → 逐个收养零件 → new_assembly → assemble_component）：transform 数值口径（4x4→XYZ mm+Euler 度）建议 native 直读或给转换公式与精度实测；嵌套子装配与缺件装配须在 FEAT-045 中定义行为": "FEAT-045 本轮范围（只读检查含 transform 明确约定；缺件/抑制行为定义）；矩阵放置承接为后续路线",
+        "§3 路线B 装配整体收养（依赖物化+重映射，参考 ClashMate import_assembly；前置条件=注册表治理；reconcile 扩展）": "后续分期单列，本轮不实施（须同时完成依赖复制、引用重映射与装配 reconcile）",
+        "§3 路线C 原地编辑源文件（反馈人自评最容易但不建议提出）": "不采纳，记录（与 never modify source 主契约冲突）",
+        "§4 分期建议（一期 FEAT-045+注册表治理并行；二期装配收养最小闭环+托管副本回存原盘显式动作；三期嵌套子装配/mate-insert-csys 全谱系/装配图）": "后续路线单列记录（一期治理已随 0.4.7 交付）",
+        "§5 价值说明（逆向工作流闭环、存量装配高频资产、路线 A 投入产出比）": "FEAT-045 优先级依据记录"
+      },
+      "additional_note": "本文档与处理计划的取舍一致：本轮推进 FEAT-045 只读检查；矩阵放置、重建编辑与整体收养后续分期，不随本轮实施。"
+    }
+  ]
+}

@@ -234,7 +234,10 @@ async def creo_callback_status() -> dict[str, Any]:
     try:
         from creo_mechdog.blend_callback import generation_inventory
 
-        result["generation_inventory"] = generation_inventory(bridge.ROOT / "build")
+        result["generation_inventory"] = generation_inventory(
+            bridge.ROOT / "build",
+            probe_readiness=result.get("readiness") if isinstance(result, dict) else None,
+        )
     except (OSError, ValueError) as error:
         result["generation_inventory"] = {"available": False, "reason": str(error)}
     if result["service"]["source_changed_since_startup"]:

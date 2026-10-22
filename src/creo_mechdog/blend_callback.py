@@ -18,6 +18,9 @@ REGISTRY_FILENAME = "blend_callback_protk.dat"
 # -<sha256[:12]> suffix when a rebuilt (nondeterministic) DLL must coexist
 # with the historical immutable copy recorded under the same fingerprint.
 GENERATION_KEY = re.compile(r"[0-9a-f]{64}(?:-[0-9a-f]{12})?\Z")
+# A callback result file fresher than this is treated as recent runtime
+# evidence and keeps its loader generation out of reclaim candidates.
+_READY_FRESH_SECONDS = 30 * 24 * 3600
 
 
 def _digest(path: Path) -> str:
@@ -149,12 +152,17 @@ def prepare_callback(build: Path, dll_sha256: str, loader_fingerprint: str) -> d
     return metadata
 
 
-def generation_inventory(build: Path) -> dict:
-    """Read-only dry-run inventory of loader generations (DEV-027).
+def generation_inventory(build: Path, *, probe_readiness: str | None = None) -> dict:
+    """Read-only dry-run inventory of loader and payload generations (DEV-027).
 
-    Identifies the current generation (build stamp), the registered one
-    (setup metadata / registry exec_file) and every remaining generation
-    directory as a reclaim candidate. Nothing is deleted; reclamation is a
+    References are classified instead of guessed: a local registration
+    reference (setup metadata and registry exec_file, tracked separately),
+    runtime evidence (a locked DLL image, a fresh callback result file, or a
+    ready native probe), and an unknown state for anything the local records
+    cannot prove. A generation is a reclaim candidate only when every
+    dimension is provably unreferenced. Missing, corrupt or conflicting local
+    records keep the affected generations; anything that cannot be proven
+    unreferenced goes to needs_review. Nothing is deleted; reclamation is a
     separate, explicitly reviewed operation.
     """
 
@@ -164,29 +172,102 @@ def generation_inventory(build: Path) -> dict:
         except OSError:
             return None
 
-    stamp = {}
-    try:
-        stamp = json.loads((build / "blend_loader_build.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        pass
-    current_key = stamp.get("generation_key") if isinstance(stamp, dict) else None
-    setup = {}
-    try:
-        setup = json.loads((build / "blend_callback_setup.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        pass
-    registered_loader = setup.get("loader_file") if isinstance(setup, dict) else None
+    def _read_json(path: Path):
+        try:
+            return True, json.loads(path.read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            return False, None
+        except (OSError, ValueError):
+            return True, None
+
+    def _locked(path: Path) -> bool:
+        # Windows locks a loaded DLL image against write access; a plain
+        # exclusive open attempt therefore detects a resident module without
+        # loading or changing anything.
+        if not path.is_file():
+            return False
+        try:
+            handle = open(path, "r+b")
+        except OSError:
+            return True
+        handle.close()
+        return False
+
+    def _fresh(path: Path, max_age_seconds: int) -> bool:
+        try:
+            age = datetime.now().timestamp() - path.stat().st_mtime
+        except OSError:
+            return False
+        return 0 <= age <= max_age_seconds
+
+    stamp_present, stamp = _read_json(build / "blend_loader_build.json")
+    stamp_ok = stamp_present and isinstance(stamp, dict)
+    setup_present, setup = _read_json(build / "blend_callback_setup.json")
+    setup_ok = setup_present and isinstance(setup, dict)
+    records_status = {
+        "build_stamp": "ok" if stamp_ok else ("missing" if not stamp_present else "corrupt"),
+        "setup": "ok" if setup_ok else ("missing" if not setup_present else "corrupt"),
+    }
+    current_key = stamp.get("generation_key") if stamp_ok else None
+    registered_loader = setup.get("loader_file") if setup_ok else None
+    registered_module = setup.get("module_file") if setup_ok else None
     registry_loader = None
+    registry_lines = None
     try:
-        for line in (build / REGISTRY_FILENAME).read_text(encoding="utf-8-sig").splitlines():
+        registry_lines = (build / REGISTRY_FILENAME).read_text(encoding="utf-8-sig").splitlines()
+    except FileNotFoundError:
+        records_status["registry"] = "missing"
+    except OSError:
+        records_status["registry"] = "corrupt"
+    else:
+        for line in registry_lines:
             parts = line.split(None, 1)
             if len(parts) == 2 and parts[0] == "exec_file":
                 registry_loader = parts[1].strip()
-    except OSError:
-        pass
+        records_status["registry"] = "ok"
+
+    def _generation_of(loader_file: str | None) -> str | None:
+        if not loader_file:
+            return None
+        try:
+            parent = Path(loader_file).resolve().parent
+        except OSError:
+            return None
+        if parent.parent == (build / "blend_loader").resolve():
+            return parent.name
+        return None
+
+    referenced = {
+        source: _generation_of(value)
+        for source, value in (
+            ("setup", registered_loader),
+            ("registry", registry_loader),
+        )
+    }
+    referenced = {k: v for k, v in referenced.items() if v}
+    conflict_keys = set(referenced.values())
+    record_conflict = len(conflict_keys) > 1
+    conflict_keys = conflict_keys if record_conflict else set()
+    records_definitive = (
+        records_status["build_stamp"] == "ok"
+        and records_status["setup"] == "ok"
+        and records_status["registry"] == "ok"
+        and not record_conflict
+    )
+
+    # Runtime evidence from the native probe, when the caller shares it: a
+    # ready probe proves the setup-recorded loader and payload are resident.
+    runtime_probe = {
+        "readiness": probe_readiness,
+        "running_generation": (
+            _generation_of(registered_loader) if probe_readiness == "ready" and setup_ok else None
+        ),
+    }
 
     generations = []
     candidates = []
+    needs_review = []
+    payload_usage: dict[str, list[str]] = {}
     root = build / "blend_loader"
     if root.is_dir():
         for directory in sorted(root.iterdir()):
@@ -194,36 +275,142 @@ def generation_inventory(build: Path) -> dict:
                 continue
             loader = directory / "loader.dll"
             sha = _sha(loader)
-            is_current = directory.name == current_key
-            is_registered = any(
-                registered and loader.is_file() and Path(registered).resolve() == loader.resolve()
-                for registered in (registered_loader, registry_loader)
-            )
+            reasons: list[str] = []
+            is_current = directory.name == current_key if current_key else None
+            if records_status["build_stamp"] != "ok":
+                reasons.append(f"build_stamp_{records_status['build_stamp']}")
+            if records_status["setup"] != "ok":
+                reasons.append(f"setup_{records_status['setup']}")
+            if records_status["registry"] != "ok":
+                reasons.append(f"registry_{records_status['registry']}")
+            if directory.name in conflict_keys:
+                reasons.append("record_conflict")
+            sources = [source for source, key in referenced.items() if key == directory.name]
+            deployment_present, deployment = _read_json(directory / "deployment.json")
+            deployment_ok = deployment_present and isinstance(deployment, dict)
+            if not deployment_present:
+                reasons.append("deployment_missing")
+            elif not deployment_ok:
+                reasons.append("deployment_corrupt")
+            payload_key = deployment.get("dll_sha256") if deployment_ok else None
+            if payload_key:
+                payload_usage.setdefault(payload_key, []).append(directory.name)
+                payload_dll = build / "blend_callback" / payload_key / "callback.dll"
+                if not payload_dll.is_file():
+                    reasons.append("deployment_payload_missing")
+                elif _sha(payload_dll) != payload_key:
+                    reasons.append("deployment_payload_mismatch")
+            elif deployment_ok:
+                reasons.append("deployment_payload_unrecorded")
+            evidence: list[str] = []
+            if sha is not None and _locked(loader):
+                evidence.append("file_locked")
+            if _fresh(directory / "callback_result.json", _READY_FRESH_SECONDS):
+                evidence.append("recent_ready_file")
+            if runtime_probe["running_generation"] == directory.name:
+                evidence.append("probe_ready")
+            is_referenced = bool(sources) or bool(evidence)
+            if sha is None:
+                reasons.append("loader_dll_unreadable")
             entry = {
                 "generation_key": directory.name,
                 "loader_sha256": sha,
-                "current": is_current,
-                "registered": is_registered,
+                "current": bool(is_current),
+                "registered": bool(sources),
+                "registered_by": sources,
+                "runtime_evidence": evidence,
+                "referenced": is_referenced,
+                "deployment_dll_sha256": payload_key,
                 "bytes": loader.stat().st_size if loader.is_file() else None,
+                "needs_review": bool(reasons),
+                "review_reasons": reasons,
             }
             generations.append(entry)
-            if not is_current and not is_registered:
-                candidates.append(entry["generation_key"])
+            if reasons:
+                needs_review.append(directory.name)
+            elif not is_referenced and is_current is False:
+                candidates.append(directory.name)
+
+    payloads = []
+    payload_candidates = []
+    payload_review = []
+    payload_root = build / "blend_callback"
+    if payload_root.is_dir():
+        for directory in sorted(payload_root.iterdir()):
+            if not directory.is_dir():
+                continue
+            dll = directory / "callback.dll"
+            sha = _sha(dll)
+            reasons: list[str] = []
+            if sha is None:
+                reasons.append("callback_dll_unreadable")
+            elif sha != directory.name:
+                reasons.append("callback_dll_mismatch")
+            if not (directory / "callback_bootstrap.json").is_file():
+                reasons.append("bootstrap_missing")
+            used_by = payload_usage.get(directory.name, [])
+            locked = sha is not None and _locked(dll)
+            current_payload = None
+            if setup_ok and registered_module:
+                try:
+                    current_payload = (
+                        Path(registered_module).resolve().parent.name
+                        if (build / "blend_callback").resolve()
+                        in Path(registered_module).resolve().parents
+                        else None
+                    )
+                except OSError:
+                    current_payload = None
+            payload_referenced = bool(used_by) or directory.name == current_payload or locked
+            if not payload_referenced and not records_definitive:
+                # Only definitive records can prove a payload generation is
+                # referenced by no surviving loader deployment or selection.
+                reasons.append("records_not_definitive")
+            entry = {
+                "payload_sha256": directory.name,
+                "callback_dll_sha256": sha,
+                "bytes": dll.stat().st_size if dll.is_file() else None,
+                "referenced_by_loader_generations": used_by,
+                "current": directory.name == current_payload,
+                "runtime_evidence": ["file_locked"] if locked else [],
+                "referenced": payload_referenced,
+                "needs_review": bool(reasons),
+                "review_reasons": reasons,
+            }
+            payloads.append(entry)
+            if reasons:
+                payload_review.append(directory.name)
+            elif not payload_referenced:
+                payload_candidates.append(directory.name)
+
     return {
         "dry_run": True,
         "deleted": False,
         "note": (
-            "Reclaim candidates are not deleted by this inventory; loaded "
-            "modules and valid registrations are never candidates. Actual "
-            "reclamation is a separate reviewed operation"
+            "Reclaim candidates require every reference dimension provably "
+            "unreferenced: definitive local records, no registration reference, "
+            "no runtime evidence and a consistent deployment record. Missing, "
+            "corrupt or conflicting records keep the affected generations; "
+            "anything unprovable is listed in needs_review. Nothing is deleted; "
+            "actual reclamation is a separate reviewed operation"
         ),
+        "records_status": records_status,
+        "records_definitive": records_definitive,
+        "record_conflict": record_conflict,
+        "conflict_generations": sorted(conflict_keys),
         "current_generation_key": current_key,
-        "current_loader_sha256": stamp.get("sha256") if isinstance(stamp, dict) else None,
+        "current_loader_sha256": stamp.get("sha256") if stamp_ok else None,
         "registered_loader_file": registered_loader,
         "registry_exec_file": registry_loader,
+        "runtime_probe": runtime_probe,
         "generation_count": len(generations),
         "generations": generations,
         "reclaim_candidates": candidates,
+        "needs_review": needs_review,
+        "payload_generation_count": len(payloads),
+        "payload_generations": payloads,
+        "reclaim_candidates_payload": payload_candidates,
+        "needs_review_payload": payload_review,
     }
 
 
