@@ -34,7 +34,11 @@ static void generic_sketch_edit(const J &op) {
     // A byte-identical replacement would only leave the sketch and its
     // dependents active-but-unregenerated, a status neither plain nor forced
     // regeneration clears; skip the rewrite and keep the feature tree intact.
-    if (meta.value("geometry", J()) == op["entities"]) {
+    // The guard may only fire while meta.geometry is known to mirror the live
+    // section (dimension/relation edits mark it stale) and the requested
+    // dimensioning mode is unchanged.
+    if (!meta.value("geometry_stale", false) && meta.value("geometry", J()) == op["entities"] &&
+        meta.value("last_dimensioning", "auto") == op.value("dimensioning", "auto")) {
         operation_results.push_back({{"op", op["op"]},
                                      {"sketch", label},
                                      {"preserved_feature_id", f.id},
@@ -243,6 +247,8 @@ static void generic_sketch_edit(const J &op) {
     if (f.id != original_id)
         throw std::runtime_error("Sketch ID changed during in-place edit");
     meta["geometry"] = op["entities"];
+    meta["geometry_stale"] = false;
+    meta["last_dimensioning"] = op.value("dimensioning", "auto");
     meta["dimension_ids"] =
         coordinate_plan.is_null() ? J::object() : coordinate_plan["dimension_ids"];
     if (op.contains("profile"))

@@ -551,6 +551,14 @@ static void remember(const J &op, ProFeature f, J extra = J::object()) {
     extra["op"] = op.at("op");
     aliases[label] = extra;
 }
+// Dimension and relation edits reshape sketch entities behind the recorded
+// entity payloads; mark every sketch alias so a later byte-identical
+// replacement cannot be mistaken for a no-op against the live section.
+static void mark_sketch_geometry_stale() {
+    for (auto it = aliases.begin(); it != aliases.end(); ++it)
+        if (it.value().contains("entity_ids"))
+            it.value()["geometry_stale"] = true;
+}
 static void body_options(ProElement root, const J &op) {
     std::string mode = op.value("mode", "add");
     bool new_body = op.value("new_body", false);
@@ -1007,6 +1015,7 @@ static void sketch(const J &op) {
          {"dimension_ids", dims},
          {"solver", solver_info},
          {"geometry", op["entities"]},
+         {"last_dimensioning", op.value("dimensioning", "auto")},
          {"normal", frame.n},
          {"origin", frame.origin},
          {"u_axis", frame.u},
@@ -1803,6 +1812,7 @@ static void execute_operation(const J &op) {
                                          "or relation instead");
             CK(ProDimensionValueSet(&d, v["value"]));
         }
+        mark_sketch_geometry_stale();
     } else if (kind == "set_sketch_dimensions") {
         ProFeature f = feature(op["sketch"]);
         ProElement root = nullptr;
@@ -1827,6 +1837,8 @@ static void execute_operation(const J &op) {
         CK(ProElementSpecialvalueSet(sk, (ProAppData)s));
         redefine(&f, root);
         CK(ProFeatureElemtreeFree(&f, root));
+        if (op["sketch"].is_string() && aliases.contains(op["sketch"].get<std::string>()))
+            aliases[op["sketch"].get<std::string>()]["geometry_stale"] = true;
     } else if (kind == "set_parameters")
         parameters(op);
     else if (kind == "set_relations") {
@@ -1846,6 +1858,7 @@ static void execute_operation(const J &op) {
             ptrs.push_back(const_cast<wchar_t *>(line.c_str()));
         CK(ProRelsetRelationsSet(&rel, ptrs.data(), (int)ptrs.size()));
         CK(ProRelsetRegenerate(&rel));
+        mark_sketch_geometry_stale();
     } else if (kind == "feature_tree") {
         ProElement root = tree_from_json(op["tree"]);
         ProFeature f = create(root);
