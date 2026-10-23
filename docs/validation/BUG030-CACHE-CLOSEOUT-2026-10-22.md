@@ -137,4 +137,4 @@ E:\Projects\MCP_CREO_MechDog\.venv\Scripts\python.exe E:\Projects\MCP_CREO_MechD
 
 ### 提交与最终指纹
 
-本轮源码、测试与文档已单独提交为 `e71d21b527b3af85b5b4ff2b2c5e2da2b14de113`（BUG-030/BUG-062: 编辑缓存守卫收口、原生核验探针与实体分支验证）；BUG-078 卡、会话记录与运行生成物排除在外，工作区剩余 dirty 项均非本轮条目。最终执行器 `build/creo_worker.exe` SHA256 `f36de8b0c94f94efdd0ad840c18e972d7e86389e114d82c5d03532bbab172267`（格式化后重建）；`native/sketch_edit.cpp` `0ff9b18e…`、`native/generic.cpp` `7280d326…`（未变）；`build/source.sha256` `f74648c9…`。上表前期构建值（`a99be308…` 等）为当时源码，最终证据以本节指纹为准。
+本轮源码、测试与文档已单独提交为 `3331854`（BUG-030/BUG-062: 编辑缓存守卫收口、原生核验探针与实体分支验证）；本节指纹补记为其后续小提交。BUG-078 卡、会话记录与运行生成物排除在外，工作区剩余 dirty 项均非本轮条目。最终执行器 `build/creo_worker.exe` SHA256 `f36de8b0c94f94efdd0ad840c18e972d7e86389e114d82c5d03532bbab172267`（格式化后重建）；`native/sketch_edit.cpp` `0ff9b18e…`、`native/generic.cpp` `7280d326…`（未变）；`build/source.sha256` `f74648c9…`。上表前期构建值（`a99be308…` 等）为当时源码，最终证据以本节指纹为准。
