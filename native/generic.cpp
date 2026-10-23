@@ -3,6 +3,7 @@
 #include "callback_identity.h"
 #include "recovery_deadline.h"
 #include "inspection_units.h"
+#include "assembly_units.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2437,13 +2438,22 @@ struct AssemblyWalk {
     J components = J::array();
     bool truncated = false;
     bool incomplete = false;
+    bool depth_limited = false;
     int budget = 0;
 };
 
+// BUG-080: the walk carries both the raw member-to-root chain (member length
+// unit -> root length unit) and the millimeter-normalized chain. Either chain
+// stops being trustworthy once an ancestor transform or unit query failed, so
+// descendants report an unknown root transform instead of inheriting a
+// grandparent matrix as if it were their own.
 struct WalkContext {
     ProSolid owner = nullptr;
-    std::vector<int> path;      // component feature ids from the root assembly
-    ProMatrix accumulated = {}; // this owner's member-to-root transform
+    std::vector<int> path; // component feature ids from the root assembly
+    // BUG-080 follow-up: both member-to-root chains with independent
+    // validity; WalkChain defaults to the real identity instead of the old
+    // zero-initialized raw root.
+    WalkChain chain;
     AssemblyWalk *walk = nullptr;
     ProMdl current = nullptr;
     int current_code = -1;
@@ -2451,7 +2461,9 @@ struct WalkContext {
 };
 
 // Creo ProMatrix is row-major with row-vector convention p' = p * M, so the
-// translation lives in the last row and units follow the owning assembly (mm).
+// translation lives in the last row. BUG-080: entries are raw Creo values in
+// the source/target model length units (see assembly_units.h); millimeter
+// maps are produced separately and stay null when units are unknown.
 static J matrix_json(const ProMatrix matrix) {
     J rows = J::array();
     for (int r = 0; r < 4; ++r) {
@@ -2463,21 +2475,22 @@ static J matrix_json(const ProMatrix matrix) {
     return rows;
 }
 
-static void multiply_row_vector(const ProMatrix a, const ProMatrix b, ProMatrix out) {
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c) {
-            double sum = 0.0;
-            for (int k = 0; k < 4; ++k)
-                sum += a[r][k] * b[k][c];
-            out[r][c] = sum;
-        }
+// BUG-080: one model's real length unit with its millimeter scale and every
+// raw query code; name and scale stay null on failure instead of pretending
+// millimeters.
+static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale) {
+    return {{"name", units.code ? J(nullptr) : J(utf8(units.length.name))},
+            {"query_code", units.code},
+            {"scale_to_mm", scale.known ? J(scale.scale) : J(nullptr)},
+            {"scale_to_mm_known", scale.known},
+            {"scale_query_codes",
+             {{"unit", scale.unit_query_code},
+              {"mm_unit", sdk_query_code_json(scale.mm_unit_queried, scale.mm_unit_query_code)},
+              {"conversion",
+               sdk_query_code_json(scale.conversion_queried, scale.conversion_query_code)}}}};
 }
 
-static void copy_matrix(const ProMatrix source, ProMatrix destination) {
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c)
-            destination[r][c] = source[r][c];
-}
+static const int kAssemblyWalkMaxDepth = 32;
 
 static J assembly_selection_json(ProSelection selection) {
     J reference = J::object();
@@ -2592,7 +2605,16 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     if (walk.truncated)
         return PRO_TK_NO_ERROR;
     ProFeattype type;
-    if (ProFeatureTypeGet(feature, &type) || type != PRO_FEAT_COMPONENT)
+    ProError type_code = ProFeatureTypeGet(feature, &type);
+    if (type_code) {
+        // An unclassifiable feature may be a component whose whole subtree
+        // would silently drop out of the walk; keep visiting siblings but
+        // drop the tree completeness claim.
+        log("WALK_TYPE_QUERY_FAILED=%d\n", (int)type_code);
+        walk.incomplete = true;
+        return PRO_TK_NO_ERROR;
+    }
+    if (type != PRO_FEAT_COMPONENT)
         return PRO_TK_NO_ERROR;
     auto *component = (ProAsmcomp *)feature;
     J item = J::object();
@@ -2613,6 +2635,11 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     int status_code = ProFeatureStatusGet(feature, &feature_status);
     codes["feature_status"] = status_code;
     item["feature_status"] = status_code ? J(nullptr) : J((int)feature_status);
+    if (status_code)
+        // The component's own feature state (active or suppressed) is
+        // unconfirmable; the node stays observable but the tree cannot claim
+        // completeness (BUG-080).
+        walk.incomplete = true;
     item["suppressed"] = status_code ? J(nullptr)
                                      : J(feature_status == PRO_FEAT_SUPPRESSED ||
                                          feature_status == PRO_FEAT_FAMTAB_SUPPRESSED ||
@@ -2631,9 +2658,13 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
         item.update({{"name", nullptr},
                      {"model_type", nullptr},
                      {"resolved", false},
+                     {"subtree_not_visited", true},
                      {"constraints", J::array()}});
         item["query_codes"] = codes;
         walk.components.push_back(item);
+        // A missing component model hides its whole subtree; the report is
+        // incomplete instead of silently looking complete.
+        walk.incomplete = true;
         if ((int)walk.components.size() >= walk.budget)
             walk.truncated = true;
         return PRO_TK_NO_ERROR;
@@ -2643,6 +2674,10 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     ProMdlType kind = PRO_MDL_PART;
     ProError kind_code = ProMdlTypeGet(child, &kind);
     codes["model_type"] = kind_code;
+    if (kind_code)
+        // An unclassifiable child model may hide a whole sub-assembly; the
+        // node stays observable but the tree completeness claim is dropped.
+        walk.incomplete = true;
     const char *kind_name = kind_code ? "" : kind == PRO_MDL_ASSEMBLY ? "assembly" : "part";
     observed["model_type"] = kind_code ? J(nullptr) : J(kind_name);
     ProMdlsubtype subtype = PROMDLSTYPE_PART_SOLID;
@@ -2651,40 +2686,91 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
         observed["model_type"] = "sheetmetal";
     for (auto it = observed.begin(); it != observed.end(); ++it)
         item[it.key()] = it.value();
+    // observed carries the child's session-identity query codes
+    // (name/origin/modified/id); merge them into the node codes so that
+    // executed diagnosis survives instead of being overwritten below.
+    if (observed.contains("query_codes")) {
+        for (auto it = observed["query_codes"].begin(); it != observed["query_codes"].end(); ++it)
+            codes[it.key()] = it.value();
+    }
+    // BUG-080: query the real component/owner units next to the transform and
+    // normalize to a full millimeter coordinate map; the raw matrix is always
+    // kept, and the normalized map stays null (never pretend-mm) whenever the
+    // transform or any required unit scale is unknown.
+    InspectionLengthUnits component_units = inspect_length_units(child);
+    InspectionLengthUnits parent_units = inspect_length_units((ProMdl)component->owner);
+    MillimeterScale component_scale = length_scale_to_mm(child, component_units);
+    MillimeterScale parent_scale = length_scale_to_mm((ProMdl)component->owner, parent_units);
+    item["units"] = {{"component", length_unit_json(component_units, component_scale)},
+                     {"parent", length_unit_json(parent_units, parent_scale)}};
     ProMatrix to_parent = {};
     ProError transform_code = component_to_assembly_transform(component, to_parent);
     codes["transform"] = transform_code;
-    item["transform_to_parent"] = transform_code ? J(nullptr) : matrix_json(to_parent);
-    ProMatrix to_root = {};
-    if (!transform_code) {
-        multiply_row_vector(to_parent, context->accumulated, to_root);
-        item["transform_to_root"] = matrix_json(to_root);
-    } else {
-        item["transform_to_root"] = nullptr;
-    }
+    // BUG-080 follow-up: a successful query whose returned matrix contains
+    // NaN/Infinity is not a known map; serializing it would emit null entries
+    // while transform_known stayed true, so the raw map is dropped instead.
+    const bool raw_map_known = local_transform_known(transform_code, to_parent);
+    ProMatrix to_parent_mm = {};
+    bool parent_map_known =
+        raw_map_known && component_scale.known && parent_scale.known &&
+        normalize_transform_mm(to_parent, component_scale.scale, parent_scale.scale, to_parent_mm);
+    item["transform_to_parent"] = parent_map_known ? matrix_json(to_parent_mm) : J(nullptr);
+    item["transform_to_parent_raw"] = raw_map_known ? matrix_json(to_parent) : J(nullptr);
+    item["transform_known"] = raw_map_known;
+    item["transform_mm_known"] = parent_map_known;
+    if (!transform_code && !parent_map_known)
+        item["transform_unknown_reason"] = !raw_map_known ? "non_finite"
+                                           : (!component_scale.known || !parent_scale.known)
+                                               ? "unknown_units"
+                                               : "invalid_scale";
+    // Root maps come from the shared chain composition: a chain exists only
+    // while this local map and every ancestor step stayed known, and finite
+    // overflow poisons the chain instead of serializing null inside a
+    // "known" transform. A failed parent transform or unknown ancestor unit
+    // therefore yields null root maps here, never a reused grandparent.
+    WalkChainStep step = walk_chain_compose(context->chain, to_parent, raw_map_known, to_parent_mm,
+                                            parent_map_known);
+    item["transform_to_root_raw"] =
+        step.root_raw_known ? matrix_json(step.to_root_raw) : J(nullptr);
+    item["transform_to_root"] = step.root_mm_known ? matrix_json(step.to_root_mm) : J(nullptr);
+    item["transform_root_known"] = step.root_mm_known;
+    // An unknown local or root chain, or an overflowing combination, makes
+    // the report incomplete; the node's own known local maps stay observable.
+    if (!parent_map_known || !step.root_mm_known || !step.root_raw_known)
+        walk.incomplete = true;
     item["constraints"] = component_constraints_json(component, codes);
     item["query_codes"] = codes;
     walk.components.push_back(item);
+    const size_t node_index = walk.components.size() - 1;
     if ((int)walk.components.size() >= walk.budget) {
         walk.truncated = true;
         return PRO_TK_NO_ERROR;
     }
-    if (!kind_code && kind == PRO_MDL_ASSEMBLY && context->depth < 32) {
-        WalkContext sub;
-        sub.owner = (ProSolid)child;
-        sub.path = occurrence;
-        copy_matrix(transform_code ? context->accumulated : to_root, sub.accumulated);
-        sub.walk = context->walk;
-        sub.current = context->current;
-        sub.current_code = context->current_code;
-        sub.depth = context->depth + 1;
-        // A failed sub-assembly walk marks this node instead of failing the
-        // whole report; sibling components stay observable.
-        int sub_code =
-            ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr, (ProAppData)&sub);
-        if (sub_code) {
-            item["subassembly_visit_code"] = sub_code;
-            walk.incomplete = true;
+    if (!kind_code && kind == PRO_MDL_ASSEMBLY) {
+        if (context->depth >= kAssemblyWalkMaxDepth) {
+            walk.depth_limited = true;
+        } else {
+            WalkContext sub;
+            sub.owner = (ProSolid)child;
+            sub.path = occurrence;
+            // Propagate both chains through the shared step: a failed local
+            // transform, unknown unit or overflow poisons the descendant
+            // root maps instead of reusing the grandparent matrix.
+            sub.chain = walk_chain_descend(context->chain, step);
+            sub.walk = context->walk;
+            sub.current = context->current;
+            sub.current_code = context->current_code;
+            sub.depth = context->depth + 1;
+            // A failed sub-assembly walk marks this node instead of failing
+            // the whole report; sibling components stay observable. The code
+            // is written into the stored node (node_index): `item` itself was
+            // already pushed and later descendants may shift components.back().
+            int sub_code =
+                ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr, (ProAppData)&sub);
+            if (sub_code) {
+                walk.components[node_index]["subassembly_visit_code"] = sub_code;
+                walk.incomplete = true;
+            }
         }
     }
     return PRO_TK_NO_ERROR;
@@ -2713,30 +2799,55 @@ static void session_assembly_native(const J &request, J &report) {
     int current_code = ProMdlCurrentGet(&current);
     AssemblyWalk walk;
     walk.budget = 4096;
+    // Query the root length unit before the walk: it decides whether the
+    // normalized root chain is interpretable at all, so it initializes the
+    // root chain validity up front; an unknown root unit makes even an empty
+    // tree globally incomplete.
+    InspectionLengthUnits root_units = inspect_length_units(mdl);
+    MillimeterScale root_scale = length_scale_to_mm(mdl, root_units);
     WalkContext context;
     context.owner = (ProSolid)mdl;
-    ProMatrix identity = {
-        {1.0, 0.0, 0.0, 0.0}, {0.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-    copy_matrix(identity, context.accumulated);
+    // WalkChain starts as the real identity on both chains; the normalized
+    // chain is only known while the root unit is.
+    context.chain.normalized_known = root_scale.known;
     context.walk = &walk;
     context.current = current;
     context.current_code = current_code;
-    check(
-        ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context),
-        "ProSolidFeatVisit");
+    // A failed root visit makes the report incomplete (root_visit_code)
+    // instead of throwing away the whole inspection.
+    int root_visit_code =
+        ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context);
+    if (root_visit_code)
+        walk.incomplete = true;
     J root = observe_session_model(mdl, "assembly", current, current_code);
+    root["length_unit"] = length_unit_json(root_units, root_scale);
+    // Without the root length unit every normalized root map is
+    // uninterpretable; even an empty tree is globally incomplete then.
+    if (!root_scale.known)
+        walk.incomplete = true;
     report.update(
         {{"success", true},
          {"assembly", root},
          {"components", walk.components},
          {"component_count", walk.components.size()},
          {"truncated", walk.truncated},
+         {"depth_limited", walk.depth_limited},
+         {"root_visit_code", root_visit_code},
          {"incomplete", walk.incomplete},
-         {"complete", !walk.truncated && !walk.incomplete},
-         {"transform_convention", "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); "
-                                  "translation occupies the last row; units follow the assembly "
-                                  "(mm); transform_to_parent maps member coordinates into the "
-                                  "owning assembly, transform_to_root into the inspected root"},
+         {"complete", walk_report_complete(walk.truncated, walk.incomplete, walk.depth_limited,
+                                           root_scale.known)},
+         {"transform_convention",
+          "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); translation occupies "
+          "the last row; transform_to_parent and transform_to_root are normalized full "
+          "coordinate maps with input and output coordinates in millimeters; "
+          "transform_to_parent_raw and transform_to_root_raw keep the raw Creo matrices "
+          "mapping member-solid coordinates (member length unit) into owner/root-solid "
+          "coordinates (owner/root length unit); per-node units.component/units.parent and "
+          "assembly.length_unit carry the real unit names, query codes and millimeter scales "
+          "and are null when unknown - normalized transforms are then null too instead of "
+          "pretending millimeters; constraint offsets stay in the owning assembly length "
+          "unit; raw cross-unit matrix semantics follow the local SDK member-transform "
+          "documentation and remain pending real mixed-unit machine verification"},
          {"readonly_note", "inspection only: no component loading, activation, "
                            "regeneration, save, adoption or managed revision"}});
 }
