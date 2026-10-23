@@ -6,7 +6,7 @@
 
 当前注册 **91 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.5.0**（0.4.6 反馈整合第二批，MINOR，新增工具 `creo_inspect_session_assembly`，工具数 90→91），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.5.0.md)。本版交付 FEAT-045 装配只读检查：按名称选定已驻留装配（外部经 `creo_open_file` 载入或受管装配均可），只读返回树序组件清单（occurrence 路径、来源/加载/抑制/封装状态、约束快照含引用与原始查询码）与完整 4×4 行向量解算变换（到父级与到根、平移末行、毫米）；首采单通道忙拒+十分钟冻结快照 32 KiB 分页；检查不加载组件、不切窗、不再生、不保存、不收养。嵌套/重复实例/抑制/缺件四场景实机触发与外部 Creo 10 复核、WorkBuddy 黑盒按卡开放；装配编辑与整体收养为后续路线。已知问题不变：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，登记待修，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.4.8（0.4.6 反馈第一批：世代盘点口径补齐+归档补录）见[版本说明](docs/RELEASE_NOTES_0.4.8.md)。
+当前服务／源码版本为 **0.5.1**（编辑链路缺陷修复批次，PATCH，无新增工具，工具数 91 不变），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.5.1.md)。本版集中修复四处编辑/恢复缺陷：`update_sketch_geometry` 支持构造中心线（回转草图可就地编辑，[BUG-062](docs/work-items/BUG-062.md)）；同几何重复编辑在尺寸编辑与模式切换后不再错误跳过、改动仍按保护策略落地（[BUG-030](docs/work-items/BUG-030.md)）；`reorder_features` 槽位编号与连续集合校验修正、就地无操作请求按原树序处理（[BUG-029](docs/work-items/BUG-029.md)）；就地修改圆弧半径不再导致草绘特征再生失败——自动标注在主平面改走完全约束的坐标尺寸路径、未变实体保持实体身份（[BUG-079](docs/work-items/BUG-079.md)，回转 288π² 与拉伸上下文实机验证，WorkBuddy 黑盒复验通过）。已知问题不变：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，根因定位为损坏会话级，建模代码零改动，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.5.0（0.4.6 反馈整合第二批，新增工具 `creo_inspect_session_assembly`，工具数 90→91）见[版本说明](docs/RELEASE_NOTES_0.5.0.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 

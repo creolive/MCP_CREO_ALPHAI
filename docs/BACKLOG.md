@@ -36,7 +36,7 @@
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
 | [BUG-077](work-items/BUG-077.md) | P0 | 验收中 | 0.4.7 | 530项单测及[0.4.7黑盒](validation/WORKBUDDY-0.4.7-2026-10-21.md)正常主线、分页、拒绝保护和并发busy通过；[小型真实非空迁移、同键回放及后续编辑/保存重载已通过](validation/WORKBUDDY-0.4.7-NONEMPTY-2026-10-21.md)；[>16 MiB超限迁移→收养→编辑实机链路通过](validation/BUG077-OVERSIZE-MIGRATION-2026-10-21.md)；[恢复链路四动作矩阵+restore_baseline/abandon_new通过](validation/BUG077-RECOVERY-2026-10-22.md)；[图纸消费点+两处拆分遗漏修复随版交付](validation/BUG077-DRAWING-2026-10-22.md)。accept两动作被BUG-078阻断；原环境复测继续开放。485条真实旧登记未迁移，不清保护。0.4.7已随版交付（d23866a/v0.4.7/Release 420203117）。 |
-| [BUG-078](work-items/BUG-078.md) | P1 | 已复现 | 待排期 | 恢复accept路径ProMdlnameBackup稳定-1（实机0/4，该路径从未实机成功），accept_saved/accept_live不可用；编辑路径同日偶发-1三例待查；图纸路径4连成支持erase→load邻接嫌疑。三个dirty现场模型保护挂起待修复收尾。不阻断0.4.7发布决策。 |
+| [BUG-078](work-items/BUG-078.md) | P1 | 验收中 | 待排期 | [根因已定位](validation/BUG078-ROOT-CAUSE-2026-10-22.md)：全部-1集中于复用孤儿nmsd的事故会话（trail 70条dbg_err_crash），代码序列无罪、零行为改动；accept_saved/accept_live健康会话各3/3独立夹具闭环（同键重放、恢复后编辑过）；偶发编辑-1十组对照未复现保留子项；三个旧现场仅restore_baseline可用待操作者收尾。 |
 | [DEV-044](work-items/DEV-044.md) | P1 | 已交付 | 0.4.7 | 0.4.7五组验收全部执行完毕（超限迁移/恢复链路/图纸消费点/health异常/发布），[发布核对](validation/RELEASE-0.4.7.md)；DEV-027二进制可复现性/安全回收另期保留，不标全计划完成。 |
 | [FEAT-047](work-items/FEAT-047.md) | P1 | 已交付 | 0.4.7 | 正常/异常场景与32KiB均实测； 正常数据526条/11页公开黑盒无重无漏；[预警/损坏/超限/32KiB逐页实测通过](validation/BUG077-HEALTH-2026-10-22.md)（单条损坏不中断扫描、最大页19,895B、其他543条登记不变）。原环境异常数据未覆盖，按卡保留。 |
 | [DEV-002](work-items/DEV-002.md) | P2 | 开发中 | 未排期 | 继续Python包迁移，下一批处理seeds/capabilities及后续服务/启动/桥接依赖；前两批证据见卡，安装入口、资源和运行数据定位须同步核对。 |
@@ -50,14 +50,15 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
-| [BUG-058](work-items/BUG-058.md) | P1 | 待复现 | 未排期 | 窗口观测与指引已实现；外部无主窗口 -11 根因仍待复现。本机 -4、探测超时与桌面访问受限未定因，按卡中分层证据定位，不自动结束 Creo。 |
-| [BUG-062](work-items/BUG-062.md) | P1 | 待复现 | 未排期 | 复现含 centerline 的回转草图更新：省略时被命名实体保护拒绝、传入时被 schema 拒绝。核对允许类型和保留规则，选择最小修复，保持命名实体保护。 |
+| [BUG-079](work-items/BUG-079.md) | P1 | 已修复，WorkBuddy 复验通过（待发布） | 下一PATCH | 就地改弧半径再生失败根因已核实：autodim 在半径变化截面上欠约束（缺 y 位置尺寸），残留孤儿特征尺寸使草绘特征再生失败；显式坐标尺寸路径成功对照确认。修复：未变实体跳过/变更实体 Delete+Add（centerline 保 Replace）+ 主平面 auto 编辑路由到坐标尺寸路径；MSVC lambda 捕获缺陷一并规避。原生全套（回转/拉伸变体、BUG-062 夹具、编辑专项 11 项、general_core、554 单测）通过；WorkBuddy 复验场景 1–3 通过、场景 4 经提示词输入勘误后实证修复有效（见卡内复验表）。 |
+| [BUG-058](work-items/BUG-058.md) | P1 | 待复现 | 未排期 | 窗口观测与指引已实现；外部无主窗口 -11 根因仍待复现。本机同码 -4 已定位客户端侧 RPC 端点自举端口错位（详见卡 2026-10-22/23 节），触发条件未定；历史外部 -11 为不同层，保持待复现。 |
+| [BUG-062](work-items/BUG-062.md) | P1 | 已修复（验收中） | 下一PATCH | [centerline 加入就地编辑允许集合](validation/BATCH2-EDITING-2026-10-22.md)：schema 缺口补齐（原生分支本就存在），回转草图 R5→R6 两入口实机通过（体积/ID/rev/保存重载），负面三路径保持拒绝；2026-10-23 会话重启后独立复验通过，WorkBuddy 黑盒验收 centerline 核心行为与三拒绝路径通过；改弧半径失败为独立缺陷 [BUG-079](work-items/BUG-079.md)。 |
 | [BUG-063](work-items/BUG-063.md) | P1 | 待复现 | 未排期 | 复现非原点轴 10×36° 阵列去料错误，与过原点轴、柱面取轴对照；核对实例变换及实际轴位置。自校验告警和显式轴参数仍需方案，关联 BUG-065。 |
 | [BUG-064](work-items/BUG-064.md) | P1 | 待复现 | 未排期 | 复现 surface 平面引用失败及纯 Z 向 u_axis 报 Zero direction vector 两条路径，核对引用分支与坐标帧计算；明确平行法向的拒绝，免引用平面输入另评估。 |
 | [BUG-065](work-items/BUG-065.md) | P2 | 待复现 | 未排期 | 复现两平面交线轴并断言原点/方向，核对是否误取首平面法向；评估公开 origin/direction 与 inspect axes，保留柱面取轴对照，关联 BUG-063。 |
 | [BUG-066](work-items/BUG-066.md) | P2 | 待复现 | 未排期 | 复现体积正确但 preview.jpg 断裂失真的模型，定位显示集/曲面/网格路径；视角选择归 FEAT-041，预览不能代替几何验收。 |
-| [BUG-030](work-items/BUG-030.md) | P1 | 待复现 | 未排期 | 复现矩形草图更新或原样替换的再生失败，分别检查独立草图和下游拉伸；成功核对引用与重载，失败核对保存点、revision 和后续编辑。 |
-| [BUG-029](work-items/BUG-029.md) | P1 | 待复现 | 未排期 | 补齐重排请求和依赖，复现三入口 code=-2。合法重排核对顺序、身份、几何及重载；依赖冲突明确拒绝并恢复。 |
+| [BUG-030](work-items/BUG-030.md) | P1 | 已验收（本机） | 下一PATCH | [最终收口](validation/BUG030-CACHE-CLOSEOUT-2026-10-22.md)（2026-10-22/23 节）：连接恢复后九项专项 9/9、实体分支核验（arc/centerline/ellipse/spline；闭合样条按保守路径）、general_core 7/7、BUG-062 复验、554 单测、同会话空闲复连全部通过；以最终源码重取全部证据。原 0.3.1 改尺寸失败仍未复现，保留历史现象。WorkBuddy 黑盒与发布待安排。 |
+| [BUG-029](work-items/BUG-029.md) | P1 | 已修复（验收中） | 下一PATCH | [重排槽位修正与矩阵](validation/BATCH2-EDITING-2026-10-22.md)：new_feat_num 为原树编号，按移动方向折算，连续性/重叠/重复前置校验；5 正例、6 负例及连续块后移等补测通过。原三次 -2 根因未确认；原位 no-op 仍保存验证且 revision +1（历史证据 3→4）。2026-10-23 随最终收口以最终源码复验通过（reordered=false、树序/ID 保持、rev+1）；WorkBuddy 黑盒与外部环境未测。 |
 | [BUG-034](work-items/BUG-034.md) | P1 | 待复现 | 未排期 | 取得 Creo 9 种子加载 -16 的完整输入和环境，查生产版本与加载原因；哈希 available 不等于可加载，本机其他版本成功不能关闭此项。兼容观察与 FEAT-030 联动。 |
 | [BUG-035](work-items/BUG-035.md) | P1 | 待复现 | 未排期 | 复现 shell=2 后 dimension_pattern 孔阵列增料与 r7 环箍，检查 leader、树顺序和阵列规则；以无抽壳及 axis_pattern 对照实际去料与重载。 |
 | [BUG-032](work-items/BUG-032.md) | P2 | 待复现 | 未排期 | 核对钣金开放/闭合壁 depth、thickness 和草图轴语义，复现 depth=1、thickness=232、线长185得到185×232×232的报告；逐类验证几何、折弯、重载及回滚。 |
