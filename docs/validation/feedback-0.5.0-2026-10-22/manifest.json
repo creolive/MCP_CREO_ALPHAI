@@ -1,0 +1,61 @@
+[
+  {
+    "source": "C:\\Users\\Administrator\\Downloads\\0.5.0\\2026-10-22_CREO10_v0.5.0_FEAT045交付与死锁根治但变换单位存疑.md",
+    "archive": "docs/validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_FEAT045交付与死锁根治但变换单位存疑.md",
+    "bytes": 9420,
+    "sha256": "b7a60bfb00f6786a03f3f325985ba8c0b9007667efc838afc71de2ca6e1ab457",
+    "archived_note": "由控制者逐字节复制归档；归档件与原件字节数、SHA256 一致，原文不得改动。",
+    "reported_version": "0.5.0",
+    "reported_environment": "MCP_CREO_MechDog 0.5.0（tool_count 91）/ Creo Parametric 10.0.0.0（release_numeric 42）；注册表迁移前 212 条目/47.5MB，迁移后 213/26.1MB；asm_mx.asm.16（8 组件）等。属原环境 Creo 10 证据，与本机 Creo 12 证据分列。",
+    "mapping": {
+      "§1/§3.1 FEAT-045 单层装配只读检查实测通过（8 组件树序、occurrence/parent 路径、双份 4x4 行向量变换、逐约束快照、分页三态与 600s 过期、只读五不）": "FEAT-045 外部 Creo 10 单层装配复核子项通过关闭（嵌套/重复实例/抑制/缺件四场景与 WorkBuddy 黑盒仍按卡保留）",
+      "§3.2 FEAT-047 健康检查：212 条目分页遍历 ok 58/legacy_inline 153/over_budget 1/corrupt 0，超限条目 usage_ratio 1.2799 与内联明细分类齐全，migration.needed 指引正确": "FEAT-047 外部正常数据与超限条目明细子项确认（异常条目还原与 32 KiB 原始响应字节仍按卡保留）",
+      "§3.3 BUG-077 迁移根治死锁：migrated 1、job_files_split 31、每文件 .pre-split-bak+sha256+migration_log、47,528,283→26,058,166 B、over_budget 1→0": "BUG-077 原环境迁移子项外部通过关闭",
+      "§3.4 死锁闭环：reconcile 三轮裸错误终结、adopt inspect/apply 恢复 adoption_committed（saved_file_reloaded_and_verified: true）": "BUG-077 原环境后续收养与恢复通道子项外部通过关闭",
+      "§4.1【P1 待作者确认】变换数值全部呈 x/25.4 精确形态（疑英寸存储），transform_convention 声明 mm；按 mm 喂 assemble_component 有 25.4 倍定位误差风险；组件 mx_plate 实测为毫米": "BUG-080 装配变换单位契约（2026-10-23 登记，待开发；单位疑点为数值指纹推断，实施时以真实单位查询为准）",
+      "§4.2【P3】adopt save_and_reload 实测 42 秒、期间 xtop hung_window 瞬时信号": "FEAT-007/FEAT-033 阶段耗时观察输入（42 秒为实测观察，不提供未测量预计时长）",
+      "§4.3【P3】get_job 滞后于 list_jobs 的终态可见性": "0.5.0 反馈计划第三批：先以受控交错夹具复现终态读取竞态，再作最小修复（待实施）",
+      "§4.4【观察】擦除后 session_model_id 大数段（1048576+）": "FEAT-043 观察延续（瞬态发现提示，不按数值范围判断身份）",
+      "§5/§8 上轮闭环与亮点": "FEAT-045/FEAT-047/BUG-077 正面验收结论记录"
+    }
+  },
+  {
+    "source": "C:\\Users\\Administrator\\Downloads\\0.5.0\\2026-10-22_CREO10_v0.5.0_装配编辑流程改进建议.md",
+    "archive": "docs/validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_装配编辑流程改进建议.md",
+    "bytes": 9006,
+    "sha256": "f41a80b735b8d754a7b89f22f16c2da2c9cf679ca2fbe39210335b401772a71a",
+    "archived_note": "由控制者逐字节复制归档；归档件与原件字节数、SHA256 一致，原文不得改动。",
+    "reported_version": "0.5.0",
+    "reported_environment": "MCP_CREO_MechDog 0.5.0 / Creo Parametric 10.0.0.0（release_numeric 42）；实操 asm_mx.asm.16（8 组件）→ 重建托管装配 asm_edit_demo.asm.5，全部写步骤 saved_file_reloaded_and_verified: true。属原环境 Creo 10 证据。",
+    "mapping": {
+      "P1-1 缺按路径收养、收养被当前窗口串行化（8 组件约 5.5 分钟，100 组件约 1 小时以上）": "FEAT-048 按路径及批量收养（2026-10-23 预登记，待开发，第二批）",
+      "P1-2 assemble_component 逐件独立 job（12-13s/件；报告预计 8 件 ~100s→~25s）": "FEAT-008 现有 creo_execute_plan 多组件单作业官方示例与验收（第二批补示例与验收，非 FEAT-048 新增批量装配工具）；预计收益仅为建议，不作承诺",
+      "P1-3 约束快照无法回放到 assemble_component.constraints（无公开字段映射契约，mate 语义丢失）": "FEAT-049 约束快照回放（2026-10-23 预登记，第三批）",
+      "P1-4 变换入参只有 Euler 角、inspect 只给 4x4 矩阵（轴交换换算易错、万向锁退化）": "FEAT-012/BUG-045 第二批 3x3 rotation_matrix 直入参；inspect 附 euler_deg_xyz 与正交性校验为候选方向",
+      "P1-5 收养拒绝不健康零件但无逐特征诊断（MX_DOWN 132 特征被拒，路线 A 断掉）": "FEAT-006 第一批补有界逐特征诊断（待实施）；只读装配源降级保留为后续候选，本轮不开放",
+      "P2-1 无重建结果 vs 原装配的比对工具": "FEAT-050 装配结果比对（2026-10-23 预登记，第三批）",
+      "P2-2 inspect_session_assembly 未输出装配单位（数值呈 x/25.4 特征，详见同期验收报告 §4.1）": "BUG-080 装配变换单位契约（与报告一 §4.1 同根）",
+      "P2-3/P3 批量预览与变更摘要、list_components 约束符号名": "0.5.0 反馈计划第二批范围（随 FEAT-048/FEAT-008 批实施）",
+      "§3 官方重建管线文档建议（含失败分支与幂等键约定）": "FEAT-008 官方流程与多组件计划示例（第二批）"
+    }
+  },
+  {
+    "source": "C:\\Users\\Administrator\\Downloads\\0.5.0\\2026-10-22CREO10.0.0.0-0.5.0BUG078跨三版未修与版本说明状态矛盾.md",
+    "archive": "docs/validation/feedback-0.5.0-2026-10-22/2026-10-22CREO10.0.0.0-0.5.0BUG078跨三版未修与版本说明状态矛盾.md",
+    "bytes": 11196,
+    "sha256": "1e3925eea02d024a8fdeb6e8b4da83c413b5b3c5c438a04b87def198acbf5a93",
+    "archived_note": "由控制者逐字节复制归档；归档件与原件字节数、SHA256 一致，原文不得改动。",
+    "reported_version": "0.5.0",
+    "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 / VS2022 BuildTools 14.44.35207 / Windows SDK 10.0.26100.0 / Python 3.13；沿用 2026-10-17 冻结约束，未发起任何 Creo 连接（源码校验、编译与文件层静态对比）。属原环境 Creo 10 证据。",
+    "mapping": {
+      "§0/§1 升级全部成功，回调注册连续第六/七版未失效（五项指纹全 SAME、两 DLL 字节未重编、目录数 2/7 不增）": "DEV-027 指纹稳定化/注册解耦外部延续确认（该子项此前已关闭，本报告为延续证据）",
+      "§2 BUG-078（P1）跨 0.4.7/0.4.8/0.5.0 三版未修、目标待排期；要求排期或'不修'结论与 dirty 现场用户自助出路": "BUG-078 当前摘要/目标/范围更新与 MODEL_RECOVERY 用户指引补录（2026-10-23 文档收口；排期或不修结论仍待台账/用户明确）",
+      "§3 0.4.7/0.4.8 版本说明写'未发布'但实际均已发布 Release（v0.4.7 2026-10-22T01:06Z、v0.4.8 2026-10-22T02:23Z）": "发布状态修正与 RELEASING 一致性核对（0.5.0 发布文档批已交付）；本轮未重新核验远端",
+      "§4 两项此前反馈已落地：回收候选判定收紧（0.4.8）与附件命名/SHA256 定名（0.5.0 两包回归定名并附 .sha256，Release body 双包完整哈希与远端一致：源码包 dd8b49bb…/种子包 fb84a37d…）": "DEV-027 0.4.8 盘点口径子项正面闭环确认；DEV-045 外部确认关闭并移入完成档案（工作卡历史保留）",
+      "§5 DEV-027 payload 目录安全回收仍未实现（外部已累积 7 个 payload 目录、跨四版未清理）": "DEV-027 第三批显式世代回收（inspect/apply，限定自有目录、逐项审计；待实施）；二进制可复现性子项继续开放",
+      "§6 升级执行与静态验证（两包 sha256 与 Release body 一致、覆盖 751 文件、editable 安装、编译一次成功、91 工具、ProMdlName 缓冲修复在册）": "0.5.0 发布外部静态确认",
+      "§6 未验证声明（FEAT-045 实机、BUG-077 迁移/health 实机、BUG-078 accept、runtime_evidence、BUG-057 双进程）": "各对应条目未验证范围记录（其中 BUG-077/FEAT-047/FEAT-045 实机由本目录报告一 §3 同日实测补上）",
+      "§7 需要作者回复的问题": "各条目跟进记录（版本说明补正已随发布文档批；其余按卡开放）"
+    }
+  }
+]

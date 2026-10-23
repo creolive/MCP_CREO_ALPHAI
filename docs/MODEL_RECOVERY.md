@@ -18,6 +18,13 @@
 
 需要核对会话时显式加 `"live":true`。实时预检使用同一 Toolkit 通道，繁忙时返回 busy；检查模型来源、健康、单位、外部依赖及相对登记基线的偏离。它不保存、擦除或接受几何。失联或权限不足表示无法确认，不等于安全。accept_live 必须先做实时预检。
 
+## 挂起现场的用户处置指引（BUG-078 反馈补录）
+
+- **保留一切原状**：原 `job_id`/`model_id`、失败恢复作业、inspect 返回与全部诊断（job 结果、native 日志、evidence）都保留；不要重交原计划、删 reservation、手工清保护或按消息文本解除 unknown。
+- **重新 inspect 后再选择**：处置前先重新 `creo_reconcile_model(mode="inspect")`，按本次返回的各动作 `available/reason` 与 10 分钟有效的 `evidence_token` 选择动作；`live:true` 实时预检同样须先满足会话核对条件，会话条件变化会使旧证据失效，以最新 inspect 为准。
+- **accept 两动作已在健康会话闭环**：accept_saved/accept_live 在健康会话各 3/3 实机通过（[BUG-078 根因记录](validation/BUG078-ROOT-CAUSE-2026-10-22.md)）；若仍遇 Backup -1，保留现场与诊断转 BUG-078，不自行用延迟、重试或替换保存路径规避。
+- **三个历史挂起模型**（`de6f0bb5…`/`bebe7e2b…`/`57294ff8…`）live 已缺失、仅 `restore_baseline` 可用：绝不自动 apply 或清保护，等待操作者明确选择后执行，原始异常历史保留。
+
 ## 明确选择动作
 
 | action | 结果 | revision |
