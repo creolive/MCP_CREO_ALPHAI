@@ -25,7 +25,7 @@
 - **根因**：byte-identical 的 `ProFeatureRedefine` 把草图与下游特征标记为 `PRO_FEAT_UNREGENERATED(6)`（active-but-unregenerated，UNHEALTHY_FEATURES 日志佐证：RECT_SK 与 PAD 均 status=6）；`ProSolidRegenerate(PRO_REGEN_NO_FLAGS)` 与 `PRO_REGEN_FORCE_REGEN` 均不清除该状态；inspection 健康检查按设计拒绝。中途试过"检测 UNREGENERATED 后强制再生"方案，实机证明 FORCE 亦无效后放弃。
 - **修复（native/sketch_edit.cpp）**：`generic_sketch_edit` 开头对与登记几何 byte-identical 的实体集直接跳过原生改写（特征树不动，操作结果标记 `unchanged`），作业仍走完整保存/擦除/重载验证——同几何替换交付为成功作业（revision +1，符合"本批不新增同几何无修改优化"的计划语义）；非同几何路径零改动。
 - **修复后矩阵**（bug030_gx1/gx2/gx3）：同几何替换 succeeded、体积保持 800、rev 1→2、ID 保持；宽度 25 体积 1000、bbox 25×10×4；计划入口同结果；裸草图同几何成功；`stale revision` 与退化矩形（min=max）均确定性拒绝（schema 层 `Rectangle max must exceed min`）；拒绝后合法编辑成功 rev→4。
-- 原报告另例（改尺寸失败 job `0bc48959c8bd`）本机未复现（尺寸变化路径全过）；原环境为 Creo 10.0.0.0/release 42，差异保留，不据此关闭历史现象。
+- 原报告另例（改尺寸失败 job `0bc48959c8bd`）本机未复现（尺寸变化路径全过）；原件与补录明确同为 Creo 12.4.0.0/release 44，历史部署身份及完整输入差异仍待核实，不据此关闭历史现象。
 
 ## 3. BUG-029：特征重排
 
@@ -52,3 +52,15 @@
 - WorkBuddy 黑盒复核与外部环境（Creo 10/9）未测。
 - BUG-030 原报告"改尺寸失败"未在本机复现（见第 2 节）；BUG-029 原报告模型原件未重建。
 - 三个 BUG-078 挂起现场保持保护，收尾动作仍待操作者选择（不随本批处置）。
+
+## 7. 继续收口的状态与报告纠正
+
+原位重排的 no-op 只表示不调用原生树重排；作业仍走保存/重载，成功 revision **+1**。`build/bug029/accept2.json` 的反序重排为 revision 3，随后原位请求为 revision 4；此前“revision 不变”的汇报错误，不改变实现。
+
+原 0.3.1 报告环境为 **Creo 12.4/release 44**，不是 Creo 10。第 2 节已纠正；原改尺寸失败的历史部署身份及完整输入仍需核实。
+
+后续三处入口/旧登记补修、当前源码身份、553 项单测与连接阻断详见[继续收口记录](BUG030-CACHE-CLOSEOUT-2026-10-22.md)。本节之前的实机通过均属于此前源码，不能覆盖本轮 `native/generic.cpp` 与 `native/sketch_edit.cpp` 的新改动。本轮新专项和原生核心回归尚未通过验收，不据历史结果宣告收口。
+
+## 8. 2026-10-23 最终收口（本机验收完成）
+
+连接 -4 排查、授权恢复、剩余五项、九项专项 9/9、general_core 7/7、BUG-062 复验、实体分支核验、554 单测、同会话空闲约 12.5 分钟复连等全部结果见[继续收口记录](BUG030-CACHE-CLOSEOUT-2026-10-22.md) 2026-10-22/23 节与各工作卡。最终源码含 `tools/test_editing_closeout.py` 分节查询修复、`native/sketch_edit.cpp` 的 `verification_probe` 诊断字段与 clang-format；相关实机证据均以最终执行器重取。本批次实机验收完成，未合并 main、未发布。

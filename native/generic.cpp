@@ -1015,6 +1015,7 @@ static void sketch(const J &op) {
          {"dimension_ids", dims},
          {"solver", solver_info},
          {"geometry", op["entities"]},
+         {"geometry_stale", false},
          {"last_dimensioning", op.value("dimensioning", "auto")},
          {"normal", frame.n},
          {"origin", frame.origin},
@@ -1837,11 +1838,13 @@ static void execute_operation(const J &op) {
         CK(ProElementSpecialvalueSet(sk, (ProAppData)s));
         redefine(&f, root);
         CK(ProFeatureElemtreeFree(&f, root));
-        if (op["sketch"].is_string() && aliases.contains(op["sketch"].get<std::string>()))
-            aliases[op["sketch"].get<std::string>()]["geometry_stale"] = true;
-    } else if (kind == "set_parameters")
+        // Numeric references and relations to other sketches need the same
+        // invalidation as label-based edits.
+        mark_sketch_geometry_stale();
+    } else if (kind == "set_parameters") {
         parameters(op);
-    else if (kind == "set_relations") {
+        mark_sketch_geometry_stale();
+    } else if (kind == "set_relations") {
         ProModelitem owner;
         CK(ProMdlToModelitem(board, &owner));
         ProRelset rel;
