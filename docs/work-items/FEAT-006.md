@@ -1,6 +1,16 @@
 # FEAT-006：失败阶段、原生诊断与操作结果的可定位契约
 
-日期：2026-10-16 补全。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-16 补全。类型：功能。优先级：P2。状态：开发中（收养拒绝逐特征诊断子项）。目标版本：下一未发布 PATCH。
+
+## 2026-10-23：收养拒绝的有界逐特征诊断（0.5.0 反馈计划第一批 P1-5）实施
+
+[0.5.0 反馈计划](../development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)第一批"补收养拒绝的有界逐特征诊断"已在开发分支 `codex/feat006-adoption-health-details`（自 main d508444 切出）实施，未合入 main：
+
+- 原生侧（`native/generic.cpp`）：`adopt_native` 的 live 摘要新增内联 `health_details`——对每个失败/抑制/不完整特征输出 `id`、`name`、`type_name`、`status_code`（`ProFeatureStatusGet` 原始整码，SDK 头文件 `ProFeature.h` 枚举核对为 -1～6）、可读 `status` 标签与 `incomplete` 标记；只列前 20 条，附 `unhealthy_total` 真实总数、`returned`、`truncated`。apply/prepare 防线拒绝消息同步携带总数与已列条数（前缀 `unhealthy_features:` 不变）。健康准入规则本身未改。
+- Python 侧（`src/creo_mechdog/adoption.py`）：`_refusal_details` 校验并把 `health_details` 暴露为 `refusal_details.unhealthy_features`，`health_breakdown` 改为逐特征口径；数据缺失或畸形（旧执行器）回退原合并口径文本，另设 50 条防御性截断上限。`ADOPTION.md` 契约段已同步。
+- 测试（`tests/unit/test_adoption.py`）：新增 4 例——有界明细透传、无明细回退 unknown、畸形数据回退、超长清单防御性截断。全套 558 例单元测试通过；`bridge.py build` 编译通过产出新执行器；`tools/dev_check.py` success=true（无新增诊断、格式合规）。
+
+未验收范围：按 BUG-001 约束未做实机 Creo 验收与 WorkBuddy 黑盒复验（需真实不健康零件触发 `unhealthy_features` 拒绝并核对返回明细）；C++ 侧有界提取的纯逻辑测试待 dev046 分支的原生测试设施（`tests/native` 范式）合入后补。未合入 main，未发布版本。
 
 ## 当前进度（2026-10-21）
 

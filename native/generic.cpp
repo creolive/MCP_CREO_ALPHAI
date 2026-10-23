@@ -3373,6 +3373,62 @@ static void open_file_native(const J &request, J &report) {
     report["success"] = true;
 }
 
+// Raw ProFeatureStatusGet codes are the queryable truth; the label is only a
+// readability hint and stays "unknown_status_code" outside the SDK enum.
+static const char *feat_status_name(int status) {
+    switch (status) {
+    case PRO_FEAT_INVALID:
+        return "invalid";
+    case PRO_FEAT_ACTIVE:
+        return "active";
+    case PRO_FEAT_INACTIVE:
+        return "inactive";
+    case PRO_FEAT_FAMTAB_SUPPRESSED:
+        return "famtab_suppressed";
+    case PRO_FEAT_SIMP_REP_SUPPRESSED:
+        return "simplified_rep_suppressed";
+    case PRO_FEAT_PROG_SUPPRESSED:
+        return "program_suppressed";
+    case PRO_FEAT_SUPPRESSED:
+        return "suppressed";
+    case PRO_FEAT_UNREGENERATED:
+        return "unregenerated";
+    default:
+        return "unknown_status_code";
+    }
+}
+
+// Bounded per-feature diagnosis for the unhealthy_features refusal (FEAT-006):
+// every failed, suppressed or incomplete feature keeps its id, name, type and
+// raw status code, but only the first item_limit entries travel in control
+// metadata; unhealthy_total and truncated keep the omitted remainder countable.
+// The health admission rule itself does not change.
+static J health_details(const J &features) {
+    constexpr size_t item_limit = 20;
+    J items = J::array();
+    size_t total = 0;
+    for (const auto &f : features) {
+        bool incomplete = f.value("incomplete", false);
+        int status = f.value("status", PRO_FEAT_ACTIVE);
+        if (!incomplete && status == PRO_FEAT_ACTIVE)
+            continue;
+        total++;
+        if (items.size() >= item_limit)
+            continue;
+        items.push_back({{"id", f.value("id", 0)},
+                         {"name", f.value("name", "")},
+                         {"type_name", f.value("type_name", "")},
+                         {"status_code", status},
+                         {"status", feat_status_name(status)},
+                         {"incomplete", incomplete}});
+    }
+    return {{"unhealthy_total", total},
+            {"returned", items.size()},
+            {"item_limit", item_limit},
+            {"truncated", total > items.size()},
+            {"items", items}};
+}
+
 static void adopt_native(const J &request, J &report) {
     const J &choice = request.at("adoption");
     const std::string action = choice.at("action");
@@ -3417,6 +3473,7 @@ static void adopt_native(const J &request, J &report) {
     bool supported = model_type == "part" || model_type == "sheetmetal";
     ProMdlName display = {};
     ProError name_code = ProMdlMdlnameGet(current, display);
+    J diagnosis = health_details(live["features"]);
     report["live"] = {{"origin", utf8(origin_text)},
                       {"model_type", model_type},
                       {"healthy", live.at("healthy")},
@@ -3425,6 +3482,7 @@ static void adopt_native(const J &request, J &report) {
                       {"millimeter_units", millimeters},
                       {"dependency_free", dependency_clean},
                       {"session_fingerprint", session},
+                      {"health_details", diagnosis},
                       {"inspection", live}};
     if (name_code == PRO_TK_NO_ERROR)
         report["live"]["display_name"] = utf8(display);
@@ -3445,8 +3503,11 @@ static void adopt_native(const J &request, J &report) {
         throw std::runtime_error(
             "Never-saved model requires explicit prepare, then confirm its frozen snapshot");
     if (!live.value("healthy", false))
-        throw std::runtime_error("unhealthy_features: source has failed, suppressed or incomplete "
-                                 "features (adoption refused)");
+        throw std::runtime_error(
+            "unhealthy_features: source has failed, suppressed or incomplete features (" +
+            std::to_string(diagnosis["unhealthy_total"].get<size_t>()) + " unhealthy; first " +
+            std::to_string(diagnosis["returned"].get<size_t>()) +
+            " listed in live.health_details) (adoption refused)");
     if (!supported)
         throw std::runtime_error("unsupported_model_type: only independent part or sheetmetal "
                                  "models are supported (adoption refused)");

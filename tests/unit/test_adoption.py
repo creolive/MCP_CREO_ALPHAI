@@ -632,6 +632,117 @@ class AdoptionBusinessRules(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "SomethingGet"):
                 adoption.inspect()
 
+    def test_unhealthy_refusal_lists_bounded_feature_details(self):
+        # FEAT-006: the unhealthy_features refusal carries the native scan's
+        # bounded per-feature diagnosis (id/name/type/status code) plus the
+        # true total and truncation flag; admission itself still refuses.
+        def unhealthy(job_directory, manifest):
+            result = synthetic_native(job_directory, manifest)
+            result["live"] = {
+                **result["live"],
+                "healthy": False,
+                "health_details": {
+                    "unhealthy_total": 132,
+                    "returned": 20,
+                    "item_limit": 20,
+                    "truncated": True,
+                    "items": [
+                        {
+                            "id": 5,
+                            "name": "CUT ID 5",
+                            "type_name": "cut",
+                            "status_code": 5,
+                            "status": "suppressed",
+                            "incomplete": False,
+                        },
+                        {
+                            "id": 9,
+                            "name": "",
+                            "type_name": "protrusion",
+                            "status_code": 6,
+                            "status": "unregenerated",
+                            "incomplete": True,
+                        },
+                    ],
+                },
+            }
+            return result
+
+        with patch.object(adoption, "_native", side_effect=unhealthy):
+            evidence = adoption.inspect()
+        self.assertFalse(evidence["available"])
+        self.assertEqual(evidence["reason_code"], "unhealthy_features")
+        details = evidence["refusal_details"]["unhealthy_features"]
+        self.assertEqual(details["unhealthy_total"], 132)
+        self.assertTrue(details["truncated"])
+        self.assertEqual(details["returned"], 2)
+        first, second = details["items"]
+        self.assertEqual(first["id"], 5)
+        self.assertEqual(first["status_code"], 5)
+        self.assertEqual(first["status"], "suppressed")
+        self.assertFalse(first["incomplete"])
+        self.assertTrue(second["incomplete"])
+        self.assertIn("per-feature", evidence["refusal_details"]["health_breakdown"])
+        self.assertIn("132", evidence["refusal_details"]["health_breakdown"])
+
+    def test_unhealthy_refusal_without_native_details_stays_unknown(self):
+        # An older executor without health_details keeps the combined
+        # unknown-marker wording; nothing is invented about causes.
+        def unhealthy(job_directory, manifest):
+            result = synthetic_native(job_directory, manifest)
+            result["live"] = {**result["live"], "healthy": False}
+            return result
+
+        with patch.object(adoption, "_native", side_effect=unhealthy):
+            evidence = adoption.inspect()
+        self.assertFalse(evidence["available"])
+        self.assertEqual(evidence["reason_code"], "unhealthy_features")
+        self.assertNotIn("unhealthy_features", evidence["refusal_details"])
+        self.assertEqual(
+            evidence["refusal_details"]["health_breakdown"],
+            "combined failed/suppressed/incomplete feature check; per-feature "
+            "reasons are unavailable",
+        )
+
+    def test_malformed_health_details_fall_back_to_unknown(self):
+        def malformed(job_directory, manifest):
+            result = synthetic_native(job_directory, manifest)
+            result["live"] = {
+                **result["live"],
+                "healthy": False,
+                "health_details": {"unhealthy_total": "many", "items": [{"id": 1}]},
+            }
+            return result
+
+        with patch.object(adoption, "_native", side_effect=malformed):
+            evidence = adoption.inspect()
+        self.assertFalse(evidence["available"])
+        self.assertEqual(evidence["reason_code"], "unhealthy_features")
+        self.assertNotIn("unhealthy_features", evidence["refusal_details"])
+        self.assertIn("unavailable", evidence["refusal_details"]["health_breakdown"])
+
+    def test_oversized_health_item_list_is_truncated_defensively(self):
+        # A substituted executor that ignores the documented bound still cannot
+        # push an unbounded item list into control metadata.
+        def oversized(job_directory, manifest):
+            result = synthetic_native(job_directory, manifest)
+            result["live"] = {
+                **result["live"],
+                "healthy": False,
+                "health_details": {
+                    "unhealthy_total": 500,
+                    "items": [{"id": i, "status_code": 5, "incomplete": False} for i in range(500)],
+                },
+            }
+            return result
+
+        with patch.object(adoption, "_native", side_effect=oversized):
+            evidence = adoption.inspect()
+        details = evidence["refusal_details"]["unhealthy_features"]
+        self.assertEqual(details["unhealthy_total"], 500)
+        self.assertEqual(details["returned"], adoption._HEALTH_ITEM_LIMIT)
+        self.assertTrue(details["truncated"])
+
     def test_inspect_hash_conflict_and_token_failures_leave_no_registration(self):
         real_write = adoption.bridge.write_json
 
