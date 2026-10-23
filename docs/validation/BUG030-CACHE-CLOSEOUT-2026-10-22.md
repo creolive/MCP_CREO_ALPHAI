@@ -138,3 +138,7 @@ E:\Projects\MCP_CREO_MechDog\.venv\Scripts\python.exe E:\Projects\MCP_CREO_MechD
 ### 提交与最终指纹
 
 本轮源码、测试与文档已单独提交为 `3331854`（BUG-030/BUG-062: 编辑缓存守卫收口、原生核验探针与实体分支验证）；本节指纹补记为其后续小提交。BUG-078 卡、会话记录与运行生成物排除在外，工作区剩余 dirty 项均非本轮条目。最终执行器 `build/creo_worker.exe` SHA256 `f36de8b0c94f94efdd0ad840c18e972d7e86389e114d82c5d03532bbab172267`（格式化后重建）；`native/sketch_edit.cpp` `0ff9b18e…`、`native/generic.cpp` `7280d326…`（未变）；`build/source.sha256` `f74648c9…`。上表前期构建值（`a99be308…` 等）为当时源码，最终证据以本节指纹为准。
+
+## 2026-10-23 WorkBuddy 黑盒验收结果与后续
+
+WorkBuddy（MCP_CREO_MechDog_dev，服务 0.5.0 / release 44）四项要求：场景 1（圆柱同几何两次提交，两次均 `unchanged=true`+`native_geometry_verified=true`+体积精确）通过；场景 4（空闲 10 分 20 秒后 `connected=true`）通过；场景 2 返回 `unchanged=true` 经核对为**正确行为**（往返后当前原生几何等于提交几何，快捷路径安全跳过；验收判据系提示词错置，已在 BUG-030 卡更正），模型无损坏；场景 3 暴露独立缺陷 [BUG-079](../work-items/BUG-079.md)——就地改弧半径一律失败（回转/拉伸均复现，圆心移动正常），已用 `build/editing-closeout/bug058-snap2/wb-r6-repro.py`、`wb-r6-extrude.py` 独立复现并收窄，登记为 P1 阻塞合入。发布决定待 BUG-079 处理后进行。
