@@ -54,6 +54,11 @@ static void generic_sketch_edit(const J &op) {
     CK(ProSectionIntentManagerModeSet(section, PRO_B_FALSE));
     ProMatrix loc;
     CK(ProSectionLocationGet(section, loc));
+    // Plain vector form of the section x axis for the lambdas below; the
+    // MSVC legacy lambda processor (std:c++17) mis-registers captures whose
+    // first reference sits deep inside a long branch chain (C2065), so the
+    // vector is also referenced early in the entity_matches body.
+    V section_x{loc[0][0], loc[0][1], loc[0][2]};
     auto project = [&](const J &p, double *xy) {
         V w = vec(meta["origin"]);
         for (int j = 0; j < 3; j++)
@@ -63,113 +68,123 @@ static void generic_sketch_edit(const J &op) {
             xy[i] = ((w[0] - loc[3][0]) * loc[i][0] + (w[1] - loc[3][1]) * loc[i][1] +
                      (w[2] - loc[3][2]) * loc[i][2]);
     };
-    auto geometry_matches = [&]() {
+    constexpr double kMatchTolerance = 1e-7;
+    auto close_enough = [&](double a, double b) {
+        return std::isfinite(a) && std::isfinite(b) && fabs(a - b) <= kMatchTolerance;
+    };
+    auto point_matches = [&](const J &p, const double *actual) {
+        double expected[2];
+        project(p, expected);
+        return close_enough(expected[0], actual[0]) && close_enough(expected[1], actual[1]);
+    };
+    // Compares a stored section entity against a requested entity description.
+    // Shared by the unchanged shortcut and the rewrite path (to skip entities
+    // whose geometry already matches).
+    auto entity_matches = [&](int id, const J &e) -> bool {
         constexpr double tolerance = 1e-7;
         auto close = [&](double a, double b) {
             return std::isfinite(a) && std::isfinite(b) && fabs(a - b) <= tolerance;
         };
-        auto point_matches = [&](const J &p, const double *actual) {
-            double expected[2];
-            project(p, expected);
-            return close(expected[0], actual[0]) && close(expected[1], actual[1]);
-        };
-        for (const auto &e : geometry) {
-            Pro2dEntdef *def = nullptr;
-            int id = meta["entity_ids"].at(e.at("name").get<std::string>());
-            CK(ProSectionEntityGet(section, id, &def));
-            const std::string type = e.at("type");
-            ProBoolean construction = PRO_B_FALSE;
-            CK(ProSectionEntityIsConstruction(section, id, &construction));
-            if (type != "centerline" &&
-                (construction == PRO_B_TRUE) != e.value("construction", false))
+        Pro2dEntdef *def = nullptr;
+        CK(ProSectionEntityGet(section, id, &def));
+        // Section-x alignment of the sketch u axis; used by the ellipse
+        // branch. Computed up front because the MSVC legacy lambda processor
+        // (std:c++17) drops captures whose first reference sits deep in this
+        // branch chain (C2065 "undeclared identifier").
+        double u_alignment = fabs(dot(vec(meta["u_axis"]), section_x));
+        const std::string type = e.at("type");
+        ProBoolean construction = PRO_B_FALSE;
+        CK(ProSectionEntityIsConstruction(section, id, &construction));
+        if (type != "centerline" && (construction == PRO_B_TRUE) != e.value("construction", false))
+            return false;
+        if (type == "line" || type == "centerline") {
+            if (def->type != (type == "line" ? PRO_2D_LINE : PRO_2D_CENTER_LINE))
                 return false;
-            if (type == "line" || type == "centerline") {
-                if (def->type != (type == "line" ? PRO_2D_LINE : PRO_2D_CENTER_LINE))
+            auto line = (Pro2dLinedef *)def;
+            if (type == "line") {
+                if (!point_matches(e["start"], line->end1) || !point_matches(e["end"], line->end2))
                     return false;
-                auto line = (Pro2dLinedef *)def;
-                if (type == "line") {
-                    if (!point_matches(e["start"], line->end1) ||
-                        !point_matches(e["end"], line->end2))
+            } else {
+                // Centerline endpoints may slide along the infinite axis.
+                double a[2], b[2];
+                project(e["start"], a);
+                project(e["end"], b);
+                double dx = b[0] - a[0], dy = b[1] - a[1], length = hypot(dx, dy);
+                if (length <= tolerance || hypot(line->end2[0] - line->end1[0],
+                                                 line->end2[1] - line->end1[1]) <= tolerance)
+                    return false;
+                for (const double *p : {line->end1, line->end2})
+                    if (fabs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / length > tolerance)
                         return false;
-                } else {
-                    // Centerline endpoints may slide along the infinite axis.
-                    double a[2], b[2];
-                    project(e["start"], a);
-                    project(e["end"], b);
-                    double dx = b[0] - a[0], dy = b[1] - a[1], length = hypot(dx, dy);
-                    if (length <= tolerance || hypot(line->end2[0] - line->end1[0],
-                                                     line->end2[1] - line->end1[1]) <= tolerance)
-                        return false;
-                    for (const double *p : {line->end1, line->end2})
-                        if (fabs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / length > tolerance)
-                            return false;
-                }
-            } else if (type == "circle") {
-                if (def->type != PRO_2D_CIRCLE)
-                    return false;
-                auto circle = (Pro2dCircledef *)def;
-                if (!point_matches(e["center"], circle->center) ||
-                    !close(e["radius"], circle->radius))
-                    return false;
-            } else if (type == "arc") {
-                if (def->type != PRO_2D_ARC)
-                    return false;
-                auto arc = (Pro2dArcdef *)def;
-                double radius = e["radius"];
-                if (!point_matches(e["center"], arc->center) || !close(radius, arc->radius))
-                    return false;
-                double center[2], angles[2];
-                project(e["center"], center);
-                for (int i = 0; i < 2; ++i) {
-                    double angle =
-                        e[i ? "end_angle" : "start_angle"].get<double>() * acos(-1.0) / 180;
-                    double xy[2];
-                    project(J::array({e["center"][0].get<double>() + radius * cos(angle),
-                                      e["center"][1].get<double>() + radius * sin(angle)}),
-                            xy);
-                    angles[i] = atan2(xy[1] - center[1], xy[0] - center[0]);
-                }
-                if (meta.value("section_normal_sign", 1) < 0)
-                    std::swap(angles[0], angles[1]);
-                if (radius * fabs(remainder(angles[0] - arc->start_angle, 2 * acos(-1.0))) >
-                        tolerance ||
-                    radius * fabs(remainder(angles[1] - arc->end_angle, 2 * acos(-1.0))) >
-                        tolerance)
-                    return false;
-            } else if (type == "ellipse") {
-                if (def->type != PRO_2D_ELLIPSE)
-                    return false;
-                auto ellipse = (Pro2dEllipsedef *)def;
-                double aligned = fabs(dot(vec(meta["u_axis"]), V{loc[0][0], loc[0][1], loc[0][2]}));
-                if (aligned <= 0.99999 && aligned >= 0.00001)
-                    return false;
-                double x = e[aligned > 0.99999 ? "x_radius" : "y_radius"];
-                double y = e[aligned > 0.99999 ? "y_radius" : "x_radius"];
-                if (!point_matches(e["center"], ellipse->origin) || !close(x, ellipse->x_radius) ||
-                    !close(y, ellipse->y_radius))
-                    return false;
-            } else if (type == "spline") {
-                if (def->type != PRO_2D_SPLINE)
-                    return false;
-                auto spline = (Pro2dSplinedef *)def;
-                bool closed = e.value("closed", false);
-                if (spline->tangency_type !=
-                    (closed ? PRO_2D_SPLINE_TAN_PERIODIC : PRO_2D_SPLINE_TAN_NONE))
-                    return false;
-                // Solved periodic sections may repeat the first point as the
-                // closing control point; accept only that exact convention.
-                size_t expected = e["points"].size();
-                if (closed && spline->n_points == expected + 1) {
-                    if (!point_matches(e["points"][0], spline->point_arr[expected]))
-                        return false;
-                } else if (spline->n_points != expected)
-                    return false;
-                for (size_t i = 0; i < expected; ++i)
-                    if (!point_matches(e["points"][i], spline->point_arr[i]))
-                        return false;
-            } else
+            }
+        } else if (type == "circle") {
+            if (def->type != PRO_2D_CIRCLE)
                 return false;
-        }
+            auto circle = (Pro2dCircledef *)def;
+            if (!point_matches(e["center"], circle->center) || !close(e["radius"], circle->radius))
+                return false;
+        } else if (type == "arc") {
+            if (def->type != PRO_2D_ARC)
+                return false;
+            auto arc = (Pro2dArcdef *)def;
+            double radius = e["radius"];
+            if (!point_matches(e["center"], arc->center) || !close(radius, arc->radius))
+                return false;
+            double center[2], angles[2];
+            project(e["center"], center);
+            for (int i = 0; i < 2; ++i) {
+                double angle = e[i ? "end_angle" : "start_angle"].get<double>() * acos(-1.0) / 180;
+                double xy[2];
+                project(J::array({e["center"][0].get<double>() + radius * cos(angle),
+                                  e["center"][1].get<double>() + radius * sin(angle)}),
+                        xy);
+                angles[i] = atan2(xy[1] - center[1], xy[0] - center[0]);
+            }
+            if (meta.value("section_normal_sign", 1) < 0)
+                std::swap(angles[0], angles[1]);
+            if (radius * fabs(remainder(angles[0] - arc->start_angle, 2 * acos(-1.0))) >
+                    tolerance ||
+                radius * fabs(remainder(angles[1] - arc->end_angle, 2 * acos(-1.0))) > tolerance)
+                return false;
+        } else if (type == "ellipse") {
+            if (def->type != PRO_2D_ELLIPSE)
+                return false;
+            auto ellipse = (Pro2dEllipsedef *)def;
+            double aligned = u_alignment;
+            if (aligned <= 0.99999 && aligned >= 0.00001)
+                return false;
+            double x = e[aligned > 0.99999 ? "x_radius" : "y_radius"];
+            double y = e[aligned > 0.99999 ? "y_radius" : "x_radius"];
+            if (!point_matches(e["center"], ellipse->origin) || !close(x, ellipse->x_radius) ||
+                !close(y, ellipse->y_radius))
+                return false;
+        } else if (type == "spline") {
+            if (def->type != PRO_2D_SPLINE)
+                return false;
+            auto spline = (Pro2dSplinedef *)def;
+            bool closed = e.value("closed", false);
+            if (spline->tangency_type !=
+                (closed ? PRO_2D_SPLINE_TAN_PERIODIC : PRO_2D_SPLINE_TAN_NONE))
+                return false;
+            // Solved periodic sections may repeat the first point as the
+            // closing control point; accept only that exact convention.
+            size_t expected = e["points"].size();
+            if (closed && spline->n_points == expected + 1) {
+                if (!point_matches(e["points"][0], spline->point_arr[expected]))
+                    return false;
+            } else if (spline->n_points != expected)
+                return false;
+            for (size_t i = 0; i < expected; ++i)
+                if (!point_matches(e["points"][i], spline->point_arr[i]))
+                    return false;
+        } else
+            return false;
+        return true;
+    };
+    auto geometry_matches = [&]() {
+        for (const auto &e : geometry)
+            if (!entity_matches(meta["entity_ids"].at(e.at("name").get<std::string>()), e))
+                return false;
         return true;
     };
     // Read-only probe for identical resubmissions that missed the shortcut:
@@ -231,6 +246,11 @@ static void generic_sketch_edit(const J &op) {
     for (auto e : geometry) {
         std::string name = e["name"], type = e["type"];
         int old = meta["entity_ids"][name], replacement = -1;
+        // BUG-079: entities whose stored geometry already matches keep their
+        // identity untouched; rebuilding unchanged entities perturbs the
+        // solver's dimension mapping and broke feature regeneration.
+        if (entity_matches(old, e))
+            continue;
         Pro2dEntdef *existing = nullptr;
         CK(ProSectionEntityGet(section, old, &existing));
         Pro2dEntType original = existing->type;
@@ -316,11 +336,20 @@ static void generic_sketch_edit(const J &op) {
                                      "polylines, rectangles, circles, arcs, ellipses and splines");
         CK(ProSectionEntityConstructionSet(
             section, replacement, e.value("construction", false) ? PRO_B_TRUE : PRO_B_FALSE));
-        CK(ProSectionEntityReplace(section, old, replacement));
-        // Replace retains the original entity identity and consumes the temporary ID.
-        Pro2dEntdef *retained = nullptr;
-        CK(ProSectionEntityGet(section, old, &retained));
-        meta["entity_ids"][name] = old;
+        if (type == "centerline") {
+            // Replace retains the original entity identity so the revolve
+            // axis reference survives (BUG-062).
+            CK(ProSectionEntityReplace(section, old, replacement));
+            Pro2dEntdef *retained = nullptr;
+            CK(ProSectionEntityGet(section, old, &retained));
+            meta["entity_ids"][name] = old;
+        } else {
+            // BUG-079: Replace on a geometry-changing entity leaves stale
+            // solver/dimension state on the section and failed feature
+            // regeneration; adopt the freshly added entity instead.
+            CK(ProSectionEntityDelete(section, old));
+            meta["entity_ids"][name] = replacement;
+        }
     }
     J solving_op = op;
     std::string mode = profile_dimensioning(op);
@@ -331,6 +360,37 @@ static void generic_sketch_edit(const J &op) {
         if (op.value("dimensioning", "auto") == "coordinates")
             throw std::runtime_error("Coordinate editing requires a principal sketch plane");
         mode = "autodim";
+    }
+    if (mode == "autodim" && op.value("dimensioning", "auto") == "auto") {
+        // BUG-079: autodim after an in-place rebuild can under-dimension the
+        // redefined section (an arc radius change dropped the position
+        // dimension), leaving an orphaned sketch-feature dimension that fails
+        // feature regeneration. Exact coordinate dimensions fully constrain
+        // the section and remap cleanly, so prefer them for automatic edits
+        // on principal planes when every entity type supports them.
+        bool coordinate_compatible = true;
+        for (auto it = names.begin(); it != names.end(); ++it) {
+            std::string type = it.value();
+            if (type != "line" && type != "centerline" && type != "circle" && type != "arc") {
+                coordinate_compatible = false;
+                break;
+            }
+        }
+        if (coordinate_compatible) {
+            bool has_origin = false;
+            ProIntlist ids = nullptr;
+            int n = 0;
+            CK(ProSectionEntityIdsGet(section, &ids, &n));
+            for (int i = 0; i < n && !has_origin; i++) {
+                Pro2dEntdef *def = nullptr;
+                CK(ProSectionEntityGet(section, ids[i], &def));
+                has_origin = def->type == PRO_2D_COORD_SYS;
+            }
+            if (ids)
+                ProArrayFree((ProArray *)&ids);
+            if (has_origin)
+                mode = "coordinates";
+        }
     }
     solving_op["dimensioning"] = mode;
     J coordinate_plan;

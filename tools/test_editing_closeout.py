@@ -44,6 +44,7 @@ CASES = (
     "parameter_driven_cache",
     "rectangle_native_verification",
     "entity_branch_native_verification",
+    "arc_radius_inplace_edit",
     "reorder_noop_revision_plus_one",
 )
 
@@ -483,6 +484,74 @@ class Closeout:
             )
             assert self.detail(noop, "reorder_features")["reordered"] is False
             self.case("reorder_noop_revision_plus_one", [initial, noop])
+
+        if "arc_radius_inplace_edit" in self.selected_cases:
+            # BUG-079: changing an arc radius during an in-place edit used to
+            # under-dimension the redefined section, and feature regeneration
+            # failed with a rollback. The revolve fixture keeps the arc off
+            # the axis; the BUG-062 sphere fixture (endpoints on the axis)
+            # never exercised this failure.
+            def profile(radius):
+                return [
+                    {"type": "centerline", "name": "axis", "start": [0, 0], "end": [0, 20]},
+                    {
+                        "type": "arc",
+                        "name": "prof_arc",
+                        "center": [8, 5],
+                        "radius": radius,
+                        "start_angle": 0,
+                        "end_angle": 180,
+                    },
+                    {
+                        "type": "line",
+                        "name": "prof_line",
+                        "start": [8 - radius, 5],
+                        "end": [8 + radius, 5],
+                    },
+                ]
+
+            initial = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": [
+                        {
+                            "op": "sketch",
+                            "label": "rev_sk",
+                            "plane": "XY",
+                            "entities": profile(5),
+                        },
+                        {"op": "revolve", "label": "rev1", "sketch": "rev_sk", "angle": 360},
+                    ],
+                },
+            )
+            self.created.add(initial["model_id"])
+            # Half-disk profile revolved 360 deg about the axis: V = 8*pi^2*r^2.
+            self.volume(initial, 200 * math.pi * math.pi)
+            grown = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": initial["model_id"],
+                    "expected_revision": initial["revision"],
+                    "sketch": "rev_sk",
+                    "entities": profile(6),
+                },
+            )
+            self.volume(grown, 288 * math.pi * math.pi)
+            detail = self.detail(grown, "update_sketch_geometry")
+            assert detail.get("unchanged") is not True
+            assert detail.get("preserved_feature_id") is not None
+            restored = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": grown["model_id"],
+                    "expected_revision": grown["revision"],
+                    "sketch": "rev_sk",
+                    "entities": profile(5),
+                },
+            )
+            self.volume(restored, 200 * math.pi * math.pi)
+            self.case("arc_radius_inplace_edit", [initial, grown, restored])
 
         self.report["success"] = True
         self.save()
