@@ -41,3 +41,7 @@
 ## 2026-10-23 BUG-080 开发验证修正（待独立审查）
 
 装配 walk 三处一致性修正：组件特征状态查询（`ProFeatureStatusGet`）失败置 incomplete，不再误称 complete；子模型身份查询码（name/origin/modified/id）合并保留进节点 `query_codes`，不再被覆盖丢失；局部原始矩阵查询成功但含 NaN/Infinity 时 `transform_known=false` 且原始矩阵为 null（原因 `non_finite`），经共用 helper `local_transform_known` 与根链同一有限语义。证据阶段：离线原生 24-case 与 Python 8 tests 已实跑通过，离线生产构建 exit 0；新增 case 25–27 尚待控制者运行，全量 dev_check 待短路径 checkout；实机/WorkBuddy 未验收，修正涉及的生产失败分支未实机触发。
+
+## 2026-10-23 BUG-080 审查 Important 修复（walk 状态共享化，待控制者运行）
+
+walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（`AssemblyWalkState`：`record_missing_component` 自盖缺件标志、`apply_query_outcome` 真实查询码驱动置 incomplete、`visit_subtree` 深度 32 先判限再执行访问且失败码写实际节点 `node_index`、`init_root_chain` 真实 root_scale 初始化根链并置 incomplete、`complete` 统一规则，budget=4096/深度 32 契约不变）；`generic.cpp` 生产回调改经同一实现。新增离线夹具 `tests/native/test_assembly_walk.cpp`（12 case，SDK 查询替换、注入 visitor 计数非真实 ProSolidFeatVisit）由 `tools\test_assembly_units.py` 同批构建运行（已修正 native 包含路径引号），覆盖缺件标志由生产操作产出/真实零非零查询码逐个驱动/深度 31–33 真实调用次数与父节点索引诊断/budget 边界/根失败保同级/根单位经真实换算由共享初始化影响链与 complete。尚待控制者运行该夹具并复编生产构建；实机触发与 WorkBuddy 仍按卡保留未验收。

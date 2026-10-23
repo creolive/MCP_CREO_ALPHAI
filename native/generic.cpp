@@ -4,6 +4,7 @@
 #include "recovery_deadline.h"
 #include "inspection_units.h"
 #include "assembly_units.h"
+#include "assembly_walk.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2434,13 +2435,9 @@ static void session_models_native(J &report) {
 // or adopts anything, and reports every node in tree order with occurrence
 // paths, resolved 4x4 transforms and constraint snapshots. Per-node failures
 // are marked with their raw query codes instead of failing the whole report.
-struct AssemblyWalk {
-    J components = J::array();
-    bool truncated = false;
-    bool incomplete = false;
-    bool depth_limited = false;
-    int budget = 0;
-};
+// The walk's mutable report state (recorded nodes plus the truncated/
+// incomplete/depth_limited judgements) is the shared AssemblyWalkState from
+// assembly_walk.h, executed by the offline harness too.
 
 // BUG-080: the walk carries both the raw member-to-root chain (member length
 // unit -> root length unit) and the millimeter-normalized chain. Either chain
@@ -2454,7 +2451,7 @@ struct WalkContext {
     // validity; WalkChain defaults to the real identity instead of the old
     // zero-initialized raw root.
     WalkChain chain;
-    AssemblyWalk *walk = nullptr;
+    AssemblyWalkState *walk = nullptr;
     ProMdl current = nullptr;
     int current_code = -1;
     int depth = 0;
@@ -2489,8 +2486,6 @@ static J length_unit_json(const InspectionLengthUnits &units, const MillimeterSc
               {"conversion",
                sdk_query_code_json(scale.conversion_queried, scale.conversion_query_code)}}}};
 }
-
-static const int kAssemblyWalkMaxDepth = 32;
 
 static J assembly_selection_json(ProSelection selection) {
     J reference = J::object();
@@ -2599,19 +2594,18 @@ static J component_constraints_json(ProAsmcomp *component, J &codes) {
 
 static ProError assembly_feature_callback(ProFeature *feature, ProError status, ProAppData data) {
     auto *context = (WalkContext *)data;
-    AssemblyWalk &walk = *context->walk;
+    AssemblyWalkState &walk = *context->walk;
     if (status)
         return status;
     if (walk.truncated)
         return PRO_TK_NO_ERROR;
     ProFeattype type;
     ProError type_code = ProFeatureTypeGet(feature, &type);
-    if (type_code) {
+    if (!walk.apply_query_outcome(type_code)) {
         // An unclassifiable feature may be a component whose whole subtree
         // would silently drop out of the walk; keep visiting siblings but
         // drop the tree completeness claim.
         log("WALK_TYPE_QUERY_FAILED=%d\n", (int)type_code);
-        walk.incomplete = true;
         return PRO_TK_NO_ERROR;
     }
     if (type != PRO_FEAT_COMPONENT)
@@ -2635,11 +2629,10 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     int status_code = ProFeatureStatusGet(feature, &feature_status);
     codes["feature_status"] = status_code;
     item["feature_status"] = status_code ? J(nullptr) : J((int)feature_status);
-    if (status_code)
-        // The component's own feature state (active or suppressed) is
-        // unconfirmable; the node stays observable but the tree cannot claim
-        // completeness (BUG-080).
-        walk.incomplete = true;
+    // The component's own feature state (active or suppressed) must stay
+    // confirmable; a failed query drops completeness through the shared
+    // query outcome judgement instead of a duplicated condition (BUG-080).
+    walk.apply_query_outcome((ProError)status_code);
     item["suppressed"] = status_code ? J(nullptr)
                                      : J(feature_status == PRO_FEAT_SUPPRESSED ||
                                          feature_status == PRO_FEAT_FAMTAB_SUPPRESSED ||
@@ -2654,19 +2647,12 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     codes["model"] = model_code;
     if (model_code || !child) {
         // The component feature exists but its model did not resolve (for
-        // example a missing file); keep the node observable instead of failing.
-        item.update({{"name", nullptr},
-                     {"model_type", nullptr},
-                     {"resolved", false},
-                     {"subtree_not_visited", true},
-                     {"constraints", J::array()}});
+        // example a missing file); keep the node observable instead of
+        // failing. The shared missing-node operation stamps the resolved /
+        // subtree flags itself and drops completeness.
+        item.update({{"name", nullptr}, {"model_type", nullptr}, {"constraints", J::array()}});
         item["query_codes"] = codes;
-        walk.components.push_back(item);
-        // A missing component model hides its whole subtree; the report is
-        // incomplete instead of silently looking complete.
-        walk.incomplete = true;
-        if ((int)walk.components.size() >= walk.budget)
-            walk.truncated = true;
+        walk.record_missing_component(item);
         return PRO_TK_NO_ERROR;
     }
     item["resolved"] = true;
@@ -2674,10 +2660,10 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     ProMdlType kind = PRO_MDL_PART;
     ProError kind_code = ProMdlTypeGet(child, &kind);
     codes["model_type"] = kind_code;
-    if (kind_code)
-        // An unclassifiable child model may hide a whole sub-assembly; the
-        // node stays observable but the tree completeness claim is dropped.
-        walk.incomplete = true;
+    // An unclassifiable child model may hide a whole sub-assembly; the node
+    // stays observable but the tree completeness claim is dropped through
+    // the shared query outcome judgement.
+    walk.apply_query_outcome(kind_code);
     const char *kind_name = kind_code ? "" : kind == PRO_MDL_ASSEMBLY ? "assembly" : "part";
     observed["model_type"] = kind_code ? J(nullptr) : J(kind_name);
     ProMdlsubtype subtype = PROMDLSTYPE_PART_SOLID;
@@ -2737,41 +2723,32 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     // An unknown local or root chain, or an overflowing combination, makes
     // the report incomplete; the node's own known local maps stay observable.
     if (!parent_map_known || !step.root_mm_known || !step.root_raw_known)
-        walk.incomplete = true;
+        walk.mark_incomplete();
     item["constraints"] = component_constraints_json(component, codes);
     item["query_codes"] = codes;
-    walk.components.push_back(item);
-    const size_t node_index = walk.components.size() - 1;
-    if ((int)walk.components.size() >= walk.budget) {
-        walk.truncated = true;
+    const size_t node_index = walk.record_node(item);
+    if (walk.truncated)
         return PRO_TK_NO_ERROR;
-    }
     if (!kind_code && kind == PRO_MDL_ASSEMBLY) {
-        if (context->depth >= kAssemblyWalkMaxDepth) {
-            walk.depth_limited = true;
-        } else {
-            WalkContext sub;
-            sub.owner = (ProSolid)child;
-            sub.path = occurrence;
-            // Propagate both chains through the shared step: a failed local
-            // transform, unknown unit or overflow poisons the descendant
-            // root maps instead of reusing the grandparent matrix.
-            sub.chain = walk_chain_descend(context->chain, step);
-            sub.walk = context->walk;
-            sub.current = context->current;
-            sub.current_code = context->current_code;
-            sub.depth = context->depth + 1;
-            // A failed sub-assembly walk marks this node instead of failing
-            // the whole report; sibling components stay observable. The code
-            // is written into the stored node (node_index): `item` itself was
-            // already pushed and later descendants may shift components.back().
-            int sub_code =
-                ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr, (ProAppData)&sub);
-            if (sub_code) {
-                walk.components[node_index]["subassembly_visit_code"] = sub_code;
-                walk.incomplete = true;
-            }
-        }
+        WalkContext sub;
+        sub.owner = (ProSolid)child;
+        sub.path = occurrence;
+        // Propagate both chains through the shared step: a failed local
+        // transform, unknown unit or overflow poisons the descendant
+        // root maps instead of reusing the grandparent matrix.
+        sub.chain = walk_chain_descend(context->chain, step);
+        sub.walk = context->walk;
+        sub.current = context->current;
+        sub.current_code = context->current_code;
+        sub.depth = context->depth + 1;
+        // The shared visit operation enforces the depth limit before the
+        // visit and diagnoses a failed sub-assembly walk on the stored node
+        // (node_index) instead of failing the whole report — sibling
+        // components stay observable.
+        walk.visit_subtree(context->depth, node_index, [&sub]() -> ProError {
+            return ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr,
+                                     (ProAppData)&sub);
+        });
     }
     return PRO_TK_NO_ERROR;
 }
@@ -2797,34 +2774,29 @@ static void session_assembly_native(const J &request, J &report) {
                                  "with that name is not an assembly");
     ProMdl current = nullptr;
     int current_code = ProMdlCurrentGet(&current);
-    AssemblyWalk walk;
+    AssemblyWalkState walk;
     walk.budget = 4096;
     // Query the root length unit before the walk: it decides whether the
-    // normalized root chain is interpretable at all, so it initializes the
-    // root chain validity up front; an unknown root unit makes even an empty
-    // tree globally incomplete.
+    // normalized root chain is interpretable at all. The shared root
+    // initialization ties the root chain validity to the real root unit and
+    // marks an unknown root unit incomplete up front, so even an empty tree
+    // is globally incomplete then.
     InspectionLengthUnits root_units = inspect_length_units(mdl);
     MillimeterScale root_scale = length_scale_to_mm(mdl, root_units);
     WalkContext context;
     context.owner = (ProSolid)mdl;
-    // WalkChain starts as the real identity on both chains; the normalized
-    // chain is only known while the root unit is.
-    context.chain.normalized_known = root_scale.known;
     context.walk = &walk;
     context.current = current;
     context.current_code = current_code;
+    walk.init_root_chain(context.chain, root_scale);
     // A failed root visit makes the report incomplete (root_visit_code)
     // instead of throwing away the whole inspection.
     int root_visit_code =
         ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context);
     if (root_visit_code)
-        walk.incomplete = true;
+        walk.record_root_visit_failure();
     J root = observe_session_model(mdl, "assembly", current, current_code);
     root["length_unit"] = length_unit_json(root_units, root_scale);
-    // Without the root length unit every normalized root map is
-    // uninterpretable; even an empty tree is globally incomplete then.
-    if (!root_scale.known)
-        walk.incomplete = true;
     report.update(
         {{"success", true},
          {"assembly", root},
@@ -2834,8 +2806,7 @@ static void session_assembly_native(const J &request, J &report) {
          {"depth_limited", walk.depth_limited},
          {"root_visit_code", root_visit_code},
          {"incomplete", walk.incomplete},
-         {"complete", walk_report_complete(walk.truncated, walk.incomplete, walk.depth_limited,
-                                           root_scale.known)},
+         {"complete", walk.complete(root_scale.known)},
          {"transform_convention",
           "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); translation occupies "
           "the last row; transform_to_parent and transform_to_root are normalized full "
