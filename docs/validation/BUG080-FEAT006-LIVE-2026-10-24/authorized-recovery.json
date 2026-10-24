@@ -1,0 +1,19 @@
+{
+  "authorization": "user granted in chat 2026-10-24 (~10:0x) for the 2026-10-22 recovery flow: exit Creo, clean leftovers, restart via creo_startup, rerun evidence",
+  "reason": "persistent connect -4 (PRO_TK_E_NOT_FOUND) from 09:37 despite healthy nmsq registration; 13min idle retry failed",
+  "pre_recovery_processes": [
+    {"name": "xtop", "pid": 22456, "started": "2026-10-24 08:22:48", "path": "Creo 12.4 x86e_win64/obj/xtop.exe"},
+    {"name": "parametric", "pid": 21692, "started": "2026-10-24 08:22:47"},
+    {"name": "pro_comm_msg", "pid": 12700, "started": "2026-10-24 08:22:51"},
+    {"name": "nmsd", "pid": 22408, "started": "2026-10-24 08:22:48", "path": "Creo 12.4 x86e_win64/nms/nmsd.exe"},
+    {"name": "creoagent", "pid": 22216, "started": "2026-10-24 08:22:57"}
+  ],
+  "exit_sequence": [
+    "CloseMainWindow on xtop: no effect (no main window handle)",
+    "WM_CLOSE to visible window 'WB080_UNHEALTHY_093521 (启用的) - Creo Parametric 12': window closed (UI exit confirmed), process lingered >65s without any titled window; two transient pro_comm_msg appeared then exited",
+    "terminated xtop/parametric/pro_comm_msg (UI already exited; all session fixture models were saved; no user models)",
+    "nmsd outlived Creo (BUG-056 leftover pattern): identity verified then terminated"
+  ],
+  "post_recovery_processes": [],
+  "session_content_at_exit": "managed fixture parts from today's runs only (wb080_unhealthy_*, all saved); seed copy never loaded"
+}

@@ -200,6 +200,52 @@ async def session_names(probe: Probe) -> list[str]:
     )
 
 
+async def readonly_job(probe: Probe, tool: str, inputs: dict, case: str) -> dict:
+    """Poll a read-only job to its terminal state (no saved/reload assertion)."""
+    entry = {"case": case, "tool": tool, "input": inputs, "terminal": None}
+    probe.report["jobs"].append(entry)
+    started = time.monotonic()
+    queued = await probe.call(tool, inputs)
+    entry["job_id"] = queued["job_id"]
+    probe.save()
+    while time.monotonic() - started < probe.job_budget:
+        state = await probe.call("creo_get_job", {"job_id": queued["job_id"], "detail": "compact"})
+        if state["status"] not in ("queued", "running"):
+            state = await probe.call("creo_get_job", {"job_id": queued["job_id"], "detail": "full"})
+            entry["terminal"] = state
+            probe.save()
+            assert state["status"] == "succeeded", state
+            return state
+        await asyncio.sleep(0.5)
+    raise TimeoutError(f"observation budget exceeded for {queued['job_id']}")
+
+
+async def erase_with_retry(
+    probe: Probe, targets: list[dict], stamp: str, case: str, attempts: int = 6
+) -> dict:
+    """Submit an erase apply, retrying transient channel-busy rejections."""
+    for attempt in range(attempts):
+        erase = await probe.call(
+            "creo_erase_session_models", {"mode": "inspect", "targets": targets}
+        )
+        try:
+            return await readonly_job(
+                probe,
+                "creo_erase_session_models",
+                {
+                    "mode": "apply",
+                    "evidence_token": erase["evidence_token"],
+                    "idempotency_key": f"wb080-{case}-{stamp}",
+                },
+                case,
+            )
+        except AssertionError as failure:
+            if "busy" not in str(failure) or attempt == attempts - 1:
+                raise
+            await asyncio.sleep(3.0)
+    raise AssertionError("unreachable")
+
+
 async def main_async(args: argparse.Namespace) -> None:
     stamp = datetime.now().strftime("%H%M%S")
     component = f"{COMPONENT_PREFIX}_{stamp}"
@@ -244,6 +290,22 @@ async def main_async(args: argparse.Namespace) -> None:
         assert capabilities["server_version"] == VERSION, capabilities["server_version"]
         await await_toolkit_ready(probe)
 
+        seed_source = ROOT / "seed_library" / "seeds" / "four_smooth" / "db_8bdd03c9da.prt.2"
+        seed_file = directory / seed_source.name
+        seed_name = seed_source.name.split(".")[0]
+
+        # A crashed previous run may leave the seed copy in the session; the
+        # service refuses same-name retrieval, so clear it first (best effort).
+        pre = await session_names(probe)
+        if seed_name.upper() in pre:
+            try:
+                await erase_with_retry(
+                    probe, [{"name": seed_name, "model_type": "part"}], stamp, "preclean"
+                )
+                report["phases"]["pre_clean"] = "erased leftover seed copy"
+            except Exception as failure:
+                raise AssertionError(f"leftover seed copy blocks this run: {failure}") from failure
+
         before = await session_names(probe)
 
         part = await probe.job(
@@ -262,11 +324,9 @@ async def main_async(args: argparse.Namespace) -> None:
         # unhealthy_features reason itself (service-created models are managed
         # and refuse with managed_output first, which still carries the same
         # per-feature diagnosis in refusal_details).
-        seed_source = ROOT / "seed_library" / "seeds" / "four_smooth" / "db_8bdd03c9da.prt.2"
-        seed_file = directory / seed_source.name
         shutil.copyfile(seed_source, seed_file)
-        seed_name = seed_source.name.split(".")[0]
-        opened = await probe.job(
+        opened = await readonly_job(
+            probe,
             "creo_open_file",
             {
                 "file_path": str(seed_file),
@@ -286,7 +346,10 @@ async def main_async(args: argparse.Namespace) -> None:
         assert suppression["returncode"] == 0, suppression
         assert suppression["suppress"] == 0 and suppression["save"] == 0, suppression
 
-        refusal = await probe.call("creo_adopt_current_model", {"mode": "inspect"}, expect_error=True)
+        # Adoption refusals are structured normal responses (available=false),
+        # not MCP tool errors.
+        refusal = await probe.call("creo_adopt_current_model", {"mode": "inspect"})
+        assert refusal["available"] is False, refusal
         details = refusal.get("refusal_details", refusal)
         unhealthy = details.get("unhealthy_features")
         assert refusal.get("reason_code") == "unhealthy_features", refusal
@@ -315,7 +378,7 @@ async def main_async(args: argparse.Namespace) -> None:
 
         inspected = await probe.call("creo_inspect_session_assembly", {"name": assembly_name})
         root_unit = inspected["assembly"]["length_unit"]
-        assert root_unit["name"] and "inch" in root_unit["name"].lower(), root_unit
+        assert root_unit["name"] in ("in", "inch"), root_unit
         assert close(root_unit["scale_to_mm"], INCH), root_unit
         component_node = next(
             item for item in inspected["components"] if component.lower() in str(item.get("name", "")).lower()
@@ -343,34 +406,23 @@ async def main_async(args: argparse.Namespace) -> None:
         probe.save()
 
         after_inspect = await session_names(probe)
-        expected = before + sorted(
+        expected = set(before) | {
             name.upper()
             for name in (assembly_name, component, seed_name)
-            if name.upper() not in before
-        )
-        assert after_inspect == expected, {"before": before, "after": after_inspect}
+        }
+        assert set(after_inspect) == expected, {"before": before, "after": after_inspect}
         report["phases"]["read_only"] = {"before": before, "after": after_inspect}
 
-        # Best-effort cleanup of the unmanaged fixtures; the managed part stays
-        # with its registry entry as evidence.
-        erase_targets = [
-            {"name": seed_name, "model_type": "part"},
-            {"name": assembly_name, "model_type": "assembly"},
+        # Best-effort cleanup: erase every leftover test assembly (unmanaged)
+        # and the seed copy; managed fixture parts stay as registry evidence.
+        leftover_assemblies = [
+            name for name in after_inspect if name.startswith(ASSEMBLY_PREFIX.upper())
+        ]
+        erase_targets = [{"name": seed_name, "model_type": "part"}] + [
+            {"name": name, "model_type": "assembly"} for name in leftover_assemblies
         ]
         try:
-            erase = await probe.call(
-                "creo_erase_session_models", {"mode": "inspect", "targets": erase_targets}
-            )
-            await probe.job(
-                "creo_erase_session_models",
-                {
-                    "mode": "apply",
-                    "evidence_token": erase["evidence_token"],
-                    "idempotency_key": f"wb080-erase-{stamp}",
-                },
-                "erase_fixtures",
-                allow_failure=True,
-            )
+            await erase_with_retry(probe, erase_targets, stamp, "erase")
             report["phases"]["cleanup"] = "erase submitted"
         except Exception as failure:  # cleanup is best effort; the refusal is recorded
             report["phases"]["cleanup"] = f"erase refused (recorded): {failure}"

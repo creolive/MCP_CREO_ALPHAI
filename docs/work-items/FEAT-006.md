@@ -1,6 +1,6 @@
 # FEAT-006：失败阶段、原生诊断与操作结果的可定位契约
 
-日期：2026-10-16 补全。类型：功能。优先级：P2。状态：实现完成（收养拒绝逐特征诊断子项；实机触发与 WorkBuddy 黑盒随 0.5.2 验收会话顺带取证，C++ 纯逻辑夹具待 `tests/native` 范式合入后补）。目标版本：下一未发布 PATCH（0.5.2）。
+日期：2026-10-16 补全。类型：功能。优先级：P2。状态：实现完成，实机取证通过（收养拒绝逐特征诊断子项，[2026-10-24 实机记录](../validation/BUG080-FEAT006-LIVE-2026-10-24.md)；WorkBuddy 黑盒待执行；C++ 纯逻辑夹具待 `tests/native` 范式顺手补）。目标版本：0.5.2。
 
 ## 2026-10-23：收养拒绝的有界逐特征诊断（0.5.0 反馈计划第一批 P1-5）实施
 
@@ -71,3 +71,7 @@
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P3-1：会话无模型时 `creo_adopt_current_model(mode=inspect)` 返回裸 `ProMdlCurrentGet(&current) failed with code -8 during adoption_inspect`，agent 无法区分"窗口无模型"与连接故障。本轮在 native 接管入口对该调用返回"无当前模型"原码时改抛 `NO_CURRENT_MODEL` 前缀错误，保留失败调用名与 Toolkit 原码，并提示先经 `creo_list_session_models` 查看会话清单。仅改错误可读性，不改接管准入、证据与保护路径；其余裸 Toolkit 错误码的可读化仍按本卡整体范围分批推进。
 
 实现当日完成（-8 经 SDK 头文件核对为 PRO_TK_BAD_CONTEXT）；实机以装配窗口的 `unsupported_model_type` 前缀路径旁证稳定原因码改造，无窗口 `NO_CURRENT_MODEL` 分支留 WorkBuddy 黑盒复验，见[验证记录](../validation/FEAT-044-live-2026-10-20.md)第四节。
+
+### 2026-10-24 实机触发取证（通过）
+
+task/2 整合树实机（Creo 12.4）：未受管种子副本（毫米、无依赖）经夹具真实抑制 BLEND 特征（id 82）后，`creo_adopt_current_model(mode=inspect)` 返回 `reason_code="unhealthy_features"`（结构化正常响应 `available=false`），`refusal_details.unhealthy_features` 为 `unhealthy_total=1/returned=1/truncated=false/items=[{id:82,name:"BLEND",type_name:"protrusion",status_code:5,status:"suppressed",incomplete:false}]`（`ProFeatureStatusGet` 原始整码 5=PRO_FEAT_SUPPRESSED），`health_breakdown` 逐特征口径。受管路径旁证：`managed_output` 拒绝同样携带完整明细（PAD2 id 87 抑制案例）。截断与旧执行器回退路径未实机触发（单测覆盖）。详见[实机取证记录](../validation/BUG080-FEAT006-LIVE-2026-10-24.md)。
