@@ -134,9 +134,10 @@ def families() -> dict:
             "tool": "creo_inspect_session_assembly",
             "scope": (
                 "Read-only inspection of a resident session assembly by name: "
-                "tree-order components with occurrence paths, transforms "
-                "(row-vector 4x4, translation last row, mm) and constraint "
-                "snapshots; frozen pagination"
+                "tree-order components with occurrence paths, normalized "
+                "millimeter coordinate transforms (row-vector 4x4, translation "
+                "last row) with raw matrices and real per-node unit info "
+                "(null when unknown), and constraint snapshots; frozen pagination"
             ),
             "limit": {"default": 20, "maximum": 50, "page_bytes": 32768},
             "supported": "resident assemblies selected by name; nested assemblies, repeated instances, suppressed and unresolved components",

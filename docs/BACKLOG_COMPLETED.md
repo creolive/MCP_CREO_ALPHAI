@@ -1,6 +1,6 @@
 # 开发台账完成事项归档
 
-归档建立：2026-10-15；最近追加：2026-10-18。当前排期与状态统一查看[主台账](BACKLOG.md)；本文件保留完成摘要、证据与历史来源，不承担当前排期。后续完成事项追加到本文件，主台账移除对应行。
+归档建立：2026-10-15；最近追加：2026-10-23。当前排期与状态统一查看[主台账](BACKLOG.md)；本文件保留完成摘要、证据与历史来源，不承担当前排期。后续完成事项追加到本文件，主台账移除对应行。
 
 ## 已完成事项
 
@@ -8,6 +8,7 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 完成摘要与证据 |
 | --- | --- | --- | --- | --- |
+| [DEV-045](work-items/DEV-045.md) | P2 | 已完成（外部确认关闭） | 未排期 | 2026-10-23：RELEASING 第 7 项"Release body 必含两包文件名与完整 SHA256 并核对远端"已两次实际执行通过（[0.4.7](validation/RELEASE-0.4.7.md) 首次、[0.5.1](validation/RELEASE-0.5.1.md)）；[0.5.0 外部报告三 §4](validation/feedback-0.5.0-2026-10-22/manifest.json)确认两包命名自 0.4.7 起按 `MCP_CREO_MechDog-{version}-source.zip`/`-seed-library.zip` 定名执行、Release body 附两包完整 SHA256 与 `.sha256` 附件且远端下载复核一致（源码包 `dd8b49bb…`/种子包 `fb84a37d…`）。按报告关闭移入本档案，工作卡历史保留。 |
 | [DEV-041](work-items/DEV-041.md) | P1 | 已完成（Release 发布与附件核对通过） | 0.3.6 | 2026-10-18：PR #11 合并 `ca105b9`、指纹链提交 `1f38069`（种子清单版本与 seeds.py 指纹同步），`v0.3.6` 标签指向该提交；[Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.3.6)（Pre-release）附源码包（588 文件，SHA256 `6cf1d925…`）与种子包（9 种子，`829474ed…`），远端下载核对一致，核对回填 [PR #11](https://github.com/wudahua/MCP_CREO_MechDog/pull/11#issuecomment-6245231613)。范围：DEV-040 的 BUG-059 修复、BUG-057 随版诊断脚本、六份 0.3.5 反馈补录与台账重构；无 C++ 改动故无原生回归。验收：dev_check 356/356、隔离黑盒三场景、复核 12/12；未测范围见[版本记录](validation/RELEASE-0.3.6.md)。 |
 | [DEV-040](work-items/DEV-040.md) | P1 | 已完成（本机诊断与 Python/MCP 修复阶段） | 未排期 | 2026-10-18：BUG-057 本机未复现，交付纯文件竞争/错误分类诊断，原环境根因保留；BUG-059 修复原生前自身占位悬挂并澄清原生后 unknown 阶段；BUG-058 仅静态核对。完整开发检查 356/356，WorkBuddy 隔离 A/B/C 补齐拒绝、保护、幂等与 compact/full，标准 stdio 复核 12/12。按用户收尾要求归档已交付阶段，G2 原环境机制与 G3 锁修复未完成仍归 BUG-057；真实 Creo 恢复、几何与并发未测（该阶段收尾时未合入/发布，修复已随 0.3.6/DEV-041 交付）。见[复核](validation/DEV-040-closeout-review-2026-10-18.md)与[隔离报告](validation/DEV-040-isolated-contract-2026-10-18.md)。 |
 | [BUG-059](work-items/BUG-059.md) | P1 | 已修复（Python/MCP 隔离契约验收） | 未排期 | 原生派发前拒绝为 failed/reconciliation_refused，附 reason/failure_phase，锁内仅释放自身 recovery_pending；原生连接后指纹拒绝保留 unknown 与保护。WorkBuddy A 验证实际 Python 拒绝、占位释放与状态不变，B/C 明确合成边界，幂等与 compact/full 一致；标准 stdio 12/12。真实会话切换/中断与原生恢复未测，FEAT-018 继续验收；未合入/发布。见[收尾记录](validation/DEV-040-closeout-review-2026-10-18.md)。 |

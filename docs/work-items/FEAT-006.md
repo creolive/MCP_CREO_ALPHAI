@@ -1,6 +1,32 @@
 # FEAT-006：失败阶段、原生诊断与操作结果的可定位契约
 
-日期：2026-10-16 补全。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-16 补全。类型：功能。优先级：P2。状态：验收完成（收养拒绝逐特征诊断子项：实机取证与 WorkBuddy 黑盒均通过，[2026-10-24 记录](../validation/BUG080-FEAT006-LIVE-2026-10-24.md)；NO_CURRENT_MODEL 分支同日黑盒复验闭环；C++ 纯逻辑夹具待 `tests/native` 范式顺手补）。目标版本：0.5.2。
+
+## 2026-10-23：收养拒绝的有界逐特征诊断（0.5.0 反馈计划第一批 P1-5）实施
+
+[0.5.0 反馈计划](../development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)第一批"补收养拒绝的有界逐特征诊断"已在开发分支 `codex/feat006-adoption-health-details`（自 main d508444 切出）实施，未合入 main：
+
+- 原生侧（`native/generic.cpp`）：`adopt_native` 的 live 摘要新增内联 `health_details`——对每个失败/抑制/不完整特征输出 `id`、`name`、`type_name`、`status_code`（`ProFeatureStatusGet` 原始整码，SDK 头文件 `ProFeature.h` 枚举核对为 -1～6）、可读 `status` 标签与 `incomplete` 标记；只列前 20 条，附 `unhealthy_total` 真实总数、`returned`、`truncated`。apply/prepare 防线拒绝消息同步携带总数与已列条数（前缀 `unhealthy_features:` 不变）。健康准入规则本身未改。
+- Python 侧（`src/creo_mechdog/adoption.py`）：`_refusal_details` 校验并把 `health_details` 暴露为 `refusal_details.unhealthy_features`，`health_breakdown` 改为逐特征口径；数据缺失或畸形（旧执行器）回退原合并口径文本，另设 50 条防御性截断上限。`ADOPTION.md` 契约段已同步。
+- 测试（`tests/unit/test_adoption.py`）：新增 4 例——有界明细透传、无明细回退 unknown、畸形数据回退、超长清单防御性截断。全套 558 例单元测试通过；`bridge.py build` 编译通过产出新执行器；`tools/dev_check.py` success=true（无新增诊断、格式合规）。
+
+未验收范围：按 BUG-001 约束未做实机 Creo 验收与 WorkBuddy 黑盒复验（需真实不健康零件触发 `unhealthy_features` 拒绝并核对返回明细）；C++ 侧有界提取的纯逻辑测试待 dev046 分支的原生测试设施（`tests/native` 范式）合入后补。未合入 main，未发布版本。
+
+### 2026-10-24 回收核对（task/2 工作树，HEAD 62bc4dc）
+
+独立复核确认 2026-10-23 实施真实落地，非仅"已启动"：`native/generic.cpp` 的 `health_details()` 以采集侧真实 `status`/`incomplete` 键（generic.cpp 采集段）为源，20 条上限、`unhealthy_total`/`returned`/`truncated` 与逐特征 `id`/`name`/`type_name`/`status_code`/可读 `status`/`incomplete` 齐备，健康判定与明细读取同键同源；拒绝消息携带总数与已列条数；`src/creo_mechdog/adoption.py` `unhealthy_features` 校验透传、畸形/缺失回退与 50 条防御截断在案；`ADOPTION.md` 契约段同步；4 个新测试方法在本提交内。
+
+- 单元复跑：主仓工作树（同一提交 62bc4dc；dirty 仅 `session_activity.json` 运行改写与未跟踪 WorkBuddy 运行产物）全量 558 例 `python -m unittest discover -s tests` OK（182.5s）。task/2 worktree 内复跑 dev_check 单元段失败，系 `server.py:55` 源码身份守卫拒绝跨检出导入（editable 属主仓，按 AGENTS 需各检出自装 `pip install --no-deps -e .`），非本提交回归；该次风格门通过（31 lint/19 未格式化，与既有基线一致，无新增）。
+- 编译核对：主仓 `build/creo_worker.exe` 时间戳 2026-10-23 22:53（本提交前 9 分钟），为含 `health_details` 的重建产物。
+- 合并面核对：与 `codex/dev046-feedback050`（b09ffc3，DEV-046 文档收口+BUG-080）`git merge-tree` 无文本冲突；合并后 dev046 的 `tests/native` 范式可用于补 C++ 有界提取夹具，其 BACKLOG 头部"FEAT-006 待下一 PATCH 实施"注记需按本分支现状校正；`version.py` 当前 0.5.1，下一 PATCH（0.5.2）未占用。
+- 验收缺口不变：实机真实不健康零件触发 `unhealthy_features` 拒绝并核对明细、WorkBuddy 黑盒仍受 BUG-001 会话核对条件约束，未执行。
+
+### 2026-10-24 会话核对（0.5.2 实机验收前置，通过）
+
+- Creo 会话：`xtop.exe` PID 22456 于 2026-10-24 08:22:48 启动，Responding=True；无 `creo_worker` 进程在运行，Toolkit 通道空闲。
+- 连接 -4：0.5.0 计划（10-22）"最新连接 -4 尚未解除"已过时——[BUG030 收口记录](../validation/BUG030-CACHE-CLOSEOUT-2026-10-22.md) 2026-10-22/23 节完成排查（本机 SDK 枚举为 `PRO_TK_E_NOT_FOUND`）、用户授权恢复，[BATCH2 §8](../validation/BATCH2-EDITING-2026-10-22.md) 记录 2026-10-23 本机实机验收完成（专项 9/9、general_core 7/7、同会话空闲约 12.5 分钟复连通过）；最新 Toolkit 作业 2026-10-23 13:50–13:52 均为终态。
+- 模型登记：822 项登记无 `recovery_pending`/`pending_job`；含 unknown 字样的 8 项均为终态（ready/abandoned/failed），BUG-078 三个旧现场已于 10-22/23 经 accept 动作收口。
+- 结论：会话核对条件满足，BUG-001 下暂停的 Toolkit 实机验收可恢复；本子项实机触发与 WorkBuddy 黑盒随 0.5.2 验收会话顺带取证。
 
 ## 当前进度（2026-10-21）
 
@@ -45,3 +71,7 @@
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P3-1：会话无模型时 `creo_adopt_current_model(mode=inspect)` 返回裸 `ProMdlCurrentGet(&current) failed with code -8 during adoption_inspect`，agent 无法区分"窗口无模型"与连接故障。本轮在 native 接管入口对该调用返回"无当前模型"原码时改抛 `NO_CURRENT_MODEL` 前缀错误，保留失败调用名与 Toolkit 原码，并提示先经 `creo_list_session_models` 查看会话清单。仅改错误可读性，不改接管准入、证据与保护路径；其余裸 Toolkit 错误码的可读化仍按本卡整体范围分批推进。
 
 实现当日完成（-8 经 SDK 头文件核对为 PRO_TK_BAD_CONTEXT）；实机以装配窗口的 `unsupported_model_type` 前缀路径旁证稳定原因码改造，无窗口 `NO_CURRENT_MODEL` 分支留 WorkBuddy 黑盒复验，见[验证记录](../validation/FEAT-044-live-2026-10-20.md)第四节。
+
+### 2026-10-24 实机触发取证（通过）
+
+task/2 整合树实机（Creo 12.4）：未受管种子副本（毫米、无依赖）经夹具真实抑制 BLEND 特征（id 82）后，`creo_adopt_current_model(mode=inspect)` 返回 `reason_code="unhealthy_features"`（结构化正常响应 `available=false`），`refusal_details.unhealthy_features` 为 `unhealthy_total=1/returned=1/truncated=false/items=[{id:82,name:"BLEND",type_name:"protrusion",status_code:5,status:"suppressed",incomplete:false}]`（`ProFeatureStatusGet` 原始整码 5=PRO_FEAT_SUPPRESSED），`health_breakdown` 逐特征口径。受管路径旁证：`managed_output` 拒绝同样携带完整明细（PAD2 id 87 抑制案例）。截断与旧执行器回退路径未实机触发（单测覆盖）。详见[实机取证记录](../validation/BUG080-FEAT006-LIVE-2026-10-24.md)。

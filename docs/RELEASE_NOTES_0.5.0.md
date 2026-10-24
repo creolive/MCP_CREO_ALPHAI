@@ -1,4 +1,6 @@
-# MCP_CREO_MechDog 0.5.0 版本说明（开发分支，未发布）
+# MCP_CREO_MechDog 0.5.0 版本说明
+
+发布状态：已发布。2026-10-22 合入 main 并发布 GitHub Release（Release 420300519，Pre-release，非草稿），交付核对见 [RELEASE-0.5.0](validation/RELEASE-0.5.0.md)。本说明撰写于 2026-10-22 发布前，当时状态为开发分支未发布，以下历史日期与陈述保持原样。
 
 日期：2026-10-22。本次为 0.4.6 反馈整合计划第二批（MINOR，新增公开工具，按现行 MINOR 规则不延用 0.4.6 的 PATCH 例外）。基于 0.4.8，工具数 90→91。
 

@@ -3,6 +3,8 @@
 #include "callback_identity.h"
 #include "recovery_deadline.h"
 #include "inspection_units.h"
+#include "assembly_units.h"
+#include "assembly_walk.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2433,25 +2435,32 @@ static void session_models_native(J &report) {
 // or adopts anything, and reports every node in tree order with occurrence
 // paths, resolved 4x4 transforms and constraint snapshots. Per-node failures
 // are marked with their raw query codes instead of failing the whole report.
-struct AssemblyWalk {
-    J components = J::array();
-    bool truncated = false;
-    bool incomplete = false;
-    int budget = 0;
-};
+// The walk's mutable report state (recorded nodes plus the truncated/
+// incomplete/depth_limited judgements) is the shared AssemblyWalkState from
+// assembly_walk.h, executed by the offline harness too.
 
+// BUG-080: the walk carries both the raw member-to-root chain (member length
+// unit -> root length unit) and the millimeter-normalized chain. Either chain
+// stops being trustworthy once an ancestor transform or unit query failed, so
+// descendants report an unknown root transform instead of inheriting a
+// grandparent matrix as if it were their own.
 struct WalkContext {
     ProSolid owner = nullptr;
-    std::vector<int> path;      // component feature ids from the root assembly
-    ProMatrix accumulated = {}; // this owner's member-to-root transform
-    AssemblyWalk *walk = nullptr;
+    std::vector<int> path; // component feature ids from the root assembly
+    // BUG-080 follow-up: both member-to-root chains with independent
+    // validity; WalkChain defaults to the real identity instead of the old
+    // zero-initialized raw root.
+    WalkChain chain;
+    AssemblyWalkState *walk = nullptr;
     ProMdl current = nullptr;
     int current_code = -1;
     int depth = 0;
 };
 
 // Creo ProMatrix is row-major with row-vector convention p' = p * M, so the
-// translation lives in the last row and units follow the owning assembly (mm).
+// translation lives in the last row. BUG-080: entries are raw Creo values in
+// the source/target model length units (see assembly_units.h); millimeter
+// maps are produced separately and stay null when units are unknown.
 static J matrix_json(const ProMatrix matrix) {
     J rows = J::array();
     for (int r = 0; r < 4; ++r) {
@@ -2463,20 +2472,19 @@ static J matrix_json(const ProMatrix matrix) {
     return rows;
 }
 
-static void multiply_row_vector(const ProMatrix a, const ProMatrix b, ProMatrix out) {
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c) {
-            double sum = 0.0;
-            for (int k = 0; k < 4; ++k)
-                sum += a[r][k] * b[k][c];
-            out[r][c] = sum;
-        }
-}
-
-static void copy_matrix(const ProMatrix source, ProMatrix destination) {
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c)
-            destination[r][c] = source[r][c];
+// BUG-080: one model's real length unit with its millimeter scale and every
+// raw query code; name and scale stay null on failure instead of pretending
+// millimeters.
+static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale) {
+    return {{"name", units.code ? J(nullptr) : J(utf8(units.length.name))},
+            {"query_code", units.code},
+            {"scale_to_mm", scale.known ? J(scale.scale) : J(nullptr)},
+            {"scale_to_mm_known", scale.known},
+            {"scale_query_codes",
+             {{"unit", scale.unit_query_code},
+              {"mm_unit", sdk_query_code_json(scale.mm_unit_queried, scale.mm_unit_query_code)},
+              {"conversion",
+               sdk_query_code_json(scale.conversion_queried, scale.conversion_query_code)}}}};
 }
 
 static J assembly_selection_json(ProSelection selection) {
@@ -2586,13 +2594,21 @@ static J component_constraints_json(ProAsmcomp *component, J &codes) {
 
 static ProError assembly_feature_callback(ProFeature *feature, ProError status, ProAppData data) {
     auto *context = (WalkContext *)data;
-    AssemblyWalk &walk = *context->walk;
+    AssemblyWalkState &walk = *context->walk;
     if (status)
         return status;
     if (walk.truncated)
         return PRO_TK_NO_ERROR;
     ProFeattype type;
-    if (ProFeatureTypeGet(feature, &type) || type != PRO_FEAT_COMPONENT)
+    ProError type_code = ProFeatureTypeGet(feature, &type);
+    if (!walk.apply_query_outcome(type_code)) {
+        // An unclassifiable feature may be a component whose whole subtree
+        // would silently drop out of the walk; keep visiting siblings but
+        // drop the tree completeness claim.
+        log("WALK_TYPE_QUERY_FAILED=%d\n", (int)type_code);
+        return PRO_TK_NO_ERROR;
+    }
+    if (type != PRO_FEAT_COMPONENT)
         return PRO_TK_NO_ERROR;
     auto *component = (ProAsmcomp *)feature;
     J item = J::object();
@@ -2613,6 +2629,10 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     int status_code = ProFeatureStatusGet(feature, &feature_status);
     codes["feature_status"] = status_code;
     item["feature_status"] = status_code ? J(nullptr) : J((int)feature_status);
+    // The component's own feature state (active or suppressed) must stay
+    // confirmable; a failed query drops completeness through the shared
+    // query outcome judgement instead of a duplicated condition (BUG-080).
+    walk.apply_query_outcome((ProError)status_code);
     item["suppressed"] = status_code ? J(nullptr)
                                      : J(feature_status == PRO_FEAT_SUPPRESSED ||
                                          feature_status == PRO_FEAT_FAMTAB_SUPPRESSED ||
@@ -2627,15 +2647,12 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     codes["model"] = model_code;
     if (model_code || !child) {
         // The component feature exists but its model did not resolve (for
-        // example a missing file); keep the node observable instead of failing.
-        item.update({{"name", nullptr},
-                     {"model_type", nullptr},
-                     {"resolved", false},
-                     {"constraints", J::array()}});
+        // example a missing file); keep the node observable instead of
+        // failing. The shared missing-node operation stamps the resolved /
+        // subtree flags itself and drops completeness.
+        item.update({{"name", nullptr}, {"model_type", nullptr}, {"constraints", J::array()}});
         item["query_codes"] = codes;
-        walk.components.push_back(item);
-        if ((int)walk.components.size() >= walk.budget)
-            walk.truncated = true;
+        walk.record_missing_component(item);
         return PRO_TK_NO_ERROR;
     }
     item["resolved"] = true;
@@ -2643,6 +2660,10 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     ProMdlType kind = PRO_MDL_PART;
     ProError kind_code = ProMdlTypeGet(child, &kind);
     codes["model_type"] = kind_code;
+    // An unclassifiable child model may hide a whole sub-assembly; the node
+    // stays observable but the tree completeness claim is dropped through
+    // the shared query outcome judgement.
+    walk.apply_query_outcome(kind_code);
     const char *kind_name = kind_code ? "" : kind == PRO_MDL_ASSEMBLY ? "assembly" : "part";
     observed["model_type"] = kind_code ? J(nullptr) : J(kind_name);
     ProMdlsubtype subtype = PROMDLSTYPE_PART_SOLID;
@@ -2651,41 +2672,83 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
         observed["model_type"] = "sheetmetal";
     for (auto it = observed.begin(); it != observed.end(); ++it)
         item[it.key()] = it.value();
+    // observed carries the child's session-identity query codes
+    // (name/origin/modified/id); merge them into the node codes so that
+    // executed diagnosis survives instead of being overwritten below.
+    if (observed.contains("query_codes")) {
+        for (auto it = observed["query_codes"].begin(); it != observed["query_codes"].end(); ++it)
+            codes[it.key()] = it.value();
+    }
+    // BUG-080: query the real component/owner units next to the transform and
+    // normalize to a full millimeter coordinate map; the raw matrix is always
+    // kept, and the normalized map stays null (never pretend-mm) whenever the
+    // transform or any required unit scale is unknown.
+    InspectionLengthUnits component_units = inspect_length_units(child);
+    InspectionLengthUnits parent_units = inspect_length_units((ProMdl)component->owner);
+    MillimeterScale component_scale = length_scale_to_mm(child, component_units);
+    MillimeterScale parent_scale = length_scale_to_mm((ProMdl)component->owner, parent_units);
+    item["units"] = {{"component", length_unit_json(component_units, component_scale)},
+                     {"parent", length_unit_json(parent_units, parent_scale)}};
     ProMatrix to_parent = {};
     ProError transform_code = component_to_assembly_transform(component, to_parent);
     codes["transform"] = transform_code;
-    item["transform_to_parent"] = transform_code ? J(nullptr) : matrix_json(to_parent);
-    ProMatrix to_root = {};
-    if (!transform_code) {
-        multiply_row_vector(to_parent, context->accumulated, to_root);
-        item["transform_to_root"] = matrix_json(to_root);
-    } else {
-        item["transform_to_root"] = nullptr;
-    }
+    // BUG-080 follow-up: a successful query whose returned matrix contains
+    // NaN/Infinity is not a known map; serializing it would emit null entries
+    // while transform_known stayed true, so the raw map is dropped instead.
+    const bool raw_map_known = local_transform_known(transform_code, to_parent);
+    ProMatrix to_parent_mm = {};
+    bool parent_map_known =
+        raw_map_known && component_scale.known && parent_scale.known &&
+        normalize_transform_mm(to_parent, component_scale.scale, parent_scale.scale, to_parent_mm);
+    item["transform_to_parent"] = parent_map_known ? matrix_json(to_parent_mm) : J(nullptr);
+    item["transform_to_parent_raw"] = raw_map_known ? matrix_json(to_parent) : J(nullptr);
+    item["transform_known"] = raw_map_known;
+    item["transform_mm_known"] = parent_map_known;
+    if (!transform_code && !parent_map_known)
+        item["transform_unknown_reason"] = !raw_map_known ? "non_finite"
+                                           : (!component_scale.known || !parent_scale.known)
+                                               ? "unknown_units"
+                                               : "invalid_scale";
+    // Root maps come from the shared chain composition: a chain exists only
+    // while this local map and every ancestor step stayed known, and finite
+    // overflow poisons the chain instead of serializing null inside a
+    // "known" transform. A failed parent transform or unknown ancestor unit
+    // therefore yields null root maps here, never a reused grandparent.
+    WalkChainStep step = walk_chain_compose(context->chain, to_parent, raw_map_known, to_parent_mm,
+                                            parent_map_known);
+    item["transform_to_root_raw"] =
+        step.root_raw_known ? matrix_json(step.to_root_raw) : J(nullptr);
+    item["transform_to_root"] = step.root_mm_known ? matrix_json(step.to_root_mm) : J(nullptr);
+    item["transform_root_known"] = step.root_mm_known;
+    // An unknown local or root chain, or an overflowing combination, makes
+    // the report incomplete; the node's own known local maps stay observable.
+    if (!parent_map_known || !step.root_mm_known || !step.root_raw_known)
+        walk.mark_incomplete();
     item["constraints"] = component_constraints_json(component, codes);
     item["query_codes"] = codes;
-    walk.components.push_back(item);
-    if ((int)walk.components.size() >= walk.budget) {
-        walk.truncated = true;
+    const size_t node_index = walk.record_node(item);
+    if (walk.truncated)
         return PRO_TK_NO_ERROR;
-    }
-    if (!kind_code && kind == PRO_MDL_ASSEMBLY && context->depth < 32) {
+    if (!kind_code && kind == PRO_MDL_ASSEMBLY) {
         WalkContext sub;
         sub.owner = (ProSolid)child;
         sub.path = occurrence;
-        copy_matrix(transform_code ? context->accumulated : to_root, sub.accumulated);
+        // Propagate both chains through the shared step: a failed local
+        // transform, unknown unit or overflow poisons the descendant
+        // root maps instead of reusing the grandparent matrix.
+        sub.chain = walk_chain_descend(context->chain, step);
         sub.walk = context->walk;
         sub.current = context->current;
         sub.current_code = context->current_code;
         sub.depth = context->depth + 1;
-        // A failed sub-assembly walk marks this node instead of failing the
-        // whole report; sibling components stay observable.
-        int sub_code =
-            ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr, (ProAppData)&sub);
-        if (sub_code) {
-            item["subassembly_visit_code"] = sub_code;
-            walk.incomplete = true;
-        }
+        // The shared visit operation enforces the depth limit before the
+        // visit and diagnoses a failed sub-assembly walk on the stored node
+        // (node_index) instead of failing the whole report — sibling
+        // components stay observable.
+        walk.visit_subtree(context->depth, node_index, [&sub]() -> ProError {
+            return ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr,
+                                     (ProAppData)&sub);
+        });
     }
     return PRO_TK_NO_ERROR;
 }
@@ -2711,32 +2774,51 @@ static void session_assembly_native(const J &request, J &report) {
                                  "with that name is not an assembly");
     ProMdl current = nullptr;
     int current_code = ProMdlCurrentGet(&current);
-    AssemblyWalk walk;
+    AssemblyWalkState walk;
     walk.budget = 4096;
+    // Query the root length unit before the walk: it decides whether the
+    // normalized root chain is interpretable at all. The shared root
+    // initialization ties the root chain validity to the real root unit and
+    // marks an unknown root unit incomplete up front, so even an empty tree
+    // is globally incomplete then.
+    InspectionLengthUnits root_units = inspect_length_units(mdl);
+    MillimeterScale root_scale = length_scale_to_mm(mdl, root_units);
     WalkContext context;
     context.owner = (ProSolid)mdl;
-    ProMatrix identity = {
-        {1.0, 0.0, 0.0, 0.0}, {0.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
-    copy_matrix(identity, context.accumulated);
     context.walk = &walk;
     context.current = current;
     context.current_code = current_code;
-    check(
-        ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context),
-        "ProSolidFeatVisit");
+    walk.init_root_chain(context.chain, root_scale);
+    // A failed root visit makes the report incomplete (root_visit_code)
+    // instead of throwing away the whole inspection.
+    int root_visit_code =
+        ProSolidFeatVisit(context.owner, assembly_feature_callback, nullptr, (ProAppData)&context);
+    if (root_visit_code)
+        walk.record_root_visit_failure();
     J root = observe_session_model(mdl, "assembly", current, current_code);
+    root["length_unit"] = length_unit_json(root_units, root_scale);
     report.update(
         {{"success", true},
          {"assembly", root},
          {"components", walk.components},
          {"component_count", walk.components.size()},
          {"truncated", walk.truncated},
+         {"depth_limited", walk.depth_limited},
+         {"root_visit_code", root_visit_code},
          {"incomplete", walk.incomplete},
-         {"complete", !walk.truncated && !walk.incomplete},
-         {"transform_convention", "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); "
-                                  "translation occupies the last row; units follow the assembly "
-                                  "(mm); transform_to_parent maps member coordinates into the "
-                                  "owning assembly, transform_to_root into the inspected root"},
+         {"complete", walk.complete(root_scale.known)},
+         {"transform_convention",
+          "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); translation occupies "
+          "the last row; transform_to_parent and transform_to_root are normalized full "
+          "coordinate maps with input and output coordinates in millimeters; "
+          "transform_to_parent_raw and transform_to_root_raw keep the raw Creo matrices "
+          "mapping member-solid coordinates (member length unit) into owner/root-solid "
+          "coordinates (owner/root length unit); per-node units.component/units.parent and "
+          "assembly.length_unit carry the real unit names, query codes and millimeter scales "
+          "and are null when unknown - normalized transforms are then null too instead of "
+          "pretending millimeters; constraint offsets stay in the owning assembly length "
+          "unit; raw cross-unit matrix semantics follow the local SDK member-transform "
+          "documentation and remain pending real mixed-unit machine verification"},
          {"readonly_note", "inspection only: no component loading, activation, "
                            "regeneration, save, adoption or managed revision"}});
 }
@@ -3373,6 +3455,62 @@ static void open_file_native(const J &request, J &report) {
     report["success"] = true;
 }
 
+// Raw ProFeatureStatusGet codes are the queryable truth; the label is only a
+// readability hint and stays "unknown_status_code" outside the SDK enum.
+static const char *feat_status_name(int status) {
+    switch (status) {
+    case PRO_FEAT_INVALID:
+        return "invalid";
+    case PRO_FEAT_ACTIVE:
+        return "active";
+    case PRO_FEAT_INACTIVE:
+        return "inactive";
+    case PRO_FEAT_FAMTAB_SUPPRESSED:
+        return "famtab_suppressed";
+    case PRO_FEAT_SIMP_REP_SUPPRESSED:
+        return "simplified_rep_suppressed";
+    case PRO_FEAT_PROG_SUPPRESSED:
+        return "program_suppressed";
+    case PRO_FEAT_SUPPRESSED:
+        return "suppressed";
+    case PRO_FEAT_UNREGENERATED:
+        return "unregenerated";
+    default:
+        return "unknown_status_code";
+    }
+}
+
+// Bounded per-feature diagnosis for the unhealthy_features refusal (FEAT-006):
+// every failed, suppressed or incomplete feature keeps its id, name, type and
+// raw status code, but only the first item_limit entries travel in control
+// metadata; unhealthy_total and truncated keep the omitted remainder countable.
+// The health admission rule itself does not change.
+static J health_details(const J &features) {
+    constexpr size_t item_limit = 20;
+    J items = J::array();
+    size_t total = 0;
+    for (const auto &f : features) {
+        bool incomplete = f.value("incomplete", false);
+        int status = f.value("status", PRO_FEAT_ACTIVE);
+        if (!incomplete && status == PRO_FEAT_ACTIVE)
+            continue;
+        total++;
+        if (items.size() >= item_limit)
+            continue;
+        items.push_back({{"id", f.value("id", 0)},
+                         {"name", f.value("name", "")},
+                         {"type_name", f.value("type_name", "")},
+                         {"status_code", status},
+                         {"status", feat_status_name(status)},
+                         {"incomplete", incomplete}});
+    }
+    return {{"unhealthy_total", total},
+            {"returned", items.size()},
+            {"item_limit", item_limit},
+            {"truncated", total > items.size()},
+            {"items", items}};
+}
+
 static void adopt_native(const J &request, J &report) {
     const J &choice = request.at("adoption");
     const std::string action = choice.at("action");
@@ -3417,6 +3555,7 @@ static void adopt_native(const J &request, J &report) {
     bool supported = model_type == "part" || model_type == "sheetmetal";
     ProMdlName display = {};
     ProError name_code = ProMdlMdlnameGet(current, display);
+    J diagnosis = health_details(live["features"]);
     report["live"] = {{"origin", utf8(origin_text)},
                       {"model_type", model_type},
                       {"healthy", live.at("healthy")},
@@ -3425,6 +3564,7 @@ static void adopt_native(const J &request, J &report) {
                       {"millimeter_units", millimeters},
                       {"dependency_free", dependency_clean},
                       {"session_fingerprint", session},
+                      {"health_details", diagnosis},
                       {"inspection", live}};
     if (name_code == PRO_TK_NO_ERROR)
         report["live"]["display_name"] = utf8(display);
@@ -3445,8 +3585,11 @@ static void adopt_native(const J &request, J &report) {
         throw std::runtime_error(
             "Never-saved model requires explicit prepare, then confirm its frozen snapshot");
     if (!live.value("healthy", false))
-        throw std::runtime_error("unhealthy_features: source has failed, suppressed or incomplete "
-                                 "features (adoption refused)");
+        throw std::runtime_error(
+            "unhealthy_features: source has failed, suppressed or incomplete features (" +
+            std::to_string(diagnosis["unhealthy_total"].get<size_t>()) + " unhealthy; first " +
+            std::to_string(diagnosis["returned"].get<size_t>()) +
+            " listed in live.health_details) (adoption refused)");
     if (!supported)
         throw std::runtime_error("unsupported_model_type: only independent part or sheetmetal "
                                  "models are supported (adoption refused)");

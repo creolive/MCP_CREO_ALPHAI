@@ -283,12 +283,59 @@ def _refusal_reason(live: dict) -> tuple[str, str] | None:
     return None
 
 
+# Maximum unhealthy-feature entries propagated into control metadata. The
+# native scan already bounds its own list; this cap only defends against a
+# substituted or future executor that returns more than the documented bound.
+_HEALTH_ITEM_LIMIT = 50
+
+
+def _unhealthy_features(live: dict) -> dict | None:
+    """Bounded per-feature diagnosis supplied by the native health scan.
+
+    Returns the verified payload, or None when the executor did not provide a
+    usable one (older binary, malformed data); the caller then falls back to
+    the combined unknown-marker wording instead of guessing.
+    """
+    details = live.get("health_details")
+    if not isinstance(details, dict):
+        return None
+    total = details.get("unhealthy_total")
+    items = details.get("items")
+    if type(total) is not int or total < 0 or not isinstance(items, list):
+        return None
+    kept = []
+    for item in items[:_HEALTH_ITEM_LIMIT]:
+        if not isinstance(item, dict) or type(item.get("id")) is not int:
+            return None
+        kept.append(
+            {
+                "id": item["id"],
+                "name": item.get("name") if isinstance(item.get("name"), str) else "",
+                "type_name": (
+                    item.get("type_name") if isinstance(item.get("type_name"), str) else ""
+                ),
+                "status_code": item.get("status_code")
+                if type(item.get("status_code")) is int
+                else None,
+                "status": item.get("status") if isinstance(item.get("status"), str) else None,
+                "incomplete": item.get("incomplete") is True,
+            }
+        )
+    truncated = details.get("truncated") is True or len(items) > len(kept)
+    return {
+        "unhealthy_total": total,
+        "returned": len(kept),
+        "truncated": truncated,
+        "items": kept,
+    }
+
+
 def _refusal_details(live: dict) -> dict:
     """Report what is reliably known; mark unavailable details as unknown."""
     inspection = live.get("inspection") or {}
     units = inspection.get("units")
     units_known = isinstance(units, str) and bool(units)
-    return {
+    details = {
         "actual_units": units if units_known else None,
         "actual_units_known": units_known,
         "units_query_code": inspection.get("units_query_code"),
@@ -297,11 +344,24 @@ def _refusal_details(live: dict) -> dict:
             "Toolkit exposes no reliable dependency list here; the boolean "
             "dependency_free check is all that is provable"
         ),
-        "health_breakdown": (
+    }
+    unhealthy = _unhealthy_features(live)
+    if unhealthy is not None:
+        breakdown = (
+            f"per-feature diagnosis from the native health scan: "
+            f"{unhealthy['unhealthy_total']} unhealthy feature(s), "
+            f"{unhealthy['returned']} listed"
+        )
+        if unhealthy["truncated"]:
+            breakdown += "; list truncated, the full inventory stays with the inspection sidecar"
+        details["health_breakdown"] = breakdown
+        details["unhealthy_features"] = unhealthy
+    else:
+        details["health_breakdown"] = (
             "combined failed/suppressed/incomplete feature check; per-feature "
             "reasons are unavailable"
-        ),
-    }
+        )
+    return details
 
 
 # Stable reason codes the native executor prefixes onto adoption refusals that
