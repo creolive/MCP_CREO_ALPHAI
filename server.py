@@ -38,6 +38,7 @@ from creo_mechdog.schema import (
     AirfoilValues,
     Entity,
     Operation,
+    RotationMatrix,
     SketchConstraint,
     SketchDimension,
     SketchOp,
@@ -100,6 +101,7 @@ _SOURCE_NAMES = (
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/component_transform.h",
+    "native/assembly_pose.h",
     "native/inspection_units.h",
     "native/drawing.cpp",
     "native/result_delivery.h",
@@ -1567,10 +1569,14 @@ async def creo_assemble_component(
     rotation: list[float] | None = None,
     placement: Literal["fixed", "default", "constraints"] = "fixed",
     constraints: list[dict[str, Any]] | None = None,
+    rotation_matrix: RotationMatrix | None = None,
 ) -> dict[str, Any]:
     """Insert a revision snapshot of a verified MCP part/sheetmetal model as a native assembly component.
 
     Translation is XYZ mm; rotation is XYZ Euler degrees, applied X then Y then Z.
+    Alternatively use a nested 3x3 rotation_matrix: row vectors, local to parent,
+    p_parent = p_local * rotation_matrix + translation. Matrix and explicit Euler
+    are mutually exclusive; matrix must be finite, orthogonal and det +1 within 1e-6.
     Sources must be ready and saved; later source edits do not update the component snapshot.
     Native placement can be fixed, default or mate/align/insert/csys constraints. Nested subassemblies are not supported yet.
     """
@@ -1582,7 +1588,8 @@ async def creo_assemble_component(
                 "label": label,
                 "source_model_id": source_model_id,
                 "translation": translation or [0, 0, 0],
-                "rotation": rotation or [0, 0, 0],
+                **({"rotation": rotation} if rotation is not None else {}),
+                **({"rotation_matrix": rotation_matrix} if rotation_matrix is not None else {}),
                 "placement": placement,
                 "constraints": constraints or [],
             }
@@ -1600,8 +1607,14 @@ async def creo_component_placement(
     component: str | int,
     translation: list[float],
     rotation: list[float] | None = None,
+    rotation_matrix: RotationMatrix | None = None,
 ) -> dict[str, Any]:
-    """Replace a component's existing placement constraints with fixed placement at the specified rigid transform."""
+    """Replace component constraints with fixed placement. Translation is XYZ mm.
+
+    Use XYZ Euler rotation degrees (X then Y then Z), or a nested 3x3 rotation_matrix,
+    never both. Row-vector mapping: p_parent = p_local * rotation_matrix + translation.
+    Matrix requires finite real numbers, orthogonality and det +1 within 1e-6.
+    """
     return await invoke(
         general.submit,
         [
@@ -1609,7 +1622,8 @@ async def creo_component_placement(
                 "op": "component_placement",
                 "component": component,
                 "translation": translation,
-                "rotation": rotation or [0, 0, 0],
+                **({"rotation": rotation} if rotation is not None else {}),
+                **({"rotation_matrix": rotation_matrix} if rotation_matrix is not None else {}),
             }
         ],
         model_id,

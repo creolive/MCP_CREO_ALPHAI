@@ -48,6 +48,7 @@ def source_files():
         "docs/validation/track-feedback-2026-10-16/track-modeling-rev2.txt",
         "docs/validation/bug-001-repro-2026-10-16/g0_driver.py",
         "tools/test_callback_payload.cpp",
+        "tests/native/test_assembly_pose.cpp",
     )
     files = [ROOT / name for name in names]
     for directory, extensions in {

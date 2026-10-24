@@ -94,6 +94,7 @@ print(json.dumps({name: [importlib.import_module(name).__file__,
                 self.assertEqual(server._source_fingerprints(), server._LOADED_FINGERPRINTS)
                 names = [f"src/creo_mechdog/{module}.py" for module in HELPERS]
                 names.append("native/inspection_units.h")
+                names.append("native/assembly_pose.h")
                 for name in names:
                     self.assertIn(name, server._SOURCE_NAMES)
                     original = (root / name).read_bytes()
@@ -125,6 +126,13 @@ print(json.dumps({name: [importlib.import_module(name).__file__,
                 "helper_layout",
                 "profile_checks",
             )
+        }
+        required |= {
+            "native/assembly_pose.h",
+            "tests/native/test_assembly_pose.cpp",
+            "tests/unit/test_assembly_pose.py",
+            "tools/test_assembly_pose.py",
+            "tools/test_assembly_matrix.py",
         }
         self.assertTrue(required <= names, required - names)
 

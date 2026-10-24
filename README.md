@@ -74,7 +74,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 基准与重复 | `creo_datum_plane`、`creo_datum_axis`、`creo_dimension_pattern`：偏移/角度基准面、基准轴、一方向尺寸阵列 |
 | 镜像、扫掠、拔模 | `creo_mirror`：整体/几何镜像；`creo_sweep`：恒定截面及命名截面尺寸；`creo_draft`：恒角、不分割拔模 |
 | 钣金 | `creo_new_sheetmetal`、`creo_sheetmetal_wall`、`creo_sheetmetal_flange`、`creo_sheetmetal_unbend`、`creo_sheetmetal_bend_back`、`creo_sheetmetal_flat_pattern`：首壁、弯曲法兰、展开、折弯回去和平展；保留原生特征树 |
-| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本副本、定位、约束、删除和查询 |
+| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本副本、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；矩阵新路径实机验收待完成，见 [FEAT-012](docs/work-items/FEAT-012.md) |
 | 新增曲面与实体 | `creo_surface_fill`、`creo_thicken`、`creo_solidify`、`creo_boolean_bodies`、`creo_rib` |
 | 新增基准 | `creo_datum_csys`、`creo_datum_points` |
 | 原生工程图 | `creo_new_drawing`；图纸、一般/投影视图、尺寸显示、注释、表格及编辑/删除；原生 DRW 与 PDF 输出 |

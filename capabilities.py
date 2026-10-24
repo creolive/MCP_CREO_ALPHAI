@@ -337,6 +337,12 @@ def families() -> dict:
         },
         "assembly": {
             "enabled": True,
+            "orientation_input": (
+                "XYZ Euler degrees (X then Y then Z), or exclusive nested 3x3 rotation_matrix; "
+                "row vectors local to parent, translation separately in mm; finite real numbers, "
+                "orthogonality and determinant +1 within 1e-6, without repair or transpose"
+            ),
+            "matrix_validation": "offline production helper and MCP/schema regression; live placement/save-reload unverified",
             "native_test": "part snapshots, rigid placement, removal, 3 datum-plane align constraints and 20 mm offset",
             "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots; mate/insert/csys/default placement need further validation",
         },
