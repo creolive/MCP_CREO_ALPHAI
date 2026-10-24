@@ -1,6 +1,6 @@
 # FEAT-006：失败阶段、原生诊断与操作结果的可定位契约
 
-日期：2026-10-16 补全。类型：功能。优先级：P2。状态：开发中（收养拒绝逐特征诊断子项）。目标版本：下一未发布 PATCH。
+日期：2026-10-16 补全。类型：功能。优先级：P2。状态：实现完成（收养拒绝逐特征诊断子项；实机触发与 WorkBuddy 黑盒随 0.5.2 验收会话顺带取证，C++ 纯逻辑夹具待 `tests/native` 范式合入后补）。目标版本：下一未发布 PATCH（0.5.2）。
 
 ## 2026-10-23：收养拒绝的有界逐特征诊断（0.5.0 反馈计划第一批 P1-5）实施
 
@@ -20,6 +20,13 @@
 - 编译核对：主仓 `build/creo_worker.exe` 时间戳 2026-10-23 22:53（本提交前 9 分钟），为含 `health_details` 的重建产物。
 - 合并面核对：与 `codex/dev046-feedback050`（b09ffc3，DEV-046 文档收口+BUG-080）`git merge-tree` 无文本冲突；合并后 dev046 的 `tests/native` 范式可用于补 C++ 有界提取夹具，其 BACKLOG 头部"FEAT-006 待下一 PATCH 实施"注记需按本分支现状校正；`version.py` 当前 0.5.1，下一 PATCH（0.5.2）未占用。
 - 验收缺口不变：实机真实不健康零件触发 `unhealthy_features` 拒绝并核对明细、WorkBuddy 黑盒仍受 BUG-001 会话核对条件约束，未执行。
+
+### 2026-10-24 会话核对（0.5.2 实机验收前置，通过）
+
+- Creo 会话：`xtop.exe` PID 22456 于 2026-10-24 08:22:48 启动，Responding=True；无 `creo_worker` 进程在运行，Toolkit 通道空闲。
+- 连接 -4：0.5.0 计划（10-22）"最新连接 -4 尚未解除"已过时——[BUG030 收口记录](../validation/BUG030-CACHE-CLOSEOUT-2026-10-22.md) 2026-10-22/23 节完成排查（本机 SDK 枚举为 `PRO_TK_E_NOT_FOUND`）、用户授权恢复，[BATCH2 §8](../validation/BATCH2-EDITING-2026-10-22.md) 记录 2026-10-23 本机实机验收完成（专项 9/9、general_core 7/7、同会话空闲约 12.5 分钟复连通过）；最新 Toolkit 作业 2026-10-23 13:50–13:52 均为终态。
+- 模型登记：822 项登记无 `recovery_pending`/`pending_job`；含 unknown 字样的 8 项均为终态（ready/abandoned/failed），BUG-078 三个旧现场已于 10-22/23 经 accept 动作收口。
+- 结论：会话核对条件满足，BUG-001 下暂停的 Toolkit 实机验收可恢复；本子项实机触发与 WorkBuddy 黑盒随 0.5.2 验收会话顺带取证。
 
 ## 当前进度（2026-10-21）
 
