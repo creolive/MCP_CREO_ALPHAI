@@ -1,12 +1,12 @@
 # 统一开发台账
 
-建立：2026-10-13；最近更新：2026-10-23。当前开发服务/源码版本：0.5.1（已发布，[发布核对](validation/RELEASE-0.5.1.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）；0.5.0 反馈整合计划第一批文档收口随本批登记（[DEV-046](work-items/DEV-046.md)）。
+建立：2026-10-13；最近更新：2026-10-24。当前开发服务/源码版本：0.5.1（已发布，[发布核对](validation/RELEASE-0.5.1.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）；0.5.0 反馈整合计划第一批（DEV-046 文档收口、BUG-080、FEAT-006）已在 task/2 整合树合流，目标 0.5.2。
 
 本页只安排未完成工作和单列的历史观察；完成结论见[完成档案](BACKLOG_COMPLETED.md)。各固定 ID 只出现一条任务记录，工作卡和原始证据保存详细输入、历史过程与已测范围。
 
 ## 当前安排
 
-- [0.5.0反馈整合计划](development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)（三份[原件](validation/feedback-0.5.0-2026-10-22/manifest.json)已逐字节归档）：第一批证据、状态与正确性由 [DEV-046](work-items/DEV-046.md) 收口（本批文档；BUG-080 装配变换单位契约 2026-10-23 实现随本批交付（实机混合单位验收保留，见卡），FEAT-006 收养拒绝逐特征诊断待下一 PATCH 实施）；第二批可靠装配重建管线（[FEAT-048](work-items/FEAT-048.md) 按路径/批量收养，矩阵入参归 FEAT-012/BUG-045，多组件单作业批量装配官方示例与验收归 FEAT-008 现有 `creo_execute_plan`）；第三批约束保真、比对与运维（[FEAT-049](work-items/FEAT-049.md) 约束回放、[FEAT-050](work-items/FEAT-050.md) 装配比对、DEV-027 显式世代回收）。原环境 Creo 10 证据与本机 Creo 12 证据分开记录，报告预计性能收益仅作建议。
+- [0.5.0反馈整合计划](development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)（三份[原件](validation/feedback-0.5.0-2026-10-22/manifest.json)已逐字节归档）：第一批证据、状态与正确性由 [DEV-046](work-items/DEV-046.md) 收口（本批文档；BUG-080 装配变换单位契约 2026-10-23 实现随本批交付（实机混合单位验收保留，见卡），FEAT-006 收养拒绝逐特征诊断已实现、随 0.5.2 同批交付（见卡））；第二批可靠装配重建管线（[FEAT-048](work-items/FEAT-048.md) 按路径/批量收养，矩阵入参归 FEAT-012/BUG-045，多组件单作业批量装配官方示例与验收归 FEAT-008 现有 `creo_execute_plan`）；第三批约束保真、比对与运维（[FEAT-049](work-items/FEAT-049.md) 约束回放、[FEAT-050](work-items/FEAT-050.md) 装配比对、DEV-027 显式世代回收）。原环境 Creo 10 证据与本机 Creo 12 证据分开记录，报告预计性能收益仅作建议。
 
 - [0.4.6反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)（三份[原件](validation/feedback-0.4.6-2026-10-21/manifest.json)已归档补录，0.4.7 发布后开工）分两批推进：第一批盘点口径补齐与证据收口（DEV-027 loader/payload 盘点区分引用三态、FEAT-046/FEAT-043/044/DEV-027 外部通过子项关闭、DEV-045 附件名 0.4.7 起定名核对通过、BUG-077 原环境复测单列）；第二批 FEAT-045 装配只读检查（新增 `creo_inspect_session_assembly`）按 MINOR（0.5.0）随版交付，四类受限场景与外部复核按卡开放。矩阵放置、重建编辑与装配整体收养为后续路线不随本轮实施。
 - [0.4.4反馈整合计划](development/0.4.4-FEEDBACK-PLAN-2026-10-21.md)（覆盖 v0.4.4 构建验收与 v0.4.5 运行反馈两份[原件](validation/feedback-0.4.4-2026-10-21/manifest.json)）：BUG-077/FEAT-047/DEV-044 五组验收已随 0.4.7 交付（[发布核对](validation/RELEASE-0.4.7.md)）；BUG-078（恢复 accept 路径 Backup 稳定 -1）自该计划登记待修。
