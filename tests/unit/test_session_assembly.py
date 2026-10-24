@@ -10,7 +10,7 @@ from unittest.mock import patch
 import bridge
 import generic_bridge as general
 from creo_mechdog import session_assembly as inspector
-from creo_mechdog.model_queries import decode_cursor, encode_cursor
+from creo_mechdog.model_queries import decode_cursor, encode_cursor, fingerprint
 from tests.unit import test_adoption as fixture
 
 IDENTITY = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
@@ -56,6 +56,7 @@ def synthetic_assembly(directory):
         "complete": True,
         "truncated": False,
         "incomplete": False,
+        "depth_limited": False,
         "components": [
             component(5, [5]),
             component(6, [6], name="wb_tree_sub", model_type="assembly"),
@@ -174,6 +175,75 @@ class SessionAssemblyRules(unittest.TestCase):
         with failing:
             with self.assertRaises(RuntimeError):
                 inspector.inspect_session_assembly("wb_tree")
+
+    def test_unit_fields_incomplete_and_depth_limit_passthrough(self):
+        payload = synthetic_assembly(self.directory)
+        payload["depth_limited"] = True
+        payload["incomplete"] = True
+        payload["complete"] = False
+        payload["root_visit_code"] = 0
+        units = {
+            "name": "in",
+            "query_code": 0,
+            "scale_to_mm": 25.4,
+            "scale_to_mm_known": True,
+            "scale_query_codes": {"unit": 0, "mm_unit": 0, "conversion": 0},
+        }
+        payload["components"][0]["units"] = {"component": units, "parent": units}
+        payload["components"][0]["transform_to_parent"] = None
+        payload["components"][0]["transform_to_parent_raw"] = IDENTITY
+        payload["components"][0]["transform_mm_known"] = False
+        payload["components"][0]["transform_unknown_reason"] = "unknown_units"
+        payload["components"][1]["subassembly_visit_code"] = -1
+        with patch.object(inspector, "_probe", side_effect=lambda d: payload):
+            result = inspector.inspect_session_assembly("wb_tree")
+        self.assertTrue(result["depth_limited"])
+        self.assertTrue(result["incomplete"])
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["root_visit_code"], 0)
+        first = result["components"][0]
+        self.assertIsNone(first["transform_to_parent"])
+        self.assertEqual(first["transform_to_parent_raw"], IDENTITY)
+        self.assertEqual(first["units"]["component"]["scale_to_mm"], 25.4)
+        self.assertEqual(result["components"][1]["subassembly_visit_code"], -1)
+        self.assertIn("millimeters", result["transform_convention"])
+        self.assertIn("raw", result["transform_convention"])
+
+    def test_root_visit_code_persists_through_snapshot_and_paging(self):
+        payload = synthetic_assembly(self.directory)
+        payload["complete"] = False
+        payload["incomplete"] = True
+        payload["root_visit_code"] = -3
+        with patch.object(inspector, "_probe", side_effect=lambda d: payload) as probe:
+            first = inspector.inspect_session_assembly("wb_tree", limit=2)
+            self.assertEqual(first["root_visit_code"], -3)
+            self.assertEqual(probe.call_count, 1)  # initial collection probes once
+            second = inspector.inspect_session_assembly("wb_tree", cursor=first["next_cursor"])
+            self.assertEqual(second["root_visit_code"], -3)
+            self.assertEqual(probe.call_count, 1)  # paging reuses the frozen snapshot
+
+    def test_legacy_snapshot_without_schema_version_rejected_without_probe(self):
+        first = inspector.inspect_session_assembly("wb_tree", limit=2)
+        job_id = first["snapshot_id"]
+        file = bridge.job_path(job_id) / "session_assembly.json"
+        snapshot = bridge.read_json(file)
+        snapshot.pop("schema_version")  # pre-upgrade snapshot shape (raw only)
+        snapshot.pop("root_visit_code")  # unit-aware fields did not exist yet
+        snapshot.pop("depth_limited")
+        bridge.write_json(file, snapshot, durable=True)
+        legacy_cursor = encode_cursor(
+            {
+                "kind": "session_assembly",
+                "snapshot": job_id,
+                "offset": 0,
+                "fingerprint": fingerprint(snapshot),
+                "name": "wb_tree",
+            }
+        )
+        with self.assertRaises(ValueError) as raised:
+            inspector.inspect_session_assembly("wb_tree", cursor=legacy_cursor)
+        self.assertIn("older service version", str(raised.exception))
+        self.assertEqual(self.native.call_count, 1)  # rejection: no new Toolkit probe
 
 
 if __name__ == "__main__":

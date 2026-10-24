@@ -13,6 +13,11 @@ from creo_mechdog.model_queries import decode_cursor, encode_cursor, fingerprint
 
 SNAPSHOT_SECONDS = 600
 PAGE_BYTES = 32 * 1024
+# BUG-080 follow-up: snapshots collected before the unit-aware schema carried
+# only raw native matrices (no real units, root_visit_code or depth_limited).
+# A cursor must never re-describe those values in millimeters; such snapshots
+# are rejected explicitly instead of KeyError-ing or guessing units.
+SNAPSHOT_SCHEMA_VERSION = 2
 REFRESH_GUIDANCE = (
     "Omit cursor to re-collect the assembly snapshot; a query carrying a cursor "
     "keeps reading its frozen snapshot and never reflects later session changes"
@@ -96,6 +101,9 @@ def inspect_session_assembly(name: str, limit: int = 20, cursor: str | None = No
                     "complete": result.get("complete", False),
                     "truncated": result.get("truncated", False),
                     "incomplete": result.get("incomplete", False),
+                    "depth_limited": result.get("depth_limited", False),
+                    "root_visit_code": result.get("root_visit_code"),
+                    "schema_version": SNAPSHOT_SCHEMA_VERSION,
                 }
                 bridge.write_json(directory / "session_assembly.json", snapshot, durable=True)
                 manifest["status"] = "succeeded"
@@ -116,6 +124,11 @@ def inspect_session_assembly(name: str, limit: int = 20, cursor: str | None = No
         if not file.is_file() or file.stat().st_size > 32 * 1024 * 1024:
             raise ValueError("Assembly snapshot is unavailable; inspect again without cursor")
         snapshot = bridge.read_json(file)
+        if snapshot.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
+            raise ValueError(
+                "Assembly snapshot was collected by an older service version; "
+                "inspect again without cursor"
+            )
         if (
             time.time() - snapshot["created"] > SNAPSHOT_SECONDS
             or snapshot["selection"] != _selection()
@@ -141,6 +154,8 @@ def inspect_session_assembly(name: str, limit: int = 20, cursor: str | None = No
         "complete": snapshot["complete"],
         "truncated": snapshot["truncated"],
         "incomplete": snapshot["incomplete"],
+        "depth_limited": snapshot["depth_limited"],
+        "root_visit_code": snapshot["root_visit_code"],
         "next_cursor": None,
         "snapshot_only": True,
         "snapshot_age_seconds": max(0, int(time.time() - snapshot["created"])),
@@ -148,9 +163,14 @@ def inspect_session_assembly(name: str, limit: int = 20, cursor: str | None = No
         "refresh_guidance": REFRESH_GUIDANCE,
         "transform_convention": (
             "row-vector 4x4 matrices in Creo ProMatrix order (p' = p * M); translation "
-            "occupies the last row; units follow the assembly (mm); transform_to_parent "
-            "maps member coordinates into the owning assembly, transform_to_root into "
-            "the inspected root assembly"
+            "occupies the last row; transform_to_parent and transform_to_root are "
+            "normalized full coordinate maps with input and output coordinates in "
+            "millimeters; transform_to_parent_raw and transform_to_root_raw keep the raw "
+            "Creo matrices in the source/target model length units; per-node units and "
+            "assembly length_unit carry real unit names, query codes and millimeter "
+            "scales, null when unknown (normalized transforms are then null too, never "
+            "guessed millimeters); constraint offsets stay in the owning assembly length "
+            "unit"
         ),
         "readonly_note": (
             "inspection only: no component loading, activation, regeneration, save, "

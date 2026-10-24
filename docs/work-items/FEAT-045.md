@@ -29,3 +29,19 @@
 崩溃修复：`ProMdlMdlnameGet` 缓冲须 `ProMdlName`（80）误用 `ProName`（32）致栈溢出；`ProAsmcompConstraintsWithComppathGet` NULL path 在 Creo 12 崩溃，改构造 owner comppath。
 
 未验证（按卡保留）：嵌套子装配/重复实例/抑制/缺件四场景实机触发（本机构造手段受限，native 路径与单测覆盖，外部环境复测定论）、外部 Creo 10 复核、WorkBuddy 黑盒。矩阵放置/重建编辑/整体收养为后续路线单列（见记录末节）。
+
+## 2026-10-23 0.5.0 反馈补录：外部单层检查复核
+
+[0.5.0 验收报告 §3.1](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_FEAT045交付与死锁根治但变换单位存疑.md)（外部 Creo 10 / 0.5.0）：`creo_inspect_session_assembly(ASM_MX, limit=5)` 8 组件树序、occurrence/parent 路径齐备、双份 4×4 行向量变换（平移末行）、逐约束快照（align/mate/orient/align_offset + 双侧 item_id/item_type/occurrence_path/offset）、分页 `complete/truncated/incomplete` 三态与 600s 过期——**外部 Creo 10 单层装配复核子项通过关闭**。嵌套子装配/重复实例/抑制/缺件四场景实机触发与 WorkBuddy 黑盒仍按卡保留；变换数值单位疑点归 [BUG-080](BUG-080.md)，矩阵直入参建议归 FEAT-012/BUG-045。
+
+## 2026-10-23 BUG-080 联动：变换单位契约修正
+
+变换字段口径随 [BUG-080](BUG-080.md) 修正：`transform_to_parent`/`transform_to_root` 为规范化毫米完整坐标映射，`transform_to_parent_raw`/`transform_to_root_raw` 保留原始矩阵；每节点 `units.component`/`units.parent` 与装配 `length_unit` 携带真实单位名称、查询码与毫米比例；未知单位/变换时规范化矩阵为 null（`transform_unknown_reason`）并使完整性标志如实反映（新增 `depth_limited`/`root_visit_code`/缺件 `subtree_not_visited`）。同单位场景下规范化结果与旧毫米输出一致。实机混合单位验证与四受限场景按 BUG-080/本卡保留，不随本次关闭。
+
+## 2026-10-23 BUG-080 开发验证修正（待独立审查）
+
+装配 walk 三处一致性修正：组件特征状态查询（`ProFeatureStatusGet`）失败置 incomplete，不再误称 complete；子模型身份查询码（name/origin/modified/id）合并保留进节点 `query_codes`，不再被覆盖丢失；局部原始矩阵查询成功但含 NaN/Infinity 时 `transform_known=false` 且原始矩阵为 null（原因 `non_finite`），经共用 helper `local_transform_known` 与根链同一有限语义。证据阶段：离线原生 case 1–27 与 Python 8 tests 已实跑通过（947f40e exit 0），离线生产构建 exit 0；947f40e 短路径全量 557 项单测与统一 dev_check 通过（success=true）；实机/WorkBuddy 未验收，修正涉及的生产失败分支未实机触发。
+
+## 2026-10-23 BUG-080 审查 Important 修复（walk 状态共享化）
+
+walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（`AssemblyWalkState`：`record_missing_component` 自盖缺件标志、`apply_query_outcome` 真实查询码驱动置 incomplete、`visit_subtree` 深度 32 先判限再执行访问且失败码写实际节点 `node_index`、`init_root_chain` 真实 root_scale 初始化根链并置 incomplete、`complete` 统一规则，budget=4096/深度 32 契约不变）；`generic.cpp` 生产回调改经同一实现。新增离线夹具 `tests/native/test_assembly_walk.cpp`（12 case，SDK 查询替换、注入 visitor 计数非真实 ProSolidFeatVisit）由 `tools\test_assembly_units.py` 同批构建运行（已修正 native 包含路径引号），覆盖缺件标志由生产操作产出/真实零非零查询码逐个驱动/深度 31–33 真实调用次数与父节点索引诊断/budget 边界/根失败保同级/根单位经真实换算由共享初始化影响链与 complete。该夹具 12 case 与生产复编已实跑通过（947f40e exit 0；SDK 查询替换、注入 visitor 非真实 ProSolidFeatVisit，不声称实机/完整 callback 几何覆盖）；实机触发与 WorkBuddy 仍按卡保留未验收。

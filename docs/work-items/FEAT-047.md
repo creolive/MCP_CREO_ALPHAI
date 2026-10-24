@@ -55,3 +55,7 @@
 ## 2026-10-21 WorkBuddy 正常数据分页
 
 [用户报告](../validation/WORKBUDDY-0.4.7-2026-10-21.md)确认0.4.7/90工具及limit/cursor已部署；正常数据526条，11页（50×10+26），唯一ID526，无重无漏，快照恒定；ok41、legacy_inline485、warning/over_budget/corrupt均0。当前公开正常数据分页通过；单条异常不中断、超限/损坏场景和32KiB原始响应字节数未由本轮黑盒验证。开发者的530项回归与字节测量证据独立保留，不写成WorkBuddy实测。
+
+## 2026-10-23 0.5.0 反馈补录：外部健康检查确认
+
+[0.5.0 验收报告 §3.2](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_FEAT045交付与死锁根治但变换单位存疑.md)（外部 Creo 10 / 0.5.0）：212 条目分页遍历，summary `ok 58 / legacy_inline 153 / over_budget 1 / corrupt 0`；超限条目 `usage_ratio 1.2799` 与内联明细分类（aliases/inspection/last_live_inspection 字节数）齐全；`migration.needed` 与迁移工具指引正确——外部正常数据与超限条目明细子项确认。异常条目（损坏/预警还原）与 32 KiB 原始响应字节仍未由外部覆盖，按卡保留。
