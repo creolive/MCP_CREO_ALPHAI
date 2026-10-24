@@ -58,18 +58,14 @@ def part_plan() -> list[dict]:
             "op": "sketch",
             "label": "sk_base",
             "plane": "XY",
-            "entities": [
-                {"type": "rectangle", "name": "outline", "min": [0, 0], "max": [60, 40]}
-            ],
+            "entities": [{"type": "rectangle", "name": "outline", "min": [0, 0], "max": [60, 40]}],
         },
         {"op": "extrude", "label": "base", "sketch": "sk_base", "depth": 10},
         {
             "op": "sketch",
             "label": "sk_pad",
             "plane": "XY",
-            "entities": [
-                {"type": "rectangle", "name": "pad", "min": [70, 0], "max": [100, 40]}
-            ],
+            "entities": [{"type": "rectangle", "name": "pad", "min": [70, 0], "max": [100, 40]}],
         },
         {"op": "extrude", "label": "pad2", "sketch": "sk_pad", "depth": 5},
     ]
@@ -111,7 +107,7 @@ def build_fixture(directory: Path, report: dict) -> Path:
     batch.write_text(
         "@echo off\n"
         + compiler_setup_script(settings)
-        + f'\ncl /nologo /MD /EHsc /std:c++17 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS '
+        + "\ncl /nologo /MD /EHsc /std:c++17 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS "
         + f'/I"{sdk / "includes"}" /c "{source}" /Fo:"{directory / "fixture.obj"}\n'
         + f'link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{executable}" '
         + f'"{directory / "fixture.obj"}" '
@@ -194,9 +190,7 @@ async def session_names(probe: Probe) -> list[str]:
     inventory = await probe.call("creo_list_session_models", {})
     models = inventory.get("models", inventory if isinstance(inventory, list) else [])
     return sorted(
-        str(item["name"]).upper()
-        for item in models
-        if isinstance(item, dict) and item.get("name")
+        str(item["name"]).upper() for item in models if isinstance(item, dict) and item.get("name")
     )
 
 
@@ -280,9 +274,7 @@ async def main_async(args: argparse.Namespace) -> None:
     shutil.copyfile(template, assembly_file)
     report["template"] = {"source": str(template), "copied_to": str(assembly_file)}
 
-    params = StdioServerParameters(
-        command=sys.executable, args=[str(ROOT / "server.py")], cwd=ROOT
-    )
+    params = StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=ROOT)
     async with Client(params, read_timeout_seconds=90) as client:
         probe = Probe(client, report, args.output, args.job_budget)
         capabilities = await probe.call("creo_capabilities", {})
@@ -368,9 +360,7 @@ async def main_async(args: argparse.Namespace) -> None:
         }
         probe.save()
 
-        assembly = run_fixture(
-            executable, ["asm", str(assembly_file), component], directory
-        )
+        assembly = run_fixture(executable, ["asm", str(assembly_file), component], directory)
         report["phases"]["assembly"] = assembly
         probe.save()
         assert assembly["returncode"] == 0, assembly
@@ -381,7 +371,9 @@ async def main_async(args: argparse.Namespace) -> None:
         assert root_unit["name"] in ("in", "inch"), root_unit
         assert close(root_unit["scale_to_mm"], INCH), root_unit
         component_node = next(
-            item for item in inspected["components"] if component.lower() in str(item.get("name", "")).lower()
+            item
+            for item in inspected["components"]
+            if component.lower() in str(item.get("name", "")).lower()
         )
         units = component_node["units"]
         assert close(units["component"]["scale_to_mm"], 1.0), units
@@ -392,9 +384,7 @@ async def main_async(args: argparse.Namespace) -> None:
             close(a, b) for a, b in zip(matrix_translation(normalized), [INCH, 2 * INCH, 3 * INCH])
         ), normalized
         raw = component_node["transform_to_parent_raw"]
-        assert all(
-            close(a, b) for a, b in zip(matrix_translation(raw), [1.0, 2.0, 3.0])
-        ), raw
+        assert all(close(a, b) for a, b in zip(matrix_translation(raw), [1.0, 2.0, 3.0])), raw
         assert inspected["complete"] is True, inspected.get("complete")
         report["phases"]["assembly_inspect"] = {
             "length_unit": root_unit,
@@ -406,10 +396,7 @@ async def main_async(args: argparse.Namespace) -> None:
         probe.save()
 
         after_inspect = await session_names(probe)
-        expected = set(before) | {
-            name.upper()
-            for name in (assembly_name, component, seed_name)
-        }
+        expected = set(before) | {name.upper() for name in (assembly_name, component, seed_name)}
         assert set(after_inspect) == expected, {"before": before, "after": after_inspect}
         report["phases"]["read_only"] = {"before": before, "after": after_inspect}
 
