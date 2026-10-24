@@ -12,6 +12,15 @@
 
 未验收范围：按 BUG-001 约束未做实机 Creo 验收与 WorkBuddy 黑盒复验（需真实不健康零件触发 `unhealthy_features` 拒绝并核对返回明细）；C++ 侧有界提取的纯逻辑测试待 dev046 分支的原生测试设施（`tests/native` 范式）合入后补。未合入 main，未发布版本。
 
+### 2026-10-24 回收核对（task/2 工作树，HEAD 62bc4dc）
+
+独立复核确认 2026-10-23 实施真实落地，非仅"已启动"：`native/generic.cpp` 的 `health_details()` 以采集侧真实 `status`/`incomplete` 键（generic.cpp 采集段）为源，20 条上限、`unhealthy_total`/`returned`/`truncated` 与逐特征 `id`/`name`/`type_name`/`status_code`/可读 `status`/`incomplete` 齐备，健康判定与明细读取同键同源；拒绝消息携带总数与已列条数；`src/creo_mechdog/adoption.py` `unhealthy_features` 校验透传、畸形/缺失回退与 50 条防御截断在案；`ADOPTION.md` 契约段同步；4 个新测试方法在本提交内。
+
+- 单元复跑：主仓工作树（同一提交 62bc4dc；dirty 仅 `session_activity.json` 运行改写与未跟踪 WorkBuddy 运行产物）全量 558 例 `python -m unittest discover -s tests` OK（182.5s）。task/2 worktree 内复跑 dev_check 单元段失败，系 `server.py:55` 源码身份守卫拒绝跨检出导入（editable 属主仓，按 AGENTS 需各检出自装 `pip install --no-deps -e .`），非本提交回归；该次风格门通过（31 lint/19 未格式化，与既有基线一致，无新增）。
+- 编译核对：主仓 `build/creo_worker.exe` 时间戳 2026-10-23 22:53（本提交前 9 分钟），为含 `health_details` 的重建产物。
+- 合并面核对：与 `codex/dev046-feedback050`（b09ffc3，DEV-046 文档收口+BUG-080）`git merge-tree` 无文本冲突；合并后 dev046 的 `tests/native` 范式可用于补 C++ 有界提取夹具，其 BACKLOG 头部"FEAT-006 待下一 PATCH 实施"注记需按本分支现状校正；`version.py` 当前 0.5.1，下一 PATCH（0.5.2）未占用。
+- 验收缺口不变：实机真实不健康零件触发 `unhealthy_features` 拒绝并核对明细、WorkBuddy 黑盒仍受 BUG-001 会话核对条件约束，未执行。
+
 ## 当前进度（2026-10-21）
 
 接管空窗口NO_CURRENT_MODEL的Python结构化转换与预检全阶段诊断已随0.4.5交付，实机空窗口保留ProMdlCurrentGet调用及-8原码；native结果/来源核验/冲突扫描/令牌发布失败记录failed_stage，超限收尾不覆盖原始诊断。见[本次实施证据](../validation/BUG076-FEEDBACK042-2026-10-21.md)，预算阻断本身仍由BUG-076继续定位。
