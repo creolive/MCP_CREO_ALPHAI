@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from creo_mechdog.references import PatternAxis
+from creo_mechdog.references import PatternAxis, RevolveAxis
 
 
 class StrictModel(BaseModel):
@@ -406,7 +406,7 @@ class RevolveOp(StrictModel):
     angle: Annotated[float, Field(gt=0, le=360)] = 360
     mode: Literal["add", "cut", "surface"] = "add"
     direction: Literal["positive", "negative", "symmetric"] = "positive"
-    axis: dict[str, Any] | None = None
+    axis: RevolveAxis | None = None
     new_body: bool = False
     thin: float | None = Field(default=None, gt=0)
 

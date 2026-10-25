@@ -105,3 +105,22 @@ WorkBuddy 最终验收仅通过已连接 MCP 的公开工具检查用户可见�
 ## 2026-10-16：0.3.2 版本发现补录
 
 [0.3.2 报告 C](../validation/FEEDBACK-0.3.2.md) 记录：0.3.1 时确无公开 Release、0.3.2 版本说明未追写旧内容，而 `creo_check_update` 已能在 0.3.1 环境发现 v0.3.2，上一轮 Q3 的"缺口"按预期化解；[0.3.2 报告 A](../validation/FEEDBACK-0.3.2.md) S8 确认 current=latest=0.3.2 时判"已是最高可比较的公开版本"、措辞正确。两处为外部来源，仍不替代公开高版本提醒、真实断网/限流、客户端去重与网络失败期间建模等本卡验收；本地领先/local_dev 文案仍作为待细化建议。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 外部第八轮 §九小项：`creo_check_update` 在网络超时（GitHub API 5 秒预算连续超时）时的表现被续报；建议失败时明确"未取得最新版本信息"。
+- 0.5.3 计划口径（未实施）：网络超时/失败保留 `failed`、`latest_version=null`、实际错误与重试规则；不能把查询失败写成已经最新，且失败不应阻断建模。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。
+
+## 2026-10-25 0.5.3 阶段三小修：失败文案明确"未取得最新版本信息"
+
+分支 `codex/chores053-wording`。`UpdateChecker._refresh` 失败分支（`src/creo_mechdog/update_check.py`）按上述口径区分两种情况，仅 message 文案，字段与行为不变：此前无成功检查时 `latest_version=null`，message 为"未取得最新版本信息：本次更新检查失败，不代表已是最新版本；15 分钟后可重试"；此前成功过时旧字段按过期缓存保留，message 额外说明须结合 `status=failed`、`stale` 与 `error` 使用。`status=failed`、实际 `error`（含超时/HTTP/网络异常各自的净化文案）与 15 分钟失败冷却保持；失败不阻塞启动、能力查询、启动状态或建模的既有行为未动。
+
+同步 `creo_check_update` 工具描述（失败=未取得最新版本信息、不代表已最新、不阻断建模）与 [UPDATE_CHECK.md](../UPDATE_CHECK.md)（status 表与失败语义段）。新增 `test_failure_messages_state_latest_info_was_not_obtained` 覆盖两种情况的字段与文案（含"已是最新"仅以否定形式出现的逐次校验），dev_check 通过。真实断网/限流与网络失败期间建模等未测场景按卡保留。
+
+## 2026-10-25 阶段三验收证据（收口）
+
+集成尖 `e2bba08`（含 `0729fee` 小修），受测指纹 `checked_source_sha256=da558d9e…b28b5f0`；环境 Windows 11 x64 / Creo 12.4.0.0 / Python 3.12.14，见[阶段三收口](../validation/PHASE3-CLOSEOUT-2026-10-25.md)。
+
+- 实现摘要：`UpdateChecker._refresh` 失败分支按计划口径区分“尚无成功检查”（`latest_version=null`，message 为“未取得最新版本信息：本次更新检查失败，不代表已是最新版本；15 分钟后可重试”）与“有旧缓存”（保留过期字段并说明须结合 `status=failed`/`stale`/`error`）；`status=failed`、净化后的 `error`、15 分钟失败冷却与不阻塞建模的既有行为未动；工具描述与 UPDATE_CHECK.md 同步。
+- 本次证据：离线全量 612 项单测通过（含该新增用例）、`tools/dev_check.py` exit 0（success=true）。本轮**未**做真实断网/限流或 GitHub 超时注入；实机回归期间的更新检查未作为本卡验收项。
+- 未测范围：local_dev/领先公开版语义、真实断网/限流/高版本提醒、客户端会话去重、网络失败期间继续建模仍缺；本轮只收敛失败文案，不改变“验收中”。

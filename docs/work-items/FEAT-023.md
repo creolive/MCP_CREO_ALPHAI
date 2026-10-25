@@ -45,3 +45,7 @@ capabilities摘要/分页已随0.4.2交付、0.4.4补验收闭环；0.4.5的READ
 ## 2026-10-21 补验收：过期、跨实例与超大实际内容
 
 按[完善计划](../development/CREO10-0.4.1-FEEDBACK-IMPROVEMENT-PLAN-2026-10-20.md)补齐 capabilities 分页此前仅单测覆盖的场景（`build/feat023_paging.py`，stdio 直连实机）：篡改 cursor 拒绝、跨实例（等价服务重启）旧 cursor 拒绝、**610 秒真实等待后的过期 cursor 拒绝**、tools 节 13 页翻完 87 条无遗漏（单页峰值 32768 字节，32KiB 上限生效）。详见[验证记录](../validation/DEV-027-030-IMPROVEMENT-2026-10-21.md)。本子项闭环；jobs 日志、组件内联身份等其余体积议题仍留本卡。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 外部第八轮确认：capabilities 104KB 问题已修（compact 摘要 + 分节），外部按 compact/detail 正常消费。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。

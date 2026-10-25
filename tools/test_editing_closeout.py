@@ -34,6 +34,44 @@ from tools.mcp_readiness import wait_for_startup
 from version import VERSION
 
 CIRCLE = [{"type": "circle", "name": "disk", "center": [0, 0], "radius": 8}]
+
+
+def onaxis_sector(theta_max, radius):
+    """BUG-082 on-axis sector profile (sketch plane XZ, revolve about the axis).
+
+    The construction centerline is the revolve axis; ``l1`` is the radial edge
+    on the +X side, the arc spans ``0 -> theta_max`` around the origin, and
+    ``l2`` closes back to the origin (on the axis). Revolving 360 deg about the
+    axis yields a spherical sector. The volume is NOT the half-ball formula
+    ``(2*pi*R^3/3) * (1 - cos(theta_max))``; Pappus' theorem gives the correct
+    ``V = (2*pi*R^3/3) * sin(theta_max)`` (the two agree only at 90 deg).
+    """
+    rad = math.radians(theta_max)
+    return [
+        {"type": "centerline", "name": "axis", "start": [0, 0], "end": [0, 20]},
+        {"type": "line", "name": "l1", "start": [0, 0], "end": [radius, 0]},
+        {
+            "type": "arc",
+            "name": "prof_arc",
+            "center": [0, 0],
+            "radius": radius,
+            "start_angle": 0,
+            "end_angle": theta_max,
+        },
+        {
+            "type": "line",
+            "name": "l2",
+            "start": [radius * math.cos(rad), radius * math.sin(rad)],
+            "end": [0, 0],
+        },
+    ]
+
+
+def onaxis_sector_volume(radius, theta_max):
+    """Spherical-sector volume of the on-axis sector revolved 360 deg."""
+    return (2 * math.pi * radius**3 / 3) * math.sin(math.radians(theta_max))
+
+
 CASES = (
     "label_dimension_edit",
     "integer_dimension_edit",
@@ -45,6 +83,8 @@ CASES = (
     "rectangle_native_verification",
     "entity_branch_native_verification",
     "arc_radius_inplace_edit",
+    "onaxis_sector_coordinate_edit",
+    "onaxis_sector_autodim_failure",
     "reorder_noop_revision_plus_one",
 )
 
@@ -115,6 +155,25 @@ class Closeout:
         assert value["result"]["saved_file_reloaded_and_verified"] is True, value
         if "expected_revision" in args:
             assert value["revision"] == args["expected_revision"] + 1, value
+        value["model_id"] = submitted["model_id"]
+        value["job_id"] = submitted["job_id"]
+        return value
+
+    async def failed_job(self, name, args):
+        submitted = await self.call(name, args)
+        deadline = time.monotonic() + 330
+        while True:
+            value = await self.call(
+                "creo_get_job", {"job_id": submitted["job_id"], "detail": "compact"}
+            )
+            if value["status"] not in {"queued", "running"}:
+                break
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Preserve and poll the accepted job {submitted['job_id']}")
+            await asyncio.sleep(1)
+        value = await self.call("creo_get_job", {"job_id": submitted["job_id"], "detail": "full"})
+        assert value["status"] == "failed", value
+        assert value["result"]["rollback_succeeded"] is True, value
         value["model_id"] = submitted["model_id"]
         value["job_id"] = submitted["job_id"]
         return value
@@ -552,6 +611,152 @@ class Closeout:
             )
             self.volume(restored, 200 * math.pi * math.pi)
             self.case("arc_radius_inplace_edit", [initial, grown, restored])
+
+        if "onaxis_sector_coordinate_edit" in self.selected_cases:
+            # BUG-082 on-axis sector: coordinates edits succeed and the volume
+            # follows the spherical-sector formula V = (2*pi*R^3/3)*sin(theta_max)
+            # (NOT the half-ball 1-cos(theta_max) formula, which only agrees at
+            # 90 deg). The off-axis BUG-079 regression is the arc_radius_inplace_edit
+            # case above; the half-circle on-axis baseline failure is a separate
+            # item and is not asserted here.
+            def plan(entities):
+                return [
+                    {"op": "sketch", "label": "rev_sk", "plane": "XZ", "entities": entities},
+                    {"op": "revolve", "label": "rev1", "sketch": "rev_sk", "angle": 360},
+                ]
+
+            initial = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": plan(onaxis_sector(90, 10)),
+                },
+            )
+            self.created.add(initial["model_id"])
+            self.volume(initial, onaxis_sector_volume(10, 90))
+            rev_id = self.aliases(initial)["rev1"]["feature_id"]
+            angled = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": initial["model_id"],
+                    "expected_revision": initial["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(80, 10),
+                    "dimensioning": "coordinates",
+                },
+            )
+            self.volume(angled, onaxis_sector_volume(10, 80))
+            detail = self.detail(angled, "update_sketch_geometry")
+            assert detail.get("unchanged") is not True
+            assert detail.get("preserved_feature_id") is not None
+            assert self.aliases(angled)["rev1"]["feature_id"] == rev_id
+            back = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": angled["model_id"],
+                    "expected_revision": angled["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(90, 10),
+                    "dimensioning": "coordinates",
+                },
+            )
+            self.volume(back, onaxis_sector_volume(10, 90))
+            grown = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": back["model_id"],
+                    "expected_revision": back["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(90, 12),
+                    "dimensioning": "coordinates",
+                },
+            )
+            self.volume(grown, onaxis_sector_volume(12, 90))
+            assert self.aliases(grown)["rev1"]["feature_id"] == rev_id
+            restored = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": grown["model_id"],
+                    "expected_revision": grown["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(90, 10),
+                    "dimensioning": "coordinates",
+                },
+            )
+            self.volume(restored, onaxis_sector_volume(10, 90))
+            # Direct submissions of the edited geometry (no in-place edit) also
+            # succeed: the on-axis sector is valid geometry, the failure is
+            # edit-path specific (D1_80 / D2_R12 controls).
+            direct_80 = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": plan(onaxis_sector(80, 10)),
+                },
+            )
+            self.created.add(direct_80["model_id"])
+            self.volume(direct_80, onaxis_sector_volume(10, 80))
+            direct_r12 = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": plan(onaxis_sector(90, 12)),
+                },
+            )
+            self.created.add(direct_r12["model_id"])
+            self.volume(direct_r12, onaxis_sector_volume(12, 90))
+            self.case(
+                "onaxis_sector_coordinate_edit",
+                [initial, angled, back, grown, restored, direct_80, direct_r12],
+            )
+
+        if "onaxis_sector_autodim_failure" in self.selected_cases:
+            # BUG-082 failure path: autodim 90->80 fails (SKETCH_SOLVE=-1) and
+            # must roll back cleanly, now with feature-level diagnostics in the
+            # response (failed_features) from the H4 inspection fix.
+            initial = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": [
+                        {
+                            "op": "sketch",
+                            "label": "rev_sk",
+                            "plane": "XZ",
+                            "entities": onaxis_sector(90, 10),
+                        },
+                        {"op": "revolve", "label": "rev1", "sketch": "rev_sk", "angle": 360},
+                    ],
+                },
+            )
+            self.created.add(initial["model_id"])
+            self.volume(initial, onaxis_sector_volume(10, 90))
+            before = general.model_info(initial["model_id"])
+            failed = await self.failed_job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": initial["model_id"],
+                    "expected_revision": initial["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(80, 10),
+                    "dimensioning": "autodim",
+                },
+            )
+            assert failed["result"]["message"].startswith("Regeneration produced a failed"), failed
+            features = failed["result"].get("failed_features") or []
+            assert features, failed
+            assert any(f["status"] != 0 for f in features), features
+            after = general.model_info(initial["model_id"])
+            assert after["revision"] == before["revision"], after
+            assert after["part_sha256"] == before["part_sha256"], after
+            assert (
+                abs(
+                    after["inspection_summary"]["volume_mm3"]
+                    - before["inspection_summary"]["volume_mm3"]
+                )
+                < 0.01
+            )
+            self.case("onaxis_sector_autodim_failure", [initial, failed])
 
         self.report["success"] = True
         self.save()

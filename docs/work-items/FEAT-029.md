@@ -167,3 +167,9 @@
 验证：单测 17 项全过（新增 setup 文本首行/路径/边界句断言）；本机 Creo 12.4 实机（stdio 直连新服务实例）：`creo_callback_status` 返回 `readiness=not_loaded, reason=no_runtime_identity_record`，instruction 首行含实际注册文件路径——正是反馈者所需的一条查询定位入口。`tools/dev_check.py` 通过（指纹 12c6a82f…）、`tools/test_general.py` GENERAL_CORE_SUCCESS=1。详见[验证记录](../validation/FEAT-029-guidance-2026-10-18.md)。
 
 未完成（保持验收中）：脚本化注册/自动启动待方案（本轮按用户选择不做）；实机加载后 ready 分支、升级/回退/并存生命周期矩阵、WorkBuddy 黑盒、Creo 13 外部环境未测。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八/九轮，2026-10-25 归档登记）
+
+- 环境：外部 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0、0.5.1。
+- 回调人工注册门槛续报：`creo_loft` 在该环境仍需人工在 Creo Auxiliary Applications 注册并启动回调 DLL（`BLEND_CALLBACK_SETUP_REQUIRED`），行为自 0.3.2 起未变，信息完整度继续提升。
+- 种子放样路径（`creo_new_loft_part`）在同一环境因种子 -16 未走通，与本卡的回调注册机制无关（见 [BUG-034](BUG-034.md)/[FEAT-030](FEAT-030.md)）；回调自动注册目标不受此影响，继续沿本卡推进。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。

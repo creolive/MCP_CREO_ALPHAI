@@ -166,6 +166,37 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["error"], "HTTP 429")
         self.assertTrue(result["stale"])
 
+    async def test_failure_messages_state_latest_info_was_not_obtained(self):
+        # No prior success: latest_version stays null and the message must never
+        # read as "already up to date".
+        self.fetch.side_effect = OSError("network down")
+        result = await self.checker.check()
+        self.assertEqual(result["status"], "failed")
+        self.assertIsNone(result["latest_version"])
+        self.assertIsNotNone(result["error"])
+        self.assertIn("未取得最新版本信息", result["message"])
+        self.assertIn("不代表已是最新版本", result["message"])
+        self.assertIn("15 分钟后可重试", result["message"])
+        self.assertEqual(
+            result["message"].count("已是最新"),
+            result["message"].count("不代表已是最新版本"),
+        )
+        # After a successful check, a failure keeps the stale cached target and
+        # labels it as expired cache that must be read with status/stale/error.
+        self.fetch.side_effect = None
+        self.now += updates.RETRY_SECONDS
+        original = await self.checker.check()
+        self.assertEqual(original["status"], "update_available")
+        self.fetch.side_effect = updates.UpdateFailure("HTTP 503")
+        self.now += updates.CACHE_SECONDS
+        failed = await self.checker.check()
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["latest_version"], original["latest_version"])
+        self.assertTrue(failed["stale"])
+        self.assertIn("未取得最新版本信息", failed["message"])
+        self.assertIn("过期缓存", failed["message"])
+        self.assertIn("status=failed", failed["message"])
+
     async def test_no_data_uses_cooldown_and_does_not_claim_up_to_date(self):
         self.fetch.return_value = []
         result = await self.checker.check()

@@ -1,0 +1,51 @@
+{
+  "operations": [
+    {
+      "op": "datum_axis",
+      "label": "turn_axis",
+      "references": [
+        {
+          "kind": "datum_plane",
+          "axis": "y"
+        },
+        {
+          "kind": "datum_plane",
+          "axis": "z"
+        }
+      ]
+    },
+    {
+      "op": "sketch",
+      "label": "ring_profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "rectangle",
+          "name": "ring",
+          "min": [
+            5,
+            0
+          ],
+          "max": [
+            15,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "op": "revolve",
+      "label": "ring",
+      "sketch": "ring_profile",
+      "angle": 360,
+      "axis": {
+        "kind": "datum_axis_feature",
+        "label": "turn_axis"
+      }
+    }
+  ],
+  "assertions": {
+    "volume_mm3": 3141.592653589793,
+    "require_solid": true
+  }
+}
