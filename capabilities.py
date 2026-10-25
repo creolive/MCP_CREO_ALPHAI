@@ -225,6 +225,24 @@ def families() -> dict:
                 "6/straight",
                 "6/smooth",
             ],
+            "available_scope": (
+                "available means the seed file bytes match the published SHA256; it does not mean "
+                "the current Creo session can load this seed"
+            ),
+            "native_load_probe": (
+                "not_performed; listing and validation never connect to Creo and never trial-load "
+                "a seed"
+            ),
+            "compatibility_evidence": (
+                "external Creo 9 reported the tested seeds failing with -16; a Creo 10 "
+                "three-section success is on record; the current session and the other seeds "
+                "are unverified"
+            ),
+            "production_version": (
+                "seed_build_version stays null until a traceable generation record or reliable "
+                "native evidence names it for the exact seed SHA256; the UGC header token is "
+                "kept as an unverified clue only"
+            ),
             "limits": "no automatic download, arbitrary seed generation or mode/count conversion",
         },
         "airfoil": {
@@ -326,6 +344,15 @@ def families() -> dict:
                 {"section_count": 6, "interpolation": "smooth"},
             ],
             "mode_verification": "requested interpolation must match the saved seed; native PRO_FEAT_INFO checked before save, after parameter edits and after reload",
+            "compatibility_evidence": (
+                "external Creo 9 reported the tested seeds failing with -16; a Creo 10 "
+                "three-section success is on record; the current session and the other seeds "
+                "are unverified"
+            ),
+            "load_failure_diagnosis": (
+                "a failed native load keeps the original API, error code and stage plus the seed "
+                "identity, SHA256 and the session release; the error alone never names the cause"
+            ),
             "native_test": "five-section smooth rectangles and NACA 0012 spline airfoils; middle sketch/plane edits; saved reload, all-section STL checks and failed-assertion rollback; two-section rectangle/circle/triangle regression",
             "limits": "requires a saved solid Blend seed with matching section count and interpolation, Chinese/English Creo; XY sketches with strictly increasing Z offsets; no seed section insertion/removal, mode conversion, cut/surface or tangency controls; use direct loft for existing-target insertion; seed endpoint settings and datums are inherited; input range is not proof that every count/profile is tested; free endpoints may produce identical geometry with two sections",
         },

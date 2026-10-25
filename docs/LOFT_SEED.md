@@ -10,6 +10,15 @@
 
 `dimensions` 是可选列表。矩形与种子实体边重合时，旧实现的自动求解可能让新草图反向引用种子混合，进而在 `ReorderSeedBlend` 失败。修复版在创建截面期间暂时抑制**新副本中的种子混合**，完成后恢复，并检查新截面没有依赖旧混合或旧截面；源种子不受影响。希望用 `width`、`height` 等名字修改参数时，仍建议提供命名尺寸；省略时可通过检查结果取得 Creo 自动尺寸的原生 ID，或修改截面平面的偏移尺寸。
 
+## 来源与兼容性口径（2026-10-25，FEAT-030 / BUG-034）
+
+**兼容口径（逐字引用）**：外部 Creo 9 已报告受测种子 -16；另有 Creo 10 三截面成功历史；当前会话/其他种子未验证。
+
+- 本文其余章节与 [SEED_LIBRARY.md](SEED_LIBRARY.md) 的历史验收段落保留其原环境与日期，不作为当前兼容结论。
+- 种子清单中的 `available` 只表示文件字节与 SHA256 有效；`creo_list_seeds` / `creo_validate_seed` 不建立 Toolkit 连接、不隐式试载，不代表当前 Creo 会话能加载该种子。
+- `seed_build_version` 只来自与该种子实际 SHA256 绑定的可追溯生成记录或可靠原生证据；否则保持 null。UGC 头中的版本数值只是诊断线索，不映射为产品版本。
+- 放样或翼型加载失败时，诊断保留原始 API（`ProMdlFiletypeLoad`）、错误码、实际阶段、种子标识与 SHA256、可取得的运行版本，并提示核对兼容性与来源。只有存在绑定该 SHA256 的来源记录且其 release 高于当前会话 release 时才给出有界的版本提示，否则原因记为 `undetermined_by_error_alone`，不硬写“由 Creo 12.4 构建，当前版本无法加载”。加载成功与后续建模成功分别记录（`seed_load_succeeded` / `modeling_succeeded`）。
+
 ## 两截面种子与调用
 
 可以直接下载独立发布的 [种子库](SEED_LIBRARY.md)，选用 `two_straight` 或 `two_smooth`。种子原文件可以在不同电脑复制，调用时改为本机绝对路径，清单中的内部 ID 适用于同一份原文件。

@@ -669,6 +669,11 @@ async def creo_new_loft_part(
     Two-section rectangles, circles and triangles are also supported. This preserves
     a native parametric Blend; it is seed reuse, not direct element-tree creation.
     The native mode is checked after creation, edits and saved-file reload.
+    A failed native load keeps the original API, error code and stage plus the seed
+    identity, SHA256 and the session release; the error alone never names the cause.
+    External Creo 9 reported the tested seeds failing with -16 and a Creo 10
+    three-section success is on record; the current session and the other seeds are
+    unverified, so no minimum Creo version is promised.
     It does not increase the seed's section count. No existing-target insertion, cut/surface modes or
     editable tangency/curvature controls; endpoint settings are inherited.
     Poll the returned job_id and use the resulting model_id for later features.
@@ -687,13 +692,13 @@ async def creo_new_loft_part(
 
 @mcp.tool(annotations=READ)
 async def creo_list_seeds() -> dict[str, Any]:
-    """Discover bundled/registered native Blend seeds and verify their SHA256. available means matching file bytes, not current Creo compatibility. seed_build_version is null when provenance is unknown; native_compatibility contains bounded historical loads tied to seed SHA256 and native release/session, without connecting Creo. No manual paths/feature IDs are needed for auto-selected lofts."""
+    """Discover bundled/registered native Blend seeds and verify their SHA256. available means matching file bytes only, not current Creo compatibility; listing never connects to Creo and never trial-loads a seed. seed_build_version is null when provenance is unknown; native_compatibility contains bounded historical loads tied to seed SHA256 and native release/session. External Creo 9 reported the tested seeds failing with -16 and a Creo 10 three-section success is on record; the current session and the other seeds are unverified. No manual paths/feature IDs are needed for auto-selected lofts."""
     return await invoke(seeds.list_seeds)
 
 
 @mcp.tool(annotations=READ)
 async def creo_validate_seed(seed_name: str) -> dict[str, Any]:
-    """Verify a seed's file hash/provenance without connecting Creo. Unknown seed_build_version stays null; native_compatibility observations are historical, never proof of current-session compatibility. Native load/type/count/mode are additionally checked on actual loft creation and reported separately from overall modeling success."""
+    """Verify a seed's file hash/provenance without connecting Creo and without trial-loading it. available means matching file bytes only, not current Creo compatibility. Unknown seed_build_version stays null; native_compatibility observations are historical, never proof of current-session compatibility. Native load/type/count/mode are additionally checked on actual loft creation and reported separately from overall modeling success."""
     return await invoke(seeds.validate_seed, seed_name)
 
 
@@ -768,7 +773,7 @@ async def creo_new_airfoil_blade(
     label: str = "blade_blend",
     interpolation: Literal["straight", "smooth"] = "smooth",
 ) -> dict[str, Any]:
-    """Create a new native Blend from varying chord/thickness/twist NACA 00xx sections. Offset is span along +Z, sections lie on XY. Automatically selects a verified matching seed; 2 straight/smooth and 5 smooth are packaged."""
+    """Create a new native Blend from varying chord/thickness/twist NACA 00xx sections. Offset is span along +Z, sections lie on XY. Automatically selects a verified matching seed; 2 straight/smooth and 5 smooth are packaged. A failed native load keeps the original API, error code and stage plus the seed identity, SHA256 and the session release; the error alone never names the cause."""
     sections = []
     for index, station in enumerate(stations):
         profile = station.model_dump()

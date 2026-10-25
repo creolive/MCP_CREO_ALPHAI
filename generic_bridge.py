@@ -333,9 +333,24 @@ def submit(
             inputs.mkdir(parents=True)
             template = inputs / source.name.lower()
             shutil.copyfile(source, template)
+            digest = hashlib.sha256(template.read_bytes()).hexdigest()
+            # The seed identity travels with the request so a native load failure
+            # can name the seed and its bytes (FEAT-030/BUG-034).
+            entry = None
+            try:
+                import seeds
+
+                entry = seeds.manifest_entry_by_digest(digest)
+            except (OSError, ValueError):
+                entry = None
             loft_seed = {
                 **loft_seed,
-                "snapshot_sha256": hashlib.sha256(template.read_bytes()).hexdigest(),
+                "snapshot_sha256": digest,
+                "seed_name": entry["name"] if entry else loft_seed.get("seed_name"),
+                "seed_manifest_sha256": (
+                    entry["sha256"] if entry else loft_seed.get("seed_manifest_sha256")
+                ),
+                "seed_source": str(source),
             }
         for index, source in udf_files.items():
             inputs = directory / "input" / str(index)
@@ -443,9 +458,15 @@ def run_generic_job(job_id: str, manifest: dict):
                     model_registry.split_job_result(result, directory)
                     manifest["result"] = result
                     if request.get("loft_seed"):
-                        from creo_mechdog.seed_compatibility import observe_load
+                        from creo_mechdog import seed_compatibility
 
-                        result["seed_load_evidence"] = observe_load(request, result, job_id)
+                        evidence = seed_compatibility.observe_load(request, result, job_id)
+                        result["seed_load_evidence"] = evidence
+                        if isinstance(evidence, dict) and evidence.get("status") == "load_failed":
+                            # Keep the native wording and add the seed identity,
+                            # stage and session release behind it.
+                            result["native_message"] = result.get("message")
+                            result["message"] = seed_compatibility.load_failure_message(result)
                     if (
                         result.get("disconnect_code") not in (None, 0)
                         or result.get("delivery_complete") is False

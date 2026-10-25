@@ -93,3 +93,27 @@ BUG-054/DEV-033的本机Creo12.4实体extrude/revolve cut开发、保存重载/�
 ## 2026-10-18：纳管第二阶段开发分支
 
 FEAT-042无盘prepare/apply、FEAT-043会话枚举及BUG-071预检收尾已实现；403项Python单元与统一检查、匹配Creo12.4 SDK构建通过。用户确认现场后首次9秒就绪探测超时，未提交纳管或抽壳任务，未做新一轮原生几何/保存重载验收。无盘001、未保存修改、外部目录及钣金仍未实机验收，WorkBuddy未执行；不改变其他环境支持声明或旧验证结论。详见[本轮证据](validation/ADOPTION-COMPLETION-2026-10-18.md)。
+
+## 2026-10-25：种子来源与加载兼容性（FEAT-030 / BUG-034）
+
+种子相关结论按"文件证据"与"原生加载证据"分开记录，两者不互相替代。
+
+**当前口径（逐字引用）**：外部 Creo 9 已报告受测种子 -16；另有 Creo 10 三截面成功历史；当前会话/其他种子未验证。
+
+- 外部环境为 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0、0.5.1：`creo_new_airfoil_blade` 与 `creo_new_loft_part`（种子放样）均报 `ProMdlFiletypeLoad failed with code -16 during connect`。记录口径为**该受测环境两条放样路径均未成功**，不外推为所有 Creo 9 放样均不可用；`-16` 本身不足以唯一归因为版本不兼容。
+- Creo 10.0.0.0 有三截面自动匹配混合成功且 `saved_file_reloaded_and_verified=true` 的历史记录（2026-10-17 报告），无 job/model 标识，不外推为完整 Creo 10 运行时验收或全部九个种子在该环境可加载。
+- **不写未经证实的最低 Creo 要求，也不写笼统的"Creo 10+ 已验证"。** 本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 的成功记录只覆盖本机已测范围。
+
+### 来源与生产版本
+
+- `seed_build_version` 只接受**可追溯生成记录**（`docs/seed_manifest.json` 中与该种子 SHA256 绑定的条目）或**可靠原生证据**（`build/seed_provenance/<sha256>/` 下由原生会话写下的记录），两者都必须与**实际种子 SHA256** 绑定；文件字节变化后不再归属，原值回到 null。
+- 当前九个已发布种子**没有**可追溯的生成记录，因此 `seed_build_version` 保持 null。UGC 头里的 `PART 2128 …` 等数值只作为 `seed_file_diagnostic.ugc_part_version_token` 诊断线索保留，没有已证明的版本对应关系，不建立 2128=12.4 之类映射，也永不用于填 `seed_build_version`。
+- 种子库重生成是另列的环境受阻子项：本机无匹配旧版生成/验收环境时不承诺完成，也不新增双版本发布门槛。
+
+### 查询与失败诊断
+
+- `creo_list_seeds` / `creo_validate_seed` 的 `available` 只表示**文件字节与 SHA256 有效**，不代表当前 Creo 可加载；普通查询不建立 Toolkit 连接、不隐式试载（`native_load_probe = not_performed`）。`native_compatibility.status` 恒为 `not_verified_for_current_session`，历史加载记录按种子 SHA256 隔离，只说明"别的会话里发生过什么"。
+- 放样/翼型加载失败时保留原始 API、错误码、实际阶段、种子标识与 SHA256、可取得的运行版本（`creo_release_numeric` / `session_fingerprint`），并提示核对兼容性与来源。只有当存在与该 SHA256 绑定的来源记录且其 release 高于当前会话 release 时，才给出有界的版本提示；否则 `cause = undetermined_by_error_alone`，不硬写"由 Creo 12.4 构建，当前版本无法加载"。加载成功与后续建模成功分别记录（`seed_load_succeeded` / `modeling_succeeded`）。
+- 诊断写入失败不改变建模终态，失败原因保留在 `seed_load_evidence.evidence_error`。
+
+本轮为开发分支改动，未连接 Creo 会话、未执行实机建模与保存重载；实机成功核对留给回归收口任务。详见 [FEAT-030](work-items/FEAT-030.md)、[BUG-034](work-items/BUG-034.md) 与[本轮验证记录](validation/FEAT030-BUG034-SEED-TRANSPARENCY-2026-10-25.md)。

@@ -38,3 +38,20 @@
 - 外部环境观察：Creo 9 会话种子加载 -16 持续复现（叶片与种子放样同病，详见 [BUG-034](BUG-034.md)）；另有 Creo 10 三截面种子放样成功的历史记录——两者分开记录，不写"所有种子在 Creo 10+ 可加载"，也不写未经证实的最低 Creo 要求。
 - UGC 头与生产版本为待核实线索：2128/2023/1934 与产品版本对应未获可追溯证明，不建立 2128=12.4 等映射；来源不足时 `seed_build_version` 继续为 null。
 - 0.5.3 计划范围（未实施）：list/validate 的 available 只表示文件及哈希有效，不代表当前 Creo 可加载；loft/airfoil 加载失败保留原始 API、错误码、实际阶段、种子标识/哈希与可取得的运行版本，不硬写"由 Creo 12.4 构建，当前版本无法加载"；capabilities/种子说明/兼容矩阵写明"外部 Creo 9 已报告受测种子 -16；另有 Creo 10 三截面成功历史；当前会话/其他种子未验证"。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。
+
+## 2026-10-25：来源与兼容信息透明化实现（开发分支，未做实机连接）
+
+实现范围（Python 侧，未改原生 C++，无需重新编译执行器）：
+
+- `src/creo_mechdog/seed_compatibility.py`：来源解析与加载失败诊断。
+  - 生产版本只接受两种来源，且都必须与**实际种子 SHA256** 绑定：`docs/seed_manifest.json` 中的可追溯生成记录（`seed_build_version` + `sha256` 一致才采纳），或 `build/seed_provenance/<sha256>/` 下由原生会话写下的证据记录（`record_native_build_evidence()` 写入，需 `row["seed_sha256"] == digest`）。文件字节变化后来源不归属，`seed_build_version` 回到 null、`seed_build_version_status` 回到 `unknown`。
+  - UGC 头解析为 `seed_file_diagnostic.ugc_part_version_token`（首行 `#UGC:2 PART 2128 …`），`ugc_interpretation` 固定为 `unverified_clue`；不建立 2128=12.4 之类映射，也永不用于填 `seed_build_version`。
+  - `load_failure_diagnosis()` 保留原始 API（`ProMdlFiletypeLoad`）、错误码、实际阶段（`failed_stage`）、种子标识与 SHA256、可取得的运行版本（`creo_release_numeric` / `creo_release_query_code` / `session_fingerprint`）与原生消息原文，并给出核对兼容性与来源的提示。只有当存在绑定该 SHA256 的来源记录且其 release 高于当前会话 release 时才给出有界的 `version_incompatibility`（`cause = recorded_release_newer_than_session_release`），否则 `cause = undetermined_by_error_alone`。
+  - 加载成功与后续建模成功分别记录（`seed_load_succeeded` / `modeling_succeeded`）；历史加载记录按种子 SHA256 隔离，只说明别的会话发生过什么，`native_compatibility.status` 恒为 `not_verified_for_current_session`。
+- `seeds.py`（根兼容包装）：`list_seeds()` / `validate_seed()` 增加 `available_scope`、`native_load_probe`（`not_performed`）与 `compatibility_evidence`；`available` 判定改为"实际文件哈希 == 清单哈希"，来源与历史随实际字节走；新增 `manifest_entry_by_digest()`。
+- `generic_bridge.py`：放样/翼型任务提交时对种子副本计算 SHA256 并绑定清单条目（`snapshot_sha256` / `seed_name` / `seed_manifest_sha256` / `seed_source`）；任务收尾调用 `observe_load()` 写加载证据，失败时把诊断并入终态消息（`native_message` 保留原生原文）。诊断写入失败不改变建模终态，原因留在 `seed_load_evidence.evidence_error`。
+- `capabilities.py`：`seed_library` 与 `loft_seed` 族增加 `available_scope` / `native_load_probe` / `compatibility_evidence` / `production_version` / `load_failure_diagnosis`。
+- `server.py`：`creo_list_seeds`、`creo_validate_seed`、`creo_new_loft_part`、`creo_new_airfoil_blade` 的说明写明 available 只代表文件字节、普通查询不建立 Toolkit 连接也不试载、失败诊断口径，且不承诺最低 Creo 版本。
+- 文档：[兼容矩阵](../COMPATIBILITY.md)、[种子库说明](../SEED_LIBRARY.md)、[放样种子说明](../LOFT_SEED.md) 均写明"外部 Creo 9 已报告受测种子 -16；另有 Creo 10 三截面成功历史；当前会话/其他种子未验证"，不写未经证实的最低 Creo 要求或笼统"Creo 10+ 已验证"。
+
+本轮为开发分支改动，**未连接 Creo 会话、未做实机建模与保存重载**：加载成功与后续建模成功的实机核对留给回归收口任务。种子库重生成是另列的环境受阻子项，本机无匹配旧版生成/验收环境，未承诺完成，也未新增双版本发布门槛。新增 17 项隔离单测、全量 585 项单元与 `tools/dev_check.py` 通过；证据见[本轮验证记录](../validation/FEAT030-BUG034-SEED-TRANSPARENCY-2026-10-25.md)。

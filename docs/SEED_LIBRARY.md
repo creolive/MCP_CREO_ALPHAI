@@ -22,6 +22,20 @@ v0.3.1 源码内含 `seed_library/`，安装器自动验证并注册九个项目
 
 三个原始 PRT 已逐字节核对 v0.2.4 实机测试输入。两截面直线和平滑的方形、圆、三角形以及五截面平滑方形和 NACA 0012 样条翼型通过原生特征、参数修改、保存擦除重载验证。证据见 [直线](validation_loft_seed.json)、[平滑](validation_loft_smooth.json)、[多截面](validation_multisection.json)。本机测试环境为 Creo 10.0.0.0，其他安装仍需验证。新增六个种子均通过真实 MCP 重绑定、参数修改、实体截面核对、保存重载、失败回滚及数量/模式拒绝验收。逐项证据在 `seed_library/validation/`。2～20 的接口数量范围不代表所有数量均已实测。
 
+## 来源、生产版本与加载兼容性（2026-10-25，FEAT-030 / BUG-034）
+
+本节是当前口径；上文“已验证内容”保留其历史环境与日期，不作为当前兼容结论。
+
+**兼容口径（逐字引用）**：外部 Creo 9 已报告受测种子 -16；另有 Creo 10 三截面成功历史；当前会话/其他种子未验证。
+
+- 外部环境为 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0、0.5.1：`creo_new_airfoil_blade` 与 `creo_new_loft_part`（种子放样）均报 `ProMdlFiletypeLoad failed with code -16 during connect`。`-16` 本身不足以唯一归因为版本不兼容，也不写未经证实的最低 Creo 要求或笼统的“Creo 10+ 已验证”。
+- `available` 只表示**文件字节与 SHA256 有效**，不代表当前 Creo 可加载。`creo_list_seeds` / `creo_validate_seed` 不建立 Toolkit 连接、不隐式试载（返回 `native_load_probe = not_performed`），`native_compatibility.status` 恒为 `not_verified_for_current_session`。
+- `seed_build_version` 只接受**可追溯生成记录**（`docs/seed_manifest.json` 中与该种子 SHA256 绑定的条目）或**可靠原生证据**（`build/seed_provenance/<sha256>/` 下由原生会话写下的记录），两者都必须与**实际种子 SHA256** 绑定。当前九个已发布种子没有可追溯的生成记录，因此 `seed_build_version` 保持 null。UGC 头中的 `PART 2128 …` 等数值只作为诊断线索（`seed_file_diagnostic.ugc_part_version_token`）保留，没有已证明的版本对应关系，不建立 2128=12.4 之类映射，也永不用于填 `seed_build_version`。
+- 种子库重生成是另列的环境受阻子项：本机无匹配旧版生成/验收环境时不承诺完成，也不新增双版本发布门槛。
+- 加载失败的诊断保留原始 API、错误码、实际阶段、种子标识与 SHA256、可取得的运行版本，并提示核对兼容性与来源；只有存在与该 SHA256 绑定的来源记录且其 release 高于当前会话 release 时才给出有界的版本提示，否则原因记为 `undetermined_by_error_alone`。加载成功与后续建模成功分别记录。
+
+详见 [兼容矩阵](COMPATIBILITY.md)、[放样种子说明](LOFT_SEED.md)、[FEAT-030](work-items/FEAT-030.md) 与 [BUG-034](work-items/BUG-034.md)。
+
 ## 下载后使用
 
 **最新源码优先流程**：完成 `setup.ps1`，调用 `creo_list_seeds` 确认可用数量为 9，随后调用 `creo_new_loft_part` 时省略 `seed_file` 和 `seed_feature_id`。数量和 `interpolation` 自动匹配。翼型还可直接调用 `creo_new_airfoil_blade`。详细说明见 [本次版本](RELEASE_NOTES_0.2.5.md)。以下保留旧调用兼容流程，适用于需要显式指定种子的用户。
