@@ -86,6 +86,7 @@ class SummarizeContract(unittest.TestCase):
             [op("remove_component", component=51)],
             job_status="succeeded",
             prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection={"components": [{"feature_id": 51}]},
             result_aliases={},
         )
         self.assertEqual(
@@ -238,7 +239,9 @@ class SummarizeContract(unittest.TestCase):
             [REMOVE, ADD],
             job_status="succeeded",
             prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection={"components": [{"feature_id": 51}]},
             result_aliases={"pin_a": {"feature_id": 77, "source_revision": 4}},
+            result_inspection={"components": [{"feature_id": 77}]},
         )
         removed, added = summary["changes"]
         self.assertEqual(removed, {"op": "removed", "label": "pin_a", "feature_id": 51})
@@ -250,6 +253,167 @@ class SummarizeContract(unittest.TestCase):
         summary = component_changes.summarize([ADD], job_status="unknown_outcome")
         self.assertEqual(summary["status"], "unknown_outcome")
         self.assertEqual(summary["changes"], [])
+
+
+DATUM = op("datum_plane", label="datum_1", offset=5)
+
+
+class ComponentIdentityFilter(unittest.TestCase):
+    """Stage-5 regressions: only real components enter the committed sets."""
+
+    def test_mixed_job_new_datum_alias_is_not_reported_as_component(self):
+        # The same assembly job assembles a component AND creates a datum.
+        # Generic aliases (datum_plane, sketch, extrude) share the alias map
+        # with components; the datum must not appear as a component change.
+        summary = component_changes.summarize(
+            [ADD, DATUM],
+            job_status="succeeded",
+            result_aliases={
+                "pin_a": {"op": "assemble_component", "feature_id": 77, "source_revision": 2},
+                "datum_1": {"op": "datum_plane", "feature_id": 90},
+            },
+            result_inspection={"components": [{"feature_id": 77}]},
+        )
+        self.assertEqual(
+            summary["changes"],
+            [
+                {
+                    "op": "added",
+                    "label": "pin_a",
+                    "feature_id": 77,
+                    "source_model_id": "a" * 32,
+                    "source_revision": 2,
+                }
+            ],
+        )
+
+    def test_mixed_job_move_plus_new_datum_reports_only_net_move(self):
+        transform_a = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        transform_b = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [9, 0, 0, 1]]
+        summary = component_changes.summarize(
+            [MOVE, DATUM],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection={"components": [{"feature_id": 51, "transform": transform_a}]},
+            result_aliases={
+                "pin_a": {"feature_id": 51},
+                "datum_1": {"op": "datum_plane", "feature_id": 90},
+            },
+            result_inspection={"components": [{"feature_id": 51, "transform": transform_b}]},
+        )
+        self.assertEqual(
+            summary["changes"],
+            [
+                {
+                    "op": "moved",
+                    "label": "pin_a",
+                    "feature_id": 51,
+                    "from": transform_a,
+                    "to": transform_b,
+                }
+            ],
+        )
+
+    def test_datum_alias_without_component_ops_returns_none(self):
+        self.assertIsNone(component_changes.summarize([DATUM], job_status="succeeded"))
+
+    def test_removed_datum_alias_is_not_reported_as_component(self):
+        # A datum that existed before the job and survives it must not be
+        # diffed as a component; only the real component removal is reported.
+        summary = component_changes.summarize(
+            [REMOVE],
+            job_status="succeeded",
+            prior_aliases={
+                "pin_a": {"feature_id": 51},
+                "datum_1": {"op": "datum_plane", "feature_id": 90},
+            },
+            prior_inspection={"components": [{"feature_id": 51}]},
+            result_aliases={"datum_1": {"op": "datum_plane", "feature_id": 90}},
+        )
+        self.assertEqual(
+            summary["changes"], [{"op": "removed", "label": "pin_a", "feature_id": 51}]
+        )
+
+    def test_alias_less_inspection_component_uses_real_feature_id(self):
+        # A native component with no managed alias still enters under its real
+        # inspection feature_id (label None); no identity is fabricated.
+        summary = component_changes.summarize(
+            [op("assemble_component", label="pin_a", source_model_id="a" * 32)],
+            job_status="succeeded",
+            result_aliases={"pin_a": {"op": "assemble_component", "feature_id": 77}},
+            result_inspection={"components": [{"feature_id": 77}, {"feature_id": 40}]},
+        )
+        added = [c for c in summary["changes"] if c["op"] == "added"]
+        self.assertIn(
+            {
+                "op": "added",
+                "label": None,
+                "feature_id": 40,
+                "source_model_id": None,
+                "source_revision": None,
+            },
+            added,
+        )
+        self.assertIn(77, [c["feature_id"] for c in added])
+
+    def test_constraints_type_name_display_only_is_not_a_change(self):
+        # Old checkpoints carry numeric-only constraints; fresh queries add
+        # the display-only type_name symbol. The projection must not report
+        # a constraints_changed for the symbol alone.
+        prior = {
+            "components": [
+                {
+                    "feature_id": 51,
+                    "constraints": [{"type": 13, "offset": 0.0, "asm_ref": 9, "comp_ref": 12}],
+                }
+            ]
+        }
+        new = {
+            "components": [
+                {
+                    "feature_id": 51,
+                    "constraints": [
+                        {
+                            "type": 13,
+                            "type_name": "fix",
+                            "offset": 0.0,
+                            "asm_ref": 9,
+                            "comp_ref": 12,
+                        }
+                    ],
+                }
+            ]
+        }
+        summary = component_changes.summarize(
+            [CONSTRAIN],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection=prior,
+            result_aliases={"pin_a": {"feature_id": 51}},
+            result_inspection=new,
+        )
+        self.assertEqual(summary["changes"], [])
+
+    def test_constraints_real_field_change_is_still_reported(self):
+        # Projecting type_name must not hide real numeric changes.
+        prior = {"components": [{"feature_id": 51, "constraints": [{"type": 13, "offset": 0.0}]}]}
+        new = {
+            "components": [
+                {"feature_id": 51, "constraints": [{"type": 13, "type_name": "fix", "offset": 2.5}]}
+            ]
+        }
+        summary = component_changes.summarize(
+            [CONSTRAIN],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection=prior,
+            result_aliases={"pin_a": {"feature_id": 51}},
+            result_inspection=new,
+        )
+        self.assertEqual(
+            summary["changes"],
+            [{"op": "constraints_changed", "label": "pin_a", "feature_id": 51}],
+        )
 
 
 class RunJobAttachment(unittest.TestCase):

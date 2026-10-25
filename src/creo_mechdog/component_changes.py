@@ -7,11 +7,20 @@ inspection; this module never simulates geometry. Statuses stay honest about
 what the native side actually confirmed:
 
 * ``committed`` — the job succeeded; entries are the net verified diff:
-  components compared by their real native ``feature_id``. A label present
-  only after the job is ``added`` (with the NEW id from the result aliases);
+  the before/after sets hold only REAL components: a managed label counts
+  when the native alias records ``op="assemble_component"`` or its
+  feature_id is one of the real component ids reported by the verified
+  inspection. Generic aliases (datum_plane, sketch, extrude, ...) are never
+  listed. Alias-less native components enter under their real inspection
+  feature_id (label ``None``); ids are never fabricated. Components are then
+  compared by their real native ``feature_id``. A label present only after
+  the job is ``added`` (with the NEW id from the result aliases);
   a label present only before the job is ``removed`` (with the PRIOR id);
   a label on both sides with the SAME id is ``moved``/``constraints_changed``
-  only when the queried transforms/constraints actually differ; a label on
+  only when the queried transforms/constraints actually differ (constraint
+  comparison projects out the display-only ``type_name`` symbol, matching
+  constraint_compare.h, so old numeric-only checkpoints stay compatible);
+  a label on
   both sides with DIFFERENT ids is a reinsert and reports ``removed`` (old
   id) plus ``added`` (new id) — identities are never fabricated from the
   final aliases of a component that was removed mid-job. Sequences such as
@@ -102,6 +111,45 @@ def _added_entry(label: Any, result_entry: dict, added_sources: dict) -> dict:
     }
 
 
+def _component_labels(aliases: dict, inspection: dict | None) -> tuple[dict, set]:
+    """Split real component aliases from generic feature aliases.
+
+    A managed label denotes a component only when the native alias records
+    ``op="assemble_component"`` (native ``remember`` always stamps the op) or
+    its feature_id is one of the real component ids reported by the verified
+    inspection. Generic aliases (datum_plane, sketch, extrude, ...) fail both
+    tests and must never enter the component summary. Also returns the set of
+    real inspection component ids for alias-less identity handling.
+    """
+    ids = {component.get("feature_id") for component in (inspection or {}).get("components") or []}
+    labels = {}
+    for label, entry in (aliases or {}).items():
+        entry = entry or {}
+        if entry.get("op") == "assemble_component" or entry.get("feature_id") in ids:
+            labels[label] = entry
+    return labels, ids
+
+
+def _constraints_view(constraints: Any) -> Any:
+    """Project out the display-only ``type_name`` symbol before comparison.
+
+    Matches native constraint_compare.h: checkpoints recorded before
+    constraints gained the readable symbol carry only numeric fields
+    (``{"type": 13}``) while fresh queries carry the same fields plus
+    ``type_name``. Real fields (numeric type, offsets, assembly/component
+    references, sides) and count/order stay fully compared; non-array
+    payloads pass through unchanged so a malformed comparison still fails.
+    """
+    if not isinstance(constraints, list):
+        return constraints
+    return [
+        {key: value for key, value in item.items() if key != "type_name"}
+        if isinstance(item, dict)
+        else item
+        for item in constraints
+    ]
+
+
 def _committed_changes(
     targeted: list[dict],
     prior_aliases: dict | None,
@@ -124,23 +172,38 @@ def _committed_changes(
         component.get("feature_id"): component
         for component in (result_inspection or {}).get("components") or []
     }
+    prior_labels, prior_ids = _component_labels(prior_aliases, prior_inspection)
+    result_labels, result_ids = _component_labels(result_aliases, result_inspection)
+    covered_prior = {entry.get("feature_id") for entry in prior_labels.values()}
+    covered_result = {entry.get("feature_id") for entry in result_labels.values()}
+    # Alias-less native components keep their real inspection feature_id
+    # (label None); identities are never fabricated.
+    for feature_id in sorted(prior_ids - covered_prior - {None}):
+        prior_labels[feature_id] = {"feature_id": feature_id}
+    for feature_id in sorted(result_ids - covered_result - {None}):
+        result_labels[feature_id] = {"feature_id": feature_id}
     changes = []
-    for label in sorted(set(prior_aliases) | set(result_aliases)):
-        prior_entry = prior_aliases.get(label) or {}
-        result_entry = result_aliases.get(label) or {}
+    for label in sorted(
+        set(prior_labels) | set(result_labels),
+        key=lambda key: (not isinstance(key, str), str(key)),
+    ):
+        # Alias-less native components (int key) have no managed label.
+        display_label = label if isinstance(label, str) else None
+        prior_entry = prior_labels.get(label) or {}
+        result_entry = result_labels.get(label) or {}
         prior_id = prior_entry.get("feature_id")
         result_id = result_entry.get("feature_id")
         if result_entry and not prior_entry:
-            changes.append(_added_entry(label, result_entry, added_sources))
+            changes.append(_added_entry(display_label, result_entry, added_sources))
             continue
         if prior_entry and not result_entry:
-            changes.append({"op": "removed", "label": label, "feature_id": prior_id})
+            changes.append({"op": "removed", "label": display_label, "feature_id": prior_id})
             continue
         # Same label on both sides: only a shared real feature id authorizes
         # move/constraint comparison; a different id is a reinsert.
         if prior_id is None or prior_id != result_id:
-            changes.append({"op": "removed", "label": label, "feature_id": prior_id})
-            changes.append(_added_entry(label, result_entry, added_sources))
+            changes.append({"op": "removed", "label": display_label, "feature_id": prior_id})
+            changes.append(_added_entry(display_label, result_entry, added_sources))
             continue
         before = prior_components.get(prior_id) or {}
         after = result_components.get(result_id) or {}
@@ -150,14 +213,18 @@ def _committed_changes(
             changes.append(
                 {
                     "op": "moved",
-                    "label": label,
+                    "label": display_label,
                     "feature_id": prior_id,
                     "from": before.get("transform"),
                     "to": after.get("transform"),
                 }
             )
-        if "constraints" in before and before.get("constraints") != after.get("constraints"):
-            changes.append({"op": "constraints_changed", "label": label, "feature_id": prior_id})
+        before_view = _constraints_view(before.get("constraints"))
+        after_view = _constraints_view(after.get("constraints"))
+        if "constraints" in before and before_view != after_view:
+            changes.append(
+                {"op": "constraints_changed", "label": display_label, "feature_id": prior_id}
+            )
     return {"status": "committed", "changes": changes}
 
 

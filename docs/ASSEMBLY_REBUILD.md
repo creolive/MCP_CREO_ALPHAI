@@ -65,12 +65,18 @@
 （`creo_get_job` 的 compact 与 full 都包含；preview 仍在
 `result.preview_file`）。状态按原生证据区分，不编造回滚：
 
-- `committed`：作业成功，清单是作业前后**已验证状态的净变更**——组件按
-  真实 `feature_id` 对比。仅作业后存在的 label 为 `added`（含结果别名里的
+- `committed`：作业成功，清单是作业前后**已验证状态的净变更**——前后集合
+  只含**真实组件**：受管 label 仅在原生别名记录 `op="assemble_component"`
+  或其 `feature_id` 属于已验证检查 `components` 的真实组件 id 时才计入；
+  `datum_plane`/`sketch`/`extrude` 等通用别名绝不列入（混合作业新增 datum
+  不会误报为组件变更）；无别名的原生组件以真实检查 `feature_id` 列入
+  （`label` 为 `null`），绝不编造 id。组件按真实 `feature_id` 对比。仅作业后存在的 label 为 `added`（含结果别名里的
   新 `feature_id`、`source_model_id`/`source_revision`）；仅作业前存在的
   label 为 `removed`（用作业前别名的旧 `feature_id`）；两侧同 label 且同
   `feature_id` 才比较移动与约束（`moved` 含 `from`/`to` 查询矩阵，仅在
-  查询到的变换确实不同时报告）；两侧同 label 但 `feature_id` 不同视为重插，
+  查询到的变换确实不同时报告；约束比较剔除仅展示的 `type_name` 符号，
+  与原生 `constraint_compare.h` 一致——旧数字-only 检查点不因新增可读
+  符号误报 `constraints_changed`，数字/refs/offset 等真实字段仍全量对比）；两侧同 label 但 `feature_id` 不同视为重插，
   报旧 id `removed` + 新 id `added`，绝不从最终别名为已移除中间组件编造
   身份。同作业内先 add 再 move 最终只有 `added`；先 add 再 remove 无净组件
   变更；连续 move 只报一次从初态到终态的 `moved`。
