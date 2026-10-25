@@ -72,6 +72,7 @@ class SummarizeContract(unittest.TestCase):
             job_status="succeeded",
             prior_aliases={"pin_a": {"feature_id": 51}},
             prior_inspection=prior,
+            result_aliases={"pin_a": {"feature_id": 51}},
             result_inspection=new,
         )
         change = summary["changes"][0]
@@ -85,10 +86,110 @@ class SummarizeContract(unittest.TestCase):
             [op("remove_component", component=51)],
             job_status="succeeded",
             prior_aliases={"pin_a": {"feature_id": 51}},
+            result_aliases={},
         )
         self.assertEqual(
             summary["changes"], [{"op": "removed", "label": "pin_a", "feature_id": 51}]
         )
+
+    def test_add_then_move_in_one_job_reports_only_added(self):
+        # Net semantics: the component did not exist before the job, so the
+        # only verified net change is the add — not add + a spurious moved.
+        summary = component_changes.summarize(
+            [ADD, MOVE],
+            job_status="succeeded",
+            result_aliases={"pin_a": {"feature_id": 77, "source_revision": 2}},
+            result_inspection={
+                "components": [
+                    {
+                        "feature_id": 77,
+                        "transform": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 0, 1]],
+                    }
+                ]
+            },
+        )
+        self.assertEqual(
+            summary["changes"],
+            [
+                {
+                    "op": "added",
+                    "label": "pin_a",
+                    "feature_id": 77,
+                    "source_model_id": "a" * 32,
+                    "source_revision": 2,
+                }
+            ],
+        )
+
+    def test_add_then_remove_in_one_job_reports_no_net_change(self):
+        summary = component_changes.summarize(
+            [ADD, REMOVE],
+            job_status="succeeded",
+            prior_aliases={},
+            result_aliases={},
+        )
+        self.assertEqual(summary["status"], "committed")
+        self.assertEqual(summary["changes"], [])
+
+    def test_consecutive_moves_report_single_net_move(self):
+        transform_a = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        transform_b = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [5, 0, 0, 1]]
+        transform_c = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [9, 0, 0, 1]]
+        summary = component_changes.summarize(
+            [MOVE, MOVE],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection={"components": [{"feature_id": 51, "transform": transform_a}]},
+            result_aliases={"pin_a": {"feature_id": 51}},
+            result_inspection={"components": [{"feature_id": 51, "transform": transform_c}]},
+        )
+        self.assertEqual(
+            summary["changes"],
+            [
+                {
+                    "op": "moved",
+                    "label": "pin_a",
+                    "feature_id": 51,
+                    "from": transform_a,
+                    "to": transform_c,
+                }
+            ],
+        )
+        self.assertNotEqual(summary["changes"][0]["from"], transform_b)
+
+    def test_remove_reinsert_then_move_reports_old_removed_new_added(self):
+        # The move after the reinsert concerns the NEW identity; the removed
+        # entry must keep the OLD identity and no moved entry may use it.
+        summary = component_changes.summarize(
+            [REMOVE, ADD, MOVE],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            prior_inspection={
+                "components": [
+                    {
+                        "feature_id": 51,
+                        "transform": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+                    }
+                ]
+            },
+            result_aliases={"pin_a": {"feature_id": 77, "source_revision": 4}},
+            result_inspection={
+                "components": [
+                    {
+                        "feature_id": 77,
+                        "transform": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [9, 0, 0, 1]],
+                    }
+                ]
+            },
+        )
+        removed, added = summary["changes"]
+        self.assertEqual(removed, {"op": "removed", "label": "pin_a", "feature_id": 51})
+        self.assertEqual(added["op"], "added")
+        self.assertEqual(added["feature_id"], 77)
+
+    def test_committed_without_verified_result_aliases_raises(self):
+        with self.assertRaises(ValueError):
+            component_changes.summarize([ADD], job_status="succeeded")
 
     def test_rolled_back_requires_confirmed_native_rollback(self):
         summary = component_changes.summarize(
@@ -180,8 +281,8 @@ class RunJobAttachment(unittest.TestCase):
             "revision": 1,
             "status": "ready",
             "model_type": "assembly",
-            "aliases": {"pin_a": {"op": "assemble_component", "feature_id": 51}},
-            "inspection": {"components": [{"feature_id": 51, "transform": None}]},
+            "aliases": {},
+            "inspection": {"components": []},
             "part_file": str(self.part),
             "output_directory": str(path / "output"),
         }
@@ -292,6 +393,29 @@ class RunJobAttachment(unittest.TestCase):
         self.assertEqual(manifest["component_changes"]["changes"], [])
         self.assertIn("busy", manifest)
 
+    def test_busy_rejection_with_broken_sidecar_keeps_no_effect_semantics(self):
+        # The pre-job snapshot read failure is auxiliary: a status that never
+        # uses the prior state (busy rejection) must keep its original
+        # semantics instead of being masked as unavailable.
+        directory = bridge.job_path(self.job_id)
+        with (
+            patch.object(
+                model_registry,
+                "aliases_of",
+                side_effect=ValueError("synthetic broken alias sidecar"),
+            ),
+            patch.object(
+                bridge,
+                "toolkit_lock",
+                side_effect=bridge.ToolkitBusy(holder={"operation": "other"}),
+            ),
+        ):
+            general.run_generic_job(self.job_id, copy.deepcopy(self.manifest))
+        manifest = bridge.read_json(directory / "job.json")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertEqual(manifest["component_changes"]["status"], "no_effect")
+        self.assertEqual(manifest["component_changes"]["changes"], [])
+
     def test_summary_failure_marks_unavailable_but_preserves_terminal_state(self):
         result = {
             "success": True,
@@ -328,6 +452,73 @@ class RunJobAttachment(unittest.TestCase):
         manifest = self.run_worker(result)
         self.assertEqual(manifest["status"], "succeeded")
         self.assertNotIn("component_changes", manifest)
+
+    def test_plain_job_never_hydrates_alias_sidecars(self):
+        # Regression for the batch-2 stage-3 defect: aliases_of/inspection_of
+        # ran unconditionally before the worker, so a broken alias sidecar on
+        # a model aborted even jobs that never touched a component. Plain
+        # jobs must not read the sidecars at all.
+        directory = bridge.job_path(self.job_id)
+        self.request["operations"] = [EXTRUDE]
+        bridge.write_json(directory / "request.json", self.request)
+        result = {
+            "success": True,
+            "delivery_complete": True,
+            "disconnect_code": 0,
+            "saved_file_reloaded_and_verified": True,
+            "part_file": str(self.part),
+        }
+        with patch.object(
+            model_registry,
+            "aliases_of",
+            side_effect=AssertionError("plain jobs must not hydrate aliases"),
+        ):
+            manifest = self.run_worker(result)
+        self.assertEqual(manifest["status"], "succeeded")
+        self.assertEqual(manifest["revision"], 2)
+        self.assertNotIn("component_changes", manifest)
+
+    def test_summary_sidecar_read_failure_degrades_to_unavailable(self):
+        # A read that exists ONLY for the summary must downgrade the summary
+        # to unavailable without touching the confirmed terminal state.
+        result = {
+            "success": True,
+            "delivery_complete": True,
+            "disconnect_code": 0,
+            "saved_file_reloaded_and_verified": True,
+            "part_file": str(self.part),
+            "aliases": {
+                "pin_a": {"op": "assemble_component", "feature_id": 77, "source_revision": 2}
+            },
+            "inspection": {"components": [{"feature_id": 77}]},
+        }
+        with patch.object(
+            model_registry,
+            "aliases_of",
+            side_effect=ValueError("synthetic auxiliary sidecar fault"),
+        ):
+            manifest = self.run_worker(result)
+        self.assertEqual(manifest["status"], "succeeded")
+        self.assertEqual(manifest["revision"], 2)
+        self.assertEqual(manifest["component_changes"]["status"], "unavailable")
+        self.assertIn("synthetic auxiliary sidecar fault", manifest["component_changes"]["error"])
+        self.assertTrue(manifest["finished_at"])
+
+    def test_committed_summary_without_result_aliases_is_unavailable(self):
+        # The verified post-state did not reach the summary; identities must
+        # never be invented, so the summary is unavailable, not guessed.
+        result = {
+            "success": True,
+            "delivery_complete": True,
+            "disconnect_code": 0,
+            "saved_file_reloaded_and_verified": True,
+            "part_file": str(self.part),
+        }
+        manifest = self.run_worker(result)
+        self.assertEqual(manifest["status"], "succeeded")
+        self.assertEqual(manifest["revision"], 2)
+        self.assertEqual(manifest["component_changes"]["status"], "unavailable")
+        self.assertIn("verified result aliases", manifest["component_changes"]["error"])
 
 
 if __name__ == "__main__":

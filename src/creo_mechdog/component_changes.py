@@ -1,12 +1,24 @@
 """Bounded component change summary for assembly jobs (FEAT-008, batch 2).
 
-A job that targets assembly components reports which component changes were
-actually committed. Every value comes from the native operation results, the
-managed aliases or the last verified inspection; this module never simulates
-geometry. Statuses stay honest about what the native side actually confirmed:
+A job that targets assembly components reports the NET change between the
+verified pre-job state and the verified post-job state. Every value comes
+from the native operation results, the managed aliases or the last verified
+inspection; this module never simulates geometry. Statuses stay honest about
+what the native side actually confirmed:
 
-* ``committed`` — the job succeeded; entries carry the real native feature
-  identities from the verified result.
+* ``committed`` — the job succeeded; entries are the net verified diff:
+  components compared by their real native ``feature_id``. A label present
+  only after the job is ``added`` (with the NEW id from the result aliases);
+  a label present only before the job is ``removed`` (with the PRIOR id);
+  a label on both sides with the SAME id is ``moved``/``constraints_changed``
+  only when the queried transforms/constraints actually differ; a label on
+  both sides with DIFFERENT ids is a reinsert and reports ``removed`` (old
+  id) plus ``added`` (new id) — identities are never fabricated from the
+  final aliases of a component that was removed mid-job. Sequences such as
+  add-then-move collapse to the single ``added`` entry; add-then-remove
+  leaves no net component change. A committed summary without the verified
+  result aliases raises, so callers degrade to ``unavailable`` instead of
+  guessing.
 * ``rolled_back`` — ONLY when the native result confirms ``rollback_succeeded``
   (the saved checkpoint was restored and verified). Entries list the requested
   component operations only, and nothing is reported as effective.
@@ -20,9 +32,9 @@ geometry. Statuses stay honest about what the native side actually confirmed:
   retained protection.
 
 The output rides on the existing job result next to ``preview_file``; no new
-batch-assembly tool is introduced. The summary is auxiliary: a summary failure
-is reported as ``unavailable`` and must never change the confirmed terminal
-state of the job.
+batch-assembly tool is introduced. The summary is auxiliary: a summary
+failure is reported as ``unavailable`` and must never change the confirmed
+terminal state of the job.
 """
 
 from __future__ import annotations
@@ -44,15 +56,6 @@ def _label_of(component: Any, prior_aliases: dict) -> Any:
     for label, alias in prior_aliases.items():
         if alias.get("feature_id") == component:
             return label
-    return None
-
-
-def _transform_of(feature_id: Any, inspection: dict | None) -> Any:
-    if not inspection:
-        return None
-    for component in inspection.get("components") or []:
-        if component.get("feature_id") == feature_id:
-            return component.get("transform")
     return None
 
 
@@ -86,6 +89,76 @@ def _status_for(job_status: str, rollback: dict | None, executed: bool) -> tuple
         "The job never executed natively (rejected or worker not started); no "
         "changes were attempted and none took effect.",
     )
+
+
+def _added_entry(label: Any, result_entry: dict, added_sources: dict) -> dict:
+    op = added_sources.get(label, {})
+    return {
+        "op": "added",
+        "label": label,
+        "feature_id": result_entry.get("feature_id"),
+        "source_model_id": result_entry.get("source_model_id") or op.get("source_model_id"),
+        "source_revision": result_entry.get("source_revision"),
+    }
+
+
+def _committed_changes(
+    targeted: list[dict],
+    prior_aliases: dict | None,
+    prior_inspection: dict | None,
+    result_aliases: dict | None,
+    result_inspection: dict | None,
+) -> dict:
+    """Net verified diff between the pre-job and post-job component state."""
+    prior_aliases = prior_aliases or {}
+    if result_aliases is None:
+        # The verified post-state is unavailable; identities must never be
+        # invented, so the caller degrades the whole summary to unavailable.
+        raise ValueError("committed component summary requires the verified result aliases")
+    added_sources = {op.get("label"): op for op in targeted if op["op"] == "assemble_component"}
+    prior_components = {
+        component.get("feature_id"): component
+        for component in (prior_inspection or {}).get("components") or []
+    }
+    result_components = {
+        component.get("feature_id"): component
+        for component in (result_inspection or {}).get("components") or []
+    }
+    changes = []
+    for label in sorted(set(prior_aliases) | set(result_aliases)):
+        prior_entry = prior_aliases.get(label) or {}
+        result_entry = result_aliases.get(label) or {}
+        prior_id = prior_entry.get("feature_id")
+        result_id = result_entry.get("feature_id")
+        if result_entry and not prior_entry:
+            changes.append(_added_entry(label, result_entry, added_sources))
+            continue
+        if prior_entry and not result_entry:
+            changes.append({"op": "removed", "label": label, "feature_id": prior_id})
+            continue
+        # Same label on both sides: only a shared real feature id authorizes
+        # move/constraint comparison; a different id is a reinsert.
+        if prior_id is None or prior_id != result_id:
+            changes.append({"op": "removed", "label": label, "feature_id": prior_id})
+            changes.append(_added_entry(label, result_entry, added_sources))
+            continue
+        before = prior_components.get(prior_id) or {}
+        after = result_components.get(result_id) or {}
+        if before.get("transform") is not None and before.get("transform") != after.get(
+            "transform"
+        ):
+            changes.append(
+                {
+                    "op": "moved",
+                    "label": label,
+                    "feature_id": prior_id,
+                    "from": before.get("transform"),
+                    "to": after.get("transform"),
+                }
+            )
+        if "constraints" in before and before.get("constraints") != after.get("constraints"):
+            changes.append({"op": "constraints_changed", "label": label, "feature_id": prior_id})
+    return {"status": "committed", "changes": changes}
 
 
 def summarize(
@@ -134,34 +207,9 @@ def summarize(
         }
     if status != "committed":
         return {"status": status, "changes": [], "note": note}
-    prior_aliases = prior_aliases or {}
-    result_aliases = result_aliases or {}
-    changes = []
-    for op in targeted:
-        kind = CHANGE_OPS[op["op"]]
-        if op["op"] == "assemble_component":
-            label = op.get("label")
-            entry = result_aliases.get(label) or {}
-            change = {
-                "op": kind,
-                "label": label,
-                "feature_id": entry.get("feature_id"),
-                "source_model_id": op.get("source_model_id"),
-                "source_revision": entry.get("source_revision"),
-            }
-        else:
-            # A remove followed by a re-insert of the same label in one job
-            # keeps both identities honest: the removed entry resolves the
-            # PRIOR feature id, the added entry above carries the NEW id from
-            # the result aliases.
-            label = _label_of(op.get("component"), prior_aliases)
-            feature_id = prior_aliases.get(label, {}).get("feature_id") if label else None
-            change = {"op": kind, "label": label, "feature_id": feature_id}
-            if kind == "moved":
-                change["from"] = _transform_of(feature_id, prior_inspection)
-                change["to"] = _transform_of(feature_id, result_inspection)
-        changes.append(change)
-    return {"status": "committed", "changes": changes}
+    return _committed_changes(
+        targeted, prior_aliases, prior_inspection, result_aliases, result_inspection
+    )
 
 
 def unavailable(exc: BaseException) -> dict:

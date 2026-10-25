@@ -42,6 +42,26 @@ POSES = [
 ]
 
 
+def is_signed_permutation(rotation) -> bool:
+    """True only for axis-aligned rotations (each row/column a unit +/- basis).
+
+    For those — and only those — the axis-aligned bounding box of a rotated
+    body keeps the source box volume. Arbitrary rotations change the AABB
+    (it grows), so volume invariance must never be asserted for them.
+    """
+    for i in range(3):
+        for j in range(3):
+            value = abs(rotation[i][j])
+            if value > 1e-9 and abs(value - 1.0) > 1e-9:
+                return False
+    for i in range(3):
+        if sum(1 for j in range(3) if abs(rotation[i][j]) > 1e-9) != 1:
+            return False
+        if sum(1 for r in range(3) if abs(rotation[r][i]) > 1e-9) != 1:
+            return False
+    return True
+
+
 async def run() -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     destination = ROOT / f"build/assembly_matrix_live_{stamp}/report.json"
@@ -301,14 +321,20 @@ async def run() -> None:
             )
             assert abs(verified["volume_mm3"] - expected_volume) <= 0.01, verified
 
-            # Bounding-box physics anchored on the NATIVE source bbox: the 8
-            # corners measured by the native saved/reload source inspection,
-            # mapped through the expected rigid poses and through the returned
-            # matrices, must agree (1e-6); each expected component box keeps
-            # the source box volume (rigid invariance); the union bounds are
-            # the expected assembly box. This does not rest on the returned
-            # matrices alone: volume above comes from Creo mass properties and
-            # the corners come from the native source inspection.
+            # Expected bounding-box derivation anchored on the NATIVE source
+            # bbox: the 8 corners measured by the native saved/reload source
+            # inspection, mapped through the expected rigid poses and through
+            # the returned matrices, must agree (1e-6). The per-component
+            # expected box volume equals the source box volume ONLY for
+            # signed-permutation (axis-aligned) rotations — for arbitrary
+            # rotations the axis-aligned box grows, so that invariant is
+            # asserted solely where it is mathematically true. The recorded
+            # assembly bbox below is the EXPECTED derived value (source bbox
+            # crossed with the returned matrices); it is not a bbox measured
+            # by Creo on the assembled model, and it is not an independent
+            # physical pose verification on its own. The independent physical
+            # anchors here are the Creo mass-property volumes above plus the
+            # native matrices/basis vectors/known points.
             source_bodies = await call(
                 "creo_inspect_model",
                 {"model_id": source["model_id"], "detail": "full", "section": "bodies"},
@@ -349,13 +375,24 @@ async def run() -> None:
                     box_volume *= component_max[axis] - component_min[axis]
                     assembly_min[axis] = min(assembly_min[axis], component_min[axis])
                     assembly_max[axis] = max(assembly_max[axis], component_max[axis])
-                assert abs(box_volume - source_box_volume) <= 1e-6, (label, box_volume)
+                if is_signed_permutation(rotation):
+                    # True only for axis-aligned poses; [30,90,60] and any
+                    # non-permutation rotation legitimately enlarge the AABB.
+                    assert abs(box_volume - source_box_volume) <= 1e-6, (label, box_volume)
+                else:
+                    # A genuine rotation strictly enlarges the axis-aligned
+                    # box (AABB volume >= solid volume, equality only when
+                    # the box stays axis-aligned).
+                    assert box_volume > source_box_volume + 1e-9, (label, box_volume)
             report["expected_assembly_bbox_mm"] = [assembly_min, assembly_max]
             save()
             report.setdefault("assertions", []).append(
                 "independent geometry: native assembly volume == 11 x native source volume "
                 "(Creo mass property on saved/reload, re-checked natively via assertions); "
-                "bbox corners anchored on the native source box"
+                "bbox corners anchored on the native source box; per-component expected box "
+                "volume invariance asserted only for signed-permutation rotations; the "
+                "recorded assembly bbox is an EXPECTED derived value (source bbox crossed "
+                "with the returned matrices), not a Creo-measured assembly bbox"
             )
             report["success"] = True
     except Exception as exc:

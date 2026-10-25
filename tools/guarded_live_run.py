@@ -1,4 +1,4 @@
-"""Guard-root developer live-run entry (0.5.0 feedback batch 2, stage 3).
+"""Guard-root developer live-run entry (0.5.0 feedback batch 2, stage 4).
 
 The main checkout service (E:\\Projects\\MCP_CREO_MechDog) normally owns the
 Creo session. To run md050 final-source live drivers without the old service
@@ -12,17 +12,36 @@ Guard discipline:
   never queues, retries, clears old owners or unknown protection;
 * child exit is NOT evidence of job completion: a driver that asserts out,
   times out or dies on a protocol error can leave accepted md050 jobs running
-  in detached runners. Before the guard is released (success, child failure
-  or exception alike) this entry therefore, while still holding the guard:
-    1. snapshots the md050 job directory set before starting any child, and
+  in detached runners. Before the guard is released this entry therefore,
+  while still holding the guard:
+    1. snapshots the md050 job directory set before starting any child
+       (only FileNotFoundError means "no jobs directory yet"; any other I/O
+       error aborts the run before the guard is even taken),
     2. polls ONLY the job directories accepted during this run to a terminal
-       status (reading job.json; never submits, replays or reconnects), and
-    3. probes the md050 toolkit lock to confirm the native channel is quiet.
-  Only when every new job is terminal and the channel probe is free is the
-  guard released. An unknown_outcome job (or a channel that cannot be proven
-  quiet within --settle-timeout seconds) stops the remaining children, keeps
-  every md050 protection untouched and exits with code 3: the report then
-  states explicitly that a safe release could not be confirmed.
+       status (reading job.json; never submits, replays or reconnects),
+       rediscovering new job directories every poll round so batch children
+       accepted while a previous job is still settling are never missed, and
+    3. requires THREE independent proofs before releasing the REAL byte lock:
+       every accepted job is terminal, no md050 native worker is alive
+       (checked against native_checkpoint.json native_pid process identities
+       and a read-only image scan for this worktree's build\\creo_worker.exe —
+       an idle lock alone never proves an orphan worker stopped), and the
+       md050 toolkit byte-lock probe is free.
+* Release outcomes once the proof is complete:
+    - all quiet (no unknown_outcome) — guard released, exit 0;
+    - an unknown_outcome job but the worker is provably stopped and the
+      channel free — the guard IS released (unknown does not mean "hold the
+      lock forever"), remaining children are still forbidden, md050 model/job
+      unknown protections are left untouched, and the run exits 3 as a
+      failure. This entry never ends Creo, kills workers, clears protection,
+      reconnects or resubmits anything.
+* If the proof cannot be completed (jobs still pending, worker/channel state
+  unprovable, discovery I/O error), --settle-timeout only writes a report
+  alert: this process KEEPS RUNNING and KEEPS HOLDING the real OS byte lock
+  until the release becomes provable. Returning early would let process exit
+  free the OS lock, which is exactly what must not happen. Operator
+  interruption (Ctrl+C) is the only early exit; it drops the OS lock without
+  any safety claim and never touches md050 state.
 * nothing about the production lock mechanism changes — the guard is a local
   ROOT binding inside this developer entry, not a production config API.
 
@@ -38,6 +57,7 @@ from __future__ import annotations
 import argparse
 import json
 import msvcrt
+import os
 import re
 import subprocess
 import sys
@@ -49,6 +69,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bridge
 from creo_mechdog.paths import SOURCE_PATHS
+from creo_mechdog.recovery import process_identity
 from tools.dev_check import git_state, source_hash
 
 ROOT = SOURCE_PATHS.resource_root
@@ -104,17 +125,22 @@ def _exit_guard(context, guard_root: Path, original) -> None:
 
 
 def _snapshot_jobs(jobs_root: Path) -> set[str]:
-    """Baseline of already-accepted md050 job directories (names only)."""
+    """Baseline of already-accepted md050 job directories (names only).
+
+    Only FileNotFoundError means the jobs directory genuinely does not exist
+    yet; any other OSError propagates so the run aborts BEFORE the guard lock
+    is taken instead of mistaking unreadable state for "no jobs".
+    """
     try:
         return {entry.name for entry in jobs_root.iterdir() if entry.is_dir() and entry.name}
-    except OSError:
+    except FileNotFoundError:
         return set()
 
 
 def _new_jobs(jobs_root: Path, baseline: set[str]) -> list[str]:
     try:
         current = {entry.name for entry in jobs_root.iterdir() if entry.is_dir() and entry.name}
-    except OSError:
+    except FileNotFoundError:
         return []
     return sorted(name for name in current - baseline if JOB_NAME.fullmatch(name))
 
@@ -148,57 +174,227 @@ def _channel_quiet(md050_root: Path) -> bool:
         handle.close()
 
 
-def _settle(md050_root: Path, jobs_root: Path, baseline: set[str], budget_seconds: float) -> dict:
-    """Confirm this run's accepted jobs are terminal and the channel is quiet.
+def _image_path_pids(target: Path) -> set[int] | None:
+    """Read-only scan for live processes whose image path equals ``target``.
 
-    Polls only; never submits, replays, erases, or touches Creo. Returns a
-    structured outcome; ``quiet`` is True only when a safe release is proven.
-    While the guard is held, ``bridge.ROOT`` stays bound to the guard root, so
-    the md050 paths are passed in explicitly.
+    Returns None when the process table itself cannot be enumerated (the scan
+    is then unprovable and the caller must stay conservative); an empty set
+    proves no such process is running. Never opens process tokens for
+    writing, never terminates anything.
+    """
+    if os.name != "nt":
+        return set()
+    if not target.is_file():
+        return set()
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    snapshot_api = kernel.CreateToolhelp32Snapshot
+    snapshot_api.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    snapshot_api.restype = wintypes.HANDLE
+    first = kernel.Process32FirstW
+    next_ = kernel.Process32NextW
+    open_process = kernel.OpenProcess
+    open_process.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    open_process.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    image_name = kernel.QueryFullProcessImageNameW
+    image_name.argtypes = (
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.c_wchar_p,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    image_name.restype = wintypes.BOOL
+
+    class _PROCESSENTRY32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_wchar * 260),
+        ]
+
+    wanted = str(target).lower()
+    matches: set[int] = set()
+    handle = snapshot_api(0x2, 0)  # TH32CS_SNAPPROCESS
+    if handle == ctypes.c_void_p(-1).value:
+        return None
+    try:
+        entry = _PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(_PROCESSENTRY32W)
+        has_entry = first(handle, ctypes.byref(entry))
+        while has_entry:
+            process = open_process(0x1000, False, entry.th32ProcessID)  # QUERY_LIMITED
+            if process:
+                try:
+                    size = wintypes.DWORD(32767)
+                    buffer = ctypes.create_unicode_buffer(32768)
+                    if image_name(process, 0, buffer, ctypes.byref(size)):
+                        if buffer.value.lower() == wanted:
+                            matches.add(entry.th32ProcessID)
+                finally:
+                    close(process)
+            has_entry = next_(handle, ctypes.byref(entry))
+    finally:
+        close(handle)
+    return matches
+
+
+def _md050_worker_state(md050_root: Path, job_dirs: list[Path]) -> dict:
+    """Read-only evidence about md050 native workers.
+
+    Two independent signals, because an idle toolkit byte lock never proves
+    an orphaned native worker stopped:
+    * the ``native_pid`` recorded in each accepted job's
+      native_checkpoint.json, checked against the live process table with the
+      process creation time (a recycled PID is not the same process); and
+    * a read-only image scan for any live process whose executable path is
+      exactly this worktree's build\\creo_worker.exe (catches orphans left by
+      earlier crashed runs whose jobs this round never saw).
+    ``alive`` is True when any signal shows a live or indeterminate worker;
+    the release proof requires ``alive`` False and a completed (non-None)
+    image scan.
+    """
+    exe = (md050_root / "build" / "creo_worker.exe").resolve()
+    observed: list[dict] = []
+    checkpoint_pids: set[int] = set()
+    for directory in job_dirs:
+        try:
+            checkpoint = bridge.read_json(directory / "native_checkpoint.json")
+        except (OSError, ValueError, TypeError):
+            continue
+        pid = checkpoint.get("native_pid")
+        if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+            checkpoint_pids.add(pid)
+    alive = False
+    for pid in sorted(checkpoint_pids):
+        identity = process_identity(pid)
+        observed.append({"source": "native_checkpoint", **identity})
+        if identity.get("alive") is not False:
+            # alive, or existence unverifiable: not provably stopped.
+            alive = True
+    image_pids = _image_path_pids(exe)
+    if image_pids is None:
+        observed.append({"source": "image_scan", "error": "process table unreadable"})
+        alive = True
+        scan_complete = False
+    else:
+        scan_complete = True
+        for pid in sorted(image_pids):
+            observed.append({"source": "image_scan", "pid": pid, "alive": True})
+            alive = True
+    return {"alive": alive, "scan_complete": scan_complete, "observed": observed}
+
+
+def _settle(
+    md050_root: Path,
+    jobs_root: Path,
+    baseline: set[str],
+    budget_seconds: float,
+    on_alert=None,
+) -> dict:
+    """Wait until a guard release is provable, then return the proof.
+
+    Polls only; never submits, replays, erases, kills, reconnects or touches
+    Creo. This function returns ONLY when every accepted job of this run is
+    terminal, no md050 native worker is provably alive, the md050 byte-lock
+    probe is free and discovery had no I/O error. When ``status`` is
+    ``unknown_outcome`` the release is still proven (the lock may be freed)
+    but the run must be reported as a failure. Until the proof completes, the
+    settle budget only triggers a report/alert via ``on_alert``; this loop
+    keeps holding the real guard lock and polling. While the guard is held,
+    ``bridge.ROOT`` stays bound to the guard root, so the md050 paths are
+    passed in explicitly.
     """
     deadline = time.monotonic() + budget_seconds
-    new_jobs = _new_jobs(jobs_root, baseline)
-    jobs = {name: _read_status(jobs_root, name) for name in new_jobs}
+    jobs: dict[str, str | None] = {}
+    alert_written = False
     while True:
-        for name in new_jobs:
+        discovery_error = None
+        try:
+            discovered = _new_jobs(jobs_root, baseline)
+        except OSError as exc:
+            discovery_error = f"{type(exc).__name__}: {exc}"
+            discovered = []
+        for name in discovered:
+            jobs.setdefault(name, None)
+        for name in jobs:
             jobs[name] = _read_status(jobs_root, name)
         pending = [name for name, status in jobs.items() if status not in TERMINAL_STATES]
         unknown = [name for name, status in jobs.items() if status == "unknown_outcome"]
         quiet = _channel_quiet(md050_root)
-        if unknown:
-            return {
-                "status": "unknown_outcome",
-                "quiet": False,
-                "new_jobs": jobs,
-                "note": (
-                    "An accepted md050 job reported unknown_outcome; remaining "
-                    "children were stopped and every md050 protection is left "
-                    "untouched. A safe guard release is NOT confirmed."
-                ),
-            }
-        if not pending and quiet:
+        workers = _md050_worker_state(md050_root, [jobs_root / name for name in jobs])
+        provable = (
+            discovery_error is None
+            and not pending
+            and quiet
+            and not workers["alive"]
+            and workers["scan_complete"]
+        )
+        if provable:
+            if unknown:
+                return {
+                    "status": "unknown_outcome",
+                    "quiet": True,
+                    "released": True,
+                    "new_jobs": jobs,
+                    "workers": workers,
+                    "note": (
+                        "Every accepted job is terminal and no md050 native "
+                        "worker is alive, so the guard lock CAN be released "
+                        "safely; however an accepted job reported "
+                        "unknown_outcome: remaining children were stopped, the "
+                        "run is a failure, and every md050 model/job unknown "
+                        "protection is left untouched (this entry never ends "
+                        "Creo, kills workers or clears protection)."
+                    ),
+                }
             return {
                 "status": "quiet",
                 "quiet": True,
+                "released": True,
                 "new_jobs": jobs,
+                "workers": workers,
                 "note": (
-                    "All jobs accepted during this run are terminal and the "
-                    "md050 toolkit channel probe is free; the guard release "
-                    "is proven safe."
+                    "All jobs accepted during this run are terminal, no md050 "
+                    "native worker (checkpoint identity or creo_worker.exe "
+                    "image scan) is alive, and the md050 channel probe is "
+                    "free; the guard release is proven safe."
                 ),
             }
-        if time.monotonic() >= deadline:
-            return {
-                "status": "not_quiet" if not quiet else "jobs_pending",
-                "quiet": False,
+        if time.monotonic() >= deadline and not alert_written:
+            alert_written = True
+            alert = {
+                "status": "waiting_for_proof",
+                "at": datetime.now(timezone.utc).isoformat(),
+                "settle_budget_seconds": budget_seconds,
                 "new_jobs": jobs,
                 "pending": pending,
+                "unknown": unknown,
+                "channel_probe_free": quiet,
+                "discovery_error": discovery_error,
+                "workers": workers,
                 "note": (
-                    "Channel quiet could not be proven within the settle budget "
-                    "(%.0f s); a safe guard release is NOT confirmed."
-                )
-                % budget_seconds,
+                    "The settle budget elapsed but a safe guard release is "
+                    "still unproven. This entry keeps running and keeps "
+                    "holding the REAL toolkit byte lock until the release "
+                    "becomes provable; it never ends Creo, kills workers or "
+                    "clears protections. Operator interruption (Ctrl+C) ends "
+                    "the process and is the only way the OS lock is dropped "
+                    "without proof."
+                ),
             }
+            if on_alert is not None:
+                on_alert(alert)
         time.sleep(1)
 
 
@@ -220,9 +416,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=1200.0,
         help=(
-            "seconds to wait for this run's accepted jobs to reach a terminal "
-            "state and the md050 channel probe to free before declaring the "
-            "release unproven (default 1200)"
+            "seconds before the report records an unproven-settlement alert; "
+            "the guard keeps holding the real lock and polling until a safe "
+            "release is provable (default 1200)"
         ),
     )
     arguments = parser.parse_args(argv)
@@ -236,6 +432,9 @@ def main(argv: list[str] | None = None) -> int:
     # root; settlement keeps using these explicit paths.
     md050_root = bridge.ROOT
     md050_jobs = bridge.JOBS
+    # A genuinely absent jobs directory is fine; any other I/O error must
+    # abort before the guard lock is taken (unreadable state is never
+    # mistaken for "no jobs").
     baseline = _snapshot_jobs(md050_jobs)
     report = {
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -260,6 +459,18 @@ def main(argv: list[str] | None = None) -> int:
 
     def save():
         destination.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def alert(update: dict):
+        report["settle"] = update
+        report["guard"]["action"] = (
+            "settlement budget elapsed without proof; this entry is still "
+            "holding the real guard lock and polling until a safe release is "
+            "provable"
+        )
+        try:
+            save()
+        except OSError as exc:  # an unreadable report dir must never drop the lock
+            print(f"guard report could not be written: {exc}", file=sys.stderr)
 
     try:
         context, original_root = _enter_guard(guard_root)
@@ -287,14 +498,21 @@ def main(argv: list[str] | None = None) -> int:
         "owner_written_to": str(guard_root / "toolkit-owner.lock"),
         "note": (
             "guard held while children run and until this run's accepted jobs "
-            "are confirmed terminal and the md050 channel probe is free; child "
-            "exit alone is not treated as completion evidence"
+            "are confirmed terminal, no md050 native worker is alive and the "
+            "md050 channel probe is free; child exit alone is not treated as "
+            "completion evidence"
         ),
     }
     save()
     children_ok = True
     exit_code = 0
-    settle = {"status": "quiet", "quiet": True, "new_jobs": {}, "note": "no children ran"}
+    settle = {
+        "status": "quiet",
+        "quiet": True,
+        "released": True,
+        "new_jobs": {},
+        "note": "no children ran",
+    }
     try:
         for command in arguments.run:
             argv_child = _split_windows(command)
@@ -323,80 +541,98 @@ def main(argv: list[str] | None = None) -> int:
                 save()
                 # A failed driver is exactly the case that can leave accepted
                 # jobs behind: settle before any release decision.
-                settle = _settle(md050_root, md050_jobs, baseline, arguments.settle_timeout)
+                settle = _settle(
+                    md050_root, md050_jobs, baseline, arguments.settle_timeout, on_alert=alert
+                )
                 report["settle"] = settle
                 save()
                 break
             # Child exit is not completion evidence: settle after EVERY child
             # so an unknown outcome or a still-running accepted job stops the
             # remaining drivers before they touch the session.
-            settle = _settle(md050_root, md050_jobs, baseline, arguments.settle_timeout)
+            settle = _settle(
+                md050_root, md050_jobs, baseline, arguments.settle_timeout, on_alert=alert
+            )
             report["settle"] = settle
-            if not settle["quiet"]:
+            if settle["status"] != "quiet":
                 children_ok = False
                 exit_code = SETTLE_EXIT
                 report["guard"]["action"] = (
-                    "settlement after a child failed; remaining children were "
-                    "not started and md050 protections are left untouched"
+                    "settlement after a child found an unknown outcome; "
+                    "remaining children were not started and every md050 "
+                    "protection is left untouched"
                 )
                 save()
                 break
-        if settle["quiet"]:
-            report["guard"]["status"] = "released"
-            report["guard"]["action"] = (
-                "settled: all jobs accepted during this run are terminal and "
-                "the md050 channel probe is free"
-            )
-            report["success"] = children_ok
-            save()
-            _exit_guard(context, guard_root, original_root)
-            print(
-                json.dumps(
-                    {"status": "ok" if children_ok else "child_failed", "report": str(destination)},
-                    ensure_ascii=False,
-                )
-            )
-            return exit_code
-        if "settle" not in report:
-            report["settle"] = settle
-            save()
-        report["guard"]["status"] = "retained_unproven"
+        # _settle returns only once a release is proven; the OS lock is freed
+        # exactly here and nowhere else (operator Ctrl+C excepted).
+        report["guard"]["status"] = "released"
         report["guard"]["action"] = (
-            "a safe release could NOT be proven; md050 protections are left "
-            "untouched and the report marks this run as not safe to continue "
-            "from automatically"
+            "settled: all jobs accepted during this run are terminal, no md050 "
+            "native worker (checkpoint identity or creo_worker.exe image scan) "
+            "is alive, and the md050 channel probe is free"
         )
+        report["success"] = children_ok and settle["status"] == "quiet"
         save()
-        # Deliberately skip the normal owner-file cleanup: the reservation
-        # evidence stays visible for operator reconciliation. The OS byte
-        # lock still frees at process exit; the report never claims safety.
+        _exit_guard(context, guard_root, original_root)
         print(
             json.dumps(
-                {"status": settle["status"], "report": str(destination)},
+                {
+                    "status": "ok" if report["success"] else settle["status"],
+                    "report": str(destination),
+                },
                 ensure_ascii=False,
             )
         )
-        return SETTLE_EXIT
+        return 0 if report["success"] else exit_code
+    except KeyboardInterrupt:
+        # Operator interruption: the process exit drops the OS byte lock. No
+        # safety claim is made and md050 jobs/protections stay untouched.
+        report["guard"]["status"] = "interrupted_while_holding"
+        report["guard"]["action"] = (
+            "operator interrupted the entry; the OS byte lock is dropped by "
+            "process exit without any release-safety claim; md050 jobs and "
+            "protections were not touched by this entry"
+        )
+        save()
+        raise
     except BaseException as exc:
         # Driver-side exception (assertion, timeout, protocol error): still
         # settle before deciding, and never claim a safe release we cannot
-        # prove. Md050 jobs and protections stay untouched either way.
-        try:
-            settle = _settle(md050_root, md050_jobs, baseline, arguments.settle_timeout)
-        except Exception:  # noqa: BLE001 - report the original failure instead
-            settle = {
-                "status": "settle_error",
-                "quiet": False,
-                "note": "settlement itself failed; a safe release is NOT confirmed",
-            }
-        report["settle"] = settle
-        report["guard"]["status"] = "retained_unproven"
+        # prove. Md050 jobs and protections stay untouched either way. A
+        # settle-internal failure is treated as unprovable: keep holding and
+        # retry instead of dropping the OS lock early.
         report["guard"]["action"] = (
-            f"guard run aborted with {type(exc).__name__}: {exc}; release safety "
-            "was not confirmed and md050 protections were left untouched"
+            f"guard run aborted with {type(exc).__name__}: {exc}; settling "
+            "before any release decision, staying conservative"
         )
+        save()
+        while True:
+            try:
+                settle = _settle(
+                    md050_root, md050_jobs, baseline, arguments.settle_timeout, on_alert=alert
+                )
+                break
+            except KeyboardInterrupt:
+                raise
+            except Exception as settle_exc:  # noqa: BLE001 - stay conservative, keep the lock
+                print(
+                    f"guard settlement retry after {type(settle_exc).__name__}: {settle_exc}",
+                    file=sys.stderr,
+                )
+                time.sleep(1)
+        report["settle"] = settle
+        report["guard"]["status"] = "released"
+        report["guard"]["action"] = (
+            f"guard run aborted with {type(exc).__name__}: {exc}; release was "
+            "only performed after every accepted job reached a terminal state, "
+            "no md050 native worker was alive and the channel probe was free; "
+            "md050 protections were left untouched"
+        )
+        report["success"] = False
         report["error"] = f"{type(exc).__name__}: {exc}"
         save()
+        _exit_guard(context, guard_root, original_root)
         print(
             json.dumps(
                 {"status": "aborted", "error": report["error"], "report": str(destination)},

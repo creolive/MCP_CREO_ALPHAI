@@ -65,21 +65,31 @@
 （`creo_get_job` 的 compact 与 full 都包含；preview 仍在
 `result.preview_file`）。状态按原生证据区分，不编造回滚：
 
-- `committed`：作业成功，清单给出真实 `feature_id`（`added` 另含
-  `source_model_id`/`source_revision`；`moved` 含 `from`/`to` 查询矩阵）。
+- `committed`：作业成功，清单是作业前后**已验证状态的净变更**——组件按
+  真实 `feature_id` 对比。仅作业后存在的 label 为 `added`（含结果别名里的
+  新 `feature_id`、`source_model_id`/`source_revision`）；仅作业前存在的
+  label 为 `removed`（用作业前别名的旧 `feature_id`）；两侧同 label 且同
+  `feature_id` 才比较移动与约束（`moved` 含 `from`/`to` 查询矩阵，仅在
+  查询到的变换确实不同时报告）；两侧同 label 但 `feature_id` 不同视为重插，
+  报旧 id `removed` + 新 id `added`，绝不从最终别名为已移除中间组件编造
+  身份。同作业内先 add 再 move 最终只有 `added`；先 add 再 remove 无净组件
+  变更；连续 move 只报一次从初态到终态的 `moved`。
 - `rolled_back`：**仅当**原生结果确认 `rollback_succeeded=true`（保存检查点
   已恢复并验证）时才出现；只列请求意图，**不声称任何变更已生效**。
 - `no_effect`：作业未产生任何变更——入口拒绝（通道 busy、worker 未启动）或
   原生预检拒绝（`model_unchanged=true`，副作用前失败）；不需要也未声称回滚。
 - `unknown_outcome`：结果未确认，或作业在原生执行后失败但回滚未确证；清单
   为空并指向保留的保护。
-- 摘要本身失败时状态为 `unavailable`，作业的已确认终态（上方 `status`）仍然
-  权威，摘要异常不会改变终态。
+- 摘要本身是辅助路径：只为摘要的别名/检查 sidecar 读取与计算**仅对含组件
+  操作的请求**发生（普通零件作业完全不读这些 sidecar），其失败只把摘要降级
+  为 `unavailable`（附错误），作业的已确认终态（上方 `status`）仍然权威，
+  摘要异常不会改变终态；缺少已验证结果别名时同样降级为 `unavailable`，
+  不猜测净变更。
 
 同一作业内对同一 label 先 `remove_component` 再 `assemble_component` 时，
-`removed` 记录的是**原** feature_id（来自作业前别名），`added` 记录的是结果
-别名里的**新** feature_id，两者不会被混用。值全部来自原生操作结果、受管别名
-与已验证检查；服务不在 Python 侧模拟几何。批量装配复用每个作业现有的
+`removed` 记录的是**原** feature_id（来自作业前别名快照），`added` 记录的是
+结果别名里的**新** feature_id，两者不会被混用。值全部来自原生操作结果、受管
+别名与已验证检查；服务不在 Python 侧模拟几何。批量装配复用每个作业现有的
 `preview.jpg`，不另设同义“批量装配工具”。
 
 ## list_components 约束符号名
@@ -98,17 +108,28 @@
   不变、来源 provenance、健康/单位/依赖拒绝、重复/失败继续、幂等回放、
   revision/保存重载）。
 - 管线实机驱动：`tools/test_assembly_pipeline.py --session-health-verified`
-  （单作业多组件、预览/摘要/符号名、快照语义与再生成）。
+  （单作业多组件、预览/摘要/符号名、快照语义与再生成；全部动态请求经
+  真实 `normalize_model_name`/`validate_operations` 离线校验，见
+  `tests/unit/test_assembly_pipeline_requests.py`）。
 - guard 实机入口（PowerShell 单行，可直接运行；参数是 `--run`，不是 `--`）：
 
   ```powershell
   .\.venv\Scripts\python.exe tools\guarded_live_run.py --guard-root E:\Projects\MCP_CREO_MechDog --run ".venv\Scripts\python.exe tools\test_assembly_matrix.py --session-health-verified" --run ".venv\Scripts\python.exe tools\test_assembly_pipeline.py --session-health-verified"
   ```
 
-  先持主工作树通道锁再顺序运行 md050 子进程；锁忙即停止（exit 2）。子进程
-  退出不等于作业终态：每个子进程结束后入口先确认本轮受理作业已终态且
-  md050 通道探针空闲才释放 guard；出现 unknown_outcome 或无法证明通道静止时
-  停止后续子进程、保留 md050 保护并以 exit 3 报告“未证明可安全释放”。
+  先持主工作树**真实字节锁**再顺序运行 md050 子进程；锁忙即停止（exit 2）。
+  子进程退出不等于作业终态：每个子进程结束后入口只轮询本轮受理作业
+  （每轮重新发现晚到作业）到终态，并且只在三项独立证据齐全时才释放真实
+  锁——全部受理作业终态 + 无 md050 原生 worker 存活（按
+  `native_checkpoint.json` 的 `native_pid` 进程身份与
+  `build\creo_worker.exe` 镜像路径只读扫描双重确认，空闲锁本身不算证据）
+  + md050 通道字节锁探针空闲。受理作业出现 `unknown_outcome` 且 worker
+  已停、通道空闲时：释放主锁但本入口返回失败（exit 3）、禁止后续子进程、
+  md050 unknown 保护原样保留——unknown 不等于必须永远持锁。若作业仍
+  pending 或通道/进程状态不可证实，`--settle-timeout` 只写报告报警，入口
+  **继续存活并持有真实锁**直至可证实；操作员中断（Ctrl+C）是唯一的提前
+  退出，进程退出即放锁，不做任何安全声明。本入口不结束 Creo、不杀
+  worker、不清保护、不重连、不重提。
   不要把“子进程退出前作业必终态”当作已验证保证——这正是本入口要确认的。
 - 每个驱动输出带时间戳的唯一报告目录。WorkBuddy 只通过公开 MCP 黑盒验收，
   场景见 [WORKBUDDY_FEAT008_PIPELINE.md](WORKBUDDY_FEAT008_PIPELINE.md)。

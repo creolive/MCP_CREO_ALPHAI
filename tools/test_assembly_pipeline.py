@@ -1,4 +1,4 @@
-"""FEAT-008 batch-2 stage-3 live official assembly rebuild pipeline scenario.
+"""FEAT-008 batch-2 stage-4 live official assembly rebuild pipeline scenario.
 
 Exercises the documented pipeline end to end through real MCP calls with
 fixtures prepared for THIS RUN ONLY:
@@ -12,6 +12,16 @@ ADOPTED source (a real protruding tab that changes volume), regenerating the
 assembly (revision+1, geometry still the old snapshot) and finally replacing
 the component via remove + re-assemble (fresh native geometry reflects the new
 source).
+
+Naming: managed model names and external source basenames are limited to 31
+characters (bridge.normalize_model_name). The long timestamp tag only names
+the report/external directories; every native model/source name derives a
+deterministic short lowercase suffix from the tag (SHA256[:8]), unique per
+run and repeatable across rounds. Every dynamic request is built by the small
+builders below and validated offline through the real
+bridge.normalize_model_name / creo_mechdog.schema.validate_operations (see
+tests/unit/test_assembly_pipeline_requests.py); the final replace step keeps
+the ``op`` field of the re-assemble operation.
 
 The earlier revision of this driver passed MCP-managed output files (which
 adoption must refuse as managed_output) to creo_adopt_file and edited the
@@ -42,7 +52,9 @@ from datetime import datetime, timezone
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
+import bridge
 from creo_mechdog.paths import SOURCE_PATHS
+from creo_mechdog.schema import validate_operations
 from tools.dev_check import git_state, source_hash
 from tools.mcp_readiness import wait_for_startup
 
@@ -56,6 +68,31 @@ TAB_MIN = [20, -5]
 TAB_MAX = [30, 5]
 TAB_DEPTH = 6
 TAB_VOLUME = (TAB_MAX[0] - TAB_MIN[0]) * (TAB_MAX[1] - TAB_MIN[1]) * TAB_DEPTH
+# Managed model names are limited to 31 characters; the long timestamp tag is
+# hashed down to a deterministic short suffix for every native name.
+SUFFIX_LENGTH = 8
+
+
+def short_suffix(tag: str) -> str:
+    """Deterministic lowercase suffix: unique per tag, repeatable per round."""
+    return hashlib.sha256(tag.encode("utf-8")).hexdigest()[:SUFFIX_LENGTH]
+
+
+def source_model_name(tag: str, key: str) -> str:
+    return bridge.normalize_model_name(f"pipe_src_{key}_{short_suffix(tag)}")
+
+
+def external_source_name(tag: str, key: str) -> str:
+    stem = bridge.normalize_model_name(f"pipe_ext_{key}_{short_suffix(tag)}")
+    return f"{stem}.prt.1"
+
+
+def original_assembly_name(tag: str) -> str:
+    return bridge.normalize_model_name(f"pipe_orig_asm_{short_suffix(tag)}")
+
+
+def rebuilt_assembly_name(tag: str) -> str:
+    return bridge.normalize_model_name(f"pipe_rebuilt_asm_{short_suffix(tag)}")
 
 
 def block(label: str, size: list[float], depth: float) -> list[dict]:
@@ -91,6 +128,113 @@ def tab_operations() -> list[dict]:
     ]
 
 
+def original_assembly_operations(source_a_id: str, source_b_id: str) -> list[dict]:
+    """Original assembly: repeated occurrence + asymmetric combined rotation."""
+    return [
+        {
+            "op": "assemble_component",
+            "label": "plate_a",
+            "source_model_id": source_a_id,
+            "translation": [0, 0, 0],
+            "placement": "fixed",
+        },
+        {
+            "op": "assemble_component",
+            "label": "plate_b",
+            "source_model_id": source_b_id,
+            "translation": [50, 0, 0],
+            "rotation_matrix": ROT_Z90,
+            "placement": "fixed",
+        },
+        {
+            "op": "assemble_component",
+            "label": "plate_b_second",
+            "source_model_id": source_b_id,
+            "translation": [50, 40, 10],
+            "rotation_matrix": ROT_COMBINED,
+            "placement": "fixed",
+        },
+    ]
+
+
+def rebuild_operations(frozen: dict, occurrences_by_name: dict) -> list[dict]:
+    """Rebuild operations from inspected normalized millimeter transforms.
+
+    ``frozen`` maps label -> snapshot with the verified ``copy_name``;
+    ``occurrences_by_name`` maps occurrence name -> inspected session item
+    whose ``transform_to_parent`` must be flagged ``transform_mm_known``.
+    """
+    operations = []
+    for label, snap in frozen.items():
+        occurrence = occurrences_by_name.get(snap["copy_name"])
+        assert occurrence is not None, f"occurrence {snap['copy_name']} missing"
+        assert occurrence["transform_mm_known"], occurrence
+        transform = occurrence["transform_to_parent"]
+        operations.append(
+            {
+                "op": "assemble_component",
+                "label": label,
+                "source_model_id": snap["source_model_id"],
+                "translation": transform[3][:3],
+                "rotation_matrix": [row[:3] for row in transform[:3]],
+                "placement": "fixed",
+            }
+        )
+    return operations
+
+
+def replace_operations(plate_a_pose: dict) -> list[dict]:
+    """remove + re-assemble. The re-assemble operation KEEPS its ``op`` field:
+    execute_plan operations must carry op (the earlier revision stripped it)."""
+    return [{"op": "remove_component", "component": "plate_a"}, dict(plate_a_pose)]
+
+
+def request_plan(
+    tag: str, adopted_ids: dict[str, str], frozen: dict, occurrences_by_name: dict
+) -> dict:
+    """Every dynamic request this driver submits, built in one place so an
+    offline test can validate all branches (including the final replace)."""
+    rebuild = rebuild_operations(frozen, occurrences_by_name)
+    return {
+        "source_a": {
+            "model_name": source_model_name(tag, "a"),
+            "operations": block("body", [40, 30], 6),
+        },
+        "source_b": {
+            "model_name": source_model_name(tag, "b"),
+            "operations": block("cap", [12, 12], 18),
+        },
+        "external_names": {key: external_source_name(tag, key) for key in ("a", "b")},
+        "original_name": original_assembly_name(tag),
+        "original_operations": original_assembly_operations(adopted_ids["a"], adopted_ids["b"]),
+        "rebuilt_name": rebuilt_assembly_name(tag),
+        "rebuild_operations": rebuild,
+        "replace_operations": replace_operations(
+            next(op for op in rebuild if op["label"] == "plate_a")
+        ),
+        "tab_operations": tab_operations(),
+        "adopt_idempotency_key": f"pipe-{tag}",
+    }
+
+
+def validate_plan(plan: dict) -> dict:
+    """Validate every branch through the real production validators."""
+    for key in ("source_a", "source_b"):
+        bridge.normalize_model_name(plan[key]["model_name"])
+        validate_operations(plan[key]["operations"])
+    for name in (plan["original_name"], plan["rebuilt_name"]):
+        bridge.normalize_model_name(name)
+    validate_operations(plan["original_operations"])
+    validate_operations(plan["rebuild_operations"])
+    validate_operations(plan["replace_operations"])
+    validate_operations(plan["tab_operations"])
+    for name in plan["external_names"].values():
+        stem = name.split(".")[0]
+        bridge.normalize_model_name(stem)
+        assert len(stem) <= 31, stem
+    return plan
+
+
 def matrix_close(actual, expected, tolerance=1e-6) -> bool:
     return all(abs(a - b) <= tolerance for ar, er in zip(actual, expected) for a, b in zip(ar, er))
 
@@ -98,13 +242,14 @@ def matrix_close(actual, expected, tolerance=1e-6) -> bool:
 async def run() -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     tag = stamp + uuid.uuid4().hex[:8]
+    suffix = short_suffix(tag)
     destination = ROOT / f"build/assembly_pipeline_live_{tag}/report.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     external_dir = ROOT / f"build/assembly_pipeline_external_{tag}"
     external_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "work_items": ["FEAT-008", "FEAT-012", "FEAT-048", "DEV-046"],
-        "stage": "batch-2 stage-3 review closeout",
+        "stage": "batch-2 stage-4 review closeout",
         "source": git_state(ROOT),
         "source_fingerprints": {
             name: source_hash(ROOT / name)
@@ -122,6 +267,7 @@ async def run() -> None:
             )
         },
         "fixture_tag": tag,
+        "model_suffix": suffix,
         "external_fixture_dir": str(external_dir),
         "tab_volume_mm3": TAB_VOLUME,
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -184,14 +330,50 @@ async def run() -> None:
             await wait_for_startup(client, report, destination)
             report["environment"] = await call("creo_check_environment", {})
 
+            # Build the whole dynamic request set up front and validate every
+            # branch through the real production validators before any MCP
+            # call accepts work.
+            plan = validate_plan(
+                request_plan(
+                    tag,
+                    {"a": "a" * 32, "b": "b" * 32},
+                    {
+                        "plate_a": {
+                            "copy_name": "c_probe_0",
+                            "source_model_id": "a" * 32,
+                            "source_revision": 1,
+                            "transform": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+                        }
+                    },
+                    {
+                        "c_probe_0": {
+                            "transform_mm_known": True,
+                            "transform_to_parent": [
+                                [1, 0, 0, 0],
+                                [0, 1, 0, 0],
+                                [0, 0, 1, 0],
+                                [0, 0, 0, 1],
+                            ],
+                        }
+                    },
+                )
+            )
+            note("full dynamic request plan validated offline through real validators")
+
             # 1-2. Fixture parts (unique names per run), verified saved+reloaded.
             source_a = await job(
                 "creo_execute_plan",
-                {"model_name": f"pipe_src_a_{tag}", "operations": block("body", [40, 30], 6)},
+                {
+                    "model_name": plan["source_a"]["model_name"],
+                    "operations": plan["source_a"]["operations"],
+                },
             )
             source_b = await job(
                 "creo_execute_plan",
-                {"model_name": f"pipe_src_b_{tag}", "operations": block("cap", [12, 12], 18)},
+                {
+                    "model_name": plan["source_b"]["model_name"],
+                    "operations": plan["source_b"]["operations"],
+                },
             )
             note("fixture parts created and saved on disk with verified reload")
 
@@ -200,7 +382,7 @@ async def run() -> None:
             external = {}
             for key, created in (("a", source_a), ("b", source_b)):
                 part = created["result"]["part_file"]
-                target = external_dir / f"pipe_ext_{key}_{tag}.prt.1"
+                target = external_dir / plan["external_names"][key]
                 target.write_bytes((ROOT / part).resolve().read_bytes())
                 digest = hashlib.sha256(target.read_bytes()).hexdigest()
                 assert digest == created["result"]["sha256"], (
@@ -225,7 +407,7 @@ async def run() -> None:
                     "file_path": paths,
                     "mode": "apply",
                     "evidence_token": evidence["evidence_token"],
-                    "idempotency_key": f"pipe-{tag}",
+                    "idempotency_key": plan["adopt_idempotency_key"],
                 },
             )
             deadline = asyncio.get_running_loop().time() + 400
@@ -246,37 +428,12 @@ async def run() -> None:
             note("external sources adopted by path with independent durable commits")
 
             # 5. Original assembly: repeated occurrence + asymmetric rotation.
-            original_name = f"pipe_orig_asm_{tag}"
-            original = await job("creo_new_assembly", {"model_name": original_name})
+            original = await job("creo_new_assembly", {"model_name": plan["original_name"]})
             original = await job(
                 "creo_execute_plan",
                 {
                     **identity_of(original),
-                    "operations": [
-                        {
-                            "op": "assemble_component",
-                            "label": "plate_a",
-                            "source_model_id": adopted_ids[external["a"]["path"]],
-                            "translation": [0, 0, 0],
-                            "placement": "fixed",
-                        },
-                        {
-                            "op": "assemble_component",
-                            "label": "plate_b",
-                            "source_model_id": adopted_ids[external["b"]["path"]],
-                            "translation": [50, 0, 0],
-                            "rotation_matrix": ROT_Z90,
-                            "placement": "fixed",
-                        },
-                        {
-                            "op": "assemble_component",
-                            "label": "plate_b_second",
-                            "source_model_id": adopted_ids[external["b"]["path"]],
-                            "translation": [50, 40, 10],
-                            "rotation_matrix": ROT_COMBINED,
-                            "placement": "fixed",
-                        },
-                    ],
+                    "operations": plan["original_operations"],
                 },
             )
             changes = original["component_changes"]
@@ -317,28 +474,13 @@ async def run() -> None:
 
             # 7. Rebuild from the inspected normalized millimeter transforms.
             inspected = await call(
-                "creo_inspect_session_assembly", {"name": original_name, "limit": 50}
+                "creo_inspect_session_assembly", {"name": plan["original_name"], "limit": 50}
             )
             assert inspected["total"] == 3, inspected
             by_name = {item["name"]: item for item in inspected["components"]}
             assert len(by_name) == 3, "occurrence names must resolve uniquely"
-            operations = []
-            for label, snap in frozen.items():
-                occurrence = by_name.get(snap["copy_name"])
-                assert occurrence is not None, f"occurrence {snap['copy_name']} missing"
-                assert occurrence["transform_mm_known"], occurrence
-                transform = occurrence["transform_to_parent"]
-                operations.append(
-                    {
-                        "op": "assemble_component",
-                        "label": label,
-                        "source_model_id": snap["source_model_id"],
-                        "translation": transform[3][:3],
-                        "rotation_matrix": [row[:3] for row in transform[:3]],
-                        "placement": "fixed",
-                    }
-                )
-            rebuilt = await job("creo_new_assembly", {"model_name": f"pipe_rebuilt_asm_{tag}"})
+            operations = rebuild_operations(frozen, by_name)
+            rebuilt = await job("creo_new_assembly", {"model_name": plan["rebuilt_name"]})
             rebuilt = await job(
                 "creo_execute_plan", {**identity_of(rebuilt), "operations": operations}
             )
@@ -393,7 +535,7 @@ async def run() -> None:
                 {
                     "model_id": adopted_a,
                     "expected_revision": adopted_a_inspect["revision"],
-                    "operations": tab_operations(),
+                    "operations": plan["tab_operations"],
                 },
             )
             edited_inspect = await volume_of(adopted_a)
@@ -436,10 +578,7 @@ async def run() -> None:
                 "creo_execute_plan",
                 {
                     **identity_of(regenerated),
-                    "operations": [
-                        {"op": "remove_component", "component": "plate_a"},
-                        {k: v for k, v in plate_a_pose.items() if k != "op"},
-                    ],
+                    "operations": replace_operations(plate_a_pose),
                 },
             )
             regen_changes = replaced["component_changes"]

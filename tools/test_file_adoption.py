@@ -72,7 +72,7 @@ async def scenario(paths: list[str], report: dict) -> None:
         for item in inspection["items"]:
             if item.get("source"):
                 provenance = item["source"]["source_state"]["provenance"]
-                assert provenance in ("fresh", "existing_resident"), item
+                assert provenance in ("fresh_retrieval", "existing_resident"), item
             if item["status"] == "refused":
                 assert item.get("reason"), item
         source_files = [i["file"] for i in inspection["items"] if i.get("file")]
