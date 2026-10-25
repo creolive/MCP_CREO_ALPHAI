@@ -51,6 +51,10 @@ static std::set<int> visited_edges;
 static std::wstring generic_job;
 static int temporarily_suppressed_loft = -1;
 static J operation_results = J::array();
+// Snapshot of unhealthy features captured by inspection() right before it
+// throws, so the failure response can carry feature-level diagnostics
+// (BUG-082 H4) instead of only the generic regeneration message.
+static J failed_features = J::array();
 static std::string generic_phase = "loading_request";
 static void generic_stage(const std::string &phase) {
     generic_phase = phase;
@@ -341,6 +345,7 @@ static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
     gsurfaces = J::array();
     gedges = J::array();
+    failed_features = J::array();
     visited_edges.clear();
     CK(ProSolidFeatVisit((ProSolid)board, inspect_feature, nullptr, nullptr));
     bool healthy = true;
@@ -354,6 +359,14 @@ static J inspection(bool require_healthy = true) {
                                                 f["id"].get<int>() != temporarily_suppressed_loft))
                 expected_only = false;
         if (!expected_only) {
+            // Preserve the offending features (id/name/type/type_name/status/
+            // incomplete/geometry_items) before unwinding so the failure
+            // response can publish them (BUG-082 H4).
+            for (const auto &f : gfeatures)
+                if (f["incomplete"].get<bool>() ||
+                    (f["status"].get<int>() != PRO_FEAT_ACTIVE &&
+                     f["id"].get<int>() != temporarily_suppressed_loft))
+                    failed_features.push_back(f);
             log("UNHEALTHY_FEATURES=%s\n", gfeatures.dump().c_str());
             throw std::runtime_error(
                 "Regeneration produced a failed, suppressed or incomplete feature");
@@ -3932,6 +3945,8 @@ static int run_generic(const std::wstring &job) {
         // the restored/current model. Publish it separately, never as a baseline.
         if (report.contains("inspection"))
             report["failure_inspection"] = report["inspection"];
+        if (!failed_features.empty())
+            report["failed_features"] = failed_features;
         report["inspection"] = nullptr;
         report["inspection_source"] = "unavailable";
     }
