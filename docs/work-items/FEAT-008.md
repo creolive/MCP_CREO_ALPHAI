@@ -136,6 +136,65 @@ Creo 12.4 SDK 离线编译；不连接 Toolkit、不故障注入。底板 holes/
 未测：实机放置/收养/管线、保存重载、WorkBuddy 黑盒、其他 Creo 版本；第三
 批约束回放（FEAT-049）未扩。
 
+### 2026-10-25 第二批第三阶段登记（复审收口，行为修改前）
+
+上游逐段读码复审确认六项缺陷，本阶段最小修复（不改写历史 validation
+与 stage1/2 测试事实，新证据另建）：
+
+1. **旧装配约束记录不兼容（真实生产缺陷）**：`native/advanced.cpp`
+   `inspect_constraints` 新增展示性 `type_name` 后，`native/generic.cpp`
+   `verify_saved` 仍整段 JSON 严格比较 `constraints`；旧保存检查点只有
+   `{"type":13}`，新查询为 `{"type":13,"type_name":"fix"}`，旧装配后续编辑
+   被误报 "Saved assembly constraints changed"。修复：提取生产 helper 只把
+   `type_name` 从兼容比较中投影掉，数字 `type`/`offset`/引用/方向/数量/顺序
+   校验完整保留；真实 helper 离线 harness 证明旧→新等价通过、真实变化仍拒绝。
+2. **变更摘要不得编造回滚**：`component_changes` 对一切非 succeeded 作业一律称
+   `rolled_back`；busy 拒绝/未执行分支并无回滚证据。改为按原生
+   `rollback_succeeded`/`model_unchanged`/终态/保护信息区分：确证回滚才称
+   `rolled_back`；未执行（busy/未启动）称 `no_effect`；执行后失败但回滚未确证
+   称 `unknown_outcome`；汇总异常只报 `unavailable` 且不得改变已确认终态
+   （成功作业不得滞留 running 或被改成 unknown）。同 job remove+reinsert 同
+   label 时 removed 用旧 feature_id、added 用结果别名新 id。compact 投影纳入
+   `component_changes`（有界）。
+3. **guard 异常收尾**：`tools/guarded_live_run.py` 原假定“driver 退出=作业终态”，
+   改为启动前记录基线作业集，成功/失败/异常后持 main guard 期间轮询本轮新
+   作业到终态并探针确认 md050 通道静止后才释放；unknown 停止后续 driver、保留
+   md050 保护，不证明静止不得声称安全释放；文档不再把“子进程退出前必终态”写成
+   已验证保证。
+4. **管线驱动修夹具与快照对象**：`tools/test_assembly_pipeline.py` 原把 MCP
+   托管输出直接送收养（必被 `managed_output` 拒绝）、快照场景编辑原 source
+   而非收养副本、重建场景非可靠验证。改为制备唯一命名外部夹具（记录源 SHA、
+   只读）、编辑实际收养 `source_model_id` 并真实改变几何（外伸凸台，体积/bbox
+   可核）、用 inspect 归一化毫米变换+来源映射重建并对上冻结快照；fixture 名
+   每次唯一。
+5. **矩阵驱动补真实回滚与独立几何断言**：单作业先合法移动再以无效 native
+   组件引用失败，要求 failed+rollback_succeeded、revision 不变、位姿恢复、
+   后续合法修改成功；增加原生保存重载 inspection 体积/bbox 独立物理断言
+   （源盒 8 角刚体变换期望边界，非自证矩阵）。
+6. **文档/示例/提示词**：`assembly_rebuild_pipeline.json` 不再固定
+   `capture.revision=0`；guard 文档给可直接运行的 `--run` PowerShell 单行；
+   WorkBuddy 回滚场景改为“先成功变更再普通 native 失败”；快照场景编辑实际
+   source_model_id 并区分缓存与刚实测原生数据。
+
+验收：针对性单测、全量 dev_check、约束比较生产 helper harness、Creo 12.4 SDK
+离线编译；记录提交/dirty/指纹/SHA/命令/未测范围。不放宽 style baseline；
+实机/WorkBuddy 仍待统一安排，本卡不关闭；首批底板 holes 等继续开放。
+
+### 2026-10-25 第三阶段实现与离线结果
+
+六项复审缺陷已全部最小修复并离线验收：约束兼容比较生产 helper
+（`native/constraint_compare.h` + 离线 harness，旧→新等价、真实变化拒绝）；
+变更摘要四态（`rolled_back` 仅回滚确证、新增 `no_effect`/`unavailable`、
+compact 投影、remove+reinsert 双身份）；guard 异常路径终态确认释放
+（基线+轮询+通道探针，unknown 保留，exit 3 不声称安全，7 项离线回归）；
+管线驱动外部夹具制备/收养副本编辑/inspect 归一化变换重建与体积取证；
+矩阵驱动单作业真实回滚 + 原生体积/bbox 独立断言；文档/示例/提示词/CLI
+修正（`--run` 单行命令、`revision=0` 固定值移除、WorkBuddy 回滚与快照
+场景重写）。676 项单测、全量 dev_check（exit 0）、三个 C++ helper harness、
+Creo 12.4 SDK 编译通过；未放宽 style baseline。完整证据见
+[BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md)。
+实机/WorkBuddy 仍待统一安排，本卡不关闭。
+
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P2-2/P1-1/P3-1：能力边界只由"MCP-owned"措辞隐式表达；接管拒绝为文本错误且缺实际单位；空窗口为裸 Toolkit 码。本轮三项：
