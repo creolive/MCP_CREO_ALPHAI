@@ -13,9 +13,12 @@ import json
 import math
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from creo_mechdog.paths import SOURCE_PATHS
 from tools.dev_check import git_state, source_hash

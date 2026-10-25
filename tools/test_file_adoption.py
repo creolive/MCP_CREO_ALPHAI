@@ -20,6 +20,8 @@ from pathlib import Path
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from creo_mechdog.file_adoption import lifetime_seconds
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import identity
