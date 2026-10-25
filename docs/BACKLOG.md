@@ -1,12 +1,14 @@
 # 统一开发台账
 
-建立：2026-10-13；最近更新：2026-10-25。当前开发服务/源码版本：0.5.2（已发布：0.5.0 反馈整合第一批；最近发布 0.5.2，[发布核对](validation/RELEASE-0.5.2.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）。
+建立：2026-10-13；最近更新：2026-10-25（0.5.3 定版发布）。当前开发服务/源码版本：0.5.3（0.5.0/0.5.1 外部 Creo 9 反馈整合阶段一+阶段三，codex/feedback05051-phase1 整合批次；发布核对见 [RELEASE-0.5.3.md](validation/RELEASE-0.5.3.md)）；前一发布 0.5.2（[发布核对](validation/RELEASE-0.5.2.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）。阶段三离线全量与实机收口见[收口证据](validation/PHASE3-CLOSEOUT-2026-10-25.md)。
 
 本页只安排未完成工作和单列的历史观察；完成结论见[完成档案](BACKLOG_COMPLETED.md)。各固定 ID 只出现一条任务记录，工作卡和原始证据保存详细输入、历史过程与已测范围。
 
 ## 当前安排
 
 - [0.5.0反馈整合计划](development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)（三份[原件](validation/feedback-0.5.0-2026-10-22/manifest.json)已逐字节归档）：第一批证据、状态与正确性由 [DEV-046](work-items/DEV-046.md) 收口（BUG-080 装配变换单位契约与 FEAT-006 收养拒绝逐特征诊断已随 0.5.2 交付，验收范围见卡）；第二批可靠装配重建管线（[FEAT-048](work-items/FEAT-048.md) 按路径/批量收养，矩阵入参归 FEAT-012/BUG-045，Task 4 已实现离线管线、实机和 WorkBuddy 验收待完成，多组件单作业批量装配官方示例与验收归 FEAT-008 现有 `creo_execute_plan`）；第三批约束保真、比对与运维（[FEAT-049](work-items/FEAT-049.md) 约束回放、[FEAT-050](work-items/FEAT-050.md) 装配比对、DEV-027 显式世代回收）。原环境 Creo 10 证据与本机 Creo 12 证据分开记录，报告预计性能收益仅作建议。
+
+- [0.5.0/0.5.1 Creo 9 反馈计划](development/0.5.0-0.5.1-FEEDBACK-PLAN-2026-10-23.md)（两份[原件](validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)已于 2026-10-25 逐字节归档）：阶段一登记完成——[BUG-081](work-items/BUG-081.md) 迁移 owner 拒绝诊断、[BUG-082](work-items/BUG-082.md) 在轴剖面就地编辑再生失败、[BUG-083](work-items/BUG-083.md) revolve.axis 非法结构裸异常三卡建立（目标 0.5.3，已随 0.5.3 定版交付）；BUG-079/062/030/029、BUG-074、BUG-077/FEAT-047、FEAT-045、BUG-058、BUG-034/FEAT-030、BUG-017/FEAT-029、BUG-036、FEAT-020/BUG-019、FEAT-023/BUG-059/FEAT-043/044/BUG-009 的外部 Creo 9 证据已按子项补录并保留未测范围。**阶段三 0.5.3 已于 2026-10-25 收口**（集成尖 `e2bba08`，随 0.5.3 定版交付）：BUG-081 诊断实现、BUG-083 双路径实机通过、FEAT-030/BUG-034 来源透明化与两种子实机加载、FEAT-045/BUG-058/FEAT-020/BUG-019 四项小修；BUG-082 实机矩阵部分通过但 autodim 改角再生失败本体仍在。证据与未测范围见[阶段三收口](validation/PHASE3-CLOSEOUT-2026-10-25.md)，保留项为 Creo 9 复验、种子重生成、revision 字段与安装库回归。
 
 - [0.4.6反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)（三份[原件](validation/feedback-0.4.6-2026-10-21/manifest.json)已归档补录，0.4.7 发布后开工）分两批推进：第一批盘点口径补齐与证据收口（DEV-027 loader/payload 盘点区分引用三态、FEAT-046/FEAT-043/044/DEV-027 外部通过子项关闭、DEV-045 附件名 0.4.7 起定名核对通过、BUG-077 原环境复测单列）；第二批 FEAT-045 装配只读检查（新增 `creo_inspect_session_assembly`）按 MINOR（0.5.0）随版交付，四类受限场景与外部复核按卡开放。矩阵放置、重建编辑与装配整体收养为后续路线不随本轮实施。
 - [0.4.4反馈整合计划](development/0.4.4-FEEDBACK-PLAN-2026-10-21.md)（覆盖 v0.4.4 构建验收与 v0.4.5 运行反馈两份[原件](validation/feedback-0.4.4-2026-10-21/manifest.json)）：BUG-077/FEAT-047/DEV-044 五组验收已随 0.4.7 交付（[发布核对](validation/RELEASE-0.4.7.md)）；BUG-078（恢复 accept 路径 Backup 稳定 -1）自该计划登记待修。
@@ -19,14 +21,15 @@
 | 状态 | 数量 | 下一步 |
 | --- | --- | --- |
 | 开发中 | 4 | 继续已登记的分期工作 |
-| 待复现 | 19 | 补齐输入与环境，复现并定位 |
+| 待复现 | 19 | 补齐输入与环境，复现并定位（BUG-081 转验收中、BUG-082 转待开发后下调 2） |
 | 待核实 | 12 | 明确输入、规则或预期后再定性 |
-| 验收中 | 27 | 按卡补齐剩余验证，不重复计入旧成功 |
+| 验收中 | 28 | 按卡补齐剩余验证，不重复计入旧成功（BUG-081、BUG-083 转入） |
 | 待规划 | 45 | 确定范围、兼容规则与验收方法 |
+| 待开发 | 2 | 范围已明确，安排实施批次（FEAT-048、BUG-082 autodim 改角） |
 | 观察中 | 2 | 出现新证据后再转回调查 |
 | 已交付/已修复/已验收（未收口，状态保留） | 6 | 归类口径：已交付2、已修复，WorkBuddy复验通过（待发布）1、已修复（验收中）2、已验收（本机）1；均有另期保留范围，按各卡待收口下一步收口后再移档，不改原状态凑数 |
 
-共 115 项：113 项未完成工作、2 项历史观察。历史观察的原优先级仅保留来源，不代表当前排期或发布阻断。
+共 118 项：116 项未完成工作、2 项历史观察。历史观察的原优先级仅保留来源，不代表当前排期或发布阻断。本轮 9 条只更新状态与剩余范围，没有条目满足“完全完成”条件，未迁入[完成档案](BACKLOG_COMPLETED.md)，完成数不变。
 
 - 收到失败报告不等于根因已确认；部分实现/通过只缩小剩余范围，不批量关闭。状态变化同时同步工作卡，完成项及时移入档案。
 - 新工作先登记固定 ID、目标、范围、环境与验收要求；执行过程写入工作卡或证据，使用[模板](templates/WORK_ITEM.md)。
@@ -55,8 +58,11 @@
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
 | [BUG-080](work-items/BUG-080.md) | P1 | 实机+A/B通过，WorkBuddy第三轮待复验 | 0.5.2 | [装配变换呈 x/25.4 指纹、文档声明 mm](validation/feedback-0.5.0-2026-10-22/manifest.json)（外部 Creo 10 / 0.5.0）：inspect 显式输出装配单位、变换统一毫米坐标映射并保留原始矩阵与单位信息；混合单位验证完整坐标映射，无法确认标未知并传播不完整标志；关联 FEAT-045。2026-10-23 实现独立复审通过（无必修，4 项 Minor 已登记见卡；单位查询+毫米完整映射+原始矩阵+完整性传播+特征状态失败置 incomplete/身份查询码保留/局部非有限矩阵修正；离线原生 case 1–27 与 walk 状态共享化夹具（assembly_walk.h/test_assembly_walk.cpp）已实跑通过、生产复编 exit 0（947f40e，886eb0d 尖端复现夹具/单测/复编；SDK 查询替换/注入 visitor 非真实 ProSolidFeatVisit）；947f40e 全量 557 项单测与统一 dev_check 通过（success=true）），实机混合单位验收 2026-10-24 通过（英寸装配+毫米组件：length_unit in/25.4、组件 mm/父 in、归一平移 25.4/50.8/76.2 与 raw 1/2/3、complete、会话不变，[记录](validation/BUG080-FEAT006-LIVE-2026-10-24.md)），WorkBuddy 黑盒待执行。 |
-| [BUG-079](work-items/BUG-079.md) | P1 | 已修复，WorkBuddy 复验通过（待发布） | 下一PATCH | 就地改弧半径再生失败根因已核实：autodim 在半径变化截面上欠约束（缺 y 位置尺寸），残留孤儿特征尺寸使草绘特征再生失败；显式坐标尺寸路径成功对照确认。修复：未变实体跳过/变更实体 Delete+Add（centerline 保 Replace）+ 主平面 auto 编辑路由到坐标尺寸路径；MSVC lambda 捕获缺陷一并规避。原生全套（回转/拉伸变体、BUG-062 夹具、编辑专项 11 项、general_core、554 单测）通过；WorkBuddy 复验场景 1–3 通过、场景 4 经提示词输入勘误后实证修复有效（见卡内复验表）。 |
-| [BUG-058](work-items/BUG-058.md) | P1 | 待复现 | 未排期 | 窗口观测与指引已实现；外部无主窗口 -11 根因仍待复现。本机同码 -4 已定位客户端侧 RPC 端点自举端口错位（详见卡 2026-10-22/23 节），触发条件未定；历史外部 -11 为不同层，保持待复现。 |
+| [BUG-081](work-items/BUG-081.md) | P1 | 验收中 | 0.5.3（目标，未发布） | [0.5.0 外部报告 §五](validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)（外部 Creo 9/0.5.0）：终态作业的仍存活 owner 使 `creo_migrate_registry` 两次拒绝且负载无停止证据（alive=None 不区分 Windows 错误），inspect 不预标注阻塞条目；本地同参直调通过发生在 owner 死亡后，不据此定性误判。**2026-10-25 阶段三已实现诊断**：inspect 预标注 `owner_block` + 顶层 `blocked_entries`，apply 在锁内重验并返回有界 `owner_block`（recorded/observed、Windows 错误、reason_code、next_steps），15 项单测与 612 例全量、dev_check 通过；停止判定语义与 BUG-074 时间证据适用面**未改**。剩余：实机 MCP 拒绝时序未复现（无同型残留 worker 现场，不新增故障注入），需外部 Creo 9 或用受控现场确认后才决定是否改停止判定。见[阶段三收口](validation/PHASE3-CLOSEOUT-2026-10-25.md)。 |
+| [BUG-082](work-items/BUG-082.md) | P1 | 待开发 | 0.5.3（目标，未发布） | [0.5.1 外部报告 §三](validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)（外部 Creo 9/0.5.1）：在轴扇形（弧心在回转轴上、R10 上半球）初始回转成功，就地改角/改半径/显式 coordinates 均失败——草图 REV_SK 成功、回转 REV1 status=6，回滚干净。**2026-10-25 本机 12.4 实机矩阵部分通过**（[收口记录](validation/PHASE3-CLOSEOUT-2026-10-25.md)）：coordinates 改角 90→80、改半径 R10→R12 与两次回程 7/7 成功，体积 2094.3951→2062.5765→3619.1147 与 `V=(2πR³/3)·sinθ_max` 逐位一致；**autodim 改角 90→80 仍失败**（REV_SK id40 与 REV1 id51 均 status=6），回滚干净、体积复原 2094.3951，`failed_features` 已带特征级诊断；失败作业 revision 未取得（报告格式不含）；外部“coordinates/改半径也失败”未在本机复现，保留外部待核对。下一步：对 autodim 改角求解失败做有界修复，不预设 Creo 9 特有或贴轴必然失败。 |
+| [BUG-083](work-items/BUG-083.md) | P2 | 验收中 | 0.5.3（目标，未发布） | [0.5.1 外部报告 §四](validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)（外部 Creo 9/0.5.1）：`revolve.axis={"entity":"ax"}` 透出 nlohmann 裸异常（key 'kind' not found），无可操作信息，回滚干净。**2026-10-25 实机双路径通过**（[收口记录](validation/PHASE3-CLOSEOUT-2026-10-25.md)）：省略 axis + 内部中心线 `revolve_modes` 3/3；`examples/revolve_external_axis.json` 显式轴隔离新件成功（revision 1、体积 3141.592653589793=1000π、保存重载 true、无失败特征）。负路径为入口离线预检：缺 kind/错误类型/空对象/不适用引用被拒且不派发原生作业，省略与 null 等价、空对象按缺 kind 拒绝。剩余：原生 `validate_revolve_axis` 未在真实执行器触发（Python 先拒），外部 Creo 9 未复测，WorkBuddy 按需；按卡留验收中，不外推为 Creo 9 已修复。 |
+| [BUG-079](work-items/BUG-079.md) | P1 | 已修复，WorkBuddy 复验通过（待发布） | 下一PATCH | 就地改弧半径再生失败根因已核实：autodim 在半径变化截面上欠约束（缺 y 位置尺寸），残留孤儿特征尺寸使草绘特征再生失败；显式坐标尺寸路径成功对照确认。修复：未变实体跳过/变更实体 Delete+Add（centerline 保 Replace）+ 主平面 auto 编辑路由到坐标尺寸路径；MSVC lambda 捕获缺陷一并规避。原生全套（回转/拉伸变体、BUG-062 夹具、编辑专项 11 项、general_core、554 单测）通过；WorkBuddy 复验场景 1–3 通过、场景 4 经提示词输入勘误后实证修复有效（见卡内复验表）；外部 Creo 9 离轴构型复验通过（R5→R6→R5 逐位一致，见卡 2026-10-23 补录）。 |
+| [BUG-058](work-items/BUG-058.md) | P1 | 待复现 | 未排期 | 窗口观测与指引已实现；外部无主窗口 -11 根因仍待复现。本机同码 -4 已定位客户端侧 RPC 端点自举端口错位（详见卡 2026-10-22/23 节），触发条件未定；历史外部 -11 为不同层，保持待复现。**2026-10-25 小修**：guidance 区分挂起窗口（hidden/visible）与活动 Dashboard/模态框，统一前置核对清单，结束进程只作为操作者明确选择的恢复项，3 项单测通过；仅文案，状态机与观测字段未动，仍需外部现场复现 -11。 |
 | [BUG-062](work-items/BUG-062.md) | P1 | 已修复（验收中） | 下一PATCH | [centerline 加入就地编辑允许集合](validation/BATCH2-EDITING-2026-10-22.md)：schema 缺口补齐（原生分支本就存在），回转草图 R5→R6 两入口实机通过（体积/ID/rev/保存重载），负面三路径保持拒绝；2026-10-23 会话重启后独立复验通过，WorkBuddy 黑盒验收 centerline 核心行为与三拒绝路径通过；改弧半径失败为独立缺陷 [BUG-079](work-items/BUG-079.md)。 |
 | [BUG-063](work-items/BUG-063.md) | P1 | 待复现 | 未排期 | 复现非原点轴 10×36° 阵列去料错误，与过原点轴、柱面取轴对照；核对实例变换及实际轴位置。自校验告警和显式轴参数仍需方案，关联 BUG-065。 |
 | [BUG-064](work-items/BUG-064.md) | P1 | 待复现 | 未排期 | 复现 surface 平面引用失败及纯 Z 向 u_axis 报 Zero direction vector 两条路径，核对引用分支与坐标帧计算；明确平行法向的拒绝，免引用平面输入另评估。 |
@@ -64,7 +70,7 @@
 | [BUG-066](work-items/BUG-066.md) | P2 | 待复现 | 未排期 | 复现体积正确但 preview.jpg 断裂失真的模型，定位显示集/曲面/网格路径；视角选择归 FEAT-041，预览不能代替几何验收。 |
 | [BUG-030](work-items/BUG-030.md) | P1 | 已验收（本机） | 下一PATCH | [最终收口](validation/BUG030-CACHE-CLOSEOUT-2026-10-22.md)（2026-10-22/23 节）：连接恢复后九项专项 9/9、实体分支核验（arc/centerline/ellipse/spline；闭合样条按保守路径）、general_core 7/7、BUG-062 复验、554 单测、同会话空闲复连全部通过；以最终源码重取全部证据。原 0.3.1 改尺寸失败仍未复现，保留历史现象。WorkBuddy 黑盒与发布待安排。 |
 | [BUG-029](work-items/BUG-029.md) | P1 | 已修复（验收中） | 下一PATCH | [重排槽位修正与矩阵](validation/BATCH2-EDITING-2026-10-22.md)：new_feat_num 为原树编号，按移动方向折算，连续性/重叠/重复前置校验；5 正例、6 负例及连续块后移等补测通过。原三次 -2 根因未确认；原位 no-op 仍保存验证且 revision +1（历史证据 3→4）。2026-10-23 随最终收口以最终源码复验通过（reordered=false、树序/ID 保持、rev+1）；WorkBuddy 黑盒与外部环境未测。 |
-| [BUG-034](work-items/BUG-034.md) | P1 | 待复现 | 未排期 | 取得 Creo 9 种子加载 -16 的完整输入和环境，查生产版本与加载原因；哈希 available 不等于可加载，本机其他版本成功不能关闭此项。兼容观察与 FEAT-030 联动。 |
+| [BUG-034](work-items/BUG-034.md) | P1 | 待复现 | 未排期 | 取得 Creo 9 种子加载 -16 的完整输入和环境，查生产版本与加载原因；哈希 available 不等于可加载，本机其他版本成功不能关闭此项。兼容观察与 FEAT-030 联动。**2026-10-25**：-16 失败诊断与来源透明化已实现（保留原始 API/错误码/阶段/种子哈希/运行版本，原因无证据时为 `undetermined_by_error_alone`，不硬写“由 12.4 构建”）；本机 12.4 两种子加载与保存重载成功只证明本机，Creo 9 未复验，**保持待复现**。 |
 | [BUG-035](work-items/BUG-035.md) | P1 | 待复现 | 未排期 | 复现 shell=2 后 dimension_pattern 孔阵列增料与 r7 环箍，检查 leader、树顺序和阵列规则；以无抽壳及 axis_pattern 对照实际去料与重载。 |
 | [BUG-032](work-items/BUG-032.md) | P2 | 待复现 | 未排期 | 核对钣金开放/闭合壁 depth、thickness 和草图轴语义，复现 depth=1、thickness=232、线长185得到185×232×232的报告；逐类验证几何、折弯、重载及回滚。 |
 | [BUG-046](work-items/BUG-046.md) | P1 | 待复现 | 未排期 | 复现钣金实体与增料块真实重叠仍 -1、同件 cut 正常的对照，先确认原生规则；支持路径须保留钣金/展开能力并重载，不支持组合给出限制。 |
@@ -114,12 +120,12 @@
 | [BUG-057](work-items/BUG-057.md) | P1 | 验收中 | 0.4.6 | 包内统一锁机制（OPEN_EXISTING→CREATE_NEW→一次共享回退）与启动协调lock_error分类已实施，双路径诊断本机三状态60轮全过；剩余双进程200轮与 Win10/Python3.13 原环境重跑。保持忙即拒绝、无重试/排队。 |
 | [FEAT-046](work-items/FEAT-046.md) | P1 | 验收中 | 0.4.6 | `creo_erase_session_models` 已实施（native inspect/apply+令牌+幂等+拓扑序+逐项复核消失确认），单元5项+全量502项+构建过；[外部 Creo 10 实机主链路通过](validation/feedback-0.4.6-2026-10-21/manifest.json)（两轮 inspect→apply、会话归零、擦除后打开装配闭环），该子项关闭；剩余本机 Creo 12.4 矩阵、阻断场景及 WorkBuddy 黑盒。 |
 | [BUG-036](work-items/BUG-036.md) | P1 | 验收中 | 未排期 | 实际组件到装配变换查询已修复并经本机约束/重载对照；仍缺面位置/法向直接量测与Creo9原失败完整输入。 |
-| [FEAT-030](work-items/FEAT-030.md) | P2 | 验收中 | 未排期 | 种子元数据与会话加载观察首批已交付；继续补可追溯生产版本及各环境实际加载证据，available只代表哈希。Creo9兼容加载失败仍由 BUG-034 跟进。 |
+| [FEAT-030](work-items/FEAT-030.md) | P2 | 验收中 | 未排期 | 种子元数据与会话加载观察首批已交付；继续补可追溯生产版本及各环境实际加载证据，available只代表哈希。Creo9兼容加载失败仍由 BUG-034 跟进。**2026-10-25**：种子实机证据取得（`two_straight` job `d161f855…` 体积 5131.268000863329/4900π·3、`two_smooth` job `fe8bf5ed…`，均 `seed_load_evidence.status=loaded`、`evidence_persisted=true`、保存重载通过；validate 仍 `not_verified_for_current_session`、`seed_build_version=null`，[收口记录](validation/PHASE3-CLOSEOUT-2026-10-25.md)）。剩余：生产版本可追溯生成记录、Creo 9/10 等其他环境加载、9 种子安装库回归；种子重生成另列环境受阻子项，保持验收中。 |
 | [FEAT-042](work-items/FEAT-042.md) | P1 | 验收中 | 未排期 | 剩余接管/同模型并发编辑、真实再生失败、钣金专有语义及prepare字段的WorkBuddy复核。原件关闭后副本续作已验证，通道级busy不能代替接管并发验收。 |
 | [BUG-072](work-items/BUG-072.md) | P2 | 验收中 | 未排期 | 非毫米units/体积误标已修复且本机英寸拒绝复验通过；剩余WorkBuddy公开复核，保持毫米准入与原件不变，拒绝格式说明与 FEAT-008 联动。 |
 | [FEAT-043](work-items/FEAT-043.md) | P2 | 验收中 | 0.4.6 | 剩余unknown、其他模型类型及真实并发枚举；本轮快照年龄/刷新指引/`service_session_changes`（跨进程有界记录，GUI变化标未实时复核）已实施，省略cursor实时重采/携cursor冻结语义保持；`opened_session_model` 原环境观察子项已[外部实测到位关闭](validation/feedback-0.4.6-2026-10-21/manifest.json)（含 loaded_session_models 9 项回读）；session_model_id 524288+ 大数段保留观察不作身份键；剩余实机与 WorkBuddy 复核。 |
 | [FEAT-022](work-items/FEAT-022.md) | P2 | 验收中 | 未排期 | 部署指纹与重启指引已实现；仍需真实连接器升级前后对照，确认路径、启动身份和工具版本一致，不能只看版本号。 |
-| [BUG-019](work-items/BUG-019.md) | P2 | 验收中 | 未排期 | 三入口别名、size回显、冲突拒绝与本机尺寸/重载已通过；剩余WorkBuddy终验，其他环境不据本机成功推定。 |
+| [BUG-019](work-items/BUG-019.md) | P2 | 验收中 | 未排期 | 三入口别名、size回显、冲突拒绝与本机尺寸/重载已通过；剩余WorkBuddy终验，其他环境不据本机成功推定。**2026-10-25 小修**：三入口等价请求示例与三步部署核对方法前移至 REFERENCE_SYNTAX.md（只读源码核对，无行为改动，既有 10 项单测复跑通过）；未新增别名，参数名差异反馈仍须先核对真实请求与受测部署。 |
 | [FEAT-029](work-items/FEAT-029.md) | P1 | 验收中 | 0.3.4 | 首次注册→启动→ready→直接放样→重启后再放样的本机主线已过；剩余不同代际兼容升级、回退、多目录并存及对应公开验收。自动注册、last_known_readiness和签名仍待评估。 |
 | [FEAT-018](work-items/FEAT-018.md) | P1 | 验收中 | 0.3.4 | 补四种恢复动作的revision、600秒凭证/过期、幂等、活动owner、跨文件登记、再次中断及后续编辑与WorkBuddy矩阵；清字段或重启不能代替恢复验收。 |
 | BUG-010 | P1 | 验收中 | 未排期 | 旧报告中 drawing_view_update(scale=2) 失败，但 0.3.1 已成功把 v_front 从 1 放大到 2。还要查清两次测试的差异，测试位置更新、图纸保存重载和 revision；失败时应保留原图。  本次只调整为剩余验收，不认定位置更新和保存重载已通过。 |
@@ -127,7 +133,7 @@
 | [BUG-014](work-items/BUG-014.md) | P1 | 验收中 | 未排期 | 查清作业counts=null、后续查询有值的时点与取数差异，补恢复失败路径；未知计数保持null。 |
 | [BUG-017](work-items/BUG-017.md) | P1 | 验收中 | 未排期 | 本机筋特征已测范围保留；Creo9材料侧再生失败仍缺完整轮廓、平面、部署与job/model，补输入后定位，不能直接归因该版本不支持。 |
 | [BUG-028](work-items/BUG-028.md) | P2 | 验收中 | 未排期 | 补计划入口的整数、数字字符串和混合草图引用最终建模/重载结果；独立工具与标签成功、仅通过输入校验都不能代替。 |
-| [FEAT-020](work-items/FEAT-020.md) | P2 | 验收中 | 0.3.0 | 补local_dev与公开版本语义、断网/限流/高版本与重复提示，以及联网失败后可继续建模的验证；current=latest只表示可比较的最高公开版本。 |
+| [FEAT-020](work-items/FEAT-020.md) | P2 | 验收中 | 0.3.0 | 补local_dev与公开版本语义、断网/限流/高版本与重复提示，以及联网失败后可继续建模的验证；current=latest只表示可比较的最高公开版本。**2026-10-25 小修**：失败 message 明确“未取得最新版本信息”（此前无成功检查时 `latest_version=null`；有旧缓存时标注须结合 `status=failed`/`stale`/`error`），`creo_check_update` 描述与 UPDATE_CHECK.md 同步，1 项单测通过；真实断网/限流与失败期间建模仍缺。 |
 | [FEAT-023](work-items/FEAT-023.md) | P2 | 验收中 | 0.4.2 | capabilities摘要/分页子项已闭环；剩余jobs日志、组件业务label/源件身份、翼型/履带请求与union错误体量。保持UTF-8预算、身份/矩阵/放置与详情入口，不能代替 BUG-053 计算优化。 |
 
 ## 功能与接口改进（待规划）
@@ -172,7 +178,7 @@
 | [FEAT-041](work-items/FEAT-041.md) | P3 | 待规划 | 未排期 | 评估可选输出目录与预览/导出视角、正交投影；保持默认行为，输出目录不开放任意写路径。 |
 | [FEAT-049](work-items/FEAT-049.md) | P1 | 待规划 | 后续MINOR | [0.5.0 反馈第三批](development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)：约束快照回放——补双侧方向/引用身份/可回放诊断，首期限单层与现有六种写入类型；未知类型/缺失映射明确拒绝，不静默退化 fixed 放置。 |
 | [FEAT-050](work-items/FEAT-050.md) | P2 | 待规划 | 后续MINOR | [0.5.0 反馈第三批](development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)：装配结果比对——冻结基准（FEAT-045 快照）+显式组件映射，比对组件集/毫米位置/旋转/约束/包围盒体积，缺失数据标未验证。 |
-| [FEAT-045](work-items/FEAT-045.md) | P2 | 验收中 | 0.5.0 | [0.4.6 反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)第二批：新增 `creo_inspect_session_assembly` 只读检查（树序 occurrence 路径/来源/加载抑制状态/约束欠约束快照、完整 4×4 行向量解算变换含单位与平移末行约定、缺件/抑制/单节点失败逐项标记+原始查询码+整体完整性标志、首采单通道忙拒+分页十分钟冻结快照 32 KiB、五不原则）。[实施与本机实机验收](validation/FEAT045-ASSEMBLY-INSPECT-2026-10-22.md)：托管链+外部装配主线通过（变换与放置平移逐位一致、fix 约束快照、分页、结构化拒绝、会话不变），单测5项+全量544项+dev_check过；[0.5.0 外部报告 §3.1](validation/feedback-0.5.0-2026-10-22/manifest.json) 单层装配复核外部通过关闭；嵌套/重复实例/抑制/缺件四场景实机触发与 WorkBuddy 黑盒按卡开放，单位疑点归 BUG-080。矩阵放置、重建编辑与装配整体收养为后续路线单列。 |
+| [FEAT-045](work-items/FEAT-045.md) | P2 | 验收中 | 0.5.0 | [0.4.6 反馈整合计划](development/0.4.6-FEEDBACK-PLAN-2026-10-21.md)第二批：新增 `creo_inspect_session_assembly` 只读检查（树序 occurrence 路径/来源/加载抑制状态/约束欠约束快照、完整 4×4 行向量解算变换含单位与平移末行约定、缺件/抑制/单节点失败逐项标记+原始查询码+整体完整性标志、首采单通道忙拒+分页十分钟冻结快照 32 KiB、五不原则）。[实施与本机实机验收](validation/FEAT045-ASSEMBLY-INSPECT-2026-10-22.md)：托管链+外部装配主线通过（变换与放置平移逐位一致、fix 约束快照、分页、结构化拒绝、会话不变），单测5项+全量544项+dev_check过；[0.5.0 外部报告 §3.1](validation/feedback-0.5.0-2026-10-22/manifest.json) 单层装配复核外部通过关闭；嵌套/重复实例/抑制/缺件四场景实机触发与 WorkBuddy 黑盒按卡开放，单位疑点归 BUG-080。矩阵放置、重建编辑与装配整体收养为后续路线单列。**2026-10-25 小修**：`support_status.assembly_checks` 由 planned/not available 改为 `supported_limited` 并指向已发布的 `creo_inspect_session_assembly`，写明只读范围、四类受限场景与无写路径，3 项单测锁定不回退；仅文案/状态字段，未重复实机，四场景与 WorkBuddy 仍开放。 |
 
 ## 工程整理（待规划）
 

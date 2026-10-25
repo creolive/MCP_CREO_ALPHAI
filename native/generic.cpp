@@ -52,6 +52,10 @@ static std::set<int> visited_edges;
 static std::wstring generic_job;
 static int temporarily_suppressed_loft = -1;
 static J operation_results = J::array();
+// Snapshot of unhealthy features captured by inspection() right before it
+// throws, so the failure response can carry feature-level diagnostics
+// (BUG-082 H4) instead of only the generic regeneration message.
+static J failed_features = J::array();
 static std::string generic_phase = "loading_request";
 static void generic_stage(const std::string &phase) {
     generic_phase = phase;
@@ -342,6 +346,7 @@ static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
     gsurfaces = J::array();
     gedges = J::array();
+    failed_features = J::array();
     visited_edges.clear();
     CK(ProSolidFeatVisit((ProSolid)board, inspect_feature, nullptr, nullptr));
     bool healthy = true;
@@ -355,6 +360,14 @@ static J inspection(bool require_healthy = true) {
                                                 f["id"].get<int>() != temporarily_suppressed_loft))
                 expected_only = false;
         if (!expected_only) {
+            // Preserve the offending features (id/name/type/type_name/status/
+            // incomplete/geometry_items) before unwinding so the failure
+            // response can publish them (BUG-082 H4).
+            for (const auto &f : gfeatures)
+                if (f["incomplete"].get<bool>() ||
+                    (f["status"].get<int>() != PRO_FEAT_ACTIVE &&
+                     f["id"].get<int>() != temporarily_suppressed_loft))
+                    failed_features.push_back(f);
             log("UNHEALTHY_FEATURES=%s\n", gfeatures.dump().c_str());
             throw std::runtime_error(
                 "Regeneration produced a failed, suppressed or incomplete feature");
@@ -1047,7 +1060,37 @@ static std::string section_create_failure(const J &op, bool revolve, ProError er
         m += " Element errors: " + last_feature_errors + ".";
     return m;
 }
+// BUG-083: a malformed revolve axis must fail with an actionable message before
+// any keyed access; the Python precheck normally rejects these earlier.
+static void validate_revolve_axis(const J &op) {
+    if (!op.contains("axis"))
+        return; // internal reference: the sketch's construction centerline
+    const J &axis = op["axis"];
+    std::string problem;
+    if (!axis.is_object() || axis.empty())
+        problem = "it is not a non-empty object";
+    else if (!axis.contains("kind") || !axis["kind"].is_string())
+        problem = "the kind key is missing or not a string";
+    else if (axis["kind"] == "axis") {
+        if (!axis.contains("id") || !axis["id"].is_number_integer() ||
+            axis["id"].get<long long>() < 0)
+            problem = "kind 'axis' requires a nonnegative integer id";
+    } else if (axis["kind"] == "datum_axis_feature") {
+        if (!axis.contains("label") || !axis["label"].is_string() ||
+            axis["label"].get<std::string>().empty())
+            problem = "kind 'datum_axis_feature' requires a nonempty label";
+    } else
+        problem = "kind '" + axis["kind"].get<std::string>() + "' is not a revolve axis";
+    if (!problem.empty())
+        throw std::runtime_error(
+            "Invalid revolve axis: " + problem +
+            ". Use {\"kind\":\"datum_axis_feature\",\"label\":\"axis_label\"} (create that datum "
+            "axis feature first), {\"kind\":\"axis\",\"id\":N} from model inspection, or omit "
+            "axis to revolve about the sketch centerline (one construction centerline required)");
+}
 static J extrude_or_revolve(const J &op, bool revolve) {
+    if (revolve)
+        validate_revolve_axis(op);
     ProFeature sketch_f = feature(op.at("sketch"));
     bool cut = op.value("mode", "add") == "cut";
     double before_volume = cut ? volume() : 0.0;
@@ -4064,6 +4107,8 @@ static int run_generic(const std::wstring &job) {
         // the restored/current model. Publish it separately, never as a baseline.
         if (report.contains("inspection"))
             report["failure_inspection"] = report["inspection"];
+        if (!failed_features.empty())
+            report["failed_features"] = failed_features;
         report["inspection"] = nullptr;
         report["inspection_source"] = "unavailable";
     }

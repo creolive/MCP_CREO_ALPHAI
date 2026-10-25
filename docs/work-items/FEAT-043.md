@@ -43,3 +43,7 @@
 ### 2026-10-22 原环境实测到位（该复测子项关闭）
 
 [0.4.6 验收报告 §3.3](../validation/feedback-0.4.6-2026-10-21/manifest.json)（Windows 10 / Creo 10.0.0.0）实测：会话清零后 `creo_open_file` 打开装配成功，结果含 `opened_session_model`（带 `observed_at` / `observed_at_source: "python_closeout"`，字段与 `creo_list_session_models` 条目同构），且 `loaded_session_models` 完整回读 9 项（8 组件+装配本体，含 origin/session_model_id/is_current）。此前 0.4.5 未观察到字段的原因同时解开：当时零件已驻留会话，走同名冲突拒绝路径而非 file-source 检索。FEAT-043/044 的"原环境 opened_session_model 观察"与 v0.4.3 建议的 `loaded_components`（超预期实现为完整会话清单回读）子项关闭；其余矩阵按卡保留。报告 §4.2 观察到依赖加载组件 `session_model_id` 落入 524288+ 大数段（与直接打开的小数段并存），与既定边界一致（瞬态发现提示、可重复、不作身份键），保留为观察，不按数值范围判断身份。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 外部第八轮：`creo_list_session_models` 冻结快照 + `service_session_changes` + 刷新指引字段完整，正例外补录。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。

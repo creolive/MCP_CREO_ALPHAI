@@ -61,20 +61,59 @@ def window_observations(pids: set[int]) -> dict[int, dict]:
     return result
 
 
+_PRECHECKS = (
+    "Before any recovery step, confirm the intended Windows session/desktop and target "
+    "Creo process, account for unsaved models and unknown or pending jobs, and keep "
+    "diagnostics (this snapshot, trail files and worker logs) for later analysis."
+)
+_OPERATOR_ONLY_ENDING = (
+    "Ending a Creo process is an explicit operator recovery choice only: it is never "
+    "performed automatically and is never a precondition for retry."
+)
+
+
 def connection_guidance(snapshot: dict) -> str:
     matching = [p for p in snapshot.get("processes", []) if p.get("matches")]
-    states = [p.get("windows", {}).get("state", "unknown") for p in matching]
-    if any(p.get("windows", {}).get("visible_hung_window_observed") for p in matching):
-        return "A matching Creo window was observed hung; preserve work and inspect that desktop/session."
+    windows = [p.get("windows", {}) for p in matching]
+    states = [w.get("state", "unknown") for w in windows]
+    if any(w.get("visible_hung_window_observed") for w in windows):
+        return (
+            "A visible matching Creo window was observed hung. A hung window is a "
+            "different condition from an active feature Dashboard or modal "
+            "warning/dialog (those keep the window responsive), and observing it does "
+            "not prove the root cause of the connection failure; finish or cancel any "
+            "reachable Dashboard or dialog manually. "
+            + _PRECHECKS
+            + " "
+            + _OPERATOR_ONLY_ENDING
+            + " This snapshot does not authorize clearing any protection."
+        )
     if states and all(s in ("hidden_only", "none_observed") for s in states):
+        hidden_hung = (
+            " Hung hidden windows were observed on matching processes; hidden launcher "
+            "windows are reported separately from visible main windows and do not by "
+            "themselves prove the whole Creo session is stuck or its root cause."
+            if any(w.get("hung_window_observed") for w in windows)
+            else ""
+        )
         return (
             "Matching Creo processes have no visible top-level window on this desktop. "
-            "Check the intended Windows desktop/session and startup state; this does not prove "
-            "a dead process and does not authorize ending it."
+            "Check the intended Windows desktop/session and startup state; this does "
+            "not prove a dead process and does not authorize ending it."
+            + hidden_hung
+            + " "
+            + _PRECHECKS
+            + " "
+            + _OPERATOR_ONLY_ENDING
         )
     if "visible" in states:
         return (
-            "Check Creo for an active feature Dashboard or modal warning/dialog, finish or cancel "
-            "it manually, then explicitly recheck readiness; a visible window does not prove Toolkit readiness."
+            "Check Creo for an active feature Dashboard or modal warning/dialog "
+            "(distinct from a hung window), finish or cancel it manually, then "
+            "explicitly recheck readiness; a visible window does not prove Toolkit "
+            "readiness. " + _PRECHECKS
         )
-    return "Window state is unconfirmed; check the intended Creo session and startup dialogs before retrying."
+    return (
+        "Window state is unconfirmed; check the intended Creo session and startup "
+        "dialogs before retrying. " + _PRECHECKS
+    )

@@ -29,7 +29,7 @@ from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
-from creo_mechdog.references import PatternAxis, reference_capabilities
+from creo_mechdog.references import PatternAxis, RevolveAxis, reference_capabilities
 from creo_mechdog.registry_ops import health as registry_health
 from creo_mechdog.registry_ops import migrate as registry_migrate
 from creo_mechdog.schema import (
@@ -273,7 +273,9 @@ async def creo_check_update(force: bool = False) -> dict[str, Any]:
     Uses a process-local 24-hour cache; force=true refreshes it, except during the
     15-minute failure/unknown cooldown. Concurrent checks share one request. A fresh
     check has a 5-second total network budget across all pages; other tools never wait
-    for it. Failed checks may retain previous successful links with stale=true.
+    for it. A failed check reports that latest version information was not obtained;
+    it never means the installation is up to date, never blocks modeling, and may
+    retain previous successful links only as cache marked with stale=true.
     Only accesses the public GitHub API; never downloads, installs or changes files.
     """
     return await updates.check(force)
@@ -482,11 +484,18 @@ def _support_status() -> dict[str, Any]:
             ),
         },
         "assembly_checks": {
-            "status": "planned",
+            "status": "supported_limited",
+            "tool": "creo_inspect_session_assembly",
             "tracking": "FEAT-045",
             "summary": (
-                "read-only external assembly inspection (component tree, transforms) is "
-                "not available yet; assemblies open for display only"
+                "read-only inspection of a resident session assembly: tree-order "
+                "components, per-constraint snapshots and unit-aware 4x4 transforms "
+                "(millimeter-normalized plus raw matrices; unknown units stay null); "
+                "nested sub-assemblies, repeated instances, suppressed and missing "
+                "components are reported per node and were not live-triggered on the "
+                "reference machine. No write path: no loading, activation, save, "
+                "adoption or managed revision; assembly adoption/reconcile stays "
+                "refused"
             ),
         },
         "external_file_managed_edit": {
@@ -676,6 +685,11 @@ async def creo_new_loft_part(
     Two-section rectangles, circles and triangles are also supported. This preserves
     a native parametric Blend; it is seed reuse, not direct element-tree creation.
     The native mode is checked after creation, edits and saved-file reload.
+    A failed native load keeps the original API, error code and stage plus the seed
+    identity, SHA256 and the session release; the error alone never names the cause.
+    External Creo 9 reported the tested seeds failing with -16 and a Creo 10
+    three-section success is on record; the current session and the other seeds are
+    unverified, so no minimum Creo version is promised.
     It does not increase the seed's section count. No existing-target insertion, cut/surface modes or
     editable tangency/curvature controls; endpoint settings are inherited.
     Poll the returned job_id and use the resulting model_id for later features.
@@ -694,13 +708,13 @@ async def creo_new_loft_part(
 
 @mcp.tool(annotations=READ)
 async def creo_list_seeds() -> dict[str, Any]:
-    """Discover bundled/registered native Blend seeds and verify their SHA256. available means matching file bytes, not current Creo compatibility. seed_build_version is null when provenance is unknown; native_compatibility contains bounded historical loads tied to seed SHA256 and native release/session, without connecting Creo. No manual paths/feature IDs are needed for auto-selected lofts."""
+    """Discover bundled/registered native Blend seeds and verify their SHA256. available means matching file bytes only, not current Creo compatibility; listing never connects to Creo and never trial-loads a seed. seed_build_version is null when provenance is unknown; native_compatibility contains bounded historical loads tied to seed SHA256 and native release/session. External Creo 9 reported the tested seeds failing with -16 and a Creo 10 three-section success is on record; the current session and the other seeds are unverified. No manual paths/feature IDs are needed for auto-selected lofts."""
     return await invoke(seeds.list_seeds)
 
 
 @mcp.tool(annotations=READ)
 async def creo_validate_seed(seed_name: str) -> dict[str, Any]:
-    """Verify a seed's file hash/provenance without connecting Creo. Unknown seed_build_version stays null; native_compatibility observations are historical, never proof of current-session compatibility. Native load/type/count/mode are additionally checked on actual loft creation and reported separately from overall modeling success."""
+    """Verify a seed's file hash/provenance without connecting Creo and without trial-loading it. available means matching file bytes only, not current Creo compatibility. Unknown seed_build_version stays null; native_compatibility observations are historical, never proof of current-session compatibility. Native load/type/count/mode are additionally checked on actual loft creation and reported separately from overall modeling success."""
     return await invoke(seeds.validate_seed, seed_name)
 
 
@@ -775,7 +789,7 @@ async def creo_new_airfoil_blade(
     label: str = "blade_blend",
     interpolation: Literal["straight", "smooth"] = "smooth",
 ) -> dict[str, Any]:
-    """Create a new native Blend from varying chord/thickness/twist NACA 00xx sections. Offset is span along +Z, sections lie on XY. Automatically selects a verified matching seed; 2 straight/smooth and 5 smooth are packaged."""
+    """Create a new native Blend from varying chord/thickness/twist NACA 00xx sections. Offset is span along +Z, sections lie on XY. Automatically selects a verified matching seed; 2 straight/smooth and 5 smooth are packaged. A failed native load keeps the original API, error code and stage plus the seed identity, SHA256 and the session release; the error alone never names the cause."""
     sections = []
     for index, station in enumerate(stations):
         profile = station.model_dump()
@@ -1008,7 +1022,8 @@ async def creo_create_sketch(
     Coordinates are in the chosen plane's (u,v) frame. Arc angles are degrees CCW.
     Rectangle/polyline expand to named lines e.g. box_0, box_1. Explicit dimensions
     have names and entity references; automatic dimensioning fills remaining freedoms.
-    For revolve include one centerline, or supply an external axis to creo_revolve.
+    For revolve include exactly one construction centerline, or supply an explicit external
+    axis to creo_revolve: {kind:'datum_axis_feature',label:'axis_label'} or {kind:'axis',id:N}.
     auto uses complete coordinate dimensions for large/complex supported principal-plane profiles;
     coordinates forces that mode; autodim retains native automatic dimensions. Coordinate mode
     supports lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
@@ -1066,11 +1081,17 @@ async def creo_revolve(
     angle: float = 360,
     mode: Literal["add", "cut", "surface"] = "add",
     direction: Literal["positive", "negative", "symmetric"] = "positive",
-    axis: dict[str, Any] | None = None,
+    axis: RevolveAxis | None = None,
     new_body: bool = False,
     thin: float | None = None,
 ) -> dict[str, Any]:
     """Create native revolve/revolved cut from an arbitrary sketch, about its centerline or an external axis.
+    Omit axis (or pass null) to revolve about the sketch's construction centerline; that sketch must
+    contain exactly one centerline. An explicit axis is a bare selection: {kind:'datum_axis_feature',
+    label:'axis_label'} for a datum axis feature created earlier in the same model (create it first,
+    e.g. with creo_datum_axis), or {kind:'axis',id:N} from model inspection. Structures without kind
+    (including {entity:'ax'}), empty objects, non-axis kinds and missing id/label are rejected before
+    a job is dispatched; the axis_pattern datum_feature alias does not apply here.
     A cut that removes no material fails and rolls back; a successful cut reports material_removed_mm3."""
     op = {
         "op": "revolve",

@@ -1,0 +1,42 @@
+[
+  {
+    "source": "C:\\Users\\Administrator\\Downloads\\0.5.1\\2026-10-23_CREO_0.5.0_种子致两条放样路径全废与迁移守卫误判.md",
+    "archive": "docs/validation/feedback-0.5.0-0.5.1-2026-10-23/2026-10-23_CREO_0.5.0_种子致两条放样路径全废与迁移守卫误判.md",
+    "bytes": 16034,
+    "sha256": "6ca6e5d690315109d3f3f4e8df4bbe936698975effb12b9c7a79bd09c3a915c2",
+    "archived_note": "2026-10-25 由控制者逐字节复制归档；归档件与下载原件字节数、SHA256 一致（cmp 复核），原文不得改动或格式化。",
+    "reported_version": "0.5.0",
+    "reported_environment": "Windows 10 / Creo Parametric 9.0.0.0（release_numeric 41）/ MCP_CREO_MechDog 0.5.0（91 工具）；报告时段 09:02–09:40，第八轮。属外部 Creo 9 证据，与本机 Creo 12 证据分列；原始 request/job/native.log 未随报告取得，据报告保留在外部 F:\\WorkBuddy CREO Space\\MCP_CREO_MechDog\\jobs\\。",
+    "mapping": {
+      "§二 BUG-058 类启动挂起复现但诊断已大幅改善（快照含 state/top_level_count/visible_count/hung_window_observed；本次前两次 PreMainWindow 挂起、launch_attempt 15 约 9 分钟后连上）": "BUG-058 窗口挂起诊断改善子项外部确认；连续两次主窗口前挂起为外部观察，启动方式与根因未定",
+      "§三 BUG-036 读侧已修写侧依旧（mate+align+align 于三正交基准面零偏移，施加约束后及 regenerate 后 transform_to_parent 仍为原放置 (-30,20,0)+绕 Z 30°，underconstrained=false 无不一致提示）": "BUG-036 写侧失败外部续报（本轮实测）；读侧改善（inspect 位姿与真实一致）确认，读侧与写侧分别记录，不承诺通用期望矩阵求解器",
+      "§四 BUG-074 已修证据链完整（runner/worker.stopped=true、reason=Historical owner predates verified OS boot、双源启动时间核验+逐文件纳秒时间戳、abandon_new apply 成功且 recovery_pending 清空）": "BUG-074 外部跨启动 abandon_new 通过子项关闭（含双源启动核验与逐文件时间戳；其余恢复矩阵按卡保留）",
+      "§五 P1 creo_migrate_registry owner 守卫 MCP 路径两次拒绝、本地同参直调通过（终态作业 ba0901e5…；时间差解释：pid 15332 拒绝时仍存活、次日清理后死亡；本地直调 migrated 14/job_files_split 219/refused 0，同 key 重放 replayed=true）": "BUG-081 登记（P1，新卡）：先补拒绝证据可见性与 inspect 预检；是否存在判定缺陷待复现后决定，不以 alive=None 直接定性误判",
+      "§六 P0 Creo 9 两条放样路径全部不可用（creo_loft=BLEND_CALLBACK_SETUP_REQUIRED；creo_new_loft_part=ProMdlFiletypeLoad -16，与叶片种子同因）": "BUG-034/FEAT-030 补录：该受测环境两条路径均未成功，不外推为所有 Creo 9 放样不可用；UGC 2128/2023/1934 与产品版本对应关系未获可追溯证明，不据此宣称由 12.4 构建或确定最低加载版本",
+      "§七 FEAT-045 单组件正例（occurrence 路径/深度/resolved/suppressed/packaged、逐约束双侧引用解析 code 0、4×4 行向量+冻结快照+只读五不；多组件分页与嵌套/抑制/缺件未测）": "FEAT-045 外部单组件装配检查正例补录；多组件分页、嵌套、抑制、缺件未覆盖，毫米声明须结合 BUG-080 核对",
+      "§七 BUG-077 登记健康与迁移（inspect 14 条目含 job_chain → apply 备份+逐文件 sha256+迁移日志 → 复验 legacy_inline=0、登记总字节 1,342,766→36,782；同 key 重放 replayed=true）": "BUG-077/FEAT-047 外部迁移与拆分正例补录；首次成功为本地进程直调（时序见 §五），之后才有 MCP 同 key 重放，不能据此证明客户端路径差异",
+      "§七 open_file/list_session_models 与核心回归正例（同名冲突 SESSION_NAME_CONFLICT、只读检索承诺、孔/参数/关系/sidecar/工程图 PDF 数值对账、PDF 作业进行中 open_file busy 拒绝含完整 owner）": "FEAT-023（compact 摘要+分节）/BUG-059（failure_phase 落地、before_native 外部分支不可达）/FEAT-043/044/BUG-009 相关正例补录；busy 正例不等于已进行全面并发验收",
+      "§八 历史问题第八轮（叶片种子 -16 仍复现且种子放样同病、筋再生失败原文、loft 回调行为未变、约束位姿写侧依旧、round radius/size 参数名未修）": "BUG-034/FEAT-030、BUG-017/FEAT-029、BUG-036、BUG-019 续报记录",
+      "§九 建议（P0 种子版本声明、P1 位姿重解、P1 alive=None 分支与 busy 证据、P2 assembly_checks 过期、P2 挂起 guidance、小项 round 参数名与 check_update 超时提示）": "分别对应 FEAT-030/BUG-034、BUG-036、BUG-081、FEAT-045、BUG-058、BUG-019、FEAT-020 跟进；性能/流程建议不直接变成交付承诺",
+      "§十 总体评价": "正面结论与两条 P0/P1 优先建议记录，不作为验收结论"
+    }
+  },
+  {
+    "source": "C:\\Users\\Administrator\\Downloads\\0.5.1\\2026-10-23_CREO_0.5.1_在轴剖面就地编辑再生失败与种子筋第九轮依旧.md",
+    "archive": "docs/validation/feedback-0.5.0-0.5.1-2026-10-23/2026-10-23_CREO_0.5.1_在轴剖面就地编辑再生失败与种子筋第九轮依旧.md",
+    "bytes": 9265,
+    "sha256": "6bba5dad80ae47fb41a884cb7411f3e17478327a357b05925229dd6ee03efbab",
+    "archived_note": "2026-10-25 由控制者逐字节复制归档；归档件与下载原件字节数、SHA256 一致（cmp 复核），原文不得改动或格式化。",
+    "reported_version": "0.5.1",
+    "reported_environment": "Windows 10 / Creo Parametric 9.0.0.0（release_numeric 41）/ MCP_CREO_MechDog 0.5.1（91 工具）；报告时段 18:28–19:00，第九轮，与第八轮同环境。属外部 Creo 9 证据；关键作业（790509fa… 初始夹具、e9d8eb72… R5→R6、5bccb031… R6→R5、1bbfc869… 同几何重复、dc18c387…/65ac9d54… 在轴失败）request/native.log 据报告保留在外部 F:\\WorkBuddy CREO Space\\MCP_CREO_MechDog\\jobs\\，本机未取得原件。",
+    "mapping": {
+      "§二 BUG-079/062/030 在 Creo 9 实测（作者原夹具：中心线 (0,0)-(0,20)、半圆弧圆心 (8,5) R5/R6、直径线闭合、revolve 360°；R5→R6→R5 体积 200π²/288π²/200π² 逐位一致、preserved_feature_id=88；同几何 unchanged=true；BUG-062 四次编辑中心线整体传入、回转轴引用存活）": "BUG-079/BUG-062/BUG-030 外部通过子项补录（不据此关闭所有编辑构型或剩余验收）",
+      "§六 核心回归数值对账（无操作重排 reordered=false、revision +1）": "BUG-029 外部通过子项补录；报告中失败回滚均干净，不等于保存重载全矩阵已覆盖",
+      "§三 P1 剖面贴回转轴就地编辑再生失败（XZ 面、构造中心线为轴、扇形 l1 (0,0)→(10,0)+arc 圆心 (0,0) R10 0°→90°+l2 闭合；初始上半球 2/3π·10³ 成功；改角 90°→80°、改半径 R10→R12、显式 coordinates 均失败且干净回滚；REV_SK status=0、REV1 status=6；另一模型重复）": "BUG-082 登记（P1，新卡）：根因尚未确定，不能先断言与 BUG-079 根因独立，也不能把所有贴轴剖面写成必然失败",
+      "§四 P2 revolve 显式 axis 引用裸 JSON 异常（axis={\"entity\":\"ax\"} → [json.exception.out_of_range.403] key 'kind' not found；回滚干净；正确用法未在 schema/REFERENCE_SYNTAX 说明）": "BUG-083 登记（P2，新卡）：工具/计划入口预检、原生防御与正确用法说明",
+      "§五 历史问题第九轮（叶片种子仍 -16、筋仍失败 Rib regeneration failed on the requested material side、loft 回调门槛未变、种子/约束/圆角参数名未变）": "BUG-034/FEAT-030、BUG-017/FEAT-029、BUG-036、BUG-019 续报记录；不把再生失败写成已证实版本不支持",
+      "§一/§六 正面结论（0.5.1 修复批次四项 + 核心回归数值对账）": "BUG-079/062/030/029 外部确认与数值证据；在轴初始创建成功（2094.3951=2/3π·10³）另作 BUG-082 对照基线",
+      "§七/§八 建议与总体评价": "在轴构型入回归矩阵、revolve.axis 文档、种子版本声明、筋兼容区分等建议分别归 BUG-082/083/FEAT-030/BUG-017 跟进，不直接变成交付承诺"
+    }
+  }
+]

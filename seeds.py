@@ -10,10 +10,17 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import bridge
-from creo_mechdog.seed_compatibility import metadata
+from creo_mechdog.seed_compatibility import (
+    AVAILABLE_SCOPE,
+    COMPATIBILITY_EVIDENCE,
+    metadata,
+)
 from creo_mechdog.seed_distribution import seed_file_bytes
 
 REGISTRY_NAME = "seed_registry.json"
+NO_NATIVE_PROBE = (
+    "not_performed; listing and validation never connect to Creo and never trial-load a seed"
+)
 
 
 def manifest() -> dict:
@@ -56,19 +63,23 @@ def _checked_seed(root: Path, entry: dict) -> dict:
         raise ValueError("Seed path escapes its library directory")
     result = {
         **entry,
-        **metadata(entry),
         "seed_file": str(path),
         "seed_feature_id": entry["seed_feature_id"],
         "required_section_count": entry["section_count"],
         "available": False,
+        "available_scope": AVAILABLE_SCOPE,
     }
     if not path.is_file():
+        # Without a file on disk nothing is attributable to these bytes.
+        result.update(metadata(entry, actual_sha256=""))
         result["reason"] = (
             "Seed file is missing; install the packaged seed_library or register its directory"
         )
         return result
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     result["actual_sha256"] = digest
+    # Provenance and history follow the bytes on disk, not the manifest claim.
+    result.update(metadata(entry, actual_sha256=digest, seed_path=path))
     result["available"] = digest == entry["sha256"]
     result["reason"] = (
         "Hash matches the verified seed manifest"
@@ -76,6 +87,16 @@ def _checked_seed(root: Path, entry: dict) -> dict:
         else "Seed SHA256 mismatch; the saved native ID is not trusted"
     )
     return result
+
+
+def manifest_entry_by_digest(digest: str) -> dict | None:
+    """The published manifest entry for these exact seed bytes, if there is one."""
+    if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+        return None
+    for entry in manifest()["seeds"]:
+        if entry.get("sha256") == digest:
+            return entry
+    return None
 
 
 def list_seeds() -> dict:
@@ -89,6 +110,9 @@ def list_seeds() -> dict:
         "available_count": sum(s["available"] for s in entries),
         "library_directories": [str(p) for p in roots],
         "validation": "SHA256 and published metadata; native type/count/mode are checked during creation",
+        "available_scope": AVAILABLE_SCOPE,
+        "native_load_probe": NO_NATIVE_PROBE,
+        "compatibility_evidence": COMPATIBILITY_EVIDENCE,
     }
 
 
@@ -120,6 +144,9 @@ def validate_seed(seed_name: str) -> dict:
     return {
         **selected,
         "native_validation": "Performed on an isolated owned copy when creo_new_loft_part creates the model",
+        "available_scope": AVAILABLE_SCOPE,
+        "native_load_probe": NO_NATIVE_PROBE,
+        "compatibility_evidence": COMPATIBILITY_EVIDENCE,
     }
 
 
@@ -133,7 +160,7 @@ def install_seed_library(directory: str | None = None, archive_file: str | None 
         if not source.is_absolute() or not source.is_file():
             raise ValueError("archive_file must be an existing absolute local ZIP path")
         # Accept only the published library, not arbitrary executable ZIP contents.
-        expected_digest = "a1ac3dd75100bdf45d2ef3d9bfe971783d3cb50b6a22f5b784f15b7ab8da290e"
+        expected_digest = "cf46f2f32b8e4b337e3272cbe37631b388980ace1307e3a393f2b8d5c6964976"
         if hashlib.sha256(source.read_bytes()).hexdigest() != expected_digest:
             raise ValueError("Archive SHA256 differs from the published MIT seed library")
         if destination.exists():

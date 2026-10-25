@@ -1,6 +1,6 @@
 # FEAT-045：外部装配只读检查
 
-日期：2026-10-20 登记。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-20 登记。类型：功能。优先级：P2。状态：验收中（只读检查已随 0.5.0 交付并通过本机/外部主线；四类受限场景与 WorkBuddy 按卡保留）。目标版本：0.5.0。
 
 来源：[v0.4.1 / Creo 10 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P1-2 及 v0.4.0 报告 §3.4 建议 2。实施边界见[处理计划](../development/CREO10-0.4.1-FEEDBACK-PLAN.md)第 5 节。
 
@@ -45,3 +45,25 @@
 ## 2026-10-23 BUG-080 审查 Important 修复（walk 状态共享化）
 
 walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（`AssemblyWalkState`：`record_missing_component` 自盖缺件标志、`apply_query_outcome` 真实查询码驱动置 incomplete、`visit_subtree` 深度 32 先判限再执行访问且失败码写实际节点 `node_index`、`init_root_chain` 真实 root_scale 初始化根链并置 incomplete、`complete` 统一规则，budget=4096/深度 32 契约不变）；`generic.cpp` 生产回调改经同一实现。新增离线夹具 `tests/native/test_assembly_walk.cpp`（12 case，SDK 查询替换、注入 visitor 计数非真实 ProSolidFeatVisit）由 `tools\test_assembly_units.py` 同批构建运行（已修正 native 包含路径引号），覆盖缺件标志由生产操作产出/真实零非零查询码逐个驱动/深度 31–33 真实调用次数与父节点索引诊断/budget 边界/根失败保同级/根单位经真实换算由共享初始化影响链与 complete。该夹具 12 case 与生产复编已实跑通过（947f40e exit 0；SDK 查询替换、注入 visitor 非真实 ProSolidFeatVisit，不声称实机/完整 callback 几何覆盖）；实机触发与 WorkBuddy 仍按卡保留未验收。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 环境：外部 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0；单组件装配（报告者称"本版质量标杆"）。
+- 通过子项：组件清单含 occurrence 路径、depth、类型、origin/has_saved_origin/modified/is_current/session_model_id、resolved/suppressed/packaged 与逐项 query_codes；约束快照（mate+align+align 全部解析 code 0，含双侧引用与 comppath、offset、orientation）；`transform_to_parent`/`transform_to_root` 完整 4×4 与行向量约定说明；冻结快照（10 分钟）+ 游标 + readonly_note（只读五不）；重复实例分别记录声明。
+- **单组件装配检查正例补录**；多组件分页（limit=1 + next_cursor）未实测，嵌套/抑制/缺件场景未覆盖。
+- 数值的毫米声明须结合 [BUG-080](BUG-080.md) 单位契约核对（该报告数值呈 x/25.4 特征，BUG-080 已随 0.5.2 交付修复并黑盒复验）。
+- 后续小修（0.5.3）：`capabilities.support_status.assembly_checks` 仍写 planned/not available(FEAT-045)，与已交付且外部实测可用的 `creo_inspect_session_assembly` 矛盾，须同步为只读及受限场景的准确状态。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。
+
+## 2026-10-25 0.5.3 阶段三小修：support_status 状态对齐
+
+分支 `codex/chores053-wording`。`server.py` 的 `support_status.assembly_checks` 由 planned/not available 修正为 `supported_limited`，`tool` 指向已发布的 `creo_inspect_session_assembly`：summary 明确只读范围（树序组件、逐约束快照、毫米规范化+原始 4×4 变换、未知单位为 null）、嵌套子装配/重复实例/抑制/缺件四类受限场景按节点报告但参考机未实机触发，以及无写路径（不加载/激活/保存/收养/受管 revision，装配收养与 reconcile 仍拒绝）。整体装配收养未宣称支持；变换单位口径只在描述本工具返回时陈述，毫米契约以 [BUG-080](BUG-080.md) 卡为限。
+
+核对结果：`capabilities.py` 的 `session_assembly` 家族登记与 `creo_inspect_session_assembly` 工具描述本已准确，未改动；compact 与分节返回经 capability_pages 携带同一 `support_status` 载荷，随本次修正自动一致；工具清单由注册驱动，无需变更。新增 `tests/unit/test_support_status.py` 3 项单测锁定状态、工具名与 capabilities 登记一致及不得回退为"not available"。本项为状态字段/文案修正，无行为改动，未重复实机与 WorkBuddy；dev_check 通过（本机 `build/development_check.json`，生成物不入库）。
+
+## 2026-10-25 阶段三验收证据（收口）
+
+集成尖 `e2bba08`（含 `0729fee` 小修），受测指纹 `checked_source_sha256=da558d9e…b28b5f0`；环境 Windows 11 x64 / Creo 12.4.0.0 / 匹配 SDK / Python 3.12.14，见[阶段三收口](../validation/PHASE3-CLOSEOUT-2026-10-25.md)。
+
+- 实现摘要：`server.py` 的 `support_status.assembly_checks` 改为 `supported_limited` 并指向 `creo_inspect_session_assembly`，明确只读（树序组件、逐约束快照、毫米规范化 + 原始 4×4、未知单位为 null）与四类受限场景按节点报告；无写路径、装配收养与 reconcile 仍拒绝。`capabilities.py` 家族登记与工具描述已准确，未改。
+- 本次证据：离线全量 612 项单测通过（含 `test_support_status.py` 3 项）、`tools/test_unit.py` exit 0、`tools/dev_check.py` exit 0（success=true）、`bridge.py build` exit 0；本卡为状态字段修正，未重复实机装配检查。
+- 未测范围：嵌套子装配/重复实例/抑制/缺件四场景实机触发、WorkBuddy 黑盒仍开放；整体装配收养、矩阵放置与重建编辑仍属后续路线，不因本次文案对齐而宣称支持。

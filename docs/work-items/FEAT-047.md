@@ -59,3 +59,9 @@
 ## 2026-10-23 0.5.0 反馈补录：外部健康检查确认
 
 [0.5.0 验收报告 §3.2](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_FEAT045交付与死锁根治但变换单位存疑.md)（外部 Creo 10 / 0.5.0）：212 条目分页遍历，summary `ok 58 / legacy_inline 153 / over_budget 1 / corrupt 0`；超限条目 `usage_ratio 1.2799` 与内联明细分类（aliases/inspection/last_live_inspection 字节数）齐全；`migration.needed` 与迁移工具指引正确——外部正常数据与超限条目明细子项确认。异常条目（损坏/预警还原）与 32 KiB 原始响应字节仍未由外部覆盖，按卡保留。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 环境：外部 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0。
+- health 输出契约外部确认：28 条目、逐条目字节与 usage_ratio、legacy_inline 分类、超限预警与分页遍历正常。
+- 迁移前后状态复验 `legacy_inline=0`、登记字节 1,342,766→36,782；与 BUG-077 同批观察（首次成功为本地直调，见 BUG-081 时序限定）。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。

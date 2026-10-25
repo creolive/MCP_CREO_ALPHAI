@@ -250,9 +250,18 @@ class UpdateChecker:
         now = datetime.now(timezone.utc).isoformat()
         if selected["status"] == "failed":
             self._result.update(selected, checked_at=now)
-            self._result["message"] = (
-                "无法确认更新；15 分钟后可重试。已有版本信息仅为上次成功缓存。"
-            )
+            if self._result.get("latest_version"):
+                # A failed check never claims "up to date"; retained successful
+                # data is stale cache only and must be read with status/error.
+                self._result["message"] = (
+                    "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；"
+                    "15 分钟后可重试。latest_version 等字段仅为上次成功取得的过期缓存，"
+                    "须结合 status=failed、stale 与 error 使用。"
+                )
+            else:
+                self._result["message"] = (
+                    "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；15 分钟后可重试。"
+                )
             self._expires = monotonic() + RETRY_SECONDS
             return
         self._result.update(
