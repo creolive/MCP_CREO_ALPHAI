@@ -192,6 +192,23 @@ def replace_operations(plate_a_pose: dict) -> list[dict]:
     return [{"op": "remove_component", "component": "plate_a"}, dict(plate_a_pose)]
 
 
+def bind_adopted_sources(plan: dict, adopted_ids: dict, external: dict) -> dict:
+    """Rebind every plan branch that references an adopted source model to the
+    REAL adopted model ids, looked up by ``input_path``.
+
+    The offline prototype plan (see ``request_plan``) validates schema shape
+    with placeholder ids only. Submitting those placeholders re-enters
+    execute_plan with unknown source model ids and the entry refuses the job
+    without a new model (live run assembly_pipeline_live_20261025T152542Z955f3b2d
+    failed exactly there). Every rebound branch is re-validated through the
+    real production validator before any MCP call accepts work.
+    """
+    bound = {key: adopted_ids[external[key]["path"]] for key in ("a", "b")}
+    plan["original_operations"] = original_assembly_operations(bound["a"], bound["b"])
+    validate_operations(plan["original_operations"])
+    return plan
+
+
 def request_plan(
     tag: str, adopted_ids: dict[str, str], frozen: dict, occurrences_by_name: dict
 ) -> dict:
@@ -428,6 +445,8 @@ async def run() -> None:
             assert set(adopted_ids.values()).isdisjoint(
                 {source_a["model_id"], source_b["model_id"]}
             ), "adoption must create independent managed models"
+            plan = bind_adopted_sources(plan, adopted_ids, external)
+            note("original assembly operations rebound to the real adopted model ids by input_path")
             note("external sources adopted by path with independent durable commits")
 
             # 5. Original assembly: repeated occurrence + asymmetric rotation.
@@ -483,6 +502,7 @@ async def run() -> None:
             by_name = {item["name"]: item for item in inspected["components"]}
             assert len(by_name) == 3, "occurrence names must resolve uniquely"
             operations = rebuild_operations(frozen, by_name)
+            validate_operations(operations)  # real inspected data, not the prototype
             rebuilt = await job("creo_new_assembly", {"model_name": plan["rebuilt_name"]})
             rebuilt = await job(
                 "creo_execute_plan", {**identity_of(rebuilt), "operations": operations}
@@ -577,11 +597,13 @@ async def run() -> None:
 
             # 9e. remove + re-assemble picks up the current source revision.
             plate_a_pose = next(op for op in operations if op["label"] == "plate_a")
+            replace = replace_operations(plate_a_pose)
+            validate_operations(replace)  # real pose data, not the prototype
             replaced = await job(
                 "creo_execute_plan",
                 {
                     **identity_of(regenerated),
-                    "operations": replace_operations(plate_a_pose),
+                    "operations": replace,
                 },
             )
             regen_changes = replaced["component_changes"]

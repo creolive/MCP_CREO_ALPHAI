@@ -45,6 +45,29 @@ POSES = [
 ]
 
 
+def verify_rolled_back_failure(
+    failed: dict, assembly_revision: int, before: dict, after: dict
+) -> None:
+    """Verify a genuinely failed job that rolled back, against queried state.
+
+    A failed job manifest may legitimately omit the top-level ``revision``
+    (the live run build/assembly_matrix_live_20261025T151808Z reported the
+    compound move+remove job 47d5dfc90089459080fb5a0b7e57674a without one,
+    while rollback_succeeded stayed true with inspection_source
+    "rollback_verified"), so the model revision is verified from an actual
+    ``creo_list_components`` query instead of being assumed present. When the
+    failed manifest does carry a revision it must match the assembly; no
+    default success value is fabricated for a missing field.
+    """
+    assert failed["status"] == "failed", failed
+    assert failed["result"]["rollback_succeeded"] is True, failed
+    if "revision" in failed:
+        assert failed["revision"] == assembly_revision, failed
+    assert failed["component_changes"]["status"] == "rolled_back", failed
+    assert after["revision"] == assembly_revision, after
+    assert before == after  # the accepted move was rolled back too
+
+
 def is_signed_permutation(rotation) -> bool:
     """True only for axis-aligned rotations (each row/column a unit +/- basis).
 
@@ -276,12 +299,8 @@ async def run() -> None:
                     ],
                 },
             )
-            assert failed["status"] == "failed", failed
-            assert failed["result"]["rollback_succeeded"] is True, failed
-            assert failed["revision"] == assembly["revision"], failed
-            assert failed["component_changes"]["status"] == "rolled_back", failed
             after = await call("creo_list_components", {"model_id": assembly["model_id"]})
-            assert before == after  # the accepted move was rolled back too
+            verify_rolled_back_failure(failed, assembly["revision"], before, after)
             # A later legal modification on the untouched assembly succeeds.
             assembly = await job(
                 "creo_component_placement",

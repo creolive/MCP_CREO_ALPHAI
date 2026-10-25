@@ -10,11 +10,14 @@ naming or schema regression fails here instead of inside a live session.
 """
 
 import unittest
+import uuid
 
 import bridge
 from tools.test_assembly_pipeline import (
+    bind_adopted_sources,
     external_source_name,
     original_assembly_name,
+    rebuild_operations,
     rebuilt_assembly_name,
     replace_operations,
     request_plan,
@@ -146,6 +149,102 @@ class PipelineRequestBuilders(unittest.TestCase):
         operations = replace_operations(pose)
         self.assertEqual(operations[1], pose)
         self.assertIsNot(operations[1], pose)
+
+
+class AdoptedSourceBinding(unittest.TestCase):
+    """Regression for the live failure build/assembly_pipeline_live_20261025T152542Z955f3b2d
+    (guard build/guarded_live_20261025T152541178279): the original assembly
+    execute_plan was submitted with the offline prototype placeholder ids
+    aaaa.../bbbb... and the entry refused it with Unknown model_id. The real
+    adopted ids keyed by input_path must be rebound into every id-bearing
+    branch before any MCP submission."""
+
+    PLACEHOLDERS = {"a" * 32, "b" * 32}
+
+    def fake_adoption(self, tag):
+        """Real-style random non-placeholder adopted ids keyed by input_path,
+        the way creo_adopt_file apply items actually return them."""
+        adopted_ids = {}
+        external = {}
+        for key in ("a", "b"):
+            path = f"build/assembly_pipeline_external_{tag}/" + external_source_name(tag, key)
+            adopted_ids[path] = uuid.uuid4().hex
+            external[key] = {"path": path}
+        return adopted_ids, external
+
+    def assert_no_placeholders(self, operations):
+        ids = {op["source_model_id"] for op in operations if "source_model_id" in op}
+        self.assertTrue(ids)
+        self.assertFalse(ids & self.PLACEHOLDERS, ids)
+
+    def test_offline_prototype_plan_alone_still_carries_placeholders(self):
+        # validate_plan checks schema shape, not id reality; this documents
+        # why binding after the real adoption is mandatory.
+        plan = validate_plan(sample_plan("20261025T120000Z0123abcd"))
+        ids = {op["source_model_id"] for op in plan["original_operations"]}
+        self.assertEqual(ids, self.PLACEHOLDERS)
+
+    def test_bind_replaces_placeholders_with_real_ids_by_input_path(self):
+        tag = "20261025T120000Z0123abcd"
+        adopted_ids, external = self.fake_adoption(tag)
+        plan = validate_plan(sample_plan(tag))
+        plan = bind_adopted_sources(plan, adopted_ids, external)
+        ids = {op["source_model_id"] for op in plan["original_operations"]}
+        self.assertEqual(
+            ids, {adopted_ids[external["a"]["path"]], adopted_ids[external["b"]["path"]]}
+        )
+
+    def test_bind_refuses_unknown_input_path(self):
+        tag = "20261025T120000Z0123abcd"
+        adopted_ids, external = self.fake_adoption(tag)
+        plan = validate_plan(sample_plan(tag))
+        del adopted_ids[external["b"]["path"]]
+        with self.assertRaises(KeyError):
+            bind_adopted_sources(plan, adopted_ids, external)
+
+    def test_whole_flow_submits_only_real_returned_ids(self):
+        """Walk every phase the driver submits and trace each source id back
+        to a real returned value — placeholders must not survive anywhere."""
+        tag = "20261025T120000Z0123abcd"
+        adopted_ids, external = self.fake_adoption(tag)
+        plan = validate_plan(sample_plan(tag))
+        plan = bind_adopted_sources(plan, adopted_ids, external)
+        self.assert_no_placeholders(plan["original_operations"])
+
+        # Later phases build from REAL list_components / inspect data (frozen
+        # aliases carry the adopted ids), not from the prototype plan.
+        real_a = adopted_ids[external["a"]["path"]]
+        real_b = adopted_ids[external["b"]["path"]]
+        frozen = {
+            "plate_a": {
+                "copy_name": "c_job_0",
+                "source_model_id": real_a,
+                "source_revision": 1,
+                "transform": IDENTITY4,
+            },
+            "plate_b": {
+                "copy_name": "c_job_1",
+                "source_model_id": real_b,
+                "source_revision": 1,
+                "transform": IDENTITY4,
+            },
+            "plate_b_second": {
+                "copy_name": "c_job_2",
+                "source_model_id": real_b,
+                "source_revision": 1,
+                "transform": POSE_COMBINED,
+            },
+        }
+        by_name = {
+            "c_job_0": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
+            "c_job_1": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
+            "c_job_2": {"transform_mm_known": True, "transform_to_parent": POSE_COMBINED},
+        }
+        rebuild = rebuild_operations(frozen, by_name)
+        validate_plan({**plan, "rebuild_operations": rebuild})
+        self.assert_no_placeholders(rebuild)
+        replace = replace_operations(next(op for op in rebuild if op["label"] == "plate_a"))
+        self.assert_no_placeholders(replace)
 
 
 if __name__ == "__main__":
