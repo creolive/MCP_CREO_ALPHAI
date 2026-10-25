@@ -426,6 +426,7 @@ def run_generic_job(job_id: str, manifest: dict):
     prior_inspection = model_registry.inspection_of(prior)
     result_aliases = None
     result_inspection = None
+    result = None
     worker_started = False
     try:
         with bridge.toolkit_lock(
@@ -596,14 +597,22 @@ def run_generic_job(job_id: str, manifest: dict):
             busy=exc.payload,
             recovery_required="Model reservation retained; inspect before recovery",
         )
-    summary = component_changes.summarize(
-        request["operations"],
-        job_status=manifest["status"],
-        prior_aliases=prior_aliases,
-        prior_inspection=prior_inspection,
-        result_aliases=result_aliases,
-        result_inspection=result_inspection,
-    )
+    # The summary is auxiliary: it rides on the confirmed terminal state and
+    # native evidence, and a summary failure must never rewrite that state or
+    # leave a persisted job stuck in running.
+    try:
+        summary = component_changes.summarize(
+            request["operations"],
+            job_status=manifest["status"],
+            rollback=result,
+            executed=worker_started,
+            prior_aliases=prior_aliases,
+            prior_inspection=prior_inspection,
+            result_aliases=result_aliases,
+            result_inspection=result_inspection,
+        )
+    except Exception as exc:  # noqa: BLE001 - auxiliary path, state stays authoritative
+        summary = component_changes.unavailable(exc)
     if summary is not None:
         manifest["component_changes"] = summary
     manifest["finished_at"] = bridge.now()

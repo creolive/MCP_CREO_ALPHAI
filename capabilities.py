@@ -383,9 +383,13 @@ def families() -> dict:
             "native_test": "part snapshots, rigid placement, removal, 3 datum-plane align constraints and 20 mm offset",
             "component_changes": (
                 "jobs with component operations report a bounded manifest component_changes "
-                "summary: committed (real native feature identities; moved carries queried "
-                "from/to transforms), rolled_back (requested intents only, never reported as "
-                "effective) or unknown_outcome (empty, protection retained)"
+                "summary (also present in detail=compact): committed (real native feature "
+                "identities; moved carries queried from/to transforms), rolled_back ONLY "
+                "with native rollback_succeeded evidence (requested intents only, never "
+                "reported as effective), no_effect (busy rejection/worker not started or "
+                "native model_unchanged; nothing attempted or mutated) or unknown_outcome "
+                "(empty; failed-after-execution without confirmed rollback, or unconfirmed "
+                "outcome; protection retained)"
             ),
             "constraint_names": (
                 "list_components constraints keep the numeric SDK type code and add type_name "

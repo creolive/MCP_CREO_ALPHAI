@@ -52,7 +52,7 @@
       "purpose": "Create the new managed assembly (native metric template).",
       "tool": "creo_new_assembly",
       "arguments": {"model_name": "rebuilt_demo_asm"},
-      "capture": {"model_id": "assembly model id", "revision": 0},
+      "capture": {"model_id": "assembly model id", "revision": "terminal revision reported by this creo_new_assembly call (capture the ACTUAL value; do not assume 0)"},
       "failure_branch": "channel busy: request is rejected, not queued; retry later with the same or a new name only after the blocking job ends"
     },
     {
@@ -61,7 +61,7 @@
       "tool": "creo_execute_plan",
       "arguments": {
         "model_id": "<assembly model_id from step 4>",
-        "expected_revision": "<current assembly revision>",
+        "expected_revision": "<actual terminal revision captured in step 4>",
         "operations": [
           {
             "op": "assemble_component",
@@ -89,7 +89,7 @@
         ]
       },
       "capture": {"job_id": "poll until terminal"},
-      "failure_branch": "any failure rolls the assembly back to its checkpoint; component_changes reports status rolled_back and nothing is claimed as effective"
+      "failure_branch": "any failure rolls the assembly back to its checkpoint; component_changes reports status rolled_back (only when the native result confirms rollback_succeeded) and nothing is claimed as effective"
     },
     {
       "step": 6,

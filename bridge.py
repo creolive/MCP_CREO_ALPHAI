@@ -1292,6 +1292,7 @@ def compact_job(manifest: dict) -> dict:
         "expires_in_seconds",
         "available",
         "model_evidence_error",
+        "component_changes",
     )
     summary = {key: manifest[key] for key in keys if key in manifest}
     summary["detail"] = "compact"

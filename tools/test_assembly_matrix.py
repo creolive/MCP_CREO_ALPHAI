@@ -231,22 +231,132 @@ async def run() -> None:
                 assert (
                     before == after
                 )  # invalid request leaves revision/placement/constraints intact
-            # One genuine ordinary failure: an unknown component reference is
-            # accepted, fails natively, and rolls back; nothing is reported as
-            # an effective change and the verified snapshot is untouched.
+            # One genuine ordinary failure INSIDE a single job: the first op
+            # legally moves an existing component, the second op references an
+            # invalid native component id (valid schema, unknown to the native
+            # lookup). The job must fail, roll back the accepted move, keep
+            # revision and geometry, and only then may a later legal move
+            # succeed. An entry-level refusal would not count as a rollback.
             before = await call("creo_list_components", {"model_id": assembly["model_id"]})
             failed = await terminal_job(
                 "creo_execute_plan",
                 {
                     **identity(assembly),
-                    "operations": [{"op": "remove_component", "component": "no_such_label"}],
+                    "operations": [
+                        {
+                            "op": "component_placement",
+                            "component": "matrix_0",
+                            "translation": [11, -8, 9],
+                            "rotation": [0, 0, 0],
+                        },
+                        {"op": "remove_component", "component": 424242},
+                    ],
                 },
             )
             assert failed["status"] == "failed", failed
+            assert failed["result"]["rollback_succeeded"] is True, failed
             assert failed["revision"] == assembly["revision"], failed
             assert failed["component_changes"]["status"] == "rolled_back", failed
             after = await call("creo_list_components", {"model_id": assembly["model_id"]})
-            assert before == after
+            assert before == after  # the accepted move was rolled back too
+            # A later legal modification on the untouched assembly succeeds.
+            assembly = await job(
+                "creo_component_placement",
+                {
+                    **identity(assembly),
+                    "component": "matrix_0",
+                    "translation": [7, -8, 9],
+                    "rotation": [0, 0, 0],
+                },
+            )
+
+            # Independent physical geometry assertions from the native
+            # saved/reload inspection: the assembly volume (Creo mass
+            # property, not the returned matrices) must equal 11 times the
+            # native source volume, and a final native regenerate job re-checks
+            # it server-side via verify_assertions.
+            source_inspect = await call(
+                "creo_inspect_model", {"model_id": source["model_id"], "detail": "compact"}
+            )
+            source_volume = source_inspect["volume_mm3"]
+            assert source_volume, source_inspect
+            expected_volume = len(POSES) * source_volume
+            assembly_inspect = await call(
+                "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
+            )
+            assert abs(assembly_inspect["volume_mm3"] - expected_volume) <= 0.01, (
+                assembly_inspect["volume_mm3"],
+                expected_volume,
+            )
+            assembly = await job(
+                "creo_execute_plan",
+                {
+                    **identity(assembly),
+                    "operations": [{"op": "regenerate"}],
+                    "assertions": {"volume_mm3": expected_volume, "volume_tolerance": 0.01},
+                },
+            )
+            verified = await call(
+                "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
+            )
+            assert abs(verified["volume_mm3"] - expected_volume) <= 0.01, verified
+
+            # Bounding-box physics anchored on the NATIVE source bbox: the 8
+            # corners measured by the native saved/reload source inspection,
+            # mapped through the expected rigid poses and through the returned
+            # matrices, must agree (1e-6); each expected component box keeps
+            # the source box volume (rigid invariance); the union bounds are
+            # the expected assembly box. This does not rest on the returned
+            # matrices alone: volume above comes from Creo mass properties and
+            # the corners come from the native source inspection.
+            source_bodies = await call(
+                "creo_inspect_model",
+                {"model_id": source["model_id"], "detail": "full", "section": "bodies"},
+            )
+            body = next(b for b in source_bodies["bodies"] if b.get("has_geometry"))
+            lo, hi = body["bbox"]
+            corners = [
+                [x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])
+            ]
+            source_box_volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
+
+            def map_point(matrix, point):
+                return [
+                    sum(v * matrix[k][j] for k, v in enumerate(point)) + matrix[3][j]
+                    for j in range(3)
+                ]
+
+            listed = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            assembly_min = [float("inf")] * 3
+            assembly_max = [float("-inf")] * 3
+            for index, (euler, rotation, mapped) in enumerate(POSES):
+                label = f"matrix_{index}"
+                feature_id = listed["aliases"][label]["feature_id"]
+                component = next(c for c in listed["components"] if c["feature_id"] == feature_id)
+                actual = component["transform"]
+                expected = [list(row) + [0] for row in rotation] + [[7, -8, 9, 1]]
+                component_min = [float("inf")] * 3
+                component_max = [float("-inf")] * 3
+                for corner in corners:
+                    mapped_expected = map_point(expected, corner)
+                    mapped_actual = map_point(actual, corner)
+                    for axis in range(3):
+                        assert abs(mapped_expected[axis] - mapped_actual[axis]) <= 1e-6
+                        component_min[axis] = min(component_min[axis], mapped_expected[axis])
+                        component_max[axis] = max(component_max[axis], mapped_expected[axis])
+                box_volume = 1.0
+                for axis in range(3):
+                    box_volume *= component_max[axis] - component_min[axis]
+                    assembly_min[axis] = min(assembly_min[axis], component_min[axis])
+                    assembly_max[axis] = max(assembly_max[axis], component_max[axis])
+                assert abs(box_volume - source_box_volume) <= 1e-6, (label, box_volume)
+            report["expected_assembly_bbox_mm"] = [assembly_min, assembly_max]
+            save()
+            report.setdefault("assertions", []).append(
+                "independent geometry: native assembly volume == 11 x native source volume "
+                "(Creo mass property on saved/reload, re-checked natively via assertions); "
+                "bbox corners anchored on the native source box"
+            )
             report["success"] = True
     except Exception as exc:
         report["error"] = str(exc)

@@ -7,6 +7,7 @@
 #include "assembly_units.h"
 #include "assembly_walk.h"
 #include "constraint_names.h"
+#include "constraint_compare.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2004,7 +2005,13 @@ static void verify_saved(const J &before, const J &after) {
             if (a.value("packaged", false) != b.value("packaged", false) ||
                 a.value("underconstrained", false) != b.value("underconstrained", false))
                 throw std::runtime_error("Saved assembly placement state changed");
-            if (a.contains("constraints") && a["constraints"] != b["constraints"])
+            // Compare through the shared projection: checkpoints saved before
+            // constraints gained the display-only type_name symbol must stay
+            // compatible, while numeric type, offsets, references, sides and
+            // count/order stay fully verified (constraint_compare.h).
+            if (a.contains("constraints") &&
+                !mechdog_constraints::match_for_verification(a["constraints"],
+                                                             b.value("constraints", J::array())))
                 throw std::runtime_error("Saved assembly constraints changed");
         }
     if (before.value("model_type", "part") != after.value("model_type", "part"))

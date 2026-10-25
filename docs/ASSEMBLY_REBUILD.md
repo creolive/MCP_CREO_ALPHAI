@@ -52,17 +52,35 @@
    快照，label 与位姿需重新指定，引用与约束需重新核对；或
 2. 新建装配整体重建。
 
+实测要点：`creo_list_components` 返回的是**最近一次已验证检查**的缓存快照，
+不能当作实时几何证明。要证明“源件编辑后装配仍是旧快照”，先对装配提交一次
+`creo_execute_plan`（仅 `{"op":"regenerate"}`），按 revision+1 契约取得保存
+重载后的新原生数据（`creo_inspect_model` 的体积/位姿）；此时体积仍等于编辑
+前值即证明组件是旧快照。之后再 `remove_component` + 重新
+`assemble_component`，保存重载后体积/包围盒反映新源件。
+
 ## 组件变更摘要
 
-含组件操作的作业在 manifest 上增加有界 `component_changes`：
+含组件操作的作业在 manifest 顶层增加有界 `component_changes`
+（`creo_get_job` 的 compact 与 full 都包含；preview 仍在
+`result.preview_file`）。状态按原生证据区分，不编造回滚：
 
 - `committed`：作业成功，清单给出真实 `feature_id`（`added` 另含
   `source_model_id`/`source_revision`；`moved` 含 `from`/`to` 查询矩阵）。
-- `rolled_back`：作业失败回滚，只列请求意图，**不声称任何变更已生效**。
-- `unknown_outcome`：结果未确认，清单为空并指向保留的保护。
+- `rolled_back`：**仅当**原生结果确认 `rollback_succeeded=true`（保存检查点
+  已恢复并验证）时才出现；只列请求意图，**不声称任何变更已生效**。
+- `no_effect`：作业未产生任何变更——入口拒绝（通道 busy、worker 未启动）或
+  原生预检拒绝（`model_unchanged=true`，副作用前失败）；不需要也未声称回滚。
+- `unknown_outcome`：结果未确认，或作业在原生执行后失败但回滚未确证；清单
+  为空并指向保留的保护。
+- 摘要本身失败时状态为 `unavailable`，作业的已确认终态（上方 `status`）仍然
+  权威，摘要异常不会改变终态。
 
-值全部来自原生操作结果、受管别名与已验证检查；服务不在 Python 侧模拟几何。
-批量装配复用每个作业现有的 `preview.jpg`，不另设同义“批量装配工具”。
+同一作业内对同一 label 先 `remove_component` 再 `assemble_component` 时，
+`removed` 记录的是**原** feature_id（来自作业前别名），`added` 记录的是结果
+别名里的**新** feature_id，两者不会被混用。值全部来自原生操作结果、受管别名
+与已验证检查；服务不在 Python 侧模拟几何。批量装配复用每个作业现有的
+`preview.jpg`，不另设同义“批量装配工具”。
 
 ## list_components 约束符号名
 
@@ -81,7 +99,16 @@
   revision/保存重载）。
 - 管线实机驱动：`tools/test_assembly_pipeline.py --session-health-verified`
   （单作业多组件、预览/摘要/符号名、快照语义与再生成）。
-- guard 实机入口：`tools/guarded_live_run.py --guard-root E:\Projects\MCP_CREO_MechDog -- <command...>`
-  先持主工作树通道锁再顺序运行 md050 子进程；锁忙即停止。
+- guard 实机入口（PowerShell 单行，可直接运行；参数是 `--run`，不是 `--`）：
+
+  ```powershell
+  .\.venv\Scripts\python.exe tools\guarded_live_run.py --guard-root E:\Projects\MCP_CREO_MechDog --run ".venv\Scripts\python.exe tools\test_assembly_matrix.py --session-health-verified" --run ".venv\Scripts\python.exe tools\test_assembly_pipeline.py --session-health-verified"
+  ```
+
+  先持主工作树通道锁再顺序运行 md050 子进程；锁忙即停止（exit 2）。子进程
+  退出不等于作业终态：每个子进程结束后入口先确认本轮受理作业已终态且
+  md050 通道探针空闲才释放 guard；出现 unknown_outcome 或无法证明通道静止时
+  停止后续子进程、保留 md050 保护并以 exit 3 报告“未证明可安全释放”。
+  不要把“子进程退出前作业必终态”当作已验证保证——这正是本入口要确认的。
 - 每个驱动输出带时间戳的唯一报告目录。WorkBuddy 只通过公开 MCP 黑盒验收，
   场景见 [WORKBUDDY_FEAT008_PIPELINE.md](WORKBUDDY_FEAT008_PIPELINE.md)。

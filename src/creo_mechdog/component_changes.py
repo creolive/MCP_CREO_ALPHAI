@@ -1,19 +1,28 @@
-"""Bounded component change summary for assembly jobs (FEAT-008, batch 2 stage 2).
+"""Bounded component change summary for assembly jobs (FEAT-008, batch 2).
 
 A job that targets assembly components reports which component changes were
 actually committed. Every value comes from the native operation results, the
 managed aliases or the last verified inspection; this module never simulates
-geometry. Three statuses keep failure modes honest:
+geometry. Statuses stay honest about what the native side actually confirmed:
 
 * ``committed`` — the job succeeded; entries carry the real native feature
   identities from the verified result.
-* ``rolled_back`` — the job failed after rollback; entries list the requested
+* ``rolled_back`` — ONLY when the native result confirms ``rollback_succeeded``
+  (the saved checkpoint was restored and verified). Entries list the requested
   component operations only, and nothing is reported as effective.
-* ``unknown_outcome`` — the result is unconfirmed; no change is reported and
-  the note points at the retained protection.
+* ``no_effect`` — the job never mutated the model: rejected before execution
+  (channel busy, worker not started) or the native preflight refused before
+  any mutation (``model_unchanged``). Nothing took effect and no rollback was
+  needed or claimed.
+* ``unknown_outcome`` — the effect is unconfirmed: either the job outcome
+  itself is unconfirmed, or the job failed after native execution without a
+  confirmed rollback. No change is reported and the note points at the
+  retained protection.
 
 The output rides on the existing job result next to ``preview_file``; no new
-batch-assembly tool is introduced.
+batch-assembly tool is introduced. The summary is auxiliary: a summary failure
+is reported as ``unavailable`` and must never change the confirmed terminal
+state of the job.
 """
 
 from __future__ import annotations
@@ -47,10 +56,44 @@ def _transform_of(feature_id: Any, inspection: dict | None) -> Any:
     return None
 
 
+def _status_for(job_status: str, rollback: dict | None, executed: bool) -> tuple[str, str]:
+    """Map the terminal state plus native evidence to an honest summary status."""
+    if job_status == "succeeded":
+        return "committed", "Changes below were committed by the job."
+    evidence = rollback if isinstance(rollback, dict) else {}
+    if evidence.get("rollback_succeeded") is True:
+        return (
+            "rolled_back",
+            "The job failed after native execution; the saved checkpoint was "
+            "restored and verified (rollback_succeeded). None of the requested "
+            "changes took effect.",
+        )
+    if evidence.get("model_unchanged") is True:
+        return (
+            "no_effect",
+            "The job failed before any mutation (model_unchanged); the model is "
+            "unchanged and no rollback was needed.",
+        )
+    if executed:
+        return (
+            "unknown_outcome",
+            "The job failed after native execution but rollback is unconfirmed; "
+            "do not treat any requested change as effective. Protection is "
+            "retained; inspect before any recovery decision.",
+        )
+    return (
+        "no_effect",
+        "The job never executed natively (rejected or worker not started); no "
+        "changes were attempted and none took effect.",
+    )
+
+
 def summarize(
     operations: list[dict],
     *,
     job_status: str,
+    rollback: dict | None = None,
+    executed: bool | None = None,
     prior_aliases: dict | None = None,
     prior_inspection: dict | None = None,
     result_aliases: dict | None = None,
@@ -60,6 +103,10 @@ def summarize(
     targeted = [op for op in operations if op.get("op") in CHANGE_OPS]
     if not targeted:
         return None
+    if executed is None:
+        # Callers that predate the evidence plumbing only ever report the
+        # terminal succeeded state honestly; anything else stays unconfirmed.
+        executed = job_status == "succeeded"
     if job_status == "unknown_outcome":
         return {
             "status": "unknown_outcome",
@@ -70,22 +117,25 @@ def summarize(
                 "inspect before any recovery decision."
             ),
         }
-    prior_aliases = prior_aliases or {}
-    result_aliases = result_aliases or {}
-    if job_status != "succeeded":
+    status, note = _status_for(job_status, rollback, executed)
+    if status in ("rolled_back",):
         return {
-            "status": "rolled_back",
+            "status": status,
             "changes": [
                 {
                     "op": CHANGE_OPS[op["op"]],
                     "label": op.get("label")
                     if op["op"] == "assemble_component"
-                    else _label_of(op.get("component"), prior_aliases),
+                    else _label_of(op.get("component"), prior_aliases or {}),
                 }
                 for op in targeted
             ],
-            "note": "The job failed and rolled back; none of these changes took effect.",
+            "note": note,
         }
+    if status != "committed":
+        return {"status": status, "changes": [], "note": note}
+    prior_aliases = prior_aliases or {}
+    result_aliases = result_aliases or {}
     changes = []
     for op in targeted:
         kind = CHANGE_OPS[op["op"]]
@@ -100,6 +150,10 @@ def summarize(
                 "source_revision": entry.get("source_revision"),
             }
         else:
+            # A remove followed by a re-insert of the same label in one job
+            # keeps both identities honest: the removed entry resolves the
+            # PRIOR feature id, the added entry above carries the NEW id from
+            # the result aliases.
             label = _label_of(op.get("component"), prior_aliases)
             feature_id = prior_aliases.get(label, {}).get("feature_id") if label else None
             change = {"op": kind, "label": label, "feature_id": feature_id}
@@ -108,3 +162,21 @@ def summarize(
                 change["to"] = _transform_of(feature_id, result_inspection)
         changes.append(change)
     return {"status": "committed", "changes": changes}
+
+
+def unavailable(exc: BaseException) -> dict:
+    """Explicit diagnostic used when summary construction itself fails.
+
+    The job terminal state (succeeded/failed/unknown_outcome) remains
+    authoritative; this marker only says the auxiliary summary could not be
+    produced and must never rewrite that state.
+    """
+    return {
+        "status": "unavailable",
+        "changes": [],
+        "error": f"{type(exc).__name__}: {exc}",
+        "note": (
+            "Component change summary unavailable; the job terminal state and "
+            "native result above remain authoritative."
+        ),
+    }

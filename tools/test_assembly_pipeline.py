@@ -1,27 +1,42 @@
-"""FEAT-008 batch-2 live official assembly rebuild pipeline scenario.
+"""FEAT-008 batch-2 stage-3 live official assembly rebuild pipeline scenario.
 
-Exercises the documented pipeline end to end through real MCP calls:
-inspect the original assembly -> adopt sources by path -> new managed
-assembly -> insert several components in ONE execute_plan job -> unified
-save/erase/reload -> readback verification, then source_snapshot semantics
-(source edit leaves inserted snapshots unchanged; remove + re-assemble
-regenerates from the current source revision).
+Exercises the documented pipeline end to end through real MCP calls with
+fixtures prepared for THIS RUN ONLY:
+create two fixture parts -> copy their verified bytes to a unique, unmanaged
+external directory (recorded SHA256, then read-only) -> adopt the external
+files by path -> build an original assembly with a repeated occurrence and an
+asymmetric combined rotation -> freeze its verified snapshot -> rebuild a new
+assembly from the normalized millimeter transforms read by
+creo_inspect_session_assembly -> prove source_snapshot semantics by editing the
+ADOPTED source (a real protruding tab that changes volume), regenerating the
+assembly (revision+1, geometry still the old snapshot) and finally replacing
+the component via remove + re-assemble (fresh native geometry reflects the new
+source).
+
+The earlier revision of this driver passed MCP-managed output files (which
+adoption must refuse as managed_output) to creo_adopt_file and edited the
+original fixture instead of the adopted copy; both defects are corrected here.
+Managed fixture originals and their registry records are never modified after
+preparation; the external sources are prepared BEFORE any acceptance and stay
+read-only afterwards.
 
 Run only after independently verifying session health and authorization under
-AGENTS.md (same conditions as tools/test_assembly_matrix.py). Every fixture is
-created by this run; historical protected models are never touched. The
-script never erases the session, recovers unknown outcomes, retries rejected
-submissions, or injects failures. For md050 runs, wrap with
-tools/guarded_live_run.py so the main worktree service cannot touch the same
-Creo concurrently. WorkBuddy acceptance is a separate pure-MCP activity.
+AGENTS.md (same conditions as tools/test_assembly_matrix.py). The script never
+erases the session, recovers unknown outcomes, retries rejected submissions, or
+injects failures. For md050 runs, wrap with tools/guarded_live_run.py so the
+main worktree service cannot touch the same Creo concurrently. WorkBuddy
+acceptance is a separate pure-MCP activity.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
+import os
 import sys
+import uuid
 from datetime import datetime, timezone
 
 from mcp import Client
@@ -32,6 +47,15 @@ from tools.dev_check import git_state, source_hash
 from tools.mcp_readiness import wait_for_startup
 
 ROOT = SOURCE_PATHS.resource_root
+ROT_Z90 = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]
+# Asymmetric combined rotation (row vectors, local to parent, det +1).
+ROT_COMBINED = [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+# Protruding tab: extends x beyond the 40x30x6 body envelope (x in -20..20),
+# so both volume (+600 mm3) and bounding box really change.
+TAB_MIN = [20, -5]
+TAB_MAX = [30, 5]
+TAB_DEPTH = 6
+TAB_VOLUME = (TAB_MAX[0] - TAB_MIN[0]) * (TAB_MAX[1] - TAB_MIN[1]) * TAB_DEPTH
 
 
 def block(label: str, size: list[float], depth: float) -> list[dict]:
@@ -53,12 +77,34 @@ def block(label: str, size: list[float], depth: float) -> list[dict]:
     ]
 
 
+def tab_operations() -> list[dict]:
+    return [
+        {
+            "op": "sketch",
+            "label": "tab_profile",
+            "plane": "XY",
+            "entities": [
+                {"type": "rectangle", "name": "tab_outline", "min": TAB_MIN, "max": TAB_MAX}
+            ],
+        },
+        {"op": "extrude", "label": "tab", "sketch": "tab_profile", "depth": TAB_DEPTH},
+    ]
+
+
+def matrix_close(actual, expected, tolerance=1e-6) -> bool:
+    return all(abs(a - b) <= tolerance for ar, er in zip(actual, expected) for a, b in zip(ar, er))
+
+
 async def run() -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    destination = ROOT / f"build/assembly_pipeline_live_{stamp}/report.json"
+    tag = stamp + uuid.uuid4().hex[:8]
+    destination = ROOT / f"build/assembly_pipeline_live_{tag}/report.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
+    external_dir = ROOT / f"build/assembly_pipeline_external_{tag}"
+    external_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "work_items": ["FEAT-008", "FEAT-012", "FEAT-048", "DEV-046"],
+        "stage": "batch-2 stage-3 review closeout",
         "source": git_state(ROOT),
         "source_fingerprints": {
             name: source_hash(ROOT / name)
@@ -70,10 +116,14 @@ async def run() -> None:
                 "src/creo_mechdog/component_changes.py",
                 "native/advanced.cpp",
                 "native/constraint_names.h",
+                "native/constraint_compare.h",
                 "native/assembly_pose.h",
                 "tools/test_assembly_pipeline.py",
             )
         },
+        "fixture_tag": tag,
+        "external_fixture_dir": str(external_dir),
+        "tab_volume_mm3": TAB_VOLUME,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "calls": [],
         "jobs": [],
@@ -125,67 +175,57 @@ async def run() -> None:
                     assert result["revision"] == arguments["expected_revision"] + 1, result
                 return result
 
-            def identity(result):
+            def identity_of(result):
                 return {"model_id": result["model_id"], "expected_revision": result["revision"]}
+
+            def volume_of(model_id):
+                return call("creo_inspect_model", {"model_id": model_id})
 
             await wait_for_startup(client, report, destination)
             report["environment"] = await call("creo_check_environment", {})
 
-            # 1-2. Source fixtures: two healthy millimeter parts saved on disk.
+            # 1-2. Fixture parts (unique names per run), verified saved+reloaded.
             source_a = await job(
                 "creo_execute_plan",
-                {"model_name": "pipe_src_a", "operations": block("body", [40, 30], 6)},
+                {"model_name": f"pipe_src_a_{tag}", "operations": block("body", [40, 30], 6)},
             )
             source_b = await job(
                 "creo_execute_plan",
-                {"model_name": "pipe_src_b", "operations": block("cap", [12, 12], 18)},
+                {"model_name": f"pipe_src_b_{tag}", "operations": block("cap", [12, 12], 18)},
             )
-            part_file_a = source_a["result"]["part_file"]
-            part_file_b = source_b["result"]["part_file"]
-            note("source parts saved on disk with verified reload")
+            note("fixture parts created and saved on disk with verified reload")
 
-            # 3. Original assembly (this run's fixture), then read-only inspect.
-            original = await job("creo_new_assembly", {"model_name": "pipe_orig_asm"})
-            original = await job(
-                "creo_execute_plan",
-                {
-                    **identity(original),
-                    "operations": [
-                        {
-                            "op": "assemble_component",
-                            "label": "orig_a",
-                            "source_model_id": source_a["model_id"],
-                            "translation": [0, 0, 0],
-                        },
-                        {
-                            "op": "assemble_component",
-                            "label": "orig_b",
-                            "source_model_id": source_b["model_id"],
-                            "translation": [50, 0, 0],
-                        },
-                    ],
-                },
-            )
-            assert original["component_changes"]["status"] == "committed"
-            assert len(original["component_changes"]["changes"]) == 2
-            inspected = await call(
-                "creo_inspect_session_assembly", {"name": "pipe_orig_asm", "limit": 50}
-            )
-            assert inspected["total"] == 2, inspected
-            assert all(item["transform_to_parent"] for item in inspected["components"]), inspected
-            note("original assembly inspected read-only with normalized mm transforms")
+            # 3. Prepare EXTERNAL, unmanaged, uniquely named adoption sources:
+            # byte copies of the verified fixture outputs, hashed and read-only.
+            external = {}
+            for key, created in (("a", source_a), ("b", source_b)):
+                part = created["result"]["part_file"]
+                target = external_dir / f"pipe_ext_{key}_{tag}.prt.1"
+                target.write_bytes((ROOT / part).resolve().read_bytes())
+                digest = hashlib.sha256(target.read_bytes()).hexdigest()
+                assert digest == created["result"]["sha256"], (
+                    "external fixture copy diverged from the verified managed output"
+                )
+                os.chmod(target, 0o444)
+                external[key] = {"path": str(target), "sha256": digest}
+            report["external_sources"] = external
+            save()
+            note("external fixture sources prepared before acceptance; read-only; SHA256 recorded")
 
-            # 4. Adopt both sources by path (inspect -> apply), one parent job.
-            paths = [part_file_a, part_file_b]
+            # 4. Adopt the EXTERNAL files by path (inspect -> apply).
+            paths = [external["a"]["path"], external["b"]["path"]]
             evidence = await call("creo_adopt_file", {"file_path": paths, "mode": "inspect"})
             assert evidence["available"] and evidence["item_count"] == 2, evidence
+            for item in evidence["items"]:
+                key = "a" if "pipe_ext_a_" in item["file"]["path"] else "b"
+                assert item["file"]["sha256"] == external[key]["sha256"], item
             adopted = await call(
                 "creo_adopt_file",
                 {
                     "file_path": paths,
                     "mode": "apply",
                     "evidence_token": evidence["evidence_token"],
-                    "idempotency_key": f"pipe-{stamp}",
+                    "idempotency_key": f"pipe-{tag}",
                 },
             )
             deadline = asyncio.get_running_loop().time() + 400
@@ -200,109 +240,235 @@ async def run() -> None:
             assert adopted["status"] == "succeeded" and adopted["all_adopted"], adopted
             adopted_ids = {item["input_path"]: item["model_id"] for item in adopted["items"]}
             assert len(set(adopted_ids.values())) == 2
-            note("both sources adopted by path with independent durable commits")
+            assert set(adopted_ids.values()).isdisjoint(
+                {source_a["model_id"], source_b["model_id"]}
+            ), "adoption must create independent managed models"
+            note("external sources adopted by path with independent durable commits")
 
-            # 5-6. New managed assembly; ONE job inserts three components.
-            assembly = await job("creo_new_assembly", {"model_name": "pipe_rebuilt_asm"})
-            batch = await job(
+            # 5. Original assembly: repeated occurrence + asymmetric rotation.
+            original_name = f"pipe_orig_asm_{tag}"
+            original = await job("creo_new_assembly", {"model_name": original_name})
+            original = await job(
                 "creo_execute_plan",
                 {
-                    **identity(assembly),
+                    **identity_of(original),
                     "operations": [
                         {
                             "op": "assemble_component",
                             "label": "plate_a",
-                            "source_model_id": adopted_ids[part_file_a],
+                            "source_model_id": adopted_ids[external["a"]["path"]],
                             "translation": [0, 0, 0],
                             "placement": "fixed",
                         },
                         {
                             "op": "assemble_component",
                             "label": "plate_b",
-                            "source_model_id": adopted_ids[part_file_b],
-                            "translation": [0, 0, 12],
-                            "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
+                            "source_model_id": adopted_ids[external["b"]["path"]],
+                            "translation": [50, 0, 0],
+                            "rotation_matrix": ROT_Z90,
                             "placement": "fixed",
                         },
                         {
                             "op": "assemble_component",
                             "label": "plate_b_second",
-                            "source_model_id": adopted_ids[part_file_b],
-                            "translation": [60, 0, 12],
-                            "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
+                            "source_model_id": adopted_ids[external["b"]["path"]],
+                            "translation": [50, 40, 10],
+                            "rotation_matrix": ROT_COMBINED,
                             "placement": "fixed",
                         },
                     ],
                 },
             )
-            changes = batch["component_changes"]
+            changes = original["component_changes"]
             assert changes["status"] == "committed" and len(changes["changes"]) == 3, changes
             assert all(change["op"] == "added" for change in changes["changes"]), changes
             assert (
                 changes["changes"][1]["source_model_id"] == changes["changes"][2]["source_model_id"]
             ), changes
-            preview = batch["result"]["preview_file"]
+            preview = original["result"]["preview_file"]
             assert preview and (ROOT / preview).resolve().is_file(), preview
-            note("single execute_plan job inserted three components; preview.jpg reused")
+            note("original assembly built: repeated occurrence + asymmetric combined rotation")
 
-            # 7. Readback: transforms, constraint symbols, snapshot aliases.
-            listed = await call("creo_list_components", {"model_id": batch["model_id"]})
+            # 6. Freeze the verified snapshot (fresh from the saved/reload job).
+            listed = await call("creo_list_components", {"model_id": original["model_id"]})
             assert len(listed["components"]) == 3, listed
             for component in listed["components"]:
                 constraint = component["constraints"][0]
                 assert constraint["type_name"] == "fix", component
                 assert type(constraint["type"]) is int, component
-            alias = listed["aliases"]["plate_a"]
-            assert alias["source_snapshot"] is True and alias["source_revision"] == 1, alias
-            copy_before = {c["feature_id"]: c["model_name"] for c in listed["components"]}
-            note("readback verified: 3 components, numeric+symbolic constraint names")
+            frozen = {}
+            for label, alias in listed["aliases"].items():
+                component = next(
+                    c for c in listed["components"] if c["feature_id"] == alias["feature_id"]
+                )
+                assert alias["source_snapshot"] is True, alias
+                frozen[label] = {
+                    "feature_id": alias["feature_id"],
+                    "copy_name": component["model_name"],
+                    "transform": component["transform"],
+                    "source_model_id": alias["source_model_id"],
+                    "source_revision": alias["source_revision"],
+                }
+            assert len(frozen) == 3
+            origin_inspect = await volume_of(original["model_id"])
+            origin_volume = origin_inspect["volume_mm3"]
+            assert origin_volume, "assembly volume must be measurable"
+            note("frozen verified snapshot recorded (poses, copy names, aliases, volume)")
 
-            # 8. Source edit does NOT update the inserted snapshot.
+            # 7. Rebuild from the inspected normalized millimeter transforms.
+            inspected = await call(
+                "creo_inspect_session_assembly", {"name": original_name, "limit": 50}
+            )
+            assert inspected["total"] == 3, inspected
+            by_name = {item["name"]: item for item in inspected["components"]}
+            assert len(by_name) == 3, "occurrence names must resolve uniquely"
+            operations = []
+            for label, snap in frozen.items():
+                occurrence = by_name.get(snap["copy_name"])
+                assert occurrence is not None, f"occurrence {snap['copy_name']} missing"
+                assert occurrence["transform_mm_known"], occurrence
+                transform = occurrence["transform_to_parent"]
+                operations.append(
+                    {
+                        "op": "assemble_component",
+                        "label": label,
+                        "source_model_id": snap["source_model_id"],
+                        "translation": transform[3][:3],
+                        "rotation_matrix": [row[:3] for row in transform[:3]],
+                        "placement": "fixed",
+                    }
+                )
+            rebuilt = await job("creo_new_assembly", {"model_name": f"pipe_rebuilt_asm_{tag}"})
+            rebuilt = await job(
+                "creo_execute_plan", {**identity_of(rebuilt), "operations": operations}
+            )
+            assert rebuilt["component_changes"]["status"] == "committed"
+            note("rebuilt assembly created from inspected normalized mm transforms")
+
+            # 8. Readback: every occurrence pose matches the frozen snapshot.
+            readback = await call("creo_list_components", {"model_id": rebuilt["model_id"]})
+            assert len(readback["components"]) == 3, readback
+            aliases = readback["aliases"]
+            assert (
+                aliases["plate_b"]["source_model_id"]
+                == aliases["plate_b_second"]["source_model_id"]
+            ), aliases
+            probe_local = [2.0, 3.0, 5.0]
+            for label, snap in frozen.items():
+                feature_id = aliases[label]["feature_id"]
+                component = next(c for c in readback["components"] if c["feature_id"] == feature_id)
+                assert matrix_close(component["transform"], snap["transform"]), (
+                    label,
+                    component["transform"],
+                    snap["transform"],
+                )
+                assert component["constraints"][0]["type_name"] == "fix", component
+                mapped = [
+                    sum(v * component["transform"][k][j] for k, v in enumerate(probe_local))
+                    + component["transform"][3][j]
+                    for j in range(3)
+                ]
+                expected = [
+                    sum(v * snap["transform"][k][j] for k, v in enumerate(probe_local))
+                    + snap["transform"][3][j]
+                    for j in range(3)
+                ]
+                assert all(abs(a - b) <= 1e-6 for a, b in zip(mapped, expected))
+            rebuilt_inspect = await volume_of(rebuilt["model_id"])
+            assert abs(rebuilt_inspect["volume_mm3"] - origin_volume) <= 0.01, (
+                rebuilt_inspect["volume_mm3"],
+                origin_volume,
+            )
+            note("rebuilt assembly readback matches the frozen snapshot (poses + volume)")
+
+            # 9. source_snapshot semantics on the ADOPTED source.
+            adopted_a = adopted_ids[external["a"]["path"]]
+            adopted_a_inspect = await volume_of(adopted_a)
+            volume_a_before = adopted_a_inspect["volume_mm3"]
+            assert volume_a_before, "adopted source volume must be measurable"
+
+            # 9a. Edit the ADOPTED source with a real protruding tab.
             edited = await job(
                 "creo_execute_plan",
                 {
-                    **identity(source_a),
-                    "operations": block("rib", [10, 10], 2),
+                    "model_id": adopted_a,
+                    "expected_revision": adopted_a_inspect["revision"],
+                    "operations": tab_operations(),
                 },
             )
-            assert edited["revision"] == source_a["revision"] + 1
-            unchanged = await call("creo_list_components", {"model_id": batch["model_id"]})
-            assert unchanged["revision"] == batch["revision"]
-            copy_after_edit = {c["feature_id"]: c["model_name"] for c in unchanged["components"]}
-            assert copy_before == copy_after_edit, "source edit moved the snapshot copy"
-            note("source edit left the inserted snapshot unchanged")
+            edited_inspect = await volume_of(adopted_a)
+            assert edited_inspect["revision"] == edited["revision"]
+            assert abs(edited_inspect["volume_mm3"] - (volume_a_before + TAB_VOLUME)) <= 0.01, (
+                edited_inspect["volume_mm3"],
+                volume_a_before + TAB_VOLUME,
+            )
+            note("adopted source edited: protruding tab really changed volume")
 
-            # 9. Regenerate: remove + re-assemble picks up the current revision.
+            # 9b. The managed fixture original must be untouched (independent
+            # identity proof for the adoption itself).
+            fixture_a = await volume_of(source_a["model_id"])
+            assert fixture_a["revision"] == source_a["revision"], fixture_a
+            assert abs(fixture_a["volume_mm3"] - 40 * 30 * 6) <= 0.01, fixture_a
+
+            # 9c. Cached readback stays stale (this is a cache, not proof).
+            cached = await call("creo_list_components", {"model_id": rebuilt["model_id"]})
+            assert cached["revision"] == rebuilt["revision"]
+            note("list_components cache unchanged after source edit (cache only, not proof)")
+
+            # 9d. Explicit native regenerate of the assembly: revision advances
+            # (+1 contract) but the fresh saved/reload geometry must still be
+            # the OLD snapshot (volume unchanged by the source edit).
             regenerated = await job(
                 "creo_execute_plan",
+                {**identity_of(rebuilt), "operations": [{"op": "regenerate"}]},
+            )
+            fresh = await volume_of(rebuilt["model_id"])
+            assert fresh["revision"] == regenerated["revision"]
+            assert abs(fresh["volume_mm3"] - origin_volume) <= 0.01, (
+                fresh["volume_mm3"],
+                origin_volume,
+            )
+            note("assembly regenerate: revision+1 with fresh native data; still old snapshot")
+
+            # 9e. remove + re-assemble picks up the current source revision.
+            plate_a_pose = next(op for op in operations if op["label"] == "plate_a")
+            replaced = await job(
+                "creo_execute_plan",
                 {
-                    **identity(unchanged),
+                    **identity_of(regenerated),
                     "operations": [
                         {"op": "remove_component", "component": "plate_a"},
-                        {
-                            "op": "assemble_component",
-                            "label": "plate_a",
-                            "source_model_id": adopted_ids[part_file_a],
-                            "translation": [0, 0, 0],
-                            "placement": "fixed",
-                        },
+                        {k: v for k, v in plate_a_pose.items() if k != "op"},
                     ],
                 },
             )
-            regen_changes = regenerated["component_changes"]
+            regen_changes = replaced["component_changes"]
             assert [c["op"] for c in regen_changes["changes"]] == ["removed", "added"], (
                 regen_changes
             )
             assert regen_changes["changes"][1]["source_revision"] == edited["revision"], (
                 regen_changes
             )
-            final = await call("creo_list_components", {"model_id": batch["model_id"]})
-            final_copies = {c["feature_id"]: c["model_name"] for c in final["components"]}
-            assert len(final_copies) == 3
-            assert set(final_copies.values()) != set(copy_before.values()), (
-                "regeneration kept the stale copy"
+            final_inspect = await volume_of(rebuilt["model_id"])
+            assert abs(final_inspect["volume_mm3"] - (origin_volume + TAB_VOLUME)) <= 0.01, (
+                final_inspect["volume_mm3"],
+                origin_volume + TAB_VOLUME,
             )
-            note("remove + re-assemble regenerated the snapshot at the current revision")
+            final_list = await call("creo_list_components", {"model_id": rebuilt["model_id"]})
+            assert len(final_list["components"]) == 3
+            new_alias = final_list["aliases"]["plate_a"]
+            assert new_alias["source_revision"] == edited["revision"], new_alias
+            new_component = next(
+                c for c in final_list["components"] if c["feature_id"] == new_alias["feature_id"]
+            )
+            assert matrix_close(new_component["transform"], frozen["plate_a"]["transform"]), (
+                new_component["transform"],
+                frozen["plate_a"]["transform"],
+            )
+            assert new_component["model_name"] != frozen["plate_a"]["copy_name"], (
+                "re-inserted snapshot must be a fresh native copy"
+            )
+            note("remove + re-assemble regenerated the snapshot at the current source revision")
 
             report["success"] = True
             report["untested"] = [

@@ -106,6 +106,7 @@ _SOURCE_NAMES = (
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
+    "native/constraint_compare.h",
     "native/adoption_source.h",
     "native/inspection_units.h",
     "native/drawing.cpp",

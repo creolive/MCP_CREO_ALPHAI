@@ -90,10 +90,12 @@ class SummarizeContract(unittest.TestCase):
             summary["changes"], [{"op": "removed", "label": "pin_a", "feature_id": 51}]
         )
 
-    def test_rolled_back_lists_requests_without_claiming_effect(self):
+    def test_rolled_back_requires_confirmed_native_rollback(self):
         summary = component_changes.summarize(
             [ADD, MOVE, CONSTRAIN, REMOVE],
             job_status="failed",
+            rollback={"rollback_succeeded": True, "failed_stage": "executing_feature_plan"},
+            executed=True,
             prior_aliases={"pin_a": {"feature_id": 51}},
         )
         self.assertEqual(summary["status"], "rolled_back")
@@ -102,6 +104,46 @@ class SummarizeContract(unittest.TestCase):
             ["added", "moved", "constraints_changed", "removed"],
         )
         self.assertNotIn("feature_id", summary["changes"][0])
+
+    def test_busy_rejection_is_no_effect_not_rolled_back(self):
+        summary = component_changes.summarize([ADD], job_status="failed", executed=False)
+        self.assertEqual(summary["status"], "no_effect")
+        self.assertEqual(summary["changes"], [])
+        self.assertIn("never executed", summary["note"])
+
+    def test_preflight_refusal_model_unchanged_is_no_effect(self):
+        summary = component_changes.summarize(
+            [ADD],
+            job_status="failed",
+            rollback={"model_unchanged": True, "failed_stage": "callback_preflight"},
+            executed=True,
+        )
+        self.assertEqual(summary["status"], "no_effect")
+        self.assertEqual(summary["changes"], [])
+
+    def test_failed_after_execution_without_rollback_evidence_stays_unknown(self):
+        summary = component_changes.summarize(
+            [ADD],
+            job_status="failed",
+            rollback={"failed_stage": "executing_feature_plan"},
+            executed=True,
+        )
+        self.assertEqual(summary["status"], "unknown_outcome")
+        self.assertEqual(summary["changes"], [])
+        self.assertIn("rollback is unconfirmed", summary["note"])
+
+    def test_remove_and_reinsert_same_label_keeps_both_identities(self):
+        summary = component_changes.summarize(
+            [REMOVE, ADD],
+            job_status="succeeded",
+            prior_aliases={"pin_a": {"feature_id": 51}},
+            result_aliases={"pin_a": {"feature_id": 77, "source_revision": 4}},
+        )
+        removed, added = summary["changes"]
+        self.assertEqual(removed, {"op": "removed", "label": "pin_a", "feature_id": 51})
+        self.assertEqual(added["op"], "added")
+        self.assertEqual(added["feature_id"], 77)
+        self.assertEqual(added["source_revision"], 4)
 
     def test_unknown_outcome_reports_no_change(self):
         summary = component_changes.summarize([ADD], job_status="unknown_outcome")
@@ -237,6 +279,40 @@ class RunJobAttachment(unittest.TestCase):
         self.assertEqual(manifest["status"], "unknown_outcome")
         self.assertEqual(manifest["component_changes"]["status"], "unknown_outcome")
         self.assertEqual(manifest["component_changes"]["changes"], [])
+
+    def test_busy_rejection_reports_no_effect(self):
+        directory = bridge.job_path(self.job_id)
+        with patch.object(
+            bridge, "toolkit_lock", side_effect=bridge.ToolkitBusy(holder={"operation": "other"})
+        ):
+            general.run_generic_job(self.job_id, copy.deepcopy(self.manifest))
+        manifest = bridge.read_json(directory / "job.json")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertEqual(manifest["component_changes"]["status"], "no_effect")
+        self.assertEqual(manifest["component_changes"]["changes"], [])
+        self.assertIn("busy", manifest)
+
+    def test_summary_failure_marks_unavailable_but_preserves_terminal_state(self):
+        result = {
+            "success": True,
+            "delivery_complete": True,
+            "disconnect_code": 0,
+            "saved_file_reloaded_and_verified": True,
+            "part_file": str(self.part),
+            "aliases": {
+                "pin_a": {"op": "assemble_component", "feature_id": 77, "source_revision": 2}
+            },
+            "inspection": {"components": [{"feature_id": 77}]},
+        }
+        with patch.object(
+            component_changes, "summarize", side_effect=RuntimeError("synthetic summary fault")
+        ):
+            manifest = self.run_worker(result)
+        self.assertEqual(manifest["status"], "succeeded")
+        self.assertEqual(manifest["revision"], 2)
+        self.assertEqual(manifest["component_changes"]["status"], "unavailable")
+        self.assertIn("synthetic summary fault", manifest["component_changes"]["error"])
+        self.assertTrue(manifest["finished_at"])
 
     def test_plain_job_has_no_summary_key(self):
         directory = bridge.job_path(self.job_id)
