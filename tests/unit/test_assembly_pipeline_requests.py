@@ -3,7 +3,8 @@
 The live driver (tools/test_assembly_pipeline.py) builds every dynamic MCP
 request through the small builders in this module's source file. These tests
 validate ALL branches — fixture parts, original assembly, rebuild from
-inspected transforms, the final remove+re-assemble replace, the tab edit and
+inspected transforms, the final remove+re-assemble replace (remove the stale
+label, re-assemble under a NEW unique label), the tab edit and
 the adoption idempotency key — through the real
 bridge.normalize_model_name / creo_mechdog.schema.validate_operations, so a
 naming or schema regression fails here instead of inside a live session.
@@ -22,6 +23,7 @@ import uuid
 
 import bridge
 from tools.test_assembly_pipeline import (
+    REFRESHED_PLATE_A_LABEL,
     bind_adopted_sources,
     external_source_name,
     index_occurrences,
@@ -138,10 +140,15 @@ class PipelineRequestBuilders(unittest.TestCase):
     def test_replace_operations_keep_the_op_field(self):
         plan = sample_plan("20261025T120000Z0123abcd")
         remove_op, reassemble_op = plan["replace_operations"]
-        self.assertEqual(remove_op["op"], "remove_component")
+        self.assertEqual(remove_op, {"op": "remove_component", "component": "plate_a"})
         # The stage-3 driver stripped "op" here, which execute_plan requires.
         self.assertEqual(reassemble_op["op"], "assemble_component")
-        self.assertEqual(reassemble_op["label"], "plate_a")
+        # Live evidence (assembly_pipeline_live_20261025T162553Z step 9e): the
+        # entry refuses a plan that re-assembles an EXISTING label even when
+        # the same job removes it first, so the refreshed snapshot enters
+        # under a NEW unique label while keeping the old pose and source.
+        self.assertEqual(reassemble_op["label"], REFRESHED_PLATE_A_LABEL)
+        self.assertNotEqual(reassemble_op["label"], "plate_a")
         self.assertIn("rotation_matrix", reassemble_op)
 
     def test_rebuild_operations_use_inspected_normalized_transforms(self):
@@ -179,8 +186,16 @@ class PipelineRequestBuilders(unittest.TestCase):
             "placement": "fixed",
         }
         operations = replace_operations(pose)
-        self.assertEqual(operations[1], pose)
-        self.assertIsNot(operations[1], pose)
+        self.assertEqual(operations[0], {"op": "remove_component", "component": "plate_a"})
+        reassemble = operations[1]
+        self.assertIsNot(reassemble, pose)
+        self.assertEqual(reassemble["label"], REFRESHED_PLATE_A_LABEL)
+        # Everything else — op, source, original pose — is preserved.
+        for key, value in pose.items():
+            if key != "label":
+                self.assertEqual(reassemble[key], value)
+        # The input pose is not mutated by the builder.
+        self.assertEqual(pose["label"], "plate_a")
 
 
 class AdoptedSourceBinding(unittest.TestCase):

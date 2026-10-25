@@ -224,6 +224,52 @@ Creo 12.4 SDK 编译通过；未放宽 style baseline。证据见
 [BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
 实机/WorkBuddy 仍待统一安排，本卡不关闭。
 
+### 2026-10-26 第二批实机收口：快照刷新改用新唯一 label（最小修复）
+
+实机证据：`build/assembly_pipeline_live_20261025T162553Z6eec525a`（guard
+`build/guarded_live_20261025T162020624286`，child_1.log 只读）9 个父作业全部
+成功（两源件、两项独立收养、原装配三组件、只读检查、重建 3 组件位姿与体积
+匹配、收养源追加凸台体积 +600、装配 regenerate 后仍旧快照），最后 step 9e 把
+同一 execute_plan `[remove_component component='plate_a',
+assemble_component label='plate_a'（同一已编辑源）]` 再次提交，被入口以
+`Feature labels already exist: ['plate_a']` 拒绝，未受理、无新 job。
+
+根因/契约：入口按计划内 assemble label 与目标既有别名求交拒绝，**即使同一
+计划先 remove 该 label**——这是现有生产契约，本批不为它扩展生产功能，也不
+包含显式 source 更新 API。最小修复：
+
+- `tools/test_assembly_pipeline.py`：`replace_operations` 改为一个原子作业内
+  remove 旧 `plate_a` + 以**新唯一 label** `plate_a_refreshed` 重新 assemble
+  （同一 `source_model_id` 当前 revision、原冻结位姿、`op` 字段保留）；
+  step 9e 下游断言按新 label 读取——`component_changes` 保留
+  removed(旧 label/旧 feature_id)+added(新 label/新 feature_id/
+  当前 source_revision)、最终 aliases 旧 label 已消失、新组件变换匹配冻结
+  快照、副本名为新原生拷贝、装配体积 origin+600；约束数字码+`type_name`
+  断言（step 6/8）不变。
+- 需保留原 label 的用户：先 remove 一个作业、再 assemble 另一个作业，各自
+  revision+1、独立提交；第二步失败不会撤销第一步。不得声称同 label 同作业
+  可行。
+- 回归（offline，无真实 server/native 执行/runner mock）：
+  `tests/unit/test_pipeline_replace_alias_precheck.py` 3 项——真实
+  `generic_bridge.submit` 预检在既有别名环境（真实样式 32-hex id、托管
+  output 命名、基线 sha256、组件别名 sidecar）下先复现原 remove+同 label
+  计划被拒（无作业、无 runner、无 pending_job），再确认新 remove+新 label
+  计划通过同一预检并入队，另锁定普通 reassemble 既有 label 同样被拒；
+  `tests/unit/test_assembly_pipeline_requests.py` 同步更新（label 重命名、
+  输入 pose 不被 builder 篡改）。
+- 文档/示例同步：`docs/ASSEMBLY_REBUILD.md` source_snapshot 再生成方式、
+  `docs/WORKBUDDY_FEAT008_PIPELINE.md` step 6、
+  `examples/assembly_rebuild_pipeline.json` step 8（新 label 与两步替代路径）；
+  单作业插入多组件主流程、原装配只读、嵌套/FEAT-049/050/世代回收范围不变；
+  未改 `docs/validation/` 任何原件。
+
+验证：针对性单测 23 项通过（上述两文件）、示例契约单测通过、Ruff 无新增、
+`tools/test_assembly_pipeline.py --help` 正常；证据与命令见
+[development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md](../development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md)。
+
+未测（主代理负责）：pipeline 实机重跑（matrix 源码未变无需重跑）、独立全量
+dev_check、WorkBuddy 黑盒、发布；本卡不关闭。
+
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P2-2/P1-1/P3-1：能力边界只由"MCP-owned"措辞隐式表达；接管拒绝为文本错误且缺实际单位；空窗口为裸 Toolkit 码。本轮三项：

@@ -72,10 +72,13 @@ Toolkit 通道 busy 立即拒绝、不排队；已受理作业只轮询，不重
    副本名、装配 revision 均不变）——这只是缓存，不是实时几何证明。要取得
    新的原生数据，对装配提交仅 `{"op":"regenerate"}` 的 `creo_execute_plan`
    作业：预期 succeeded、revision+1、`saved_file_reloaded_and_verified=true`，
-   而刚实测的装配体积仍等于编辑前值，证明已插入组件是旧快照。然后
-   `remove_component`+重新 `assemble_component`（原 label、原位姿、同一
-   `source_model_id`）：预期作业 succeeded，`component_changes` 各列一条
-   `removed`（原 feature_id）与 `added`（新 feature_id、
+   而刚实测的装配体积仍等于编辑前值，证明已插入组件是旧快照。然后在一个
+   作业内 `remove_component`+重新 `assemble_component`（**新的唯一 label**、
+   原快照位姿、同一 `source_model_id`——入口拒绝与既有别名重复的计划内
+   assemble label，即使同一作业先 remove 了它；若必须保留原 label，拆成
+   remove、assemble 两个作业各自 revision+1 独立提交，第二步失败不会撤销
+   第一步）：预期作业 succeeded，`component_changes` 各列一条
+   `removed`（原 label、原 feature_id）与 `added`（新 label、新 feature_id、
    `source_revision` 为新值）；保存重载后装配体积反映新源件几何。约束与
    引用需重新核对；`component_placement`/`regenerate`/`save` 不是源件更新
    手段，不得据此声称源件已更新。嵌套装配（以装配为源）预期被拒绝。

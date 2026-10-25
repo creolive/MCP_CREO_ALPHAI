@@ -10,8 +10,8 @@ assembly from the normalized millimeter transforms read by
 creo_inspect_session_assembly -> prove source_snapshot semantics by editing the
 ADOPTED source (a real protruding tab that changes volume), regenerating the
 assembly (revision+1, geometry still the old snapshot) and finally replacing
-the component via remove + re-assemble (fresh native geometry reflects the new
-source).
+the component via remove + re-assemble under a NEW unique label (fresh native
+geometry reflects the new source).
 
 Naming: managed model names and external source basenames are limited to 31
 characters (bridge.normalize_model_name). The long timestamp tag only names
@@ -21,7 +21,8 @@ run and repeatable across rounds. Every dynamic request is built by the small
 builders below and validated offline through the real
 bridge.normalize_model_name / creo_mechdog.schema.validate_operations (see
 tests/unit/test_assembly_pipeline_requests.py); the final replace step keeps
-the ``op`` field of the re-assemble operation.
+the ``op`` field of the re-assemble operation and renames it to a fresh
+unique label (see replace_operations).
 
 The earlier revision of this driver passed MCP-managed output files (which
 adoption must refuse as managed_output) to creo_adopt_file and edited the
@@ -217,10 +218,31 @@ def rebuild_operations(frozen: dict, occurrences) -> list[dict]:
     return operations
 
 
+# The re-assembled snapshot enters under a NEW unique label. The execute_plan
+# entry rejects any assemble label that already exists in the target aliases —
+# even when the same plan first removes that label (live evidence 2026-10-25,
+# build/assembly_pipeline_live_20261025T162553Z step 9e: one plan carrying
+# remove_component 'plate_a' + assemble_component label 'plate_a' was refused
+# with "Feature labels already exist: ['plate_a']" and NO job was created).
+REFRESHED_PLATE_A_LABEL = "plate_a_refreshed"
+
+
 def replace_operations(plate_a_pose: dict) -> list[dict]:
-    """remove + re-assemble. The re-assemble operation KEEPS its ``op`` field:
-    execute_plan operations must carry op (the earlier revision stripped it)."""
-    return [{"op": "remove_component", "component": "plate_a"}, dict(plate_a_pose)]
+    """remove + re-assemble under a NEW unique label, in ONE atomic job.
+
+    The re-assemble operation KEEPS its ``op`` field (the stage-3 revision
+    stripped it), the same ``source_model_id`` and the original frozen pose;
+    only the label changes, so the entry's existing-alias pre-check passes
+    and the atomic job rolls the delete+insert back together on failure.
+    Reusing the old label inside one plan is refused before any job exists
+    (see the module evidence above). Users who must keep the old label run
+    TWO jobs instead — remove (revision+1), then assemble (revision+1) — and
+    a failure of the second job never undoes the first.
+    """
+    reassemble = dict(plate_a_pose)
+    assert reassemble["label"] == "plate_a", reassemble
+    reassemble["label"] = REFRESHED_PLATE_A_LABEL
+    return [{"op": "remove_component", "component": "plate_a"}, reassemble]
 
 
 def bind_adopted_sources(plan: dict, adopted_ids: dict, external: dict) -> dict:
@@ -666,6 +688,20 @@ async def run() -> None:
             assert [c["op"] for c in regen_changes["changes"]] == ["removed", "added"], (
                 regen_changes
             )
+            # Labels sort plate_a before plate_a_refreshed; the removed entry
+            # keeps the PRIOR feature_id, the added entry carries the NEW one.
+            assert regen_changes["changes"][0]["label"] == "plate_a", regen_changes
+            assert regen_changes["changes"][1]["label"] == REFRESHED_PLATE_A_LABEL, regen_changes
+            assert regen_changes["changes"][0]["feature_id"] == frozen["plate_a"]["feature_id"], (
+                regen_changes
+            )
+            assert regen_changes["changes"][1]["feature_id"] != frozen["plate_a"]["feature_id"], (
+                regen_changes
+            )
+            assert (
+                regen_changes["changes"][1]["source_model_id"]
+                == frozen["plate_a"]["source_model_id"]
+            ), regen_changes
             assert regen_changes["changes"][1]["source_revision"] == edited["revision"], (
                 regen_changes
             )
@@ -676,8 +712,13 @@ async def run() -> None:
             )
             final_list = await call("creo_list_components", {"model_id": rebuilt["model_id"]})
             assert len(final_list["components"]) == 3
-            new_alias = final_list["aliases"]["plate_a"]
+            final_aliases = final_list["aliases"]
+            # The stale label left with its component; the refreshed snapshot
+            # is only addressable by its NEW label (never read the old key).
+            assert "plate_a" not in final_aliases, final_aliases
+            new_alias = final_aliases[REFRESHED_PLATE_A_LABEL]
             assert new_alias["source_revision"] == edited["revision"], new_alias
+            assert new_alias["source_model_id"] == frozen["plate_a"]["source_model_id"], new_alias
             new_component = next(
                 c for c in final_list["components"] if c["feature_id"] == new_alias["feature_id"]
             )

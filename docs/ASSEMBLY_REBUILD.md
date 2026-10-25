@@ -48,8 +48,14 @@
 `c_<job>_<index>`）。编辑源件**不会**自动更新已插入组件；`component_placement`、
 `regenerate`、`save` 都不是源件更新手段。当前支持的重新生成方式：
 
-1. `remove_component` 后重新 `assemble_component`：按源件**当前** revision 取新
-   快照，label 与位姿需重新指定，引用与约束需重新核对；或
+1. 一个作业内 `remove_component` 后重新 `assemble_component`：按源件**当前**
+   revision 取新快照。重新 assemble 必须使用**新的唯一 label**——入口拒绝
+   与目标既有别名重复的 assemble label，即使同一作业先 remove 了它（实机
+   `assembly_pipeline_live_20261025T162553Z` step 9e 以原 label 复用同一计划
+   被入口拒绝、未产生作业）；位姿沿用原快照位姿、同一 `source_model_id`，
+   引用与约束需重新核对。若必须保留原 label，则拆成两个作业：先
+   remove（revision+1），再 assemble（revision+1），各自独立提交，第二步
+   失败不会撤销第一步；或
 2. 新建装配整体重建。
 
 实测要点：`creo_list_components` 返回的是**最近一次已验证检查**的缓存快照，
@@ -57,7 +63,8 @@
 `creo_execute_plan`（仅 `{"op":"regenerate"}`），按 revision+1 契约取得保存
 重载后的新原生数据（`creo_inspect_model` 的体积/位姿）；此时体积仍等于编辑
 前值即证明组件是旧快照。之后再 `remove_component` + 重新
-`assemble_component`，保存重载后体积/包围盒反映新源件。
+`assemble_component`（**新的唯一 label**，见上），保存重载后体积/包围盒反映
+新源件。
 
 ## 组件变更摘要
 
@@ -92,8 +99,10 @@
   摘要异常不会改变终态；缺少已验证结果别名时同样降级为 `unavailable`，
   不猜测净变更。
 
-同一作业内对同一 label 先 `remove_component` 再 `assemble_component` 时，
-`removed` 记录的是**原** feature_id（来自作业前别名快照），`added` 记录的是
+入口当前拒绝在同一计划内复用既有 assemble label（即使先 remove），故经入口
+提交的净重插状态只可能来自既有别名数据本身；无论何种来源，摘要按下述身份
+规则报告：同一净状态下对同一 label 的旧 `remove_component` 与新
+`assemble_component`，`removed` 记录的是**原** feature_id（来自作业前别名快照），`added` 记录的是
 结果别名里的**新** feature_id，两者不会被混用。值全部来自原生操作结果、受管
 别名与已验证检查；服务不在 Python 侧模拟几何。批量装配复用每个作业现有的
 `preview.jpg`，不另设同义“批量装配工具”。

@@ -119,7 +119,7 @@
     },
     {
       "step": 8,
-      "purpose": "Optional regeneration after a source edit: remove the stale snapshot and re-insert from the same source_model_id (now at its newer revision) with the original label and pose; constraints and references must be re-checked afterwards.",
+      "purpose": "Optional regeneration after a source edit: in ONE job, remove the stale snapshot and re-insert from the same source_model_id (now at its newer revision) with the original pose but a NEW unique assemble label — the entry refuses an assemble label that already exists on the model, even when the same plan removes it first. To keep the original label instead, run two jobs (remove, then assemble), each revision+1 and independently submitted; a failure of the second job never undoes the first. Constraints and references must be re-checked afterwards.",
       "tool": "creo_execute_plan",
       "arguments": {
         "model_id": "<assembly model_id>",
@@ -128,7 +128,7 @@
           {"op": "remove_component", "component": "plate_b"},
           {
             "op": "assemble_component",
-            "label": "plate_b",
+            "label": "plate_b_refreshed",
             "source_model_id": "<same adopted model_id of plate_b>",
             "translation": [0, 0, 45],
             "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
@@ -137,7 +137,7 @@
         ]
       },
       "expect": [
-        "component_changes lists one removed and one added entry (committed)",
+        "component_changes lists one removed (plate_b, old feature_id) and one added entry (plate_b_refreshed, committed)",
         "the re-inserted component reflects the current source revision (new native copy name)"
       ]
     }
