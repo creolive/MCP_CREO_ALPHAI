@@ -148,3 +148,13 @@
   不要把“子进程退出前作业必终态”当作已验证保证——这正是本入口要确认的。
 - 每个驱动输出带时间戳的唯一报告目录。WorkBuddy 只通过公开 MCP 黑盒验收，
   场景见 [WORKBUDDY_FEAT008_PIPELINE.md](WORKBUDDY_FEAT008_PIPELINE.md)。
+
+## 开发者实机验收状态（2026-10-26）
+
+矩阵、批量收养与管线三驱动已于 2026-10-25/26 在本机 Creo 12.4 真实会话通过
+开发者 MCP 实机验收（非 WorkBuddy）：矩阵 38 父作业（37 成功 + 1 故意普通
+失败成功回滚）、4 次真实改变位姿 rev 36→40；收养两批 2+1 成功、3+2 拒绝、
+0 unknown；最终管线 10 父作业全成功（快照刷新新唯一 label，12384→12984、
+装配 rev 3→4）。raw 报告关键值与文件 SHA256 见
+[development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。
+WorkBuddy 黑盒仍待验收；并发、unknown 自然分支、其他 Creo 版本未实机。

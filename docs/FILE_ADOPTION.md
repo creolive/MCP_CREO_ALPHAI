@@ -1,6 +1,6 @@
 ﻿# Path and batch adoption (FEAT-048)
 
-Development-branch implementation; native / WorkBuddy acceptance remains pending.
+Developer live acceptance passed on 2026-10-25/26 (two real-fixture batches, rev 1, save/reload, window/source-byte preservation, same-key replay); WorkBuddy black-box acceptance remains pending. Evidence and report SHA256s: [development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md).
 
 `creo_adopt_file(file_path, mode="inspect", evidence_token=None, idempotency_key=None)` accepts one absolute Windows native file path or an ordered list of 1-20 paths. Explicit `.prt.N` selects that exact numeric version. `.prt` selects the highest numeric version, falling back to the extension-only file when no numbered file exists. Target names are generated internally.
 

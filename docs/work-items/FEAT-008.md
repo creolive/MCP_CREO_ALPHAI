@@ -267,8 +267,26 @@ assemble_component label='plate_a'（同一已编辑源）]` 再次提交，被�
 `tools/test_assembly_pipeline.py --help` 正常；证据与命令见
 [development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md](../development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md)。
 
-未测（主代理负责）：pipeline 实机重跑（matrix 源码未变无需重跑）、独立全量
-dev_check、WorkBuddy 黑盒、发布；本卡不关闭。
+### 2026-10-26 开发者实机收口结果（本阶段管线重跑已通过，WorkBuddy 待）
+
+最终管线 b86 实机重跑成功（`build/assembly_pipeline_live_20261025T170907Zf5978fb3`，
+guard `guarded_live_20261025T170905774374` 子 exit 0、settle quiet/released、
+本轮 16 个新发现作业全部 succeeded）：10 个父作业全成功——两外部源件制备与
+按路径收养（独立 durable 提交）、原装配三组件（含重复 occurrence + 非对称
+组合旋转）、原装配只读检查、按 inspect 归一化 mm 变换重建并回读匹配冻结
+快照（新旧体积均 12384）、收养源编辑真实 +600（7200→7800）后 regenerate+
+保存重载仍 12384（list_components 缓存不变仅作缓存证据）、单作业 remove
+`plate_a` + 新唯一 label `plate_a_refreshed` 重插后 12984、装配 rev 3→4、
+`component_changes` committed（removed 旧 feature_id / added 新 feature_id 与
+当前 source_revision）；源只读 hash 不变、原装配只读不改动。保留原 label
+须两独立作业（第二失败不回滚首个删除），生产 alias 预检规则未改。矩阵实机
+（fc86231，38 父作业）与 4 次真实改变位姿、批量收养两批实机、独立全量
+dev_check 748 项一并通过；证据与文件 SHA256 见
+[BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](../development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。
+
+未测：WorkBuddy 黑盒（提示词已备 `build/workbuddy_batch2_20261026/PROMPT.txt`）、
+并发/unknown 自然分支/断连注入/其他 Creo 版本；首批底板 holes/对称深度/
+平面引用继续开放，整卡不关闭。
 
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 

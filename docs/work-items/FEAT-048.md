@@ -4,7 +4,7 @@
 
 优先级：P1
 
-状态：验收中（Task 5 离线实现；实机 / WorkBuddy 待验收）
+状态：开发者实机已通过；WorkBuddy 黑盒待验收（不据此判整批交付或发布）
 
 目标版本：下一 MINOR（0.5.0 反馈第二批）
 
@@ -140,3 +140,26 @@ md050 原生 worker 存活（checkpoint `native_pid` 身份与 `creo_worker.exe`
 [FEAT-008](FEAT-008.md) 第四阶段登记与
 [BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
 实机仍待统一安排。
+
+### 2026-10-26 开发者实机验收（WorkBuddy 待）
+
+两批真实 MCP 实机通过（源码 aac3c84，与最终 production 相同；关键值经人工
+核对 raw 报告；文件 SHA256 见
+[BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](../development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)）：
+
+- 批次一（`file_adoption_integration_20261025T153627Z_4dd8fca3`）：父作业
+  `536d15c0312f460780637a743fbfa03c`，2 成功（现驻留健康 `existing_resident`、
+  fresh 健康 `fresh_retrieval`）+ 3 拒绝（`unhealthy_features`、
+  `non_millimeter_units`、`duplicate_source`）+ 0 unknown；两件各自 rev 1、
+  保存重载 true、source SHA 不变、当前窗口不变、same-key 回放同父作业。
+- 批次二（`file_adoption_integration_20261025T160223Z_21b9c215`）：父作业
+  `0df319186d284a168b3359f9291e42b2`，真实历史依赖件 `external_dependencies`
+  拒绝 → 继续 → 健康件 `fresh_retrieval` 成功（rev 1）→ `duplicate_source`
+  拒绝；1 成功 2 拒绝。真实夹具为 2026-10-19 原件只读副本
+  （manifest 记录原件/副本 SHA，独立重 hash 不变）；附加探针作业
+  `9e48e7ec31294564936f721cad4c095d` 证明健康毫米但 `dependency_free=false`
+  分支。此前两种私有 SDK 夹具均普通失败，原报告保留，不宣称成功。
+- 未实机泛化：modified / wrong-origin / token 超时等准入分支仍只离线覆盖；
+  unknown/并发/断连注入与其他 Creo 版本未实机；WorkBuddy 黑盒未运行
+  （提示词已备 `build/workbuddy_batch2_20261026/PROMPT.txt`）。本卡其余范围
+  （不健康收养、装配整体收养等）继续按"不包含"开放。

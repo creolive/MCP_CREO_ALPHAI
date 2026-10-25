@@ -1,0 +1,132 @@
+# 第二批可靠装配重建管线：开发者实机验收综合证据（2026-10-26）
+
+范围：FEAT-012/BUG-045 矩阵子项、FEAT-048 按路径/批量收养、FEAT-008 官方装配重建管线
+（DEV-046 第二批）。本轮只做开发者验收证据与文档收口：不改生产代码/测试逻辑/版本，
+不连接新 Toolkit、不启动/结束 Creo、不清 unknown、不故障注入、不合入 main/推送/发版。
+
+分支 `codex/feat012-matrix-pipeline` HEAD `b86fa4a7c1184767c50b1ecc12352114c070d386`，
+工作树干净（`git status --porcelain` 空）；`c50fd65` 与 main `b5ad5d5` 均为祖先；
+21 个暂存文件由 d563958 保全（tree `08ba93a34409f539145686ea91541ce34fb34102`，
+备份 `E:\Projects\md050-preservation\20261025-165659`）。canonical
+`E:\Projects\MCP_CREO_MechDog` 为 detached 同一 b86 候选（本机 dev 服务规范），
+main ref 仍 b5、版本仍 0.5.3；canonical 仅多 tracked 运行账本 session_activity.json
+自然变化与既有 untracked，保留不还原/不提交。
+
+**以下全部为重启后的真实开发者 MCP 实机证据，不是 WorkBuddy 黑盒。** 环境：Windows 11
+x64 / Python 3.12.14 / Creo 12.4.0.0 匹配 SDK+MSVC；重启后 parametric 进程 4516 /
+xtop 17932，session fingerprint `1841692455511503772`。canonical native worker
+SHA256 `9b25859862fffecbb79bfc655795bbb35cabba0d5f6e5dd41a60955966ad35ad`，
+native 生产源码本轮未再变。所有 raw 报告关键值已经人工核对。
+
+## 1. 独立全量开发检查（md050，串行 solo）
+
+- `build/batch2_solo_check_b86fa4a_20261025T165605Z/`：748 项单测 0 失败 0 错误，
+  dev_check `success=true`，source clean b86、`checked_source_sha256=
+  c0b92b7fd31d570d72ecc591c929394d53e66c8f8a5dd21127c9b1b7fd7dfafb`。
+  style 存量基线 31 lint / 19 unformatted（非严格全库零问题，未放宽基线）。
+- 文件 SHA256：
+  - `result.json` `fee140cf6cd4a35db2fe40675bb77f3908a0f2dd0189423975933fc7e0b69e29`
+  - `development_check.json` `912702fa7face154bc885c7d543ecd61add2795c2c2e51aee2ef3aa42fedbee5`
+  - `unit_test_report.json` `c03cccb94ba211a07daa1c4d28877d808ae2f0727dc1bb93c41cc2878450128d`
+  - `dev_check.log` `5c9b6ee7660e3590bbbdc718577eb387bf74208212eb752525afd70041380d34`
+- 历史失误不计通过：上次 c6 并行测试 full 726 报 ToolkitBusy（1 error），原件
+  `build/batch2_parallel_check_failure_20261025T154845Z/development_check.json`
+  （SHA256 `0c8b5a28166a6cf016c1eb6a49295cffb1637a197e4ff292021dc225d0b156ea`）
+  另存保留；随后 fc86231 solo 745 项与本次 b86 solo 748 项均通过。
+
+## 2. 矩阵实机（canonical，源码 fc86231）
+
+- `build/assembly_matrix_live_20261025T162021Z/report.json`
+  （SHA256 `fb44e398d27aed3d60734eeead16c74a351f7dce7a9365ac88303d8a00c16a3a`）：
+  `success=true`；38 个父作业 = 37 成功 + 1 故意普通失败（无效组件引用 id 424242，
+  job `b0292449d74345f582858540bc30ea81`，`toolkit_code=-23`，
+  `rollback_succeeded=true`，`component_changes.status=rolled_back`，装配 revision
+  与位姿恢复后后续作业继续成功）。覆盖 11 组姿态、实际查询矩阵基向量/已知点、
+  非法互斥/形状/NaN/反射输入拒绝、revision 递进、native 保存重载、约束数字码 13
+  + `type_name="fix"` 并存、装配体积 330（11×30）独立几何断言（原生质量属性，
+  保存重载后复检）；记录 bbox 为源盒×回读矩阵的**预期派生值**，不是 Creo 实测
+  装配 bbox。
+- 配套 guard `build/guarded_live_20261025T162020624286/report.json`
+  （SHA256 `ec9eaf6a88f484715a12b3954a56a47d9bd6266133e7e7065532ed618b7cf45`）：
+  **总体 `success=false`（不写通过）**——旧管线驱动 step 9e 以原 label 复用
+  remove+re-assemble 被入口拒绝（`Feature labels already exist: ['plate_a']`），
+  pipeline 子进程 exit 1；**matrix 子进程 exit 0**（唯一失败为上述故意回滚作业）。
+  guard settle quiet/released 成立（本轮 53 个新发现作业：52 succeeded + 1 故意
+  failed）。
+
+## 3. 补充真实改变位姿 4 步（md050）
+
+- `build/matrix_changed_pose_20261025T1636/report.json`
+  （SHA256 `6b40a9e22232283ad26f21854a180c51d50fe76ac0a96f0a1832d0601d13be94`）：
+  model `fc8b1c60f0b947debba6ca84726fcc90`，revision 36→40，四步依次为
+  独立工具矩阵（job `fb4d8de1494d4fa19141a8ed1c36bff4`，rev 37）→
+  execute_plan 矩阵（`a0ea652d956a4f7f8155b6840f43d4fc`，rev 38）→
+  Euler 兼容（`c8f05de9429b45b290c584f8b8835ac9`，rev 39）→
+  恢复原位姿（`7d4a0489b7ec4fafaa52a1e45eff8128`，rev 40）；逐步真实查询回读
+  与 knownpoint/摘要 moved/保存重载一致，worker SHA 同上。
+
+## 4. FEAT-048 批量收养实机（canonical，源码 aac3c84，与最终 production 相同）
+
+- 批次一 `build/file_adoption_integration_20261025T153627Z_4dd8fca3/report.json`
+  （SHA256 `7ca681f0a92e90740534622f8b3575b74838c7e4f9426c5b66d49df8cf022bb8`）：
+  父作业 `536d15c0312f460780637a743fbfa03c` succeeded；5 件 = 2 成功 + 3 拒绝 +
+  0 unknown——item0 现驻留健康 `existing_resident` 成功（model
+  `76c54f8a6f06441d843409fecb728b95`）、item1 `unhealthy_features` 拒绝、item2
+  `non_millimeter_units` 拒绝、item3 fresh 健康 `fresh_retrieval` 成功
+  （`fd97bb56e2a548f69765588690a5140c`）、item4 `duplicate_source` 拒绝。两件成功
+  各自 revision=1（durable item 作业 `83f47d16…`/`a7a10541…`）、
+  `saved_file_reloaded_and_verified=true`、source SHA 不变、窗口不变、same-key
+  回放返回同一父作业。guard `guarded_live_20261025T153625988611` released/quiet
+  （报告 SHA256 `62e64327adb955083c1d74bbd1050f3921cc6abca7cbab0e7fcb0744f83918c7`）。
+- 批次二（真实外部依赖源件）`build/file_adoption_integration_20261025T160223Z_21b9c215/report.json`
+  （SHA256 `2b6f6fae7e6a5cd6697f4f0a372e1ae3d3de2c71d97201975f3733a0ffb6c1cf`）：
+  父作业 `0df319186d284a168b3359f9291e42b2` succeeded；3 件 = 1 成功 + 2 拒绝——
+  item0 `wb_reject_dep.prt.1`（existing_resident）`external_dependencies` 拒绝，
+  item1 `b2dep_ok_062d403a.prt.1` `fresh_retrieval` 成功（model
+  `f86154053a7a4f67aad18b4d60b07689`，rev 1），item2 `duplicate_source` 拒绝；
+  same-key 回放/source 不变/窗口不变/保存重载均成立。guard
+  `guarded_live_20261025T160222706597` released/quiet（报告 SHA256
+  `938dac7eb61eaf6cf50f64df87ecbbdaa0afe2a34e20c3cafc04bd0c092b8b7f`）。
+- 真实夹具：`build/batch2_existing_dependency_20261025T155102Z_21d0fb/manifest.json`
+  （SHA256 `d1e3a59b8dd544b39468e270ea5af30c62692a1b0fb863b68a4fde8ae9e770ce`）记录
+  原件（`E:\CreoAcceptance\2026-10-19\`，证据 docs/validation/ADOPTION-WorkBuddy-
+  2026-10-19.md 同日段）与只读副本 SHA（`c2eaa0cc…`/`8d4429d7…`/`fff48c00…`），
+  原件与副本独立重 hash 均不变。附加单 inspect 作业
+  `9e48e7ec31294564936f721cad4c095d`（kind `adoption_file_probe`，status=failed
+  即探到依赖）：units=mm、healthy=true、`dependency_free=false`（显示名
+  WB_REJECT_DEP），证明“健康毫米但非 dependency_free”的准入分支。
+- 此前两种私有 SDK 造依赖夹具均普通失败，原报告保留，不宣称成功、不推测许可
+  根因；本批已用真实历史依赖夹具解决。modified / wrong-origin / token 超时等
+  准入分支本轮仍只离线覆盖，未实机泛化。
+
+## 5. 最终管线实机（canonical，源码 b86）
+
+- `build/assembly_pipeline_live_20261025T170907Zf5978fb3/report.json`
+  （SHA256 `d193f80a4da87951fe03caf7ee9155a9d3ce0d6f392e65c98b034ec8cdc4c261`）：
+  `success=true`，10 个父作业全部成功。original model `806a0a70687b472981db4690d4551628`、
+  rebuilt `e43c98380fa54c1faf9310b86c86c2e8`、source A `f0d3e46e07c14866ad69793af7e7bcca`。
+  源 A 7200→7800（外伸凸台 tab 体积 600）；新旧装配快照总体积均 12384；源编辑后
+  原生 regenerate+保存重载仍 12384（list_components 缓存不变，仅缓存非实时证明）；
+  单作业 remove `plate_a` + 新唯一 label `plate_a_refreshed` 重插后 12984，
+  装配 rev 3→4，`component_changes` committed（removed 旧 feature_id / added 新
+  feature_id 与新 copy name、当前 source_revision）；三 occurrence（含 B 重复 +
+  非对称组合旋转 R）按实际 occurrence_path 与 mm transform 重建并回读匹配冻结
+  快照；源只读 hash 不变、原装配只读检查不改动。保留原 label 需两个独立作业，
+  第二失败不回滚首个删除；生产 alias 预检规则未改。
+- guard `build/guarded_live_20261025T170905774374/report.json`
+  （SHA256 `962d243085bd51423ebab419a5efc1d279c6957d953f00fa950adc8cc5bdce5b`）：
+  `success=true`、子进程 exit 0、settle quiet/released，本轮 16 个新发现作业全部
+  succeeded；释放时无 md050 native worker 存活且通道锁空闲。旧 24 个历史
+  pending/running 登记不属本轮，不核销、不清保护。
+
+## WorkBuddy 与未测范围（必须保留）
+
+- WorkBuddy 黑盒**仍未运行**：重启后 Codeg 把 WB 窗口 w17 置为 read 非 control；
+  已备独立纯 MCP 提示词 `build/workbuddy_batch2_20261026/PROMPT.txt`，但无黑盒结果。
+  **当前不能判整批交付或发布。**
+- 未实机：并发/通道忙交错、unknown 自然分支与断连故障注入、其他 Creo 版本
+  （9/10 未复验）、modified/wrong-origin/token 超时等收养准入分支（仅离线）、
+  嵌套子装配、FEAT-012 显式源件更新、第三批 FEAT-049/050、DEV-027 世代回收。
+  unknown 保护只有离线覆盖。派生 AABB 非独立几何实测。
+- 第一批与第三批范围、FEAT-008/FEAT-012 整卡其余范围保持开放，不按本轮证据
+  关闭。
