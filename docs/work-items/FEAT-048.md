@@ -85,3 +85,40 @@ Toolkit，不改版本或发布。
 合并树上 35 项重点单测、原生 helper（11+12 项）、SDK 编译与全量 dev_check
 （647 项）通过。完整证据见
 [BATCH2-STAGE1-REVIEW-2026-10-25.md](../development/BATCH2-STAGE1-REVIEW-2026-10-25.md)。
+
+### 2026-10-25 第二批第二阶段：锁顺序修复结果
+
+上游复审追加修复（本阶段实现，提交见批次证据）：新 `inspect`/`apply` 改为在
+昂贵逐文件选择/哈希（`_select`）之前取得非阻塞通道锁；廉价 schema 校验
+（键、token 格式）仍在锁前；已知幂等回放保持忙时只读返回并维持既有
+路径/identity/token 绑定契约（回放仍执行 `_select` 绑定身份）。不增加排队/
+重试，不改幂等语义。
+
+回归（`tests/unit/test_file_adoption.py` +3，共 32 项）：持锁时新 inspect/
+新 apply 未进入 `_select`（side_effect 断言）、identity、native，且零作业/
+intent/evidence/model 接受状态；忙时回放仍绑定身份并返回同一父作业。既有
+全部 FEAT-048 单测不回退；全量 dev_check 666 项通过（证据见
+[BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md](../development/BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md)）。
+
+配套：批量收养实机驱动补 provenance（fresh/existing_resident）与拒绝原因
+断言、唯一报告目录；guard-root 开发者实机入口
+`tools/guarded_live_run.py`（最外层持主工作树真实通道锁再顺序运行 md050
+子进程，锁忙即停，离线回归 3 项）。实机仍未连接。
+
+### 2026-10-25 第二批第二阶段登记（行为修改前）
+
+上游复审追加：01a4cd8 后 `inspect` 仍先 `_select(paths)`（逐文件哈希，可能
+每件数秒）再取通道锁；`apply` 新提交同样先 `_select` 再检查锁。项目契约
+要求通道忙立即拒绝，新提交不得先做整批耗时文件选择/哈希。本轮最小修复：
+新 `inspect`/`apply` 在昂贵选择前取得非阻塞通道锁；廉价 schema 校验
+（键格式、token/key 形态）仍在锁前；已知幂等回放保持忙时只读返回并维持
+既有路径/identity/token 绑定契约。不增加排队/重试，不改幂等语义。
+
+范围还包括第二阶段配套（登记于 FEAT-008/DEV-046）：批量收养实机驱动补
+fresh/existing_resident 来源、健康/单位/依赖拒绝与幂等回放断言；开发者
+guard-root 实机执行入口（只准备不连接）。
+
+验收：离线 mock 回归——持锁时新提交未进入 `_select`/identity/native、无
+作业/模型/intent/证据接受状态；回放路径不变；既有 FEAT-048 单测不回退。
+环境：Windows 11 x64 / Python 3.12.14 / 本机 Creo 12.4 SDK（仅离线编译），
+不连接 Toolkit。

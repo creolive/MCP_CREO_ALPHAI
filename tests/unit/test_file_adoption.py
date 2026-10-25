@@ -462,6 +462,59 @@ class PathAdoption(unittest.TestCase):
         self.assertEqual(list((self.root / "models").iterdir()), [])
         self.native.assert_not_called()
 
+    def test_busy_inspect_acquires_lock_before_selection(self):
+        # A new submission must not run the expensive per-file selection or
+        # identity hashing while the channel is busy.
+        with bridge.toolkit_lock(operation="other_job"):
+            with patch.object(
+                batch, "_select", side_effect=AssertionError("selection ran while busy")
+            ):
+                with self.assertRaises(bridge.ToolkitBusy):
+                    batch.adopt_file(self.sources)
+        self.native.assert_not_called()
+        self.assertEqual(list((self.root / "jobs").iterdir()), [])
+
+    def test_busy_new_apply_acquires_lock_before_selection(self):
+        evidence = self.inspected()
+        native_calls = self.native.call_count
+        jobs_root = self.root / "jobs"
+        before = set(jobs_root.iterdir())
+        with bridge.toolkit_lock(operation="other_job"):
+            with patch.object(
+                batch, "_select", side_effect=AssertionError("selection ran while busy")
+            ):
+                with self.assertRaises(bridge.ToolkitBusy):
+                    self.submitted(evidence=evidence)
+        self.assertEqual(set(jobs_root.iterdir()) - before, set())
+        store = jobs_root / "file_adoption"
+        intents = list(store.glob("intent-*.json")) if store.exists() else []
+        self.assertEqual(intents, [])
+        self.launch.assert_not_called()
+        self.assertEqual(self.native.call_count, native_calls)
+
+    def test_busy_replay_still_binds_identities_readonly(self):
+        # Known idempotent replay keeps its path/identity binding contract and
+        # returns read-only while the original parent owns the channel.
+        evidence = self.inspected()
+        manifest = self.submitted(evidence=evidence)
+        native_calls = self.native.call_count
+        launches = self.launch.call_count
+        selected = []
+        original = batch._select
+
+        def recording(paths):
+            result = original(paths)
+            selected.append(paths)
+            return result
+
+        with bridge.toolkit_lock(operation="synthetic_busy"):
+            with patch.object(batch, "_select", side_effect=recording, autospec=True):
+                replay = self.submitted(evidence=evidence)
+        self.assertEqual(selected, [self.sources])
+        self.assertEqual(replay["job_id"], manifest["job_id"])
+        self.assertEqual(self.native.call_count, native_calls)
+        self.assertEqual(self.launch.call_count, launches)
+
     def test_schema_and_distribution_include_real_dependencies(self):
         import server
         from tools.package import source_files

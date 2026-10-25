@@ -69,6 +69,12 @@ async def scenario(paths: list[str], report: dict) -> None:
         assert inspection["status"] == "succeeded", inspection
         assert before == await current(), "Inspect changed the current model"
         assert inspection["items"][-1]["reason"] == "duplicate_source"
+        for item in inspection["items"]:
+            if item.get("source"):
+                provenance = item["source"]["source_state"]["provenance"]
+                assert provenance in ("fresh", "existing_resident"), item
+            if item["status"] == "refused":
+                assert item.get("reason"), item
         source_files = [i["file"] for i in inspection["items"] if i.get("file")]
         for file in source_files:
             assert identity(Path(file["path"])) == file
@@ -130,8 +136,9 @@ def main() -> int:
     try:
         asyncio.run(scenario([*arguments.sources, arguments.sources[0]], report))
     finally:
-        destination = ROOT / "build/file_adoption_integration.json"
-        destination.parent.mkdir(exist_ok=True)
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        destination = ROOT / f"build/file_adoption_integration_{stamp}/report.json"
+        destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return 0 if report["success"] else 1
 

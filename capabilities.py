@@ -381,6 +381,18 @@ def families() -> dict:
             ),
             "matrix_validation": "offline production helper and MCP/schema regression; live placement/save-reload unverified",
             "native_test": "part snapshots, rigid placement, removal, 3 datum-plane align constraints and 20 mm offset",
-            "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots; mate/insert/csys/default placement need further validation",
+            "component_changes": (
+                "jobs with component operations report a bounded manifest component_changes "
+                "summary: committed (real native feature identities; moved carries queried "
+                "from/to transforms), rolled_back (requested intents only, never reported as "
+                "effective) or unknown_outcome (empty, protection retained)"
+            ),
+            "constraint_names": (
+                "list_components constraints keep the numeric SDK type code and add type_name "
+                "from the same mapping as inspect_session_assembly; unknown codes stay numeric "
+                "with type_name unknown"
+            ),
+            "pipeline": "single execute_plan job inserts multiple components (distinct labels per occurrence); official rebuild pipeline: docs/ASSEMBLY_REBUILD.md with examples/assembly_rebuild_pipeline.json",
+            "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots (regenerate via remove + re-assemble or rebuild); mate/insert/csys/default placement need further validation",
         },
     }

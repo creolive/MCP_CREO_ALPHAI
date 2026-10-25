@@ -50,6 +50,7 @@ def source_files():
         "tools/test_callback_payload.cpp",
         "tests/native/test_assembly_pose.cpp",
         "tests/native/test_adoption_source.cpp",
+        "tests/native/test_constraint_names.cpp",
     )
     files = [ROOT / name for name in names]
     for directory, extensions in {

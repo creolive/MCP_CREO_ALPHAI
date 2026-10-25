@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
-from creo_mechdog import model_registry
+from creo_mechdog import component_changes, model_registry
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -414,6 +414,18 @@ def run_generic_job(job_id: str, manifest: dict):
     request = bridge.read_json(directory / "request.json")
     model = request["model"]
     path = model_path(model["model_id"])
+    # Pre-job verified state for the bounded component change summary; the
+    # control record on disk is authoritative at run time. Seed/recovery
+    # fixtures may run without a persisted control record; fall back to the
+    # request view (which may carry detail references instead of payloads).
+    try:
+        prior = model_registry.read_control(path)
+    except (OSError, ValueError):
+        prior = model
+    prior_aliases = model_registry.aliases_of(prior)
+    prior_inspection = model_registry.inspection_of(prior)
+    result_aliases = None
+    result_inspection = None
     worker_started = False
     try:
         with bridge.toolkit_lock(
@@ -452,6 +464,8 @@ def run_generic_job(job_id: str, manifest: dict):
                     model["status"] = "unknown_outcome"
                 else:
                     result = bridge.read_json(result_file)
+                    result_aliases = result.get("aliases")
+                    result_inspection = result.get("inspection")
                     # Job manifests keep only summaries and controlled references;
                     # a repeated full-payload result would regrow the read budget
                     # problem inside job.json (BUG-077).
@@ -582,5 +596,15 @@ def run_generic_job(job_id: str, manifest: dict):
             busy=exc.payload,
             recovery_required="Model reservation retained; inspect before recovery",
         )
+    summary = component_changes.summarize(
+        request["operations"],
+        job_status=manifest["status"],
+        prior_aliases=prior_aliases,
+        prior_inspection=prior_inspection,
+        result_aliases=result_aliases,
+        result_inspection=result_inspection,
+    )
+    if summary is not None:
+        manifest["component_changes"] = summary
     manifest["finished_at"] = bridge.now()
     bridge.write_json(directory / "job.json", manifest)

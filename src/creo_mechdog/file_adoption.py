@@ -118,11 +118,12 @@ def _choice(item: dict, action: str) -> dict:
 
 
 def inspect(paths: list[str]) -> dict:
-    items = _select(paths)
     parent_id = uuid.uuid4().hex
     # Busy rejection must not publish any job: acquire the channel before the
-    # parent directory or running manifest exists.
+    # expensive per-file selection/hashing and before the parent directory or
+    # running manifest exists.
     with bridge.toolkit_lock(operation="inspect_adoption_files", job_id=parent_id):
+        items = _select(paths)
         directory = bridge.job_path(parent_id)
         directory.mkdir()
         manifest = {
@@ -236,21 +237,27 @@ def _public_item(item: dict) -> dict:
     } | ({"source": adoption._summary_only({"live": item["live"]})} if "live" in item else {})
 
 
+def _arguments(paths: list[str], token: str) -> dict:
+    selected = _select(paths)
+    return {"paths": paths, "selection": _selection(selected), "evidence_token": token}
+
+
 def apply(paths: list[str], token: str, key: str) -> dict:
     adoption._key(key)
     if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{32}", token):
         raise ValueError("Invalid path-adoption evidence_token")
-    selected = _select(paths)
-    arguments = {"paths": paths, "selection": _selection(selected), "evidence_token": token}
     pointer = _store() / f"intent-{adoption.digest(key)}.json"
     # Replay is read-only and works while the original parent owns the channel.
     existing = _read(pointer)
     if existing:
-        return _replay(existing, arguments)
+        return _replay(existing, _arguments(paths, token))
     with bridge.toolkit_lock(operation="submit_adoption_files"):
+        # A new submission must not perform the expensive per-file
+        # selection/hashing before owning the channel.
         existing = _read(pointer)
         if existing:
-            return _replay(existing, arguments, locked=True)
+            return _replay(existing, _arguments(paths, token), locked=True)
+        arguments = _arguments(paths, token)
         evidence = _read(_store() / f"evidence-{token}.json")
         if not evidence or time.time() - evidence["created"] > adoption.TOKEN_SECONDS:
             raise ValueError("Path-adoption evidence expired; inspect again")

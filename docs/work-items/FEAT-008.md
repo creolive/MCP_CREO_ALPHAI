@@ -71,6 +71,71 @@ list_models 的 complete=false / next_cursor 为报告方实际分页正例，�
 
 后续外部依赖及含抑制特征的健康拒绝亦通过；健康理由合并failed/suppressed/incomplete，没有公开逐特征原因。若后续增加细粒度诊断，保持稳定原因分类与原错误兼容，不能从feature_count=9推断具体DTM1状态，也不能据抑制用例判真实再生失败已验收。当前仅补改进线索，不新增同义条目或扩大本卡首批范围。
 
+## 2026-10-25：0.5.0 反馈第二批第二阶段（官方装配重建管线配套）
+
+来源：[0.5.0 反馈整合计划第二批](../development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)与
+[装配编辑流程改进建议](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_装配编辑流程改进建议.md)
+P1-2/P2-3/P3 及 §3。范围（本阶段实现，实机/WorkBuddy 仍待验收）：
+
+1. **官方流程示例与说明**：`examples/assembly_rebuild_pipeline.json`（检查原装配→
+   按路径收养→新建托管装配→单个 execute_plan 多组件→统一保存重载→回读验证）
+   与 `examples/assembly_multicomponent_plan.json`（单作业批量插入）；配套
+   `docs/ASSEMBLY_REBUILD.md` 说明 inspect 归一化毫米变换约定（行向量 4×4，
+   3×3 R 加独立毫米 translation，p_parent=p_local·R+t；不自动转置/修正；原
+   变换未知或不支持时明确拒绝）、source_snapshot 语义与变更摘要/type_name 用法；
+   开发者 MCP 集成入口 `tools/test_assembly_pipeline.py`。首期单层、健康毫米
+   独立零件/钣金；重复 occurrence 复用收养 model_id、独立组件 label。
+2. **source_snapshot 明确**：源件编辑不自动更新已插入组件；当前重新生成方式
+   为 remove_component 后重新 assemble_component（按当前源 revision，原 label/
+   位姿需重新指定，引用与约束需重新核对）或新建装配重建；文档与示例不承诺
+   component_placement/regenerate/save 可更新源件快照，不实现显式源件更新与
+   嵌套装配。
+3. **组件变更摘要**：含组件操作的作业结果增加有界 `component_changes`
+   （committed/rolled_back/unknown_outcome 三态；added/moved/constraints_changed/
+   removed 清单，值取自原生操作结果、受管别名与已验证检查，Python 不模拟几何；
+   失败/回滚/unknown 不报为已生效）；复用现有 preview.jpg，不新增同义批量装配
+   工具。
+4. **list_components 约束符号名**：保留 `constraints[].type` 数字码，新增
+   `type_name`（统一复用 FEAT-045 会话装配原生约束映射，未知码保留数字并标
+   `unknown`）；不扩第三批约束回放。
+
+验收：示例参数经真实 schema 校验单测；变更摘要三态单测；约束符号名离线
+helper 与 SDK 编译；matrix/批量收养/管线三个实机驱动编写待用（唯一报告目录）；
+WorkBuddy 纯 MCP 场景文档。环境：Windows 11 x64 / Python 3.12.14 / 本机
+Creo 12.4 SDK 离线编译；不连接 Toolkit、不故障注入。底板 holes/对称深度/
+平面引用等首批范围不受影响，整卡不关闭。
+
+### 2026-10-25 第二阶段实现与离线结果
+
+已实现并离线验证（提交见批次证据
+[BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md](../development/BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md)）：
+
+- 示例：`examples/assembly_rebuild_pipeline.json`（八步官方管线，含快照再
+  生成步骤）、`examples/assembly_multicomponent_plan.json`（单作业三组件），
+  参数与真实 MCP schema 一致并由 `tests/unit/test_assembly_examples.py` 锁定；
+  说明文档 `docs/ASSEMBLY_REBUILD.md`（毫米行向量约定、source_snapshot 语义、
+  变更摘要与 type_name 用法、开发者入口）。
+- `component_changes`：含组件操作的 generic 作业 manifest 增加有界摘要
+  （committed/rolled_back/unknown_outcome 三态；added 含真实
+  feature_id/source_revision，moved 含查询矩阵 from/to，removed 按既有别名
+  解析 label）；失败/回滚/unknown 不报为已生效；现有结果字段不变；
+  `src/creo_mechdog/component_changes.py` + `tests/unit/test_component_changes.py`
+  （纯契约 6 项 + run_generic_job 挂载 4 项）。
+- `list_components` 约束符号名：原生 `native/constraint_names.h` 统一
+  FEAT-045 会话装配与受管组件清单映射（SDK 枚举 static_assert 钉住数值，
+  离线回退值仅供无 SDK harness）；`inspect_constraints` 保留数字 `type` 并新增
+  `type_name`，未知码输出 `"unknown"`；离线 harness
+  `tools/test_constraint_names.py`（13 组符号 + 未知码）通过，SDK 编译 exit 0。
+- 实机驱动：`tools/test_assembly_matrix.py` 补真实普通失败后回滚断言与
+  type_name/数字码断言、唯一报告目录；`tools/test_file_adoption.py` 补
+  provenance/拒绝原因断言、唯一报告目录；新增
+  `tools/test_assembly_pipeline.py`（单作业多组件、预览/摘要/符号名、快照
+  语义与再生成）。三者仅编写待用，未连接 Toolkit。
+- WorkBuddy 纯 MCP 场景：`docs/WORKBUDDY_FEAT008_PIPELINE.md`。
+
+未测：实机放置/收养/管线、保存重载、WorkBuddy 黑盒、其他 Creo 版本；第三
+批约束回放（FEAT-049）未扩。
+
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P2-2/P1-1/P3-1：能力边界只由"MCP-owned"措辞隐式表达；接管拒绝为文本错误且缺实际单位；空窗口为裸 Toolkit 码。本轮三项：

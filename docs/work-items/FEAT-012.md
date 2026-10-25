@@ -55,3 +55,17 @@ SDK 离线构建和最终 dev_check（567 项单测）通过；[完整证据](..
 +1/互斥及 Euler 省略兼容一致；行向量局部到父级、p_parent=p_local*R+t 与 helper
 一致；校验先于提交锁与副作用。33 项重点回归在合并树上通过，未发现需修复缺陷；
 不据此关闭实机范围。
+
+### 2026-10-25 第二批第二阶段登记（配套，行为修改前）
+
+本阶段不新增矩阵行为；配套工作归口：FEAT-008 官方示例与说明（含矩阵放置
+步骤与非对称组合旋转/已知点映射的 WorkBuddy 场景）、list_components 约束
+符号名（复用 FEAT-045 原生映射，见 FEAT-008 第二阶段登记）、组件变更摘要。
+matrix 实机驱动补真实普通失败后的回滚断言。实机验收仍待统一安排。
+
+第二阶段结果（2026-10-25，离线）：配套已实现并随批次证据交付
+（[BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md](../development/BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md)）；
+矩阵行为本体未改。`tools/test_assembly_matrix.py` 新增真实普通失败（未知
+组件引用）作业的回滚断言：作业 failed、装配 revision 与组件快照不变、
+`component_changes.status=rolled_back`；另断言 `type_name` 与数字码并存。
+实机/WorkBuddy 待验收，本卡不关闭。

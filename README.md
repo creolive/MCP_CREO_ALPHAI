@@ -74,7 +74,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 基准与重复 | `creo_datum_plane`、`creo_datum_axis`、`creo_dimension_pattern`：偏移/角度基准面、基准轴、一方向尺寸阵列 |
 | 镜像、扫掠、拔模 | `creo_mirror`：整体/几何镜像；`creo_sweep`：恒定截面及命名截面尺寸；`creo_draft`：恒角、不分割拔模 |
 | 钣金 | `creo_new_sheetmetal`、`creo_sheetmetal_wall`、`creo_sheetmetal_flange`、`creo_sheetmetal_unbend`、`creo_sheetmetal_bend_back`、`creo_sheetmetal_flat_pattern`：首壁、弯曲法兰、展开、折弯回去和平展；保留原生特征树 |
-| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本副本、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；矩阵新路径实机验收待完成，见 [FEAT-012](docs/work-items/FEAT-012.md) |
+| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本快照、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；含组件操作的作业附 `component_changes` 有界变更摘要（committed/rolled_back/unknown_outcome），`list_components` 约束保留数字 `type` 并附 `type_name` 符号；单作业插入多个组件与官方重建管线见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)；矩阵放置与收养实机验收待完成，见 [FEAT-012](docs/work-items/FEAT-012.md) |
 | 新增曲面与实体 | `creo_surface_fill`、`creo_thicken`、`creo_solidify`、`creo_boolean_bodies`、`creo_rib` |
 | 新增基准 | `creo_datum_csys`、`creo_datum_points` |
 | 原生工程图 | `creo_new_drawing`；图纸、一般/投影视图、尺寸显示、注释、表格及编辑/删除；原生 DRW 与 PDF 输出 |
@@ -138,7 +138,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 随后 `creo_set_sketch_dimensions` 使用 `sketch:"profile", values:{"diameter":24}` 修改直径；拉伸实体随之更新。`creo_set_dimensions` 接收查询结果中的模型尺寸 ID，例如 `values:[{"id":18,"value":40}]`；实际 ID 由 Creo 生成。
 
-完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
+完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划；装配重建管线与单作业多组件示例见 `examples/assembly_rebuild_pipeline.json` 与 `examples/assembly_multicomponent_plan.json`（说明见 [docs/ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)）。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
 
 ## 坐标、引用与参数
 

@@ -43,7 +43,8 @@ POSES = [
 
 
 async def run() -> None:
-    destination = ROOT / "build/assembly_matrix_live/report.json"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    destination = ROOT / f"build/assembly_matrix_live_{stamp}/report.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     report = {
         "work_items": ["FEAT-012", "BUG-045"],
@@ -105,15 +106,36 @@ async def run() -> None:
                     assert result["revision"] == arguments["expected_revision"] + 1, result
                 return result
 
+            async def terminal_job(name, arguments):
+                # Poll to a terminal status without assuming success.
+                created = await call(name, arguments)
+                deadline = asyncio.get_running_loop().time() + 330
+                result = created
+                while asyncio.get_running_loop().time() < deadline:
+                    result = await call(
+                        "creo_get_job", {"job_id": created["job_id"], "detail": "full"}
+                    )
+                    if result["status"] not in ("queued", "running"):
+                        break
+                    await asyncio.sleep(1)
+                else:
+                    raise TimeoutError("Poll existing job only; do not resubmit")
+                report["jobs"].append(result)
+                save()
+                return result
+
             def identity(result):
                 return {"model_id": result["model_id"], "expected_revision": result["revision"]}
 
             async def check(result, label, rotation, mapped):
                 listed = await call("creo_list_components", {"model_id": result["model_id"]})
                 component_id = listed["aliases"][label]["feature_id"]
-                actual = next(
-                    c["transform"] for c in listed["components"] if c["feature_id"] == component_id
-                )
+                component = next(c for c in listed["components"] if c["feature_id"] == component_id)
+                actual = component["transform"]
+                # Fixed placement reports the numeric SDK code plus the shared
+                # readable symbol; both stay available (FEAT-008 batch 2).
+                assert component["constraints"][0]["type_name"] == "fix", component
+                assert type(component["constraints"][0]["type"]) is int, component
                 expected = [row + [0] for row in rotation] + [[7, -8, 9, 1]]
                 assert all(
                     abs(a - b) < 1e-6 for ar, er in zip(actual, expected) for a, b in zip(ar, er)
@@ -209,6 +231,22 @@ async def run() -> None:
                 assert (
                     before == after
                 )  # invalid request leaves revision/placement/constraints intact
+            # One genuine ordinary failure: an unknown component reference is
+            # accepted, fails natively, and rolls back; nothing is reported as
+            # an effective change and the verified snapshot is untouched.
+            before = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            failed = await terminal_job(
+                "creo_execute_plan",
+                {
+                    **identity(assembly),
+                    "operations": [{"op": "remove_component", "component": "no_such_label"}],
+                },
+            )
+            assert failed["status"] == "failed", failed
+            assert failed["revision"] == assembly["revision"], failed
+            assert failed["component_changes"]["status"] == "rolled_back", failed
+            after = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            assert before == after
             report["success"] = True
     except Exception as exc:
         report["error"] = str(exc)

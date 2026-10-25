@@ -1,0 +1,40 @@
+{
+  "description": "FEAT-008 batch-2: insert several components in ONE creo_execute_plan job on an existing managed assembly. The job saves, erases and reloads once at the end; the result keeps the usual preview.jpg and adds a bounded component_changes summary. Repeat occurrences of the same source reuse its adopted model_id but use distinct component labels.",
+  "request": {
+    "model_id": "<assembly model_id from creo_new_assembly>",
+    "expected_revision": "<current assembly revision from creo_inspect_model>",
+    "operations": [
+      {
+        "op": "assemble_component",
+        "label": "base_plate",
+        "source_model_id": "<adopted source model_id (first path)>",
+        "translation": [0, 0, 0],
+        "placement": "fixed"
+      },
+      {
+        "op": "assemble_component",
+        "label": "base_plate_flip",
+        "source_model_id": "<adopted source model_id (first path, same as base_plate)>",
+        "translation": [80, 0, 0],
+        "rotation_matrix": [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
+        "placement": "fixed"
+      },
+      {
+        "op": "assemble_component",
+        "label": "guide_pin",
+        "source_model_id": "<adopted source model_id (second path)>",
+        "translation": [40, 25, 12],
+        "rotation": [0, 0, 90],
+        "placement": "fixed"
+      }
+    ]
+  },
+  "expect": {
+    "job": "status succeeded; result.saved_file_reloaded_and_verified is true; revision increments by 1 for the whole job",
+    "component_changes": {
+      "status": "committed",
+      "changes": "one added entry per operation above with real feature_id, source_model_id and source_revision"
+    },
+    "readback": "creo_list_components returns three components; fixed constraints carry numeric type plus type_name \"fix\""
+  }
+}

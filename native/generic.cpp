@@ -6,6 +6,7 @@
 #include "inspection_units.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
+#include "constraint_names.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2560,29 +2561,24 @@ static J assembly_selection_json(ProSelection selection) {
 }
 
 static J constraint_json(ProAsmcompconstraint constraint) {
-    static const std::map<int, const char *> type_names = {
-        {PRO_ASM_FIX, "fix"},
-        {PRO_ASM_MATE, "mate"},
-        {PRO_ASM_MATE_OFF, "mate_offset"},
-        {PRO_ASM_ALIGN, "align"},
-        {PRO_ASM_ALIGN_OFF, "align_offset"},
-        {PRO_ASM_INSERT, "insert"},
-        {PRO_ASM_ORIENT, "orient"},
-        {PRO_ASM_CSYS, "csys"},
-        {PRO_ASM_TANGENT, "tangent"},
-        {PRO_ASM_PNT_ON_SRF, "pnt_on_srf"},
-        {PRO_ASM_EDGE_ON_SRF, "edge_on_srf"},
-        {PRO_ASM_DEF_PLACEMENT, "default"},
-        {PRO_ASM_AUTO, "auto"},
-    };
+// The shared mapping pins the published ProAsmcompConstrType values; SDK enum
+// drift fails the build instead of silently renaming production symbols.
+#ifndef CREO_CONSTRAINT_CODES_FALLBACK
+    static_assert(PRO_ASM_MATE == 0 && PRO_ASM_MATE_OFF == 1 && PRO_ASM_ALIGN == 2 &&
+                      PRO_ASM_ALIGN_OFF == 3 && PRO_ASM_INSERT == 4 && PRO_ASM_ORIENT == 5 &&
+                      PRO_ASM_CSYS == 6 && PRO_ASM_TANGENT == 7 && PRO_ASM_PNT_ON_SRF == 8 &&
+                      PRO_ASM_EDGE_ON_SRF == 9 && PRO_ASM_DEF_PLACEMENT == 10 &&
+                      PRO_ASM_FIX == 13 && PRO_ASM_AUTO == 14,
+                  "ProAsmcompConstrType drifted; refresh native/constraint_names.h");
+#endif
     J item = J::object();
     J codes = J::object();
     ProAsmcompConstrType type = PRO_ASM_FIX;
     int type_code = ProAsmcompconstraintTypeGet(constraint, &type);
     codes["type"] = type_code;
     if (!type_code) {
-        auto found = type_names.find(type);
-        item["type"] = found != type_names.end() ? found->second : "unknown";
+        const char *name = assembly_constraint_type_name((int)type);
+        item["type"] = name ? name : "unknown";
         item["type_code"] = (int)type;
     } else {
         item["type"] = nullptr;

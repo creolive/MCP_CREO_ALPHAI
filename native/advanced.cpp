@@ -1,4 +1,5 @@
 #include "assembly_pose.h"
+#include "constraint_names.h"
 
 // Native feature families added for version 0.21. Included after generic helpers.
 static J component_sources = J::object();
@@ -521,6 +522,10 @@ static J inspect_constraints(ProAsmcomp *comp) {
         ProAsmcompConstrType type;
         CK(ProAsmcompconstraintTypeGet(list[i], &type));
         J item = {{"type", (int)type}};
+        // Keep the numeric SDK code and add the shared readable symbol; an
+        // unrecognized code stays numeric with an explicit "unknown" symbol.
+        const char *type_name = assembly_constraint_type_name((int)type);
+        item["type_name"] = type_name ? type_name : "unknown";
         if (type == PRO_ASM_FIX || type == PRO_ASM_DEF_PLACEMENT) {
             result.push_back(item);
             continue;
