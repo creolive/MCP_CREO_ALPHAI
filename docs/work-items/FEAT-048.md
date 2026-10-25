@@ -4,7 +4,7 @@
 
 优先级：P1
 
-状态：待开发
+状态：验收中（Task 5 离线实现；实机 / WorkBuddy 待验收）
 
 目标版本：下一 MINOR（0.5.0 反馈第二批）
 
@@ -18,7 +18,7 @@
 
 包含（按 0.5.0 反馈计划第二批设计）：
 
-- 新增统一收养入口（如 `creo_adopt_file(file_path, mode, model_name?, idempotency_key)`），支持单路径与路径列表，采用 inspect/apply、证据令牌与幂等键；不要求也不改变当前窗口，源文件只读，内部完成 retrieve + 预检 + 复制。
+- 新增统一收养入口（如 `creo_adopt_file(file_path, mode="inspect", evidence_token=None, idempotency_key=None)`），支持单路径与路径列表，采用 inspect/apply、证据令牌与幂等键；不要求也不改变当前窗口，源文件只读，内部完成 retrieve + 预检 + 复制。
 - 首期仅支持健康、毫米、无外部依赖的零件/钣金件；批量收养在单通道内顺序执行，每件独立提交并返回独立结果。
 - 普通单件拒绝不撤销此前成功项；通道结果未知时停止剩余项并保留保护，不自动重试（保持单通道忙拒边界，无排队）。
 
@@ -34,3 +34,29 @@
 ## 实现与证据
 
 2026-10-23 预登记，未实施。
+
+### 2026-10-24 Task 5 implementation scope (registered before behavior edits)
+
+Status at registration: implementation in progress; live Creo / WorkBuddy acceptance pending.
+
+Approved API: `creo_adopt_file(file_path: str | list[str], mode="inspect", evidence_token=None, idempotency_key=None)`, 1-20 ordered paths, internal unique names, 600-second tokens. Exact numeric/latest version selection; source files are read-only; native retrieve/copy never displays. Only healthy millimeter dependency-free parts/sheetmetal are admitted. Duplicate origins produce `duplicate_source` / `duplicate_of`.
+
+One parent holds the channel across independent durable item journals and revision=1 save/reload commits. Known refusals continue; unknown execution or commit stops remaining dispatch and preserves protection. Replay/poll only materializes known durable decisions. Parent lifetime covers bounded sequential execution; no general budget API.
+
+Controller clarification: an existing unmodified exact-origin resident is allowed with explicit `existing_resident` provenance, session/id/versionstamp/live inspection plus stable disk SHA. Pre-inspection disk/resident content equality is unknown (a file might have been externally replaced before inspection). Fresh disk semantics require the name to be absent through prior manual session management. No automatic erase or rename.
+
+Verification: offline temporary-root regressions (identities, expiration, replay, duplicates, partial success, unknown stop, metadata interruption), Windows / Creo 12.4 SDK compile and production helper harness, final unified dev check. No Toolkit connection, Creo process/session actions, recovery/unknown clearing, original service data/config changes, version bump or publication. Actual window preservation, source bytes, save/reload/revision and WorkBuddy remain unverified until session clearance.
+
+
+### 2026-10-25 offline implementation and evidence
+
+Implemented the [path-adoption contract](../FILE_ADOPTION.md), public tool/capabilities, native no-display selector with explicit resident provenance, independent durable per-item commits and unknown stop, bounded parent polling and metadata-only idempotent replay. Current development registry has 92 public tools; historical 0.5.2 release records retain 91.
+
+Validation environment: Windows 11 x64 / Python 3.12.14 / local Creo 12.4 Toolkit SDK / MSVC x64, private editable worktree `E:/Projects/md050`. Tested source: base `c50fd653e7974a64706abfd46071941a62de61fc`, dirty=true, final checked source SHA256 `c68dee7becfd45409621e6879315c9ca9752c0ec0f846b76eac4a03c6389cff6`.
+
+- `.venv/Scripts/python.exe -m unittest tests.unit.test_file_adoption -q`: final focused 28 passed (7.143s); includes deterministic stale-parent polling regression. Existing adoption/open-file focused suite: 71 passed; reconciliation suite: 66 passed before the last two path cases.
+- `.venv/Scripts/python.exe tools/test_adoption_source.py`: SDK-independent production source-state helper compiled and passed 12 checks; report `build/adoption_source_test/report.json`.
+- `.venv/Scripts/python.exe bridge.py build`: full SDK compilation succeeded on 2026-10-24; final 2026-10-25 build validated/reused the same matching binary. Worker SHA256 `95fbe6d7be50fad58bf7a0b2b62ff3e2d4e14e13559533381d5e0ee6e3b47667`. Existing C4819 code-page warnings remain; no error.
+- `.venv/Scripts/python.exe tools/dev_check.py --work-item FEAT-048`: final stable-source run passed, 595 tests / 0 failures / 0 errors, 152.796s; `build/feat048-dev-check-final.log`, `build/development_check.json`, `build/unit_test_report.json`. No baseline modifications. Interim run retained separately: three old tool-count assertions and three in-flight source-change detections; all corrected before final run.
+
+No Toolkit/live integration or WorkBuddy execution. Actual window/source preservation, fresh/resident selection behavior, native health/units/dependencies, save/reload/revision, modified/wrong-origin cases and other Creo versions remain unverified. The added `tools/test_file_adoption.py` is a future permitted integration scenario, not current native evidence. Independent review remains required before the controller advances the plan.

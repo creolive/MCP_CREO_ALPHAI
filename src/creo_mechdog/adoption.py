@@ -185,6 +185,11 @@ def _native(directory: Path, manifest: dict) -> dict:
             "Adoption outcome is unconfirmed; reservation retained; inspect native checkpoint"
         )
     if proc.returncode != 0 or not result.get("success"):
+        # Path adoption distinguishes a delivered pre-copy refusal from an
+        # uncertain copy. Delivery/disconnect were independently confirmed above.
+        if result.get("path_source_checked") and result.get("path_copy_started") is False:
+            message = result.get("message", "Path source refused")
+            raise AdoptionRefused(message.partition(":")[0], message)
         raise RuntimeError(result.get("message", "Native adoption failed; reservation retained"))
     return result
 
@@ -951,7 +956,6 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
     if intent.get("state") == "committed":
         return _finish(intent)
     directory = bridge.job_path(job_id)
-    bridge.build_native()
     current = general.model_info(manifest["model_id"])
     if current.get("pending_job") != job_id or current.get("status") != "adopt_pending":
         raise AdoptionRefused(
@@ -969,6 +973,12 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
                 "snapshot_changed", "Prepared snapshot changed before native dispatch"
             )
     result = _native(directory, manifest)
+    if request["adoption"].get("path_source"):
+        expected_source = intent["evidence"]["file"]
+        if identity(Path(expected_source["path"])) != expected_source:
+            raise RuntimeError("Path source changed during copying; protection retained")
+        if result.get("source_unchanged") is not True or result.get("window_unchanged") is not True:
+            raise RuntimeError("Path source/window verification missing; protection retained")
     # Defense in depth for substituted/older executor boundaries: every
     # downstream consumer (registry, journal, manifest) sees references only.
     _split_result(result, directory)
@@ -1034,7 +1044,8 @@ def _run_locked(job_id: str, manifest: dict, file: Path) -> dict:
     intent["state"] = "committed"  # Durable decision precedes materialization.
     bridge.write_json(file, intent, durable=True)
     _finish(intent)
-    _record_session_change(job_id, manifest)
+    if not request["adoption"].get("path_source"):
+        _record_session_change(job_id, manifest)
     return manifest
 
 
@@ -1198,3 +1209,17 @@ def adopt(
     if mode != "apply" or not model_id or not evidence_token or not idempotency_key:
         raise ValueError("apply requires model_id, evidence_token and idempotency_key")
     return apply(model_id, evidence_token, model_name, idempotency_key)
+
+
+def run_item_locked(job_id: str, manifest: dict, journal: Path) -> dict:
+    """Execute one reserved path-adoption item under its parent's channel lock.
+
+    The item has a real durable journal and native directory, but no separately
+    submitted runner. The parent alone controls scheduling and unknown stop.
+    """
+    return _run_locked(job_id, manifest, journal)
+
+
+def finish_item_commit(record: dict) -> dict:
+    """Materialize a known durable item decision without invoking native code."""
+    return _finish(record)

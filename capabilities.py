@@ -121,6 +121,16 @@ def families() -> dict:
                 "creo_reconcile_model abandon_new"
             ),
         },
+        "file_adoption": {
+            "enabled": True,
+            "tool": "creo_adopt_file",
+            "actions": ["inspect", "apply"],
+            "maximum_paths": 20,
+            "scope": "Healthy independent millimeter parts/sheetmetal; ordered independent commits; no display/window switching",
+            "limits": "Duplicate origins refused; modified/ambiguous residents refused; existing_resident disk/content equality before inspection unknown; unknown stops remainder and preserves protection",
+            "evidence_seconds": 600,
+            "native_acceptance": "Pending Creo 12.4 / WorkBuddy validation",
+        },
         "session_models": {
             "enabled": True,
             "tool": "creo_list_session_models",

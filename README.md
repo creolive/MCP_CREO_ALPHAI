@@ -4,7 +4,7 @@
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **91 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
 当前服务／源码版本为 **0.5.2**（0.5.0 反馈整合第一批，PATCH，无新增公开工具，工具数 91 不变），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.5.2.md)。本版交付两处契约修复：`creo_inspect_session_assembly` 显式输出装配自身单位与逐组件单位（新增 `assembly.length_unit`、`units.component`/`units.parent` 及完整性标志），`transform_to_parent` 统一为毫米归一化全坐标映射、原始单位矩阵保留在新增 `transform_to_parent_raw`（[BUG-080](docs/work-items/BUG-080.md)，英寸/毫米混合单位实机取证与同对象 A/B 通过）；收养拒绝 `unhealthy_features` 附有界逐特征诊断（`refusal_details.unhealthy_features`：id/名称/类型/状态码/状态/incomplete，20 条上限附真实总数与截断标志，[FEAT-006](docs/work-items/FEAT-006.md)，实机取证与 WorkBuddy 黑盒通过）。已知问题不变：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，根因定位为损坏会话级，建模代码零改动，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.5.1（编辑链路缺陷修复批次：BUG-062/BUG-030/BUG-029/BUG-079）见[版本说明](docs/RELEASE_NOTES_0.5.1.md)。
 
@@ -205,6 +205,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 目前高层工具覆盖上述常见实体特征，仍有明确范围：
 
 - 持续修改支持本服务创建、登记的零件、钣金模型和装配；用户已在 Creo 打开的未登记模型可通过 `creo_adopt_current_model` 显式接管为受管副本（原件与原会话对象不动，首批独立 part/钣金、mm 单位、无外部依赖；身份按 origin 路径 + 文件哈希 + live 快照证明，不信任显示名）。
+- Development branch: `creo_adopt_file` accepts 1-20 ordered source paths with inspect/apply, independent per-item commits and no display/window activation. Existing unmodified exact-origin residents are copied as explicitly inspected session state; their pre-inspection disk/content equality is unknown. Duplicate sources are refused with reuse guidance; unknown outcomes stop remaining items and retain protection. See [path-adoption contract and pending native acceptance](docs/FILE_ADOPTION.md).
 - 各类尺寸/约束的复杂组合、极端几何及外部人工修改的自动接管仍需后续扩展。
 - 孔为直孔，尚未封装螺纹、沉头、沉孔标准孔；倒角为等距，阵列支持一方向尺寸阵列和原生轴阵列。
 - 普通混合支持平行 XY 截面的种子复用及直接创建/追加。随包九个种子覆盖 2/3/4/6 截面的直线和平滑，以及 5 截面平滑；其他数量需显式兼容种子或直接创建并本机验证。直接混合仅支持受管草图、Z 严格递增和默认实体增材。不支持自动增减种子截面、转换连接模式、非平行截面或端点相切/曲率控制。数量上限不代表每种数量都已实测。新零件整体可用原生定位特征移动或旋转。
