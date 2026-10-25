@@ -441,9 +441,26 @@ class PathAdoption(unittest.TestCase):
 
     def test_busy_submission_rejects_without_acceptance(self):
         evidence = self.inspected()
+        jobs_root = self.root / "jobs"
+        before = set(jobs_root.iterdir())
         with bridge.toolkit_lock(operation="other_job"), self.assertRaises(bridge.ToolkitBusy):
             self.submitted(evidence=evidence)
+        self.assertEqual(set(jobs_root.iterdir()) - before, set())
+        store = jobs_root / "file_adoption"
+        intents = list(store.glob("intent-*.json")) if store.exists() else []
+        self.assertEqual(intents, [])
+        self.assertEqual(len(list((self.root / "models").iterdir())), 0)
         self.launch.assert_not_called()
+
+    def test_busy_inspect_rejects_without_any_job_artifact(self):
+        jobs_root = self.root / "jobs"
+        before = set(jobs_root.iterdir())
+        with bridge.toolkit_lock(operation="other_job"), self.assertRaises(bridge.ToolkitBusy):
+            batch.adopt_file(self.sources)
+        self.assertEqual(set(jobs_root.iterdir()) - before, set())
+        self.assertFalse((jobs_root / "file_adoption").exists())
+        self.assertEqual(list((self.root / "models").iterdir()), [])
+        self.native.assert_not_called()
 
     def test_schema_and_distribution_include_real_dependencies(self):
         import server

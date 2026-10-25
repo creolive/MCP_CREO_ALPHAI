@@ -120,19 +120,21 @@ def _choice(item: dict, action: str) -> dict:
 def inspect(paths: list[str]) -> dict:
     items = _select(paths)
     parent_id = uuid.uuid4().hex
-    directory = bridge.job_path(parent_id)
-    directory.mkdir()
-    manifest = {
-        "job_id": parent_id,
-        "batch_id": parent_id,
-        "kind": "adoption_file_inspect",
-        "status": "running",
-        "created_at": bridge.now(),
-        "items": items,
-        "item_count": len(items),
-    }
-    _publish(parent_id, manifest)
+    # Busy rejection must not publish any job: acquire the channel before the
+    # parent directory or running manifest exists.
     with bridge.toolkit_lock(operation="inspect_adoption_files", job_id=parent_id):
+        directory = bridge.job_path(parent_id)
+        directory.mkdir()
+        manifest = {
+            "job_id": parent_id,
+            "batch_id": parent_id,
+            "kind": "adoption_file_inspect",
+            "status": "running",
+            "created_at": bridge.now(),
+            "items": items,
+            "item_count": len(items),
+        }
+        _publish(parent_id, manifest)
         stopped = False
         for item in items:
             if stopped:

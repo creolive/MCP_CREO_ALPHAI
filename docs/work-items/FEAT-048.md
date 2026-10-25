@@ -60,3 +60,21 @@ Validation environment: Windows 11 x64 / Python 3.12.14 / local Creo 12.4 Toolki
 - `.venv/Scripts/python.exe tools/dev_check.py --work-item FEAT-048`: final stable-source run passed, 595 tests / 0 failures / 0 errors, 152.796s; `build/feat048-dev-check-final.log`, `build/development_check.json`, `build/unit_test_report.json`. No baseline modifications. Interim run retained separately: three old tool-count assertions and three in-flight source-change detections; all corrected before final run.
 
 No Toolkit/live integration or WorkBuddy execution. Actual window/source preservation, fresh/resident selection behavior, native health/units/dependencies, save/reload/revision, modified/wrong-origin cases and other Creo versions remain unverified. The added `tools/test_file_adoption.py` is a future permitted integration scenario, not current native evidence. Independent review remains required before the controller advances the plan.
+
+### 2026-10-25 复审登记（main 0.5.3 整合后，行为修改前）
+
+背景：复审前已把 origin/main（b5ad5d5，0.5.3）merge 进本分支（合并提交 85d5178），
+21 个暂存文件的保全提交 d563958 的 tree 与保全备份 index tree
+08ba93a3… 一致；历史 docs/validation 原件未改写。
+
+上游复审确认缺陷（review-findings.json，本地复现一致）：`inspect` 在获取
+`bridge.toolkit_lock` 之前创建 parent 作业目录并发布 running 清单；通道忙碌时
+`ToolkitBusy` 拒绝受理，但遗留一个 `adoption_file_inspect`/`running` 孤儿目录
+（native_calls=0），违反“忙碌拒绝不接受作业、不留接受态”契约。
+
+本轮范围（最小修复，不扩功能）：`inspect` 的 parent 目录创建与首次清单发布移到
+`toolkit_lock` 获取之后；忙碌拒绝不得遗留 job/runner/model/intent/证据或任何
+接受状态。`apply` 路径复查确认目录创建于锁内（无泄漏），补回归锁定该行为。
+验收：inspect 与 apply 在持有通道锁时拒绝且零新增作业目录、零 evidence/intent、
+零 model、零 native 调用；既有全部 FEAT-048 单测不回退。离线 mock 夹具，不连接
+Toolkit，不改版本或发布。
