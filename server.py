@@ -28,7 +28,7 @@ from creo_mechdog.capability_pages import capabilities_response
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
-from creo_mechdog.references import PatternAxis, reference_capabilities
+from creo_mechdog.references import PatternAxis, RevolveAxis, reference_capabilities
 from creo_mechdog.registry_ops import health as registry_health
 from creo_mechdog.registry_ops import migrate as registry_migrate
 from creo_mechdog.schema import (
@@ -1001,7 +1001,8 @@ async def creo_create_sketch(
     Coordinates are in the chosen plane's (u,v) frame. Arc angles are degrees CCW.
     Rectangle/polyline expand to named lines e.g. box_0, box_1. Explicit dimensions
     have names and entity references; automatic dimensioning fills remaining freedoms.
-    For revolve include one centerline, or supply an external axis to creo_revolve.
+    For revolve include exactly one construction centerline, or supply an explicit external
+    axis to creo_revolve: {kind:'datum_axis_feature',label:'axis_label'} or {kind:'axis',id:N}.
     auto uses complete coordinate dimensions for large/complex supported principal-plane profiles;
     coordinates forces that mode; autodim retains native automatic dimensions. Coordinate mode
     supports lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
@@ -1059,11 +1060,17 @@ async def creo_revolve(
     angle: float = 360,
     mode: Literal["add", "cut", "surface"] = "add",
     direction: Literal["positive", "negative", "symmetric"] = "positive",
-    axis: dict[str, Any] | None = None,
+    axis: RevolveAxis | None = None,
     new_body: bool = False,
     thin: float | None = None,
 ) -> dict[str, Any]:
     """Create native revolve/revolved cut from an arbitrary sketch, about its centerline or an external axis.
+    Omit axis (or pass null) to revolve about the sketch's construction centerline; that sketch must
+    contain exactly one centerline. An explicit axis is a bare selection: {kind:'datum_axis_feature',
+    label:'axis_label'} for a datum axis feature created earlier in the same model (create it first,
+    e.g. with creo_datum_axis), or {kind:'axis',id:N} from model inspection. Structures without kind
+    (including {entity:'ax'}), empty objects, non-axis kinds and missing id/label are rejected before
+    a job is dispatched; the axis_pattern datum_feature alias does not apply here.
     A cut that removes no material fails and rolls back; a successful cut reports material_removed_mm3."""
     op = {
         "op": "revolve",

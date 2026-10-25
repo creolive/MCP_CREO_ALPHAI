@@ -1046,7 +1046,37 @@ static std::string section_create_failure(const J &op, bool revolve, ProError er
         m += " Element errors: " + last_feature_errors + ".";
     return m;
 }
+// BUG-083: a malformed revolve axis must fail with an actionable message before
+// any keyed access; the Python precheck normally rejects these earlier.
+static void validate_revolve_axis(const J &op) {
+    if (!op.contains("axis"))
+        return; // internal reference: the sketch's construction centerline
+    const J &axis = op["axis"];
+    std::string problem;
+    if (!axis.is_object() || axis.empty())
+        problem = "it is not a non-empty object";
+    else if (!axis.contains("kind") || !axis["kind"].is_string())
+        problem = "the kind key is missing or not a string";
+    else if (axis["kind"] == "axis") {
+        if (!axis.contains("id") || !axis["id"].is_number_integer() ||
+            axis["id"].get<long long>() < 0)
+            problem = "kind 'axis' requires a nonnegative integer id";
+    } else if (axis["kind"] == "datum_axis_feature") {
+        if (!axis.contains("label") || !axis["label"].is_string() ||
+            axis["label"].get<std::string>().empty())
+            problem = "kind 'datum_axis_feature' requires a nonempty label";
+    } else
+        problem = "kind '" + axis["kind"].get<std::string>() + "' is not a revolve axis";
+    if (!problem.empty())
+        throw std::runtime_error(
+            "Invalid revolve axis: " + problem +
+            ". Use {\"kind\":\"datum_axis_feature\",\"label\":\"axis_label\"} (create that datum "
+            "axis feature first), {\"kind\":\"axis\",\"id\":N} from model inspection, or omit "
+            "axis to revolve about the sketch centerline (one construction centerline required)");
+}
 static J extrude_or_revolve(const J &op, bool revolve) {
+    if (revolve)
+        validate_revolve_axis(op);
     ProFeature sketch_f = feature(op.at("sketch"));
     bool cut = op.value("mode", "add") == "cut";
     double before_volume = cut ? volume() : 0.0;

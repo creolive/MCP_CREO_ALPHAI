@@ -62,6 +62,62 @@ PatternAxis = Annotated[
 ]
 
 
+REVOLVE_AXIS_DESCRIPTION = (
+    "Bare axis selection: {kind:'datum_axis_feature',label:'axis_label'} referencing a datum "
+    "axis feature created earlier in the same model, or {kind:'axis',id:N} from model "
+    "inspection. Omit axis (or pass null) to revolve about the sketch's own construction "
+    "centerline; that sketch must contain exactly one centerline. Objects without a kind key "
+    "(including {entity:'ax'}), empty objects, non-axis kinds and missing id/label are rejected. "
+    "The axis_pattern-only datum_feature alias does not apply here; do not wrap the selection "
+    "in reference/entity/edge containers."
+)
+
+
+def normalize_revolve_axis(value: Any) -> dict[str, Any]:
+    """Reject malformed or non-axis revolve.axis selections before native dispatch (BUG-083)."""
+    error = ValueError(
+        "Revolve axis is not a valid explicit axis reference. " + REVOLVE_AXIS_DESCRIPTION
+    )
+    if not isinstance(value, dict) or not value:
+        raise error
+    kind = value.get("kind")
+    if not isinstance(kind, str):
+        raise error
+    if kind == "axis":
+        if type(value.get("id")) is not int or value["id"] < 0:
+            raise error
+    elif kind == "datum_axis_feature":
+        if not isinstance(value.get("label"), str) or not value["label"]:
+            raise error
+    else:
+        raise error
+    return dict(value)
+
+
+_REVOLVE_AXIS_SCHEMA = {
+    "description": REVOLVE_AXIS_DESCRIPTION,
+    "oneOf": [
+        {
+            "type": "object",
+            "properties": {"kind": {"const": "axis"}, "id": {"type": "integer", "minimum": 0}},
+            "required": ["kind", "id"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "datum_axis_feature"},
+                "label": {"type": "string", "minLength": 1},
+            },
+            "required": ["kind", "label"],
+        },
+    ],
+}
+
+RevolveAxis = Annotated[
+    dict[str, Any], BeforeValidator(normalize_revolve_axis), WithJsonSchema(_REVOLVE_AXIS_SCHEMA)
+]
+
+
 def reference_capabilities() -> dict[str, Any]:
     """Keep the legacy example keys while spelling out each parameter's full shape."""
     plane = {"kind": "datum_plane", "axis": "z", "offset": 0}
@@ -100,6 +156,15 @@ def reference_capabilities() -> dict[str, Any]:
             },
             "creo_datum_csys": {"reference": {"kind": "default_csys"}},
             "creo_datum_points": {"reference": {"kind": "default_csys"}},
+            "creo_revolve": {
+                "axis": axis_label,
+                "axis_geometry_id": axis,
+                "omitted_or_null": "Revolve about the sketch's construction centerline; "
+                "the sketch must contain exactly one centerline",
+                "requires": "A bare axis selection when supplied; the axis_pattern "
+                "datum_feature alias does not apply, and structures without kind "
+                "(including {entity:'ax'}) are rejected before a job is dispatched",
+            },
             "creo_hole": {
                 "placement": face,
                 "reference1": {"kind": "datum_plane", "axis": "x"},
