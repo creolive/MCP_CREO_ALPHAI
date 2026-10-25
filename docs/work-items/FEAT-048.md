@@ -78,3 +78,10 @@ No Toolkit/live integration or WorkBuddy execution. Actual window/source preserv
 验收：inspect 与 apply 在持有通道锁时拒绝且零新增作业目录、零 evidence/intent、
 零 model、零 native 调用；既有全部 FEAT-048 单测不回退。离线 mock 夹具，不连接
 Toolkit，不改版本或发布。
+
+修复结果（2026-10-25，提交 01a4cd8）：`inspect` 的 parent 目录创建与首次清单
+发布已移入 `toolkit_lock` 之后；复现脚本确认忙碌拒绝零遗留；新增
+`test_busy_inspect_rejects_without_any_job_artifact` 并强化 apply 忙碌回归；
+合并树上 35 项重点单测、原生 helper（11+12 项）、SDK 编译与全量 dev_check
+（647 项）通过。完整证据见
+[BATCH2-STAGE1-REVIEW-2026-10-25.md](../development/BATCH2-STAGE1-REVIEW-2026-10-25.md)。

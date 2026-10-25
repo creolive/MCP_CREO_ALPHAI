@@ -48,3 +48,10 @@ Python 和原生最终入口在副作用前校验有限实数、正交性和行�
 SDK 离线构建和最终 dev_check（567 项单测）通过；[完整证据](../development/FEAT012-MATRIX-OFFLINE-2026-10-24.md)
 记录源码/dirty、指纹、环境、命令及日志。实际 Creo/revision/保存重载/WorkBuddy
 仍未验证，矩阵子项待实机验收，整卡不关闭。
+
+2026-10-25 复审记录（main 0.5.3 整合后）：独立复核创建/更新组件与
+`creo_execute_plan` 的矩阵管线——Python `schema._rotation_matrix` 与原生
+`assembly_pose.h` 双侧形状/有限实数（拒 bool/字符串/NaN/Inf）/1e-6 正交与行列式
++1/互斥及 Euler 省略兼容一致；行向量局部到父级、p_parent=p_local*R+t 与 helper
+一致；校验先于提交锁与副作用。33 项重点回归在合并树上通过，未发现需修复缺陷；
+不据此关闭实机范围。
