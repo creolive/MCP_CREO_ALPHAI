@@ -195,6 +195,35 @@ Creo 12.4 SDK 编译通过；未放宽 style baseline。完整证据见
 [BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md)。
 实机/WorkBuddy 仍待统一安排，本卡不关闭。
 
+### 2026-10-25 第四阶段复审收口（残余缺陷最小修复）
+
+上游最终源码读码确认的四项残余缺陷已最小修复并离线验收：
+
+1. **guard 真实锁释放语义**：释放 main 真实锁唯一条件是本轮全部受理作业
+   终态 + 无 md050 原生 worker 存活（checkpoint `native_pid` 进程身份 +
+   `creo_worker.exe` 镜像只读扫描双证据，空闲锁不算）+ 字节锁探针空闲；
+   unknown 安静后可释放但返回失败并保留 unknown 保护；不可证实时
+   `--settle-timeout` 只写报警，入口持续存活持真锁直至可证实，Ctrl+C
+   唯一提前退出。`_snapshot_jobs/_new_jobs` 仅 FileNotFoundError 当空，
+   每轮重新发现累计晚到作业。11 项离线回归用独立进程真实抢锁断言。
+2. **管线驱动**：原生模型/外部源名改用 tag 的 SHA256[:8] 短后缀（≤31，
+   旧 24 字符 tag 命名被真实 `normalize_model_name` 拒绝已锁定）；末尾
+   replace 操作保留 `op`；全部动态请求提取为 builder 并用真实
+   `normalize_model_name`/`validate_operations` 离线校验（+8 项单测）。
+3. **矩阵驱动**：AABB 体积不变量仅对有符号置换旋转断言（`[30,90,60]`
+   严格增大已数学锁定，+4 项单测）；记录 bbox 明确为预期派生值而非
+   Creo 实测装配 bbox。
+4. **摘要辅助路径**：作业前快照只对有组件操作的请求读取，读取失败仅
+   降级 `component_changes.status=unavailable`（busy/no_effect/unknown
+   原语义不变）；committed 摘要改为按真实 feature_id 的净变更
+   （add+move→仅 added、add+remove→无净变更、重插双身份、连续 move
+   单次净移动、缺结果别名→unavailable，+9 项单测）。
+
+全量 701 项单测、dev_check（exit 0）、四个 C++ helper harness、
+Creo 12.4 SDK 编译通过；未放宽 style baseline。证据见
+[BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
+实机/WorkBuddy 仍待统一安排，本卡不关闭。
+
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 
 [v0.4.1 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P2-2/P1-1/P3-1：能力边界只由"MCP-owned"措辞隐式表达；接管拒绝为文本错误且缺实际单位；空窗口为裸 Toolkit 码。本轮三项：

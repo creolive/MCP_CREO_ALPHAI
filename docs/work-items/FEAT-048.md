@@ -128,3 +128,15 @@ guard-root 实机执行入口（只准备不连接）。
 guard-root 异常路径收尾修复（启动前基线、终态确认与通道静止后才释放、
 unknown 保留）与管线驱动外部夹具制备修正，范围与验收见
 [FEAT-008](FEAT-008.md) 第三阶段登记；收养行为本体未改，实机仍待统一安排。
+
+### 2026-10-25 第二批第四阶段登记（复审收口续）
+
+guard 释放语义进一步强化：真实 main 锁只在"本轮受理作业全终态 + 无
+md050 原生 worker 存活（checkpoint `native_pid` 身份与 `creo_worker.exe`
+镜像扫描双证据）+ md050 字节锁空闲"时释放；不可证实时入口持续存活持锁，
+`--settle-timeout` 仅写报警；unknown 安静后可释放但返回失败并保留保护。
+收养驱动 provenance 断言随原生实际值修正为 `fresh_retrieval`（工作树
+既有未提交修正，本轮一并提交）；收养行为本体未改。范围与验收见
+[FEAT-008](FEAT-008.md) 第四阶段登记与
+[BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
+实机仍待统一安排。
