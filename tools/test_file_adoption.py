@@ -25,15 +25,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from creo_mechdog.file_adoption import lifetime_seconds
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import identity
+from tools.mcp_readiness import wait_for_startup
 
 ROOT = SOURCE_PATHS.resource_root
 
 
-async def scenario(paths: list[str], report: dict) -> None:
+def report_destination() -> Path:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    return ROOT / f"build/file_adoption_integration_{stamp}_{uuid.uuid4().hex[:8]}/report.json"
+
+
+async def scenario(paths: list[str], report: dict, output: Path) -> None:
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=ROOT),
         read_timeout_seconds=lifetime_seconds(len(paths)),
     ) as client:
+        await wait_for_startup(client, report, output)
 
         async def call(name, arguments):
             response = await client.call_tool(name, arguments)
@@ -123,12 +130,13 @@ async def scenario(paths: list[str], report: dict) -> None:
         )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sources", nargs="+")
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
     if not 1 <= len(arguments.sources) <= 19:
         parser.error("Provide 1-19 sources; driver appends one duplicate")
+    destination = report_destination()
     report = {
         "started_at": time.time(),
         "calls": [],
@@ -136,10 +144,8 @@ def main() -> int:
         "scope": "Developer integration through MCP; not WorkBuddy acceptance",
     }
     try:
-        asyncio.run(scenario([*arguments.sources, arguments.sources[0]], report))
+        asyncio.run(scenario([*arguments.sources, arguments.sources[0]], report, destination))
     finally:
-        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-        destination = ROOT / f"build/file_adoption_integration_{stamp}/report.json"
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return 0 if report["success"] else 1
