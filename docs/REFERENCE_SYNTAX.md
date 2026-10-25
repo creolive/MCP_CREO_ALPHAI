@@ -40,6 +40,38 @@
 
 实现与当前验收范围见 [BUG-006](work-items/BUG-006.md) 和 [本次证据](validation/BUG-006.md)。
 
+## 圆角/倒角尺寸字段对照与部署核对（BUG-019）
+
+三个入口的尺寸数值是同一个值（mm），只是入口字段名不同：独立工具 `creo_round.radius`、`creo_chamfer.distance` 在提交时转换为计划操作的 `size`；`creo_execute_plan` 的 round/chamfer 操作以 `size` 为主字段，并分别接受 `radius`/`distance` 作为 `size` 的别名（别名与 `size` 同现、或用于另一种操作时明确拒绝，不做静默优先）。别名自 0.3.7（DEV-042）起可用。
+
+三个入口的等价请求示例（同一 3 mm 圆角）：
+
+```json
+// 独立工具 creo_round（参数名 radius）
+{"model_id":"<id>","expected_revision":7,"label":"fillet","radius":3.0,
+ "references":[{"edge":{"kind":"edge","id":9}}]}
+
+// execute_plan 旧式（主字段 size）
+{"model_id":"<id>","expected_revision":7,
+ "operations":[{"op":"round","label":"fillet","size":3.0,
+               "references":[{"edge":{"kind":"edge","id":9}}]}]}
+
+// execute_plan 别名（round 的 radius，与上一条等价；chamfer 对应别名是 distance）
+{"model_id":"<id>","expected_revision":7,
+ "operations":[{"op":"round","label":"fillet","radius":3.0,
+               "references":[{"edge":{"kind":"edge","id":9}}]}]}
+```
+
+无论入口如何，任务提交回显 `operations[].size`，终态 `result.operations[].size` 回显原生特征实际应用的值（compact 返回同样保留），可与调用输入直接对照。
+
+部署核对方法（仅用公开 MCP 接口，不读源码）：
+
+1. 用 `creo_capabilities`（或 `creo_check_update`）读当前部署的 `version`/`current_version`：低于 0.3.7 的部署没有计划别名，独立工具的 `radius`/`distance` 参数一直可用。
+2. 在客户端 `tools/list` 或 `creo_capabilities` 的 tools 分节核对 schema：`creo_round` 输入为 `radius`（无 `size`），`creo_chamfer` 输入为 `distance`，`creo_execute_plan` 的 round/chamfer 操作含 `size` 与别名字段。
+3. 实测一条最小请求：任一入口提交成功后，提交返回与终态均出现 `operations[].size` 且数值等于输入；给 round 同时传 `size` 与 `radius`（或给 round 传 `distance`）应被明确拒绝。
+
+外部 0.3.1/0.3.4/0.3.5 的参数名差异反馈来自别名引入前的部署；在核对真实请求与受测部署身份之前，不把这些旧反馈计为当前实现的回归。
+
 ## 待核对的补充契约
 
 [FEAT-008 首批任务](work-items/FEAT-008.md)跟进专用底板holes的客户端传输形状、对称拉伸depth口径与“查当前可编辑尺寸再修改”的闭环；[BUG-031](work-items/BUG-031.md)核对共面多候选/默认基准选择，结合字符串plane+offset产生构造特征的可见性说明。[履带反馈补录](validation/TRACK-FEEDBACK-2026-10-16.md)仅提供外部来源。上述是待核对工作，不是已新增字段或已变更接口；仍须按当前工具schema和真实返回使用，不把报告中的建议引用/参数当作已支持形式。

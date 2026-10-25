@@ -33,3 +33,56 @@ class WindowObservations(unittest.TestCase):
         self.assertIn("Dashboard", windows.connection_guidance(snapshot))
         snapshot["processes"][0]["matches"] = False
         self.assertIn("unconfirmed", windows.connection_guidance(snapshot))
+
+    def test_visible_hung_guidance_distinguishes_dialogs_and_bounds_ending(self):
+        snapshot = {
+            "processes": [
+                {
+                    "matches": True,
+                    "windows": {"state": "visible", "visible_hung_window_observed": True},
+                }
+            ]
+        }
+        text = windows.connection_guidance(snapshot)
+        self.assertIn("hung", text)
+        self.assertIn("Dashboard", text)
+        self.assertIn("different condition", text)
+        self.assertIn("does not prove the root cause", text)
+        self.assertIn("explicit operator recovery choice", text)
+        self.assertIn("never performed automatically", text)
+        self.assertIn("never a precondition for retry", text)
+        self.assertIn("does not authorize clearing any protection", text)
+
+    def test_hidden_hung_windows_are_reported_separately_from_visible_ones(self):
+        snapshot = {
+            "processes": [
+                {
+                    "matches": True,
+                    "windows": {
+                        "state": "hidden_only",
+                        "hung_window_observed": True,
+                        "visible_hung_window_observed": False,
+                    },
+                }
+            ]
+        }
+        text = windows.connection_guidance(snapshot)
+        self.assertIn("Hung hidden windows", text)
+        self.assertIn("separately", text)
+        self.assertIn("does not prove a dead process", text)
+        self.assertIn("explicit operator recovery choice", text)
+
+    def test_every_actionable_branch_keeps_prechecks_and_diagnostics(self):
+        states = [
+            {"state": "visible", "visible_hung_window_observed": True},
+            {"state": "hidden_only", "hung_window_observed": True},
+            {"state": "none_observed"},
+            {"state": "visible"},
+        ]
+        for windows_state in states:
+            with self.subTest(state=windows_state["state"]):
+                snapshot = {"processes": [{"matches": True, "windows": windows_state}]}
+                text = windows.connection_guidance(snapshot)
+                self.assertIn("unsaved models", text)
+                self.assertIn("unknown or pending jobs", text)
+                self.assertIn("diagnostics", text)

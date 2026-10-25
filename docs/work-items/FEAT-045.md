@@ -53,3 +53,9 @@ walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（
 - **单组件装配检查正例补录**；多组件分页（limit=1 + next_cursor）未实测，嵌套/抑制/缺件场景未覆盖。
 - 数值的毫米声明须结合 [BUG-080](BUG-080.md) 单位契约核对（该报告数值呈 x/25.4 特征，BUG-080 已随 0.5.2 交付修复并黑盒复验）。
 - 后续小修（0.5.3）：`capabilities.support_status.assembly_checks` 仍写 planned/not available(FEAT-045)，与已交付且外部实测可用的 `creo_inspect_session_assembly` 矛盾，须同步为只读及受限场景的准确状态。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。
+
+## 2026-10-25 0.5.3 阶段三小修：support_status 状态对齐
+
+分支 `codex/chores053-wording`。`server.py` 的 `support_status.assembly_checks` 由 planned/not available 修正为 `supported_limited`，`tool` 指向已发布的 `creo_inspect_session_assembly`：summary 明确只读范围（树序组件、逐约束快照、毫米规范化+原始 4×4 变换、未知单位为 null）、嵌套子装配/重复实例/抑制/缺件四类受限场景按节点报告但参考机未实机触发，以及无写路径（不加载/激活/保存/收养/受管 revision，装配收养与 reconcile 仍拒绝）。整体装配收养未宣称支持；变换单位口径只在描述本工具返回时陈述，毫米契约以 [BUG-080](BUG-080.md) 卡为限。
+
+核对结果：`capabilities.py` 的 `session_assembly` 家族登记与 `creo_inspect_session_assembly` 工具描述本已准确，未改动；compact 与分节返回经 capability_pages 携带同一 `support_status` 载荷，随本次修正自动一致；工具清单由注册驱动，无需变更。新增 `tests/unit/test_support_status.py` 3 项单测锁定状态、工具名与 capabilities 登记一致及不得回退为"not available"。本项为状态字段/文案修正，无行为改动，未重复实机与 WorkBuddy；dev_check 通过（本机 `build/development_check.json`，生成物不入库）。

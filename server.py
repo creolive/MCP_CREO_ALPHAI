@@ -268,7 +268,9 @@ async def creo_check_update(force: bool = False) -> dict[str, Any]:
     Uses a process-local 24-hour cache; force=true refreshes it, except during the
     15-minute failure/unknown cooldown. Concurrent checks share one request. A fresh
     check has a 5-second total network budget across all pages; other tools never wait
-    for it. Failed checks may retain previous successful links with stale=true.
+    for it. A failed check reports that latest version information was not obtained;
+    it never means the installation is up to date, never blocks modeling, and may
+    retain previous successful links only as cache marked with stale=true.
     Only accesses the public GitHub API; never downloads, installs or changes files.
     """
     return await updates.check(force)
@@ -466,11 +468,18 @@ def _support_status() -> dict[str, Any]:
             ),
         },
         "assembly_checks": {
-            "status": "planned",
+            "status": "supported_limited",
+            "tool": "creo_inspect_session_assembly",
             "tracking": "FEAT-045",
             "summary": (
-                "read-only external assembly inspection (component tree, transforms) is "
-                "not available yet; assemblies open for display only"
+                "read-only inspection of a resident session assembly: tree-order "
+                "components, per-constraint snapshots and unit-aware 4x4 transforms "
+                "(millimeter-normalized plus raw matrices; unknown units stay null); "
+                "nested sub-assemblies, repeated instances, suppressed and missing "
+                "components are reported per node and were not live-triggered on the "
+                "reference machine. No write path: no loading, activation, save, "
+                "adoption or managed revision; assembly adoption/reconcile stays "
+                "refused"
             ),
         },
         "external_file_managed_edit": {
