@@ -1,6 +1,6 @@
 # FEAT-045：外部装配只读检查
 
-日期：2026-10-20 登记。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-20 登记。类型：功能。优先级：P2。状态：验收中（只读检查已随 0.5.0 交付并通过本机/外部主线；四类受限场景与 WorkBuddy 按卡保留）。目标版本：0.5.0。
 
 来源：[v0.4.1 / Creo 10 反馈](../validation/FEEDBACK-0.4.1-CREO10-2026-10-20.md) P1-2 及 v0.4.0 报告 §3.4 建议 2。实施边界见[处理计划](../development/CREO10-0.4.1-FEEDBACK-PLAN.md)第 5 节。
 
@@ -59,3 +59,11 @@ walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（
 分支 `codex/chores053-wording`。`server.py` 的 `support_status.assembly_checks` 由 planned/not available 修正为 `supported_limited`，`tool` 指向已发布的 `creo_inspect_session_assembly`：summary 明确只读范围（树序组件、逐约束快照、毫米规范化+原始 4×4 变换、未知单位为 null）、嵌套子装配/重复实例/抑制/缺件四类受限场景按节点报告但参考机未实机触发，以及无写路径（不加载/激活/保存/收养/受管 revision，装配收养与 reconcile 仍拒绝）。整体装配收养未宣称支持；变换单位口径只在描述本工具返回时陈述，毫米契约以 [BUG-080](BUG-080.md) 卡为限。
 
 核对结果：`capabilities.py` 的 `session_assembly` 家族登记与 `creo_inspect_session_assembly` 工具描述本已准确，未改动；compact 与分节返回经 capability_pages 携带同一 `support_status` 载荷，随本次修正自动一致；工具清单由注册驱动，无需变更。新增 `tests/unit/test_support_status.py` 3 项单测锁定状态、工具名与 capabilities 登记一致及不得回退为"not available"。本项为状态字段/文案修正，无行为改动，未重复实机与 WorkBuddy；dev_check 通过（本机 `build/development_check.json`，生成物不入库）。
+
+## 2026-10-25 阶段三验收证据（收口）
+
+集成尖 `e2bba08`（含 `0729fee` 小修），受测指纹 `checked_source_sha256=da558d9e…b28b5f0`；环境 Windows 11 x64 / Creo 12.4.0.0 / 匹配 SDK / Python 3.12.14，见[阶段三收口](../validation/PHASE3-CLOSEOUT-2026-10-25.md)。
+
+- 实现摘要：`server.py` 的 `support_status.assembly_checks` 改为 `supported_limited` 并指向 `creo_inspect_session_assembly`，明确只读（树序组件、逐约束快照、毫米规范化 + 原始 4×4、未知单位为 null）与四类受限场景按节点报告；无写路径、装配收养与 reconcile 仍拒绝。`capabilities.py` 家族登记与工具描述已准确，未改。
+- 本次证据：离线全量 612 项单测通过（含 `test_support_status.py` 3 项）、`tools/test_unit.py` exit 0、`tools/dev_check.py` exit 0（success=true）、`bridge.py build` exit 0；本卡为状态字段修正，未重复实机装配检查。
+- 未测范围：嵌套子装配/重复实例/抑制/缺件四场景实机触发、WorkBuddy 黑盒仍开放；整体装配收养、矩阵放置与重建编辑仍属后续路线，不因本次文案对齐而宣称支持。
