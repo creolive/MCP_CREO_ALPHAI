@@ -30,6 +30,88 @@ MODEL_BACKUP = "model.json.pre-split-bak"
 JOB_BACKUP_SUFFIX = ".pre-split-bak"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
 
+# BUG-081: bounded refusal diagnostics for the migration owner guard. Fixed
+# vocabulary and sizes; a complete but live/unqueryable identity is never
+# released by time alone (BUG-074 rules stay untouched).
+OWNER_BLOCK_NEXT_STEPS = (
+    "Migration is refused: an owner is active or its stop is unproven. "
+    "Preserve all job and model files. If the owning process is still running, "
+    "let it finish or stop it under operator control, then rerun "
+    "creo_migrate_registry (inspect, then apply with a fresh idempotency_key). "
+    "A complete but live or unqueryable process identity is never released by "
+    "time alone; incomplete legacy identities only qualify after an "
+    "independently verified Windows restart with complete pre-boot job files. "
+    "Do not delete records, edit manifests, or replay a blocked apply by hand."
+)
+OWNER_BLOCK_REASONS = (
+    "active_job",
+    "runner_unproven",
+    "worker_unproven",
+    "protected_owner_unproven",
+)
+
+
+def _identity_view(identity: object) -> dict | None:
+    """Bounded projection of a recorded owner identity (BUG-081)."""
+    if not isinstance(identity, dict):
+        return None
+    view: dict = {}
+    if type(identity.get("pid")) is int:
+        view["pid"] = identity["pid"]
+    if type(identity.get("created")) is int:
+        view["created"] = identity["created"]
+    fingerprint = identity.get("session_fingerprint")
+    if isinstance(fingerprint, str) and fingerprint:
+        view["session_fingerprint"] = fingerprint[:64]
+    return view or None
+
+
+def _observed_view(observed: object) -> dict | None:
+    """Bounded projection of a live process observation (BUG-081)."""
+    if not isinstance(observed, dict):
+        return None
+    created = observed.get("created")
+    windows_error = observed.get("windows_error")
+    return {
+        "pid": observed.get("pid") if type(observed.get("pid")) is int else None,
+        "alive": observed.get("alive") if observed.get("alive") in (True, False) else None,
+        "created": created if type(created) is int else None,
+        "windows_error": windows_error if type(windows_error) is int else None,
+    }
+
+
+def _owner_view(result: dict | None) -> dict | None:
+    """Bounded recorded/observed view of one owner check (BUG-081)."""
+    if not isinstance(result, dict):
+        return None
+    reason = result.get("reason")
+    return {
+        "stopped": result.get("stopped") is True,
+        "reason": reason[:120] if isinstance(reason, str) else "",
+        "recorded": _identity_view(result.get("recorded")),
+        "observed": _observed_view(result.get("observed")),
+    }
+
+
+def _owner_block(
+    job_id: str,
+    model_id: str,
+    reason_code: str,
+    job_status: object,
+    runner: dict | None,
+    worker: dict | None,
+) -> dict:
+    status = str(job_status)[:24] if job_status is not None else None
+    return {
+        "job_id": job_id,
+        "model_id": model_id,
+        "reason_code": reason_code,
+        "job_status": status,
+        "runner": _owner_view(runner),
+        "worker": _owner_view(worker),
+        "next_steps": OWNER_BLOCK_NEXT_STEPS,
+    }
+
 
 def _read_object(file: Path) -> dict:
     """Maintenance may read oversized legacy files, but never follow links."""
@@ -402,57 +484,92 @@ def _pending(directories: list[Path]) -> list[dict]:
     return pending
 
 
-def _check_owners(pending: list[dict]) -> None:
-    """The OS lock excludes workers; reservations also exclude runners about to start."""
+def _observe_job_owner(model: dict, job_id: str) -> dict | None:
+    """BUG-081: bounded observation of why one job would block migration, else None.
+
+    The stop semantics are exactly the pre-BUG-081 guard: an active status, or
+    any recorded runner/worker identity that cannot be proven stopped, blocks;
+    terminal states never substitute for stop proof, and no time-based release
+    exists for complete identities. Only jobs reserved by pending_job or
+    recovery_pending additionally consult the reboot-evidence chain.
+    """
     from creo_mechdog import reconciliation
 
+    model_id = model["model_id"]
+    directory = bridge.job_path(job_id)
+    for name in ("details", "details/details"):
+        if (directory / name).is_symlink() or (directory / name).is_junction():
+            raise ValueError("Job detail directories cannot be links")
+    manifest_file = directory / "job.json"
+    job = _read_object(manifest_file) if manifest_file.is_file() else {}
+    if job.get("model_id", model_id) != model_id:
+        raise ValueError("Migration job belongs to a different model")
+    request_file = directory / "request.json"
+    if request_file.is_file():
+        request = _read_object(request_file)
+        if request.get("model", {}).get("model_id") != model_id:
+            raise ValueError("Migration request belongs to a different model")
+    # A reserved/queued runner can start as soon as this lock is released;
+    # migration is not permission to rewrite its captured request.
+    active = job.get("status") in ("queued", "waiting_for_channel", "running")
+    runner = (
+        reconciliation._stopped(job.get("runner_identity"))
+        if job.get("runner_identity") is not None
+        else None
+    )
+    worker = None
+    owner_file = directory / "native_owner.json"
+    if owner_file.is_file():
+        worker = reconciliation._stopped(_read_object(owner_file))
+    reason_code = None
+    if active:
+        reason_code = "active_job"
+    elif runner is not None and not runner["stopped"]:
+        reason_code = "runner_unproven"
+    elif worker is not None and not worker["stopped"]:
+        reason_code = "worker_unproven"
+    elif job_id in ({model.get("pending_job"), model.get("recovery_pending")} - {None}):
+        owners = reconciliation._owners(job_id, read_metadata=_read_object)
+        if not owners["stopped"]:
+            runner, worker = owners["runner"], owners["worker"]
+            reason_code = "protected_owner_unproven"
+    if reason_code is None:
+        return None
+    return _owner_block(job_id, model_id, reason_code, job.get("status"), runner, worker)
+
+
+def _job_owner_block(model: dict, job_id: str, *, strict: bool) -> dict | None:
+    """Apply (strict) refuses bad evidence as before; inspect only observes."""
+    try:
+        return _observe_job_owner(model, job_id)
+    except ValueError:
+        if strict:
+            raise
+        return None
+
+
+def _check_owners(pending: list[dict]) -> None:
+    """The OS lock excludes workers; reservations also exclude runners about to start."""
     for item in pending:
         if item.get("state") == "corrupt":
             continue
         model_id = item["model_id"]
         model = _read_object(_model_directory(model_id) / "model.json")
-        protected = {model.get("pending_job"), model.get("recovery_pending")} - {None}
         for job_id in item["job_chain"]:
-            directory = bridge.job_path(job_id)
-            for name in ("details", "details/details"):
-                if (directory / name).is_symlink() or (directory / name).is_junction():
-                    raise ValueError("Job detail directories cannot be links")
-            manifest_file = directory / "job.json"
-            job = _read_object(manifest_file) if manifest_file.is_file() else {}
-            if job.get("model_id", model_id) != model_id:
-                raise ValueError("Migration job belongs to a different model")
-            request_file = directory / "request.json"
-            if request_file.is_file():
-                request = _read_object(request_file)
-                if request.get("model", {}).get("model_id") != model_id:
-                    raise ValueError("Migration request belongs to a different model")
-            # A reserved/queued runner can start as soon as this lock is released;
-            # migration is not permission to rewrite its captured request.
-            active = job.get("status") in ("queued", "waiting_for_channel", "running")
-            identities = [job.get("runner_identity")]
-            owner_file = directory / "native_owner.json"
-            if owner_file.is_file():
-                identities.append(_read_object(owner_file))
-            owner_uncertain = any(
-                identity is not None and not reconciliation._stopped(identity)["stopped"]
-                for identity in identities
+            block = _job_owner_block(model, job_id, strict=True)
+            if block is None:
+                continue
+            message = (
+                "Registry migration requires proof that protected owners stopped"
+                if block["reason_code"] == "protected_owner_unproven"
+                else "Registry migration cannot rewrite an active or unproven job"
             )
-            if active or owner_uncertain:
-                raise bridge.ToolkitBusy(
-                    "Registry migration cannot rewrite an active or unproven job",
-                    holder={"job_id": job_id, "model_id": model_id, "operation": "registry_owner"},
-                )
-            if job_id in protected:
-                evidence = reconciliation._owners(job_id, read_metadata=_read_object)
-                if not evidence["stopped"]:
-                    raise bridge.ToolkitBusy(
-                        "Registry migration requires proof that protected owners stopped",
-                        holder={
-                            "job_id": job_id,
-                            "model_id": model_id,
-                            "operation": "registry_owner",
-                        },
-                    )
+            busy = bridge.ToolkitBusy(
+                message,
+                holder={"job_id": job_id, "model_id": model_id, "operation": "registry_owner"},
+            )
+            busy.payload["owner_block"] = block
+            raise busy
 
 
 def migrate(
@@ -485,10 +602,27 @@ def migrate(
             return _apply(targets, idempotency_key, limit, cursor)
     directories = _directories(targets)
     pending = _pending(directories)
+    # Inspect only reports observations; apply re-runs the same guard under
+    # the channel lock, so an inspect pass never authorizes a write (BUG-081).
+    blocked = 0
+    for item in pending:
+        if item.get("state") == "corrupt":
+            continue
+        try:
+            model = _read_object(_model_directory(item["model_id"]) / "model.json")
+        except (OSError, ValueError):
+            continue
+        for job_id in item["job_chain"]:
+            block = _job_owner_block(model, job_id, strict=False)
+            if block is not None:
+                item["owner_block"] = block
+                blocked += 1
+                break
     return _page(
         {
             "mode": "inspect",
             "entries_needing_migration": len(pending),
+            "blocked_entries": blocked,
             "apply_usage": "rerun with mode=apply, the same targets (or none) and a fresh idempotency_key",
             "budget_bytes": model_registry.BUDGET_BYTES,
         },
