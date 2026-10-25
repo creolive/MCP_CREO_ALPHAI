@@ -60,6 +60,7 @@ from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.schema import validate_operations
 from tools.dev_check import git_state, source_hash
 from tools.mcp_readiness import wait_for_startup
+from tools.test_assembly_matrix import compact_inspection
 
 ROOT = SOURCE_PATHS.resource_root
 ROT_Z90 = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]
@@ -160,17 +161,47 @@ def original_assembly_operations(source_a_id: str, source_b_id: str) -> list[dic
     ]
 
 
-def rebuild_operations(frozen: dict, occurrences_by_name: dict) -> list[dict]:
+def index_occurrences(components: list) -> dict:
+    """Index inspected session-assembly components by ROOT occurrence path.
+
+    Real public contract (live MCP evidence, 2026-10-25): the SAME root
+    occurrence carries DIFFERENT display names across APIs — e.g. copy_name
+    '▩C_A3C874E18A0445A10001' from ``creo_list_components`` vs name
+    'C_A3C874E18A0445A1_0' from ``creo_inspect_session_assembly`` for one
+    component with feature_id/component_id 40 and occurrence_path [40].
+    Display names are recorded in the report as evidence but are NEVER used
+    as join identity: the stable identity is the root-level
+    ``occurrence_path`` (== [component_id] at depth 0). This batch has no
+    nesting, so any non-root depth is rejected rather than guessed.
+    """
+    indexed = {}
+    for item in components:
+        path = item.get("occurrence_path")
+        assert isinstance(path, list) and path, item
+        assert item.get("depth") == 0, item
+        key = tuple(path)
+        assert key not in indexed, item
+        indexed[key] = item
+    return indexed
+
+
+def rebuild_operations(frozen: dict, occurrences) -> list[dict]:
     """Rebuild operations from inspected normalized millimeter transforms.
 
-    ``frozen`` maps label -> snapshot with the verified ``copy_name``;
-    ``occurrences_by_name`` maps occurrence name -> inspected session item
-    whose ``transform_to_parent`` must be flagged ``transform_mm_known``.
+    ``frozen`` maps label -> snapshot whose queried ``feature_id`` identifies
+    the root occurrence (occurrence_path == [feature_id]); ``occurrences`` is
+    the path-indexed mapping from ``index_occurrences`` (or a raw inspected
+    component list, indexed here). ``copy_name`` stays recorded in the
+    snapshot for evidence but is not an identity key.
     """
+    if not isinstance(occurrences, dict):
+        occurrences = index_occurrences(occurrences)
     operations = []
     for label, snap in frozen.items():
-        occurrence = occurrences_by_name.get(snap["copy_name"])
-        assert occurrence is not None, f"occurrence {snap['copy_name']} missing"
+        path = (snap["feature_id"],)
+        occurrence = occurrences.get(path)
+        assert occurrence is not None, f"root occurrence {path} for {label} missing"
+        assert occurrence.get("component_id") == snap["feature_id"], occurrence
         assert occurrence["transform_mm_known"], occurrence
         transform = occurrence["transform_to_parent"]
         operations.append(
@@ -209,12 +240,17 @@ def bind_adopted_sources(plan: dict, adopted_ids: dict, external: dict) -> dict:
     return plan
 
 
-def request_plan(
-    tag: str, adopted_ids: dict[str, str], frozen: dict, occurrences_by_name: dict
-) -> dict:
+def request_plan(tag: str, adopted_ids: dict[str, str], frozen: dict, occurrences: list) -> dict:
     """Every dynamic request this driver submits, built in one place so an
-    offline test can validate all branches (including the final replace)."""
-    rebuild = rebuild_operations(frozen, occurrences_by_name)
+    offline test can validate all branches (including the final replace).
+
+    ``occurrences`` carries the REAL ``creo_inspect_session_assembly``
+    component shape (root-level occurrence_path/component_id/depth,
+    transform_mm_known/transform_to_parent); display names in the prototype
+    deliberately differ from the frozen copy_names so the offline suite locks
+    the path-based join instead of a name-based one.
+    """
+    rebuild = rebuild_operations(frozen, occurrences)
     return {
         "source_a": {
             "model_name": source_model_name(tag, "a"),
@@ -344,8 +380,14 @@ async def run() -> None:
             def identity_of(result):
                 return {"model_id": result["model_id"], "expected_revision": result["revision"]}
 
-            def volume_of(model_id):
-                return call("creo_inspect_model", {"model_id": model_id})
+            async def volume_of(model_id):
+                # Real compact contract: volume/units/query codes under
+                # payload.inspection, revision top-level (never default a
+                # missing volume to 0).
+                inspect = await call(
+                    "creo_inspect_model", {"model_id": model_id, "detail": "compact"}
+                )
+                return compact_inspection(inspect)
 
             await wait_for_startup(client, report, destination)
             report["environment"] = await call("creo_check_environment", {})
@@ -359,14 +401,23 @@ async def run() -> None:
                     {"a": "a" * 32, "b": "b" * 32},
                     {
                         "plate_a": {
-                            "copy_name": "c_probe_0",
+                            "feature_id": 40,
+                            "copy_name": "▩C_A3C874E18A0445A10001",
                             "source_model_id": "a" * 32,
                             "source_revision": 1,
                             "transform": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
                         }
                     },
-                    {
-                        "c_probe_0": {
+                    [
+                        # Real creo_inspect_session_assembly root component
+                        # shape: the display name deliberately differs from
+                        # the list_components copy_name above; only
+                        # occurrence_path [40] == [feature_id] joins them.
+                        {
+                            "component_id": 40,
+                            "depth": 0,
+                            "name": "C_A3C874E18A0445A1_0",
+                            "occurrence_path": [40],
                             "transform_mm_known": True,
                             "transform_to_parent": [
                                 [1, 0, 0, 0],
@@ -375,7 +426,7 @@ async def run() -> None:
                                 [0, 0, 0, 1],
                             ],
                         }
-                    },
+                    ],
                 )
             )
             note("full dynamic request plan validated offline through real validators")
@@ -494,14 +545,19 @@ async def run() -> None:
             assert origin_volume, "assembly volume must be measurable"
             note("frozen verified snapshot recorded (poses, copy names, aliases, volume)")
 
-            # 7. Rebuild from the inspected normalized millimeter transforms.
+            # 7. Rebuild from the inspected normalized millimeter transforms,
+            # joined to the frozen snapshot by ROOT occurrence path (never by
+            # display name: the two APIs render the same occurrence under
+            # different names — real evidence shows '▩C_...001' vs 'C_..._0'
+            # for feature_id/component_id 40, occurrence_path [40]).
             inspected = await call(
                 "creo_inspect_session_assembly", {"name": plan["original_name"], "limit": 50}
             )
             assert inspected["total"] == 3, inspected
-            by_name = {item["name"]: item for item in inspected["components"]}
-            assert len(by_name) == 3, "occurrence names must resolve uniquely"
-            operations = rebuild_operations(frozen, by_name)
+            assert inspected["next_cursor"] is None, inspected
+            occurrences = index_occurrences(inspected["components"])
+            assert len(occurrences) == 3, inspected
+            operations = rebuild_operations(frozen, occurrences)
             validate_operations(operations)  # real inspected data, not the prototype
             rebuilt = await job("creo_new_assembly", {"model_name": plan["rebuilt_name"]})
             rebuilt = await job(

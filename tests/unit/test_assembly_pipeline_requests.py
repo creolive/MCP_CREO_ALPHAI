@@ -7,6 +7,14 @@ inspected transforms, the final remove+re-assemble replace, the tab edit and
 the adoption idempotency key — through the real
 bridge.normalize_model_name / creo_mechdog.schema.validate_operations, so a
 naming or schema regression fails here instead of inside a live session.
+
+Occurrence identity: the rebuild joins the frozen list_components snapshot to
+creo_inspect_session_assembly items by ROOT occurrence path
+(occurrence_path == [feature_id] at depth 0), never by display name. Real
+2026-10-25 evidence shows the same occurrence named '▩C_A3C874E18A0445A10001'
+(list_components copy_name) and 'C_A3C874E18A0445A1_0' (session assembly
+name), and a repeated source occurrence shares one native copy name across
+different occurrence paths — name-based joins collapse or miss those.
 """
 
 import unittest
@@ -16,6 +24,7 @@ import bridge
 from tools.test_assembly_pipeline import (
     bind_adopted_sources,
     external_source_name,
+    index_occurrences,
     original_assembly_name,
     rebuild_operations,
     rebuilt_assembly_name,
@@ -29,6 +38,25 @@ from tools.test_assembly_pipeline import (
 IDENTITY4 = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 POSE_COMBINED = [[0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 0, 0], [50, 40, 10, 1]]
 
+# The real cross-API display-name divergence for ONE root occurrence
+# (feature_id/component_id 40, occurrence_path [40], 2026-10-25 evidence):
+LIST_COPY_NAME = "▩C_A3C874E18A0445A10001"
+SESSION_NAME = "C_A3C874E18A0445A1_0"
+# Repeated occurrences of one source share a single native copy name:
+SHARED_COPY_NAME = "▩C_JOB_B_PLATE_00001"
+
+
+def session_item(feature_id: int, name: str, transform, depth: int = 0) -> dict:
+    """Minimal real creo_inspect_session_assembly root component DTO."""
+    return {
+        "component_id": feature_id,
+        "depth": depth,
+        "name": name,
+        "occurrence_path": [feature_id],
+        "transform_mm_known": True,
+        "transform_to_parent": transform,
+    }
+
 
 def sample_plan(tag: str) -> dict:
     return request_plan(
@@ -36,29 +64,32 @@ def sample_plan(tag: str) -> dict:
         {"a": "a" * 32, "b": "b" * 32},
         {
             "plate_a": {
-                "copy_name": "c_job_0",
+                "feature_id": 40,
+                "copy_name": LIST_COPY_NAME,
                 "source_model_id": "a" * 32,
                 "source_revision": 1,
                 "transform": IDENTITY4,
             },
             "plate_b": {
-                "copy_name": "c_job_1",
+                "feature_id": 41,
+                "copy_name": SHARED_COPY_NAME,
                 "source_model_id": "b" * 32,
                 "source_revision": 2,
                 "transform": IDENTITY4,
             },
             "plate_b_second": {
-                "copy_name": "c_job_2",
+                "feature_id": 42,
+                "copy_name": SHARED_COPY_NAME,  # same native copy, second occurrence
                 "source_model_id": "b" * 32,
                 "source_revision": 2,
                 "transform": POSE_COMBINED,
             },
         },
-        {
-            "c_job_0": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
-            "c_job_1": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
-            "c_job_2": {"transform_mm_known": True, "transform_to_parent": POSE_COMBINED},
-        },
+        [
+            session_item(40, SESSION_NAME, IDENTITY4),
+            session_item(41, "C_JOB_B_PLATE_1_0", IDENTITY4),
+            session_item(42, "C_JOB_B_PLATE_1_1", POSE_COMBINED),
+        ],
     )
 
 
@@ -128,13 +159,14 @@ class PipelineRequestBuilders(unittest.TestCase):
                 {"a": "a" * 32, "b": "b" * 32},
                 {
                     "plate_a": {
-                        "copy_name": "c_job_0",
+                        "feature_id": 40,
+                        "copy_name": LIST_COPY_NAME,
                         "source_model_id": "a" * 32,
                         "source_revision": 1,
                         "transform": IDENTITY4,
                     }
                 },
-                {},  # occurrence never inspected
+                [],  # occurrence never inspected
             )
 
     def test_replace_operations_builder_directly(self):
@@ -212,39 +244,148 @@ class AdoptedSourceBinding(unittest.TestCase):
         self.assert_no_placeholders(plan["original_operations"])
 
         # Later phases build from REAL list_components / inspect data (frozen
-        # aliases carry the adopted ids), not from the prototype plan.
+        # aliases carry the adopted ids and queried feature_ids), not from the
+        # prototype plan.
         real_a = adopted_ids[external["a"]["path"]]
         real_b = adopted_ids[external["b"]["path"]]
         frozen = {
             "plate_a": {
-                "copy_name": "c_job_0",
+                "feature_id": 40,
+                "copy_name": LIST_COPY_NAME,
                 "source_model_id": real_a,
                 "source_revision": 1,
                 "transform": IDENTITY4,
             },
             "plate_b": {
-                "copy_name": "c_job_1",
+                "feature_id": 41,
+                "copy_name": SHARED_COPY_NAME,
                 "source_model_id": real_b,
                 "source_revision": 1,
                 "transform": IDENTITY4,
             },
             "plate_b_second": {
-                "copy_name": "c_job_2",
+                "feature_id": 42,
+                "copy_name": SHARED_COPY_NAME,
                 "source_model_id": real_b,
                 "source_revision": 1,
                 "transform": POSE_COMBINED,
             },
         }
-        by_name = {
-            "c_job_0": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
-            "c_job_1": {"transform_mm_known": True, "transform_to_parent": IDENTITY4},
-            "c_job_2": {"transform_mm_known": True, "transform_to_parent": POSE_COMBINED},
-        }
-        rebuild = rebuild_operations(frozen, by_name)
+        occurrences = [
+            session_item(40, SESSION_NAME, IDENTITY4),
+            session_item(41, "C_JOB_B_PLATE_1_0", IDENTITY4),
+            session_item(42, "C_JOB_B_PLATE_1_1", POSE_COMBINED),
+        ]
+        rebuild = rebuild_operations(frozen, occurrences)
         validate_plan({**plan, "rebuild_operations": rebuild})
         self.assert_no_placeholders(rebuild)
         replace = replace_operations(next(op for op in rebuild if op["label"] == "plate_a"))
         self.assert_no_placeholders(replace)
+
+
+class OccurrencePathBinding(unittest.TestCase):
+    """Regression for the driver response contract found in the 2026-10-25
+    guarded matrix run: the same root occurrence is named differently by
+    creo_list_components ('▩C_A3C874E18A0445A10001') and
+    creo_inspect_session_assembly ('C_A3C874E18A0445A1_0'), and a repeated
+    source occurrence shares one native copy name across distinct occurrence
+    paths. Display names must stay evidence-only; identity is the root-level
+    occurrence_path / queried feature_id."""
+
+    FROZEN_SINGLE = {
+        "plate_a": {
+            "feature_id": 40,
+            "copy_name": LIST_COPY_NAME,
+            "source_model_id": "a" * 32,
+            "source_revision": 1,
+            "transform": IDENTITY4,
+        }
+    }
+
+    def test_display_names_differ_across_apis_but_root_path_joins(self):
+        operations = rebuild_operations(
+            self.FROZEN_SINGLE,
+            [session_item(40, SESSION_NAME, IDENTITY4)],
+        )
+        (op,) = operations
+        self.assertEqual(op["source_model_id"], "a" * 32)
+        self.assertEqual(op["translation"], [0, 0, 0])
+        self.assertEqual(op["rotation_matrix"], [[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+
+    def test_repeated_occurrence_same_copy_name_binds_each_path(self):
+        frozen = {
+            "plate_b": {
+                "feature_id": 41,
+                "copy_name": SHARED_COPY_NAME,
+                "source_model_id": "b" * 32,
+                "source_revision": 2,
+                "transform": IDENTITY4,
+            },
+            "plate_b_second": {
+                "feature_id": 42,
+                "copy_name": SHARED_COPY_NAME,
+                "source_model_id": "b" * 32,
+                "source_revision": 2,
+                "transform": POSE_COMBINED,
+            },
+        }
+        operations = rebuild_operations(
+            frozen,
+            [
+                session_item(41, "C_JOB_B_PLATE_1_0", IDENTITY4),
+                session_item(42, "C_JOB_B_PLATE_1_1", POSE_COMBINED),
+            ],
+        )
+        by_label = {op["label"]: op for op in operations}
+        self.assertEqual(by_label["plate_b"]["translation"], [0, 0, 0])
+        self.assertEqual(by_label["plate_b_second"]["translation"], [50, 40, 10])
+        self.assertEqual(
+            by_label["plate_b_second"]["rotation_matrix"], [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+        )
+
+    def test_identical_session_names_do_not_collapse_occurrences(self):
+        # Even within ONE API response, two occurrences may share a display
+        # name; only occurrence_path keeps them apart.
+        operations = rebuild_operations(
+            self.FROZEN_SINGLE,
+            [session_item(40, "dup_name", IDENTITY4)],
+        )
+        self.assertEqual(len(operations), 1)
+        other = session_item(41, "dup_name", POSE_COMBINED)
+        indexed = index_occurrences([session_item(40, "dup_name", IDENTITY4), other])
+        self.assertEqual(indexed[(41,)]["name"], "dup_name")
+
+    def test_nested_depth_is_rejected_not_guessed(self):
+        with self.assertRaises(AssertionError):
+            index_occurrences([session_item(40, SESSION_NAME, IDENTITY4, depth=1)])
+
+    def test_component_id_must_match_frozen_feature_id(self):
+        item = session_item(40, SESSION_NAME, IDENTITY4)
+        item["component_id"] = 41
+        with self.assertRaises(AssertionError):
+            rebuild_operations(self.FROZEN_SINGLE, [item])
+
+    def test_duplicate_occurrence_path_is_rejected(self):
+        with self.assertRaises(AssertionError):
+            index_occurrences(
+                [session_item(40, SESSION_NAME, IDENTITY4), session_item(40, "other", IDENTITY4)]
+            )
+
+    def test_missing_or_empty_occurrence_path_is_rejected(self):
+        item = session_item(40, SESSION_NAME, IDENTITY4)
+        item["occurrence_path"] = []
+        with self.assertRaises(AssertionError):
+            index_occurrences([item])
+        item2 = session_item(40, SESSION_NAME, IDENTITY4)
+        del item2["occurrence_path"]
+        with self.assertRaises(AssertionError):
+            index_occurrences([item2])
+
+    def test_unknown_mm_transform_is_rejected(self):
+        item = session_item(40, SESSION_NAME, IDENTITY4)
+        item["transform_mm_known"] = False
+        with self.assertRaises(AssertionError):
+            rebuild_operations(self.FROZEN_SINGLE, [item])
 
 
 if __name__ == "__main__":

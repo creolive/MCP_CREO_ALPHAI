@@ -45,6 +45,48 @@ POSES = [
 ]
 
 
+def compact_inspection(payload: dict) -> dict:
+    """Extract the saved/reload inspection block from a real compact
+    ``creo_inspect_model`` payload.
+
+    Real public contract (live MCP evidence, 2026-10-25): volume, units and
+    their query codes live under ``payload["inspection"]`` — never at the
+    top level; ``revision`` stays top-level. BUG-072 semantics are preserved:
+    non-millimeter or unknown units yield ``volume_mm3=None`` with a non-zero
+    query code, so a missing/unverified volume is a hard failure here, never
+    defaulted to 0 or a pass.
+    """
+    inspection = payload.get("inspection")
+    assert isinstance(inspection, dict) and inspection, payload
+    assert inspection.get("inspection_available") is True, inspection
+    assert inspection.get("units") == "mm", inspection
+    assert inspection.get("units_query_code") == 0, inspection
+    assert inspection.get("volume_query_code") == 0, inspection
+    volume = inspection.get("volume_mm3")
+    assert isinstance(volume, (int, float)) and not isinstance(volume, bool) and volume > 0, (
+        inspection
+    )
+    assert "revision" in payload, payload
+    return {
+        "revision": payload["revision"],
+        "volume_mm3": volume,
+        "units": inspection["units"],
+        "volume_query_code": inspection["volume_query_code"],
+        "inspection_source": inspection.get("inspection_source"),
+    }
+
+
+def full_section_records(payload: dict, section: str) -> list:
+    """Full-detail section records of ``creo_inspect_model`` live under
+    ``payload["data"][section]`` (e.g. ``data.bodies[].bbox``); there is no
+    top-level ``payload[section]`` in the real contract."""
+    data = payload.get("data")
+    assert isinstance(data, dict), payload
+    records = data.get(section)
+    assert isinstance(records, list) and records, payload
+    return records
+
+
 def verify_rolled_back_failure(
     failed: dict, assembly_revision: int, before: dict, after: dict
 ) -> None:
@@ -320,14 +362,15 @@ async def run() -> None:
             source_inspect = await call(
                 "creo_inspect_model", {"model_id": source["model_id"], "detail": "compact"}
             )
-            source_volume = source_inspect["volume_mm3"]
-            assert source_volume, source_inspect
+            source_info = compact_inspection(source_inspect)
+            source_volume = source_info["volume_mm3"]
             expected_volume = len(POSES) * source_volume
             assembly_inspect = await call(
                 "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
             )
-            assert abs(assembly_inspect["volume_mm3"] - expected_volume) <= 0.01, (
-                assembly_inspect["volume_mm3"],
+            assembly_info = compact_inspection(assembly_inspect)
+            assert abs(assembly_info["volume_mm3"] - expected_volume) <= 0.01, (
+                assembly_info["volume_mm3"],
                 expected_volume,
             )
             assembly = await job(
@@ -341,7 +384,8 @@ async def run() -> None:
             verified = await call(
                 "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
             )
-            assert abs(verified["volume_mm3"] - expected_volume) <= 0.01, verified
+            verified_info = compact_inspection(verified)
+            assert abs(verified_info["volume_mm3"] - expected_volume) <= 0.01, verified_info
 
             # Expected bounding-box derivation anchored on the NATIVE source
             # bbox: the 8 corners measured by the native saved/reload source
@@ -361,7 +405,9 @@ async def run() -> None:
                 "creo_inspect_model",
                 {"model_id": source["model_id"], "detail": "full", "section": "bodies"},
             )
-            body = next(b for b in source_bodies["bodies"] if b.get("has_geometry"))
+            body = next(
+                b for b in full_section_records(source_bodies, "bodies") if b.get("has_geometry")
+            )
             lo, hi = body["bbox"]
             corners = [
                 [x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])
