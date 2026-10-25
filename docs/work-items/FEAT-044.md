@@ -72,3 +72,7 @@
 ### 2026-10-21 loaded_session_models 摘要
 
 按[0.4.3 反馈完善计划](../development/0.4.3-feedback-improvement-plan-2026-10-21.md)实施（分支 `codex/dev-043-ledger-simplification`，[实施记录](../validation/FEEDBACK-0.4.3-IMPLEMENTATION-2026-10-21.md)）：`creo_open_file` 成功结果新增 `open_file.loaded_session_models`（会话模型数、本次装配打开的组件实例数及统计口径、有界 20 条页、has_more 与 `creo_list_session_models` 详情入口），显示成功后一次全量枚举生成；`SESSION_NAME_CONFLICT` 消息补充装配依赖加载来源提示。既有测试通过；剩余实机装配打开观察与原环境验收。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 外部第八轮：`creo_open_file` 同名冲突正确拒绝（`SESSION_NAME_CONFLICT`，文件未打开）；成功路径返回 display_name/displayed/loaded、opened_session_model、源文件 identity_before/identity_after 与 source_file_changed_during_open；`model_id: null`、不创建受管模型——符合只读检索承诺。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。

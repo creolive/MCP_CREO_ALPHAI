@@ -45,3 +45,11 @@
 ## 2026-10-23 BUG-080 审查 Important 修复（walk 状态共享化）
 
 walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（`AssemblyWalkState`：`record_missing_component` 自盖缺件标志、`apply_query_outcome` 真实查询码驱动置 incomplete、`visit_subtree` 深度 32 先判限再执行访问且失败码写实际节点 `node_index`、`init_root_chain` 真实 root_scale 初始化根链并置 incomplete、`complete` 统一规则，budget=4096/深度 32 契约不变）；`generic.cpp` 生产回调改经同一实现。新增离线夹具 `tests/native/test_assembly_walk.cpp`（12 case，SDK 查询替换、注入 visitor 计数非真实 ProSolidFeatVisit）由 `tools\test_assembly_units.py` 同批构建运行（已修正 native 包含路径引号），覆盖缺件标志由生产操作产出/真实零非零查询码逐个驱动/深度 31–33 真实调用次数与父节点索引诊断/budget 边界/根失败保同级/根单位经真实换算由共享初始化影响链与 complete。该夹具 12 case 与生产复编已实跑通过（947f40e exit 0；SDK 查询替换、注入 visitor 非真实 ProSolidFeatVisit，不声称实机/完整 callback 几何覆盖）；实机触发与 WorkBuddy 仍按卡保留未验收。
+
+## 2026-10-23 外部 Creo 9 证据补录（第八轮，2026-10-25 归档登记）
+
+- 环境：外部 Windows 10 / Creo 9.0.0.0（release 41）/ 服务 0.5.0；单组件装配（报告者称"本版质量标杆"）。
+- 通过子项：组件清单含 occurrence 路径、depth、类型、origin/has_saved_origin/modified/is_current/session_model_id、resolved/suppressed/packaged 与逐项 query_codes；约束快照（mate+align+align 全部解析 code 0，含双侧引用与 comppath、offset、orientation）；`transform_to_parent`/`transform_to_root` 完整 4×4 与行向量约定说明；冻结快照（10 分钟）+ 游标 + readonly_note（只读五不）；重复实例分别记录声明。
+- **单组件装配检查正例补录**；多组件分页（limit=1 + next_cursor）未实测，嵌套/抑制/缺件场景未覆盖。
+- 数值的毫米声明须结合 [BUG-080](BUG-080.md) 单位契约核对（该报告数值呈 x/25.4 特征，BUG-080 已随 0.5.2 交付修复并黑盒复验）。
+- 后续小修（0.5.3）：`capabilities.support_status.assembly_checks` 仍写 planned/not available(FEAT-045)，与已交付且外部实测可用的 `creo_inspect_session_assembly` 矛盾，须同步为只读及受限场景的准确状态。归档见 [feedback-0.5.0-0.5.1-2026-10-23](../validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)。
