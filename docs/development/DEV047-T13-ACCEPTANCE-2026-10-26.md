@@ -44,3 +44,10 @@ T05 毫米几何矩阵此前已在该通道通过（18/18，见 T05 记录 Live0
 - 装配矩阵/单位驱动（test_assembly_matrix/units）在新结果契约下的重跑、既有编辑/装配管线专项复跑尚未执行。
 - 外部 Creo 9/10、WorkBuddy 黑盒、安装解包冒烟与 0.7.0 版本/发布（含 main 合入、标签、附件与 Release）未执行——发布须按派发表在全部约定验收完成且用户指派最终交付后实施。
 - 实现子代理（写程序高手）自 T11 起持续 spawn 即拒（child_refusal ×5），用户侧待修复；T11 收尾与 T12 由集成负责人完成并全程记录。
+
+## T13 补充：三现场只读落定与真实世代盘点（2026-10-26）
+
+只读探针 `build/t13_settle.py`（reconcile inspect 不 apply、盘点为查询；config 字节已恢复；证据 `build/t13-settle.json`）：
+
+- **BUG-078 三个旧现场落定**：`de6f0bb5…`/`bebe7e2b…`/`57294ff8…` 实测均 status=failed 且仅 `restore_baseline` 可用（需显式 apply+证据+幂等键），accept_saved/accept_live 均不可用——与 BUG-078 2026-10-22 记录一致，FEAT-006 2026-10-24"已 accept 收口"说法不成立。三现场维持**待操作者选择**，本轮未 apply、未清保护、未改登记；口径冲突以本实测为准落定。
+- **T11 真实世代只读盘点**：`creo_callback_status.generation_inventory` 取得本机 build/ 实际三态（records_status/current_generation_key/注册与回退保留等，详见证据文件）；未删除任何真实目录。
