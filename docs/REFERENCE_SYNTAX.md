@@ -31,6 +31,14 @@
 
 前三个 ID 只是格式示例，调用前须从**目标模型本次巡检**选取。显式 `plane`/`datum_plane` ID 与同一引用对象的 `axis`、`normal`、`offset` 互斥，连默认 `axis:"z"` 或 `offset:0` 同现也拒绝；不带 ID 时保留几何筛选模式。`creo_create_sketch.plane` 的字典把上述一个裸引用放在 `reference` 内，可另给 `origin`、`u_axis` 帧字段。支撑面缺失、非平面或不唯一时明确失败，不能回退默认 XY。结果 `operations[]` 的 `surface_id`、`origin`、`normal`、`u_axis`、`v_axis` 来自原生解析；`u_axis` 必须非零且在真实支撑面内有非零投影。无新 Toolkit 连接的离线验证不能替代这些几何数值的实机核验。
 
+## 任意平面 coordinates 标注（FEAT-010 / T04）
+
+`dimensioning="coordinates"` 与 auto 路由的坐标标注不再限于主平面字符串：字典平面（任意有效支撑面）同样创建完整坐标尺寸，编辑路径（`creo_update_sketch_geometry`）不再因非主平面法向拒绝或强制退回 autodim。坐标尺寸在**原生 section 局部坐标**中创建并回读核验；草图 U 轴与 section 轴成任意角度时，输入 u/v 分量按主导 section 轴命名（日志 `COORDINATE_AXES`），不再报 "requires principal section axes"。
+
+- 创建、就地编辑与同几何快捷路径共用同一坐标变换（T03 实际帧 `origin/u_axis/v_axis`）与 1e-5 mm 回读门槛；不放宽阈值、不改输入坐标、不静默降级，核验失败如实报错并回滚。
+- 中心线按**直线身份核验**：比较方向与两端点到目标无限线的偏移（日志 `COORDINATE_CENTERLINE_IDENTITY`），不依赖可能被求解器滑动的端点。轴平行中心线仍用基准投影线偏移尺寸固定；斜中心线不生成已知不稳定的端点尺寸（日志 `COORDINATE_CENTERLINE_SKEW`），仅靠核验兜底。
+- 图元集合与互斥边界不变：line/centerline/rectangle/polyline/circle/arc；显式 dimensions/constraints 与 coordinates 仍互斥；ellipse/spline 仍走 autodim，本项不扩展。
+
 ## 回转轴（revolve.axis，BUG-083）
 
 `creo_revolve.axis` 与 execute_plan 的 `revolve` 操作 `axis` 字段接受以下两种裸对象，不增加 `reference`/`entity`/`edge` 包装：

@@ -1026,15 +1026,16 @@ static J sketch(const J &op) {
             !op.value("constraints", J::array()).empty())
             throw std::runtime_error(
                 "Coordinate dimensioning cannot be combined with supplied dimensions/constraints");
-        double aligned = fabs(dot(frame.u, V{loc[0][0], loc[0][1], loc[0][2]}));
-        if (aligned > 0.99999)
-            coordinate_plan =
-                coordinate_dimensions(section, csid, entities, {0, 1}, coordinate_anchors);
-        else if (aligned < 0.00001)
-            coordinate_plan =
-                coordinate_dimensions(section, csid, entities, {1, 0}, coordinate_anchors);
-        else
-            throw std::runtime_error("Coordinate dimensioning requires principal section axes");
+        // The section axes are whatever Creo picked for the support plane and its
+        // orientation reference; the sketch u axis may meet them at any angle.
+        // Coordinate dimensions are created and verified in native section
+        // coordinates either way, so name the input u/v components after their
+        // dominant section axis instead of rejecting unaligned frames.
+        double u_to_section_x = dot(frame.u, V{loc[0][0], loc[0][1], loc[0][2]});
+        std::array<int, 2> axes =
+            fabs(u_to_section_x) >= sqrt(0.5) ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 0};
+        log("COORDINATE_AXES u_to_section_x=%.9f axes=%d,%d\n", u_to_section_x, axes[0], axes[1]);
+        coordinate_plan = coordinate_dimensions(section, csid, entities, axes, coordinate_anchors);
         dims = coordinate_plan["dimension_ids"];
     }
     for (auto d : op.value("dimensions", J::array())) {

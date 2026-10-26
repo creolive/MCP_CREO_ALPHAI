@@ -802,7 +802,7 @@ async def creo_update_sketch_geometry(
     entities: list[Entity],
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto",
 ) -> dict[str, Any]:
-    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On principal planes, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone is kept off principal planes, where a failed edit rolls back cleanly."""
+    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On any valid sketch plane, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone stays on its native route, where a failed edit rolls back cleanly."""
     return await invoke(
         general.submit,
         [
@@ -987,9 +987,12 @@ async def creo_create_sketch(
     have names and entity references; automatic dimensioning fills remaining freedoms.
     For revolve include exactly one construction centerline, or supply an explicit external
     axis to creo_revolve: {kind:'datum_axis_feature',label:'axis_label'} or {kind:'axis',id:N}.
-    auto uses complete coordinate dimensions for large/complex supported principal-plane profiles;
-    coordinates forces that mode; autodim retains native automatic dimensions. Coordinate mode
-    supports lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
+    auto uses complete coordinate dimensions for large/complex supported profiles on
+    any valid sketch plane (principal or dictionary plane); coordinates forces that mode;
+    autodim retains native automatic dimensions. Coordinate mode supports
+    lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
+    Centerlines are verified as infinite lines (direction and offset); skewed centerlines
+    carry no endpoint dimensions.
     """
     op = {
         "op": "sketch",

@@ -255,12 +255,12 @@ class SketchOp(StrictModel):
                 raise ValueError(
                     "Coordinate dimensioning cannot be combined with supplied dimensions/constraints"
                 )
-            if not isinstance(self.plane, str) or any(
+            if any(
                 e.type not in {"line", "centerline", "rectangle", "polyline", "circle", "arc"}
                 for e in self.entities
             ):
                 raise ValueError(
-                    "Coordinate dimensioning requires a principal plane and line/polyline/rectangle/circle/arc entities"
+                    "Coordinate dimensioning supports line/centerline/rectangle/polyline/circle/arc entities"
                 )
         names = [e.name for e in self.entities]
         if len(names) != len(set(names)):

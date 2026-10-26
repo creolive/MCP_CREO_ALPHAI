@@ -424,14 +424,6 @@ static void generic_sketch_edit(const J &op) {
     trace_section_entities(section, "after_rebuild");
     J solving_op = op;
     std::string mode = profile_dimensioning(op);
-    double principal = 0;
-    for (auto value : meta["normal"])
-        principal = std::max(principal, fabs(value.get<double>()));
-    if (principal < 0.99999) {
-        if (op.value("dimensioning", "auto") == "coordinates")
-            throw std::runtime_error("Coordinate editing requires a principal sketch plane");
-        mode = "autodim";
-    }
     if (mode == "autodim" && op.value("dimensioning", "auto") != "coordinates") {
         // BUG-079: autodim after an in-place rebuild can under-dimension the
         // redefined section (an arc radius change dropped the position
@@ -499,13 +491,14 @@ static void generic_sketch_edit(const J &op) {
         std::map<std::string, int> named;
         for (auto it = meta["entity_ids"].begin(); it != meta["entity_ids"].end(); ++it)
             named[it.key()] = it.value();
-        double aligned = fabs(dot(vec(meta["u_axis"]), V{loc[0][0], loc[0][1], loc[0][2]}));
-        if (aligned > 0.99999)
-            coordinate_plan = coordinate_dimensions(section, origin, named, {0, 1}, anchors);
-        else if (aligned < 0.00001)
-            coordinate_plan = coordinate_dimensions(section, origin, named, {1, 0}, anchors);
-        else
-            throw std::runtime_error("Coordinate editing requires principal section axes");
+        // Same naming rule as creation: dimension in native section coordinates
+        // and name the input u/v components after their dominant section axis,
+        // whatever angle the stored sketch frame meets the section axes at.
+        double u_to_section_x = dot(vec(meta["u_axis"]), V{loc[0][0], loc[0][1], loc[0][2]});
+        std::array<int, 2> axes =
+            fabs(u_to_section_x) >= sqrt(0.5) ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 0};
+        log("COORDINATE_AXES u_to_section_x=%.9f axes=%d,%d\n", u_to_section_x, axes[0], axes[1]);
+        coordinate_plan = coordinate_dimensions(section, origin, named, axes, anchors);
     }
     meta["solver"] = solve_profile(section, solving_op);
     trace_section_ids(section, "after_solve");

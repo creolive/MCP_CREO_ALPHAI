@@ -264,9 +264,9 @@ def families() -> dict:
         "sketch_dimensioning": {
             "enabled": True,
             "modes": ["auto", "autodim", "coordinates"],
-            "scope": "auto selects native coordinate dimensions on principal planes for supported undimensioned profiles with at least 10 expanded entities or coordinate/radius magnitude above 1000 mm; coordinates can be requested explicitly",
+            "scope": "auto selects native coordinate dimensions on any valid sketch plane for supported undimensioned profiles with at least 10 expanded entities or coordinate/radius magnitude above 1000 mm; coordinates can be requested explicitly",
             "native_test": "19-line large-coordinate profile, R40000 12-gon, large capsule on XY and rotated/translated XZ, large YZ circle and explicit-coordinate rectangle; native sketch/solid IDs, named dimension edits, STL boundaries and save/erase/reload verified",
-            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on XY/XZ/YZ, without user dimensions/constraints; actual geometry checked to 1e-5 mm when creating/replacing; spline/ellipse and arbitrary planes use autodim; no normalization or rigid solving; not proof of every constraint or extreme shape",
+            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on any valid sketch plane (principal string or dictionary plane), without user dimensions/constraints; input u/v components are named after their dominant native section axis; actual geometry checked to 1e-5 mm when creating/replacing; centerlines are verified as infinite lines (direction and offset) and skewed centerlines carry no endpoint dimensions; spline/ellipse use autodim; no normalization or rigid solving; not proof of every constraint or extreme shape",
         },
         "sketch_geometry_edit": {
             "enabled": True,
