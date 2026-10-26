@@ -58,7 +58,13 @@ class SeedRegressionContract(unittest.IsolatedAsyncioTestCase):
                     "available": True,
                     "native_compatibility": {
                         "status": "not_verified_for_current_session",
-                        "observations": [{"job_id": job_id}],
+                        "observations": [
+                            {
+                                "job_id": job_id,
+                                "status": "loaded",
+                                "seed_sha256": "7d" + "0" * 62,
+                            }
+                        ],
                     },
                 }
                 for job_id in job_ids

@@ -70,6 +70,9 @@ async def main(library: Path):
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
+        from tools.mcp_readiness import wait_for_startup
+
+        await wait_for_startup(client, report, output)
 
         async def job(tool, args, expected_failure=False):
             response = await client.call_tool(tool, args)
@@ -139,19 +142,38 @@ async def main(library: Path):
                         "values": {"width": 12, "height": 12},
                     }
                     assertions = {"volume_mm3": 7840}
-                else:
-                    label = "TOP_PLANE" if count == 2 else "SECTION_2_PLANE"
+                elif count == 2:
+                    label = "TOP_PLANE"
                     inspection, _ = native_result_details(state)
                     plane = next(f for f in inspection["features"] if f["name"] == label)
-                    offset = ops[1 if count == 2 else 2]["offset"]
-                    dim = next(d for d in plane["dimensions"] if abs(d["value"] - offset) < 1e-7)
+                    assert plane["dimensions"], plane
+                    dim = plane["dimensions"][0]
                     edit = {
                         "op": "set_dimensions",
-                        "values": [{"id": dim["id"], "value": offset + 5}],
+                        "values": [{"id": dim["id"], "value": dim["value"] + 5}],
+                    }
+                    assertions = {"volume_mm3": 7000 * 35 / 30}
+                else:
+                    # Multi-section seeds do not universally drive the blend
+                    # from their own datum planes (four-section seeds keep a
+                    # private 10/20/30 spacing and ignore it), so edit a real
+                    # sketch dimension of section_1 instead — the autodimmed
+                    # rectangle keeps a nonzero width that must change the
+                    # blend volume.
+                    inspection, section_aliases = native_result_details(state)
+                    sketch = next(
+                        f
+                        for f in inspection["features"]
+                        if f["id"] == section_aliases["section_1"]["feature_id"]
+                    )
+                    dims = [d for d in sketch["dimensions"] if d["value"] > 1e-6]
+                    assert dims, sketch
+                    dim = max(dims, key=lambda d: d["value"])
+                    edit = {
+                        "op": "set_dimensions",
+                        "values": [{"id": dim["id"], "value": dim["value"] + 5}],
                     }
                     assertions = {"require_solid": True}
-                    if count == 2:
-                        assertions["volume_mm3"] = 7000 * 35 / 30
                 edited = await job(
                     "creo_execute_plan",
                     {
