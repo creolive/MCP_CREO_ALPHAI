@@ -308,3 +308,12 @@ dev_check 748 项一并通过；证据与文件 SHA256 见
 装配只读检查另登记 FEAT-045；本卡 2026-10-19 的统一 code/reason 契约评估与本轮稳定原因代码衔接，不重复登记。
 
 三项当日实现并随[验证记录](../validation/FEAT-044-live-2026-10-20.md)实测：支持状态表与分页一并经 stdio 直连确认（compact 含 support_status）；native 八处接管拒绝错误文本加稳定原因前缀；空窗口 NO_CURRENT_MODEL 见 FEAT-006。2026-10-20 晚按 WorkBuddy 黑盒第 16 项反馈（refusal_details 未在错误表面出现）补齐：inspect 对 native 稳定前缀拒绝返回结构化 `{available:false, reason_code, refusal_details}`（native 先于 live 摘要拒绝时单位/依赖/健康如实标 unknown，不留 staging 登记），实机装配窗口验证通过、新增 2 项单元；同轮 `version.py` 定版 0.4.2（用户 2026-10-20 指定 PATCH、弃用 0.5.0 编号）、缺件错误码/幂等键/session_model_id 提示同步（见验证记录第六节）。整卡仍待规划中首批三项（底板/对称深度/平面构造）未动，不据此关闭。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-08)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求及§6复测；R2 §2.3—§2.5/§7单位规范与迁移；R3 §6.2标签、§6.4批量、§6.5拔模及§7正例。T01补摘要/版本/标签/单位契约；assembly_checks已在基线修为supported_limited，不重开。T12复用既有execute_plan、0.6.0多组件管线、matrix和draft：既有零件批量追加、一次revision/回滚、真实面上的11°内拔模及圆台解析验收，不新增apply_plan或extrude.draft_angle。底板holes等父卡其他范围保持。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。

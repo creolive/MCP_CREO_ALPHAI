@@ -75,3 +75,12 @@
 ### 2026-10-24 实机触发取证（通过）
 
 task/2 整合树实机（Creo 12.4）：未受管种子副本（毫米、无依赖）经夹具真实抑制 BLEND 特征（id 82）后，`creo_adopt_current_model(mode=inspect)` 返回 `reason_code="unhealthy_features"`（结构化正常响应 `available=false`），`refusal_details.unhealthy_features` 为 `unhealthy_total=1/returned=1/truncated=false/items=[{id:82,name:"BLEND",type_name:"protrusion",status_code:5,status:"suppressed",incomplete:false}]`（`ProFeatureStatusGet` 原始整码 5=PRO_FEAT_SUPPRESSED），`health_breakdown` 逐特征口径。受管路径旁证：`managed_output` 拒绝同样携带完整明细（PAD2 id 87 抑制案例）。截断与旧执行器回退路径未实机触发（单测覆盖）。详见[实机取证记录](../validation/BUG080-FEAT006-LIVE-2026-10-24.md)。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-13)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §5 P1-5是旧“未变”跟踪且未复测MX_DOWN，不能推翻本卡0.5.2已交付诊断；R2 §6仅静态确认unhealthy_features，明确未实机验证。R3 §4.2/§4.3的多环错误误导归本卡诊断子项+BUG-049/T06，只输出可确认环/实体/原始错误，不能从-1断因；T02操作结果亦保留诊断。本卡2026-10-24所写三个旧现场已收口，与BUG-078/总计划口径冲突，交集成负责人核对，不在T00改写历史。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。

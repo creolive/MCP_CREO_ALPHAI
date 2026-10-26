@@ -34,3 +34,12 @@ FEAT-045 的约束快照（type: align/mate/orient/align_offset、type_code、it
 ## 实现与证据
 
 2026-10-23 预登记，未实施。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-13)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §5 P1-3延续快照无法回放请求，本卡为T09/0.7.0子项。已确认只读creo_plan_assembly_rebuild(snapshot_id, component_mapping, reference_mapping)生成execute_plan operations及绑定源身份；双侧引用/方向/偏移单位、replayable/reason，先全插入后约束、同层兄弟引用、六既有写入类型。源revision/摘要提交和原生使用前复核；旧/过期证据、缺映射、未知类型、嵌套明确拒绝，不转fixed，不拆多事务。真实随动及保存重载验收；FEAT-050公共比对不纳入。本段取代历史候选桥接工具选型，未实施。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
