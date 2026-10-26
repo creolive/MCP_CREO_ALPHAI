@@ -18,6 +18,19 @@
 
 其它参数中的 datum_feature 继续代表基准平面。`{"kind":"datum_plane","axis":"z"}` 的 axis 表示平面法向，不能用作旋转轴。阵列轴必须先于 leader；必要时创建独立基准轴，再用 creo_reorder_features 调整顺序。高层工具和 execute_plan 使用同一规范化逻辑，非法轴类型、缺少 ID/标签会在入队前返回可操作示例，revision 防护保持有效。
 
+## 显式平面几何 ID（BUG-084 / T03）
+
+`datum_plane.id` 使用当前模型 `creo_inspect_model(section="datum_planes")` 返回的**基准平面几何 ID**；`plane.id` 使用当前模型中经验证为平面的几何 ID；`surface.id` 沿用面几何 ID，草图支撑面仍须确实平面。特征标签使用 `datum_feature`。特征 ID 与几何 ID 不互换，同一个数字也不能靠类型猜测重解释。
+
+```json
+{"kind":"datum_plane","id":163}
+{"kind":"plane","id":163}
+{"kind":"surface","id":163}
+{"kind":"datum_feature","label":"right_plane"}
+```
+
+前三个 ID 只是格式示例，调用前须从**目标模型本次巡检**选取。显式 `plane`/`datum_plane` ID 与同一引用对象的 `axis`、`normal`、`offset` 互斥，连默认 `axis:"z"` 或 `offset:0` 同现也拒绝；不带 ID 时保留几何筛选模式。`creo_create_sketch.plane` 的字典把上述一个裸引用放在 `reference` 内，可另给 `origin`、`u_axis` 帧字段。支撑面缺失、非平面或不唯一时明确失败，不能回退默认 XY。结果 `operations[]` 的 `surface_id`、`origin`、`normal`、`u_axis`、`v_axis` 来自原生解析；`u_axis` 必须非零且在真实支撑面内有非零投影。无新 Toolkit 连接的离线验证不能替代这些几何数值的实机核验。
+
 ## 回转轴（revolve.axis，BUG-083）
 
 `creo_revolve.axis` 与 execute_plan 的 `revolve` 操作 `axis` 字段接受以下两种裸对象，不增加 `reference`/`entity`/`edge` 包装：
@@ -35,20 +48,20 @@
 
 | 工具 / 参数 | 完整形状或规则 |
 | --- | --- |
-| datum_plane.reference | 裸平面/面引用，如 `{"kind":"datum_plane","axis":"z"}` 或 `{"kind":"datum_feature","label":"plane_label"}` |
+| datum_plane.reference | 裸平面/面引用，如 `{"kind":"datum_plane","id":163}`、`{"kind":"datum_plane","axis":"z"}` 或 `{"kind":"datum_feature","label":"plane_label"}`；操作自身的 offset 与引用内部的筛选 offset 分开 |
 | revolve.axis | 裸轴引用（`datum_axis_feature`+label 或 `axis`+id）；省略或 null 用草图构造中心线，空对象/缺 kind 在入口拒绝 |
 | datum_axis.references | 裸引用数组，如两张基准平面；圆柱面、直边或现有轴需满足实际几何要求 |
 | datum_csys / datum_points.reference | 裸坐标系引用，如 `{"kind":"default_csys"}`、几何 csys ID 或 datum_csys_feature 标签 |
-| hole.placement/reference1/reference2 | 各自直接传入裸引用，placement 为放置面，reference1/2 为定位参考 |
-| draft.surfaces/neutral_plane/pull_direction | surfaces 是裸面引用数组；neutral_plane 和 pull_direction 分别是裸单引用 |
+| hole.placement/reference1/reference2 | 各自直接传入裸引用，placement 为放置面，reference1/2 为定位参考；平面定位参考可用 `datum_plane.id` 几何 ID |
+| draft.surfaces/neutral_plane/pull_direction | surfaces 是裸面引用数组；neutral_plane 和 pull_direction 分别是裸单引用，neutral_plane 可用 `datum_plane.id` 几何 ID |
 | boolean_bodies.targets/tools | 裸 body 引用数组，须明确不同 body ID；不能传特征 ID |
-| solidify.reference | 裸平面/曲面参考；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
+| solidify.reference | 裸平面/曲面参考，可用已验证平面的 `plane.id` 几何 ID；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
 | surface_fill.sketch | 草图特征标签或特征 ID（字符串或整数），无需 `{kind:...}` 对象 |
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |
 | sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`；参数内部不再加 edge/reference 包装 |
 | round/chamfer.references | **集合对象数组**：`[{"edge":{"kind":"edge","id":N}}]`，或 `[{"surfaces":[{"kind":"surface","id":A},{"kind":"surface","id":B}]}]`；裸边数组不等于集合数组 |
 | round/chamfer 尺寸字段 | 独立工具 `creo_round.radius`、`creo_chamfer.distance` 与计划操作 `size` 是同一数值（mm）：round 计划也接受 `radius`、chamfer 计划也接受 `distance` 作为 `size` 别名；别名与 `size` 同现或用于另一种操作时明确拒绝。任务提交回显 `operations[].size`，终态 `result.operations[].size` 回显原生应用值（compact 返回同样保留） |
-| create_sketch.plane | 主平面字符串 `XY/XZ/YZ`；字典形式为 `{"reference":{"kind":"surface","id":N},"origin":[x,y,z],"u_axis":[x,y,z]}`，origin/u_axis 可省略，reference 容器必需 |
+| create_sketch.plane | 主平面字符串 `XY/XZ/YZ`；字典形式为 `{"reference":{"kind":"datum_plane","id":N},"origin":[x,y,z],"u_axis":[x,y,z]}`，reference 也可取已验证平面 `plane`/`surface` 几何 ID 或 `datum_feature` 标签；origin/u_axis 可省略，reference 容器必需 |
 
 这些集合和坐标包装承载不同的参数含义，不能简单地给所有裸引用增加同一层包装。此修复兼容报告中的轴标签、补齐引用契约，不更改原生执行器或创建额外几何。
 

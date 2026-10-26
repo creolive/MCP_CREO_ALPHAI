@@ -1364,6 +1364,11 @@ def compact_job(manifest: dict) -> dict:
                     "file",
                     "feature_id",
                     "material_removed_mm3",
+                    "surface_id",
+                    "origin",
+                    "normal",
+                    "u_axis",
+                    "v_axis",
                     "elapsed_seconds",
                     "message",
                 )

@@ -509,6 +509,30 @@ static ProSelection resolve(const J &r) {
     if (kind == "plane" || kind == "datum_plane") {
         J state = inspection(false);
         J candidates = kind == "datum_plane" ? state["datum_planes"] : state["surfaces"];
+        if (r.contains("id")) {
+            if (r.contains("axis") || r.contains("normal") || r.contains("offset"))
+                throw std::runtime_error("Plane id cannot be combined with axis, normal or offset");
+            const J &raw_id = r.at("id");
+            if (!raw_id.is_number_integer() || raw_id < 0 || raw_id > 2147483647)
+                throw std::runtime_error("Plane geometry id must be a nonnegative 32-bit integer");
+            int id = raw_id.get<int>();
+            // A generic plane ID may name either a solid face or a datum plane;
+            // datum_plane IDs must appear in the dedicated inspection collection.
+            if (kind == "plane")
+                for (const auto &datum : state["datum_planes"])
+                    candidates.push_back(datum);
+            for (const auto &candidate : candidates) {
+                if (candidate.at("id").get<int>() != id)
+                    continue;
+                if (!candidate.contains("normal"))
+                    throw std::runtime_error("Plane geometry id is not a planar surface: " +
+                                             std::to_string(id));
+                return selection(id, PRO_SURFACE);
+            }
+            throw std::runtime_error((kind == "datum_plane" ? "Datum plane geometry id not found: "
+                                                            : "Plane geometry id not found: ") +
+                                     std::to_string(id));
+        }
         V desired;
         if (r.contains("normal"))
             desired = normalized(vec(r["normal"]));
@@ -544,6 +568,10 @@ static ProSelection resolve(const J &r) {
     if (kind == "datum_feature") {
         int fid = feature_id(r.at("label"));
         ProFeature f = feature(fid);
+        ProFeattype type;
+        CK(ProFeatureTypeGet(&f, &type));
+        if (type != PRO_FEAT_DATUM)
+            throw std::runtime_error("Datum feature label does not identify a datum plane");
         planes.clear();
         CK(ProFeatureGeomitemVisit(&f, PRO_SURFACE, geom_cb, nullptr, nullptr));
         if (planes.size() != 1)
@@ -633,9 +661,7 @@ static Frame sketch_frame(const J &op) {
         int axis = name == "XY" ? 2 : name == "XZ" ? 1 : 0;
         f.n = axis == 2 ? V{0, 0, 1} : axis == 1 ? V{0, -1, 0} : V{1, 0, 0};
         f.u = axis == 0 ? V{0, 1, 0} : V{1, 0, 0};
-        f.v = cross(f.n, f.u);
         double offset = op.value("offset", 0.0);
-        f.origin = axis == 2 ? V{0, 0, offset} : axis == 1 ? V{0, offset, 0} : V{offset, 0, 0};
         J reference = {{"kind", "datum_plane"},
                        {"axis", axis == 0   ? "x"
                                 : axis == 1 ? "y"
@@ -661,27 +687,51 @@ static Frame sketch_frame(const J &op) {
         ProModelitem mi;
         CK(ProSelectionModelitemGet(s, &mi));
         f.surface = mi.id;
-        ProSurface sf;
-        CK(ProSurfaceInit((ProSolid)board, f.surface, &sf));
-        ProGeomitemdata *d;
-        CK(ProSurfaceDataGet(sf, &d));
-        auto shape = d->data.p_surface_data;
-        if (!shape || shape->type != PRO_SRF_PLANE)
-            throw std::runtime_error("Sketch support must be planar");
-        f.n = normalized({shape->srf_shape.plane.e3[0], shape->srf_shape.plane.e3[1],
-                          shape->srf_shape.plane.e3[2]});
-        double dist = dot(f.n, {shape->srf_shape.plane.origin[0], shape->srf_shape.plane.origin[1],
-                                shape->srf_shape.plane.origin[2]});
-        f.origin = p.contains("origin") ? vec(p["origin"]) : scale(f.n, dist);
-        if (fabs(dot(f.n, f.origin) - dist) > 1e-6)
+        ProSelectionFree(&s);
+    }
+    // Read the actual selected support once for both named and explicit forms.
+    // The reported frame is the frame used to build the section, not an echo
+    // of the input selection or an assumed world-XY plane.
+    ProSurface support;
+    CK(ProSurfaceInit((ProSolid)board, f.surface, &support));
+    ProGeomitemdata *data = nullptr;
+    CK(ProSurfaceDataGet(support, &data));
+    auto shape = data ? data->data.p_surface_data : nullptr;
+    bool planar = shape && shape->type == PRO_SRF_PLANE;
+    V support_normal = {}, support_origin = {};
+    if (planar) {
+        support_normal = {shape->srf_shape.plane.e3[0], shape->srf_shape.plane.e3[1],
+                          shape->srf_shape.plane.e3[2]};
+        support_origin = {shape->srf_shape.plane.origin[0], shape->srf_shape.plane.origin[1],
+                          shape->srf_shape.plane.origin[2]};
+    }
+    if (data)
+        ProGeomitemdataFree(&data);
+    if (!planar)
+        throw std::runtime_error("Sketch support must be planar");
+    support_normal = normalized(support_normal);
+    if (p.is_string()) {
+        if (fabs(fabs(dot(support_normal, f.n)) - 1) > 1e-7)
+            throw std::runtime_error("Named sketch plane does not match the resolved support");
+        f.n = scale(support_normal, dot(support_normal, f.n) < 0 ? -1 : 1);
+        f.origin = support_origin;
+        f.u = normalized(add(f.u, scale(f.n, -dot(f.u, f.n))));
+    } else {
+        f.n = support_normal;
+        f.origin = p.contains("origin") ? vec(p["origin"]) : support_origin;
+        if (fabs(dot(f.n, add(f.origin, scale(support_origin, -1)))) > 1e-6)
             throw std::runtime_error("Sketch origin is outside support plane");
         V preferred = p.contains("u_axis") ? vec(p["u_axis"])
                                            : (fabs(f.n[0]) < 0.9 ? V{1, 0, 0} : V{0, 1, 0});
-        f.u = normalized(add(preferred, scale(f.n, -dot(preferred, f.n))));
-        f.v = cross(f.n, f.u);
-        ProGeomitemdataFree(&d);
-        ProSelectionFree(&s);
+        double magnitude = sqrt(dot(preferred, preferred));
+        if (magnitude < 1e-9)
+            throw std::runtime_error("Sketch u_axis must be a nonzero direction vector");
+        V in_plane = add(preferred, scale(f.n, -dot(preferred, f.n)));
+        if (sqrt(dot(in_plane, in_plane)) < 1e-9 * magnitude)
+            throw std::runtime_error("Sketch u_axis is parallel to the support plane normal");
+        f.u = normalized(in_plane);
     }
+    f.v = normalized(cross(f.n, f.u));
     double best = 10;
     f.orientation = -1;
     planes.clear();
@@ -767,7 +817,7 @@ static void redefine(ProFeature *f, ProElement root) {
 }
 #include "sketch_coordinates.cpp"
 #include "sketch_solver.cpp"
-static void sketch(const J &op) {
+static J sketch(const J &op) {
     Frame frame = sketch_frame(op);
     ProSelection plane_ref = selection(frame.surface, PRO_SURFACE),
                  orient = selection(frame.orientation, PRO_SURFACE);
@@ -1035,6 +1085,7 @@ static void sketch(const J &op) {
          {"geometry", op["entities"]},
          {"geometry_stale", false},
          {"last_dimensioning", op.value("dimensioning", "auto")},
+         {"surface_id", frame.surface},
          {"normal", frame.n},
          {"origin", frame.origin},
          {"u_axis", frame.u},
@@ -1042,6 +1093,11 @@ static void sketch(const J &op) {
          {"section_normal_sign", dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1}});
     if (op.contains("profile"))
         aliases[op["label"].get<std::string>()]["airfoil"] = op["profile"];
+    return {{"surface_id", frame.surface},
+            {"origin", frame.origin},
+            {"normal", frame.n},
+            {"u_axis", frame.u},
+            {"v_axis", frame.v}};
 }
 // ProFeatureWithoptionsCreate reports an invalid section only as a bare code;
 // Toolkit validation stays authoritative, so explain the likely causes here
@@ -1770,7 +1826,7 @@ static void execute_operation(const J &op) {
     log("PHASE=%s%s%s\n", kind.c_str(), op.contains("label") ? ":" : "",
         op.value("label", "").c_str());
     if (kind == "sketch" || kind == "airfoil_sketch")
-        sketch(op);
+        details = sketch(op);
     else if (kind == "update_sketch_geometry" || kind == "update_airfoil")
         generic_sketch_edit(op);
     else if (kind == "feature_group")

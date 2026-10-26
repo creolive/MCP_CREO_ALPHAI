@@ -30,7 +30,12 @@ from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
-from creo_mechdog.references import PatternAxis, RevolveAxis, reference_capabilities
+from creo_mechdog.references import (
+    PLANE_REFERENCE_DESCRIPTION,
+    PatternAxis,
+    RevolveAxis,
+    reference_capabilities,
+)
 from creo_mechdog.registry_ops import health as registry_health
 from creo_mechdog.registry_ops import migrate as registry_migrate
 from creo_mechdog.schema import (
@@ -968,9 +973,7 @@ async def creo_create_sketch(
     entities: list[Entity],
     plane: Annotated[
         Literal["XY", "XZ", "YZ"] | dict[str, Any],
-        Field(
-            description="XY/XZ/YZ, or {reference:{kind:'surface',id:N},origin:[x,y,z],u_axis:[x,y,z]}; frame fields optional. A dictionary plane requires the reference container."
-        ),
+        Field(description=PLANE_REFERENCE_DESCRIPTION),
     ] = "XY",
     offset: float = 0,
     dimensions: list[SketchDimension] | None = None,
@@ -1172,7 +1175,10 @@ async def creo_datum_plane(
     angle: float | None = None,
     axis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Create parametric offset datum plane, or angled plane through an axis."""
+    """Create an offset/angled datum plane. reference accepts datum_plane geometry ID
+    from inspect_model(datum_planes), planar surface ID, datum_feature label, or a
+    plane axis/normal filter; ID cannot share axis/normal/offset in that reference.
+    """
     op = {"op": "datum_plane", "label": label, "reference": reference, "offset": offset}
     if angle is not None:
         op["angle"] = angle
@@ -1185,7 +1191,11 @@ async def creo_datum_plane(
 async def creo_datum_axis(
     model_id: str, expected_revision: int, label: str, references: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Create a native datum axis through two planes, a cylindrical face, a straight edge or existing axis."""
+    """Create an axis through two planes, a cylindrical face, straight edge or axis.
+
+    Plane references accept datum_plane geometry IDs from inspect_model(datum_planes),
+    planar surface IDs or datum_feature labels. Feature IDs are not geometry IDs.
+    """
     return await invoke(
         general.submit,
         [{"op": "datum_axis", "label": label, "references": references}],

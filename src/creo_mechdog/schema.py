@@ -20,7 +20,12 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from creo_mechdog.references import PatternAxis, RevolveAxis
+from creo_mechdog.references import (
+    PatternAxis,
+    RevolveAxis,
+    validate_planar_reference,
+    validate_sketch_plane_frame,
+)
 
 
 class StrictModel(BaseModel):
@@ -1208,11 +1213,14 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                 finite(v)
 
     finite(dumped)
+    for index, operation in enumerate(dumped):
+        if operation["op"] in ("sketch", "airfoil_sketch") and isinstance(operation["plane"], dict):
+            validate_sketch_plane_frame(operation["plane"], f"operations[{index}].plane")
 
-    def references(x):
+    def references(x, path: str):
         if isinstance(x, list):
-            for v in x:
-                references(v)
+            for index, v in enumerate(x):
+                references(v, f"{path}[{index}]")
         if isinstance(x, dict):
             if "kind" in x:
                 k = x["kind"]
@@ -1233,19 +1241,11 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                     if not isinstance(x.get("label"), str):
                         raise ValueError("Datum reference requires a label")
                 elif k in ("plane", "datum_plane"):
-                    if "normal" in x:
-                        if (
-                            not isinstance(x["normal"], list)
-                            or len(x["normal"]) != 3
-                            or sum(v * v for v in x["normal"]) < 1e-12
-                        ):
-                            raise ValueError("Plane normal requires a nonzero 3D vector")
-                    elif x.get("axis", "z") not in ("x", "y", "z"):
-                        raise ValueError("Plane axis must be x, y or z")
+                    validate_planar_reference(x, path)
                 elif k not in ("body", "part", "default_csys"):
                     raise ValueError(f"Unsupported model reference kind: {k}")
-            for v in x.values():
-                references(v)
+            for key, v in x.items():
+                references(v, f"{path}.{key}")
 
-    references([op for op in dumped if not op["op"].startswith("drawing_")])
+    references([op for op in dumped if not op["op"].startswith("drawing_")], "operations")
     return dumped

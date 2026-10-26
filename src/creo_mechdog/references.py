@@ -14,6 +14,16 @@ AXIS_DESCRIPTION = (
     "is not a rotation axis. Do not wrap this selection in reference/edge."
 )
 
+PLANE_REFERENCE_DESCRIPTION = (
+    "XY/XZ/YZ, or a dictionary with reference selecting "
+    "{kind:'datum_plane',id:N} (geometry ID from datum_planes), "
+    "{kind:'plane',id:N} (verified planar geometry), {kind:'surface',id:N} "
+    "(planar support), or {kind:'datum_feature',label:'plane_label'}. "
+    "The dictionary requires the reference container; origin/u_axis are optional "
+    "frame fields. A plane/datum_plane id "
+    "cannot be combined with axis, normal or offset in the same reference object."
+)
+
 
 def normalize_pattern_axis(value: Any) -> dict[str, Any]:
     """Convert the reported generic datum label to the existing native axis selector."""
@@ -94,6 +104,46 @@ def normalize_revolve_axis(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
+def validate_planar_reference(value: dict[str, Any], path: str) -> None:
+    """Validate geometry-ID selection without changing legacy geometric filters."""
+    if "id" in value:
+        if any(key in value for key in ("axis", "normal", "offset")):
+            raise ValueError(f"{path}: id cannot be combined with axis, normal or offset")
+        if type(value["id"]) is not int or not 0 <= value["id"] <= 2147483647:
+            raise ValueError(f"{path}.id must be a nonnegative 32-bit integer geometry ID")
+        return
+    if "normal" in value:
+        normal = value["normal"]
+        if (
+            not isinstance(normal, list)
+            or len(normal) != 3
+            or any(type(item) not in (int, float) for item in normal)
+            or sum(item * item for item in normal) < 1e-12
+        ):
+            raise ValueError(f"{path}.normal requires a nonzero 3D vector")
+    elif value.get("axis", "z") not in ("x", "y", "z"):
+        raise ValueError(f"{path}.axis must be x, y or z")
+
+
+def validate_sketch_plane_frame(value: dict[str, Any], path: str) -> None:
+    """Check the dictionary wrapper and numeric frame before native resolution."""
+    reference = value.get("reference")
+    if not isinstance(reference, dict) or not isinstance(reference.get("kind"), str):
+        raise ValueError(f"{path}.reference requires a {{kind:...}} support selection")
+    for key in ("origin", "u_axis"):
+        if key not in value:
+            continue
+        vector = value[key]
+        if (
+            not isinstance(vector, list)
+            or len(vector) != 3
+            or any(type(item) not in (int, float) for item in vector)
+        ):
+            raise ValueError(f"{path}.{key} requires a numeric 3D vector")
+        if key == "u_axis" and sum(item * item for item in vector) < 1e-18:
+            raise ValueError(f"{path}.u_axis must be a nonzero direction vector")
+
+
 _REVOLVE_AXIS_SCHEMA = {
     "description": REVOLVE_AXIS_DESCRIPTION,
     "oneOf": [
@@ -121,12 +171,16 @@ RevolveAxis = Annotated[
 def reference_capabilities() -> dict[str, Any]:
     """Keep the legacy example keys while spelling out each parameter's full shape."""
     plane = {"kind": "datum_plane", "axis": "z", "offset": 0}
+    datum_plane_id = {"kind": "datum_plane", "id": 163}
+    plane_id = {"kind": "plane", "id": 163}
     face = {"kind": "surface", "id": 11}
     edge = {"kind": "edge", "id": 12}
     axis = {"kind": "axis", "id": 83}
     axis_label = {"kind": "datum_axis_feature", "label": "axis_label"}
     return {
         "datum_plane": plane,
+        "datum_plane_id": datum_plane_id,
+        "plane_id": plane_id,
         "planar_solid_face": {"kind": "plane", "normal": [0, 0, 1], "offset": 10},
         "raw_face": face,
         "raw_edge": edge,
@@ -136,6 +190,7 @@ def reference_capabilities() -> dict[str, Any]:
         "syntax": {
             "single_selection": "A bare {kind:...} object, passed directly to the named parameter",
             "geometry_id": "Model geometry ID from inspection, not a feature ID",
+            "plane_id": "datum_plane.id comes from datum_planes; plane.id must resolve to planar geometry. id excludes axis/normal/offset in that same reference object",
             "feature_label": "An MCP feature alias; use the geometry-specific kind",
             "datum_feature": "Normally a datum plane label; axis_pattern.axis accepts it as an axis-label compatibility alias",
             "example_ids": "IDs below are illustrative. Inspect the actual model and replace them; labels must exist in that model",
@@ -149,9 +204,14 @@ def reference_capabilities() -> dict[str, Any]:
                 "compatibility_normalized_to": "datum_axis_feature",
                 "requires": "A geometric axis, preceding the leader. A plane's axis/normal does not define a rotation axis",
             },
-            "creo_datum_plane": {"reference": plane, "axis": axis},
+            "creo_datum_plane": {
+                "reference": plane,
+                "reference_by_id": datum_plane_id,
+                "axis": axis,
+            },
             "creo_datum_axis": {
                 "references": [{"kind": "datum_plane", "axis": "x"}, plane],
+                "references_by_id": [datum_plane_id, {"kind": "datum_plane", "id": 164}],
                 "alternative": "A cylindrical face, straight edge or existing axis, subject to actual geometry",
             },
             "creo_datum_csys": {"reference": {"kind": "default_csys"}},
@@ -203,8 +263,14 @@ def reference_capabilities() -> dict[str, Any]:
             },
             "creo_create_sketch": {
                 "plane": {"reference": plane, "origin": [0, 0, 0], "u_axis": [1, 0, 0]},
+                "plane_by_datum_id": {"reference": datum_plane_id, "u_axis": [0, 0, 1]},
+                "plane_by_geometry_id": {"reference": plane_id, "u_axis": [0, 0, 1]},
+                "plane_by_label": {
+                    "reference": {"kind": "datum_feature", "label": "plane_label"},
+                    "u_axis": [0, 0, 1],
+                },
                 "alternative": "XY/XZ/YZ string for a principal plane",
-                "requires": "For a dictionary plane, put the support selection under reference; origin/u_axis are optional frame fields",
+                "requires": "For a dictionary plane, put the support selection under reference; origin/u_axis are optional frame fields. Use geometry IDs from inspection, not feature IDs; id excludes axis/normal/offset in the same selection",
             },
         },
     }
