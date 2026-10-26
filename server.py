@@ -100,6 +100,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/window_observations.py",
     "src/creo_mechdog/schema.py",
     "src/creo_mechdog/profile_checks.py",
+    "src/creo_mechdog/profile_diagnostics.py",
     "src/creo_mechdog/airfoil.py",
     "version.py",
     "generic_bridge.py",
@@ -1000,6 +1001,10 @@ async def creo_create_sketch(
     lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
     Centerlines are verified as infinite lines (direction and offset); skewed centerlines
     carry no endpoint dimensions.
+    Multiple disjoint or nested closed loops are supported in one sketch. The result
+    reports analytic input contour/entity counts and the solved native section counts;
+    solid extrude/revolve rejects only profiles proven open, branched, self-intersecting,
+    intersecting, tangent or zero-area from the supplied coordinates.
     """
     op = {
         "op": "sketch",

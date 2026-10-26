@@ -84,7 +84,9 @@ def normalize_operations(
     return normalized
 
 
-def annotate_native_result(result: dict[str, Any], *, readonly: bool) -> dict[str, Any]:
+def annotate_native_result(
+    result: dict[str, Any], *, readonly: bool, inputs: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """Normalize an accepted native result before it is persisted on the job."""
     operations = result.get("operations")
     if not isinstance(operations, list):
@@ -99,4 +101,60 @@ def annotate_native_result(result: dict[str, Any], *, readonly: bool) -> dict[st
         readonly=readonly,
         failed_index=failed_index if isinstance(failed_index, int) else None,
     )
+    if inputs is not None:
+        annotate_profiles(result, inputs)
+    return result
+
+
+def _profile_summary(entities: list[dict[str, Any]]) -> dict[str, Any]:
+    from creo_mechdog.profile_diagnostics import analyze_profile
+
+    report = analyze_profile(entities)
+    return {
+        "source": "input",
+        "analysis": report["analysis"],
+        "entity_count": report["entity_count"],
+        "contour_count": report["contour_count"],
+        "closed_contour_count": report["closed_contour_count"],
+        "open_contour_count": report["open_contour_count"],
+        "material_area_mm2": report["material_area_mm2"],
+        "categories": {name: entry["count"] for name, entry in report["categories"].items()},
+    }
+
+
+def annotate_profiles(result: dict[str, Any], inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Attach the analytic input contour report to every sketch result (T06).
+
+    The native section summary is a separate field supplied by the executor;
+    this report describes the supplied coordinates and never replaces it.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list) or not isinstance(inputs, list):
+        return result
+    for position, operation in enumerate(operations):
+        if not isinstance(operation, dict) or operation.get("op") != "sketch":
+            continue
+        source = inputs[position] if position < len(inputs) else None
+        if not (
+            isinstance(source, dict)
+            and source.get("op") == "sketch"
+            and source.get("label") == operation.get("label")
+        ):
+            matches = [
+                item
+                for item in inputs
+                if isinstance(item, dict)
+                and item.get("op") == "sketch"
+                and item.get("label") == operation.get("label")
+            ]
+            source = matches[0] if len(matches) == 1 else None
+        entities = source.get("entities") if isinstance(source, dict) else None
+        if not isinstance(entities, list) or not entities:
+            continue
+        try:
+            operation["profile"] = _profile_summary(entities)
+        except (KeyError, TypeError, ValueError):
+            # Diagnostics must never turn a delivered native result into a
+            # failure; record that the input report is unavailable instead.
+            operation["profile"] = {"source": "input", "analysis": "unavailable"}
     return result

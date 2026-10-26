@@ -1383,6 +1383,8 @@ def compact_job(manifest: dict) -> dict:
                     "datum_axes",
                     "axes_query_code",
                     "length_unit",
+                    "profile",
+                    "native_section",
                     "elapsed_seconds",
                     "message",
                 )

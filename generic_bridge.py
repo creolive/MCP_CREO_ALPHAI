@@ -475,7 +475,9 @@ def run_generic_job(job_id: str, manifest: dict):
                     model["status"] = "unknown_outcome"
                 else:
                     result = operation_results.annotate_native_result(
-                        bridge.read_json(result_file), readonly=request["readonly"]
+                        bridge.read_json(result_file),
+                        readonly=request["readonly"],
+                        inputs=request["operations"],
                     )
                     result_aliases = result.get("aliases")
                     result_inspection = result.get("inspection")

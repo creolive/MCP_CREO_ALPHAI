@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <map>
@@ -915,6 +917,176 @@ static ProError axis_feat_cb(ProFeature *f, ProError status, ProAppData) {
         ProFeatureGeomitemVisit(f, PRO_AXIS, axis_ref_cb, nullptr, nullptr);
     return PRO_TK_NO_ERROR;
 }
+// DEV-047 T06: describe the solved section with the entities the kernel will
+// actually use. A failed feature creation can then distinguish an open or
+// branched contour from a geometry or feature-tree problem without guessing
+// the cause from a bare Toolkit code.
+struct SectionEdge {
+    int entity;
+    int first;
+    int second;
+};
+static J section_profile_summary(ProSection section, const char *phase) {
+    J summary = {{"available", false}, {"query_code", 0}};
+    ProIntlist ids = nullptr;
+    int count = 0;
+    ProError code = ProSectionEntityIdsGet(section, &ids, &count);
+    if (code) {
+        summary["query_code"] = code;
+        log("SECTION_PROFILE_UNAVAILABLE phase=%s code=%d\n", phase, code);
+        return summary;
+    }
+    const double tolerance = 1e-6;
+    std::vector<std::array<double, 2>> points, representatives;
+    std::vector<std::vector<int>> members;
+    std::vector<int> node_entity;
+    std::vector<SectionEdge> edges;
+    int curves = 0, standalone = 0, construction = 0, references = 0, unsupported = 0;
+    auto node = [&](const std::array<double, 2> &point, int entity) {
+        for (size_t index = 0; index < representatives.size(); index++) {
+            if (hypot(point[0] - representatives[index][0], point[1] - representatives[index][1]) <=
+                tolerance) {
+                int position = (int)points.size();
+                points.push_back(point);
+                members[index].push_back(position);
+                return (int)index;
+            }
+        }
+        int position = (int)points.size();
+        points.push_back(point);
+        representatives.push_back(point);
+        members.push_back({position});
+        node_entity.push_back(entity);
+        return (int)representatives.size() - 1;
+    };
+    auto edge = [&](int entity, const std::array<double, 2> &a, const std::array<double, 2> &b) {
+        curves++;
+        edges.push_back({entity, node(a, entity), node(b, entity)});
+    };
+    for (int index = 0; index < count; index++) {
+        int entity = ids[index];
+        ProBoolean is_construction = PRO_B_FALSE, is_projection = PRO_B_FALSE;
+        if (!ProSectionEntityIsConstruction(section, entity, &is_construction) && is_construction) {
+            construction++;
+            continue;
+        }
+        if (!ProSectionEntityIsProjection(section, entity, &is_projection) && is_projection) {
+            references++;
+            continue;
+        }
+        Pro2dEntdef *def = nullptr;
+        if (ProSectionEntityGet(section, entity, &def)) {
+            unsupported++;
+            continue;
+        }
+        if (def->type == PRO_2D_LINE || def->type == PRO_2D_CENTER_LINE) {
+            auto line = (Pro2dLinedef *)def;
+            edge(entity, {line->end1[0], line->end1[1]}, {line->end2[0], line->end2[1]});
+        } else if (def->type == PRO_2D_ARC) {
+            auto arc = (Pro2dArcdef *)def;
+            auto at = [&](double angle) {
+                return std::array<double, 2>{arc->center[0] + arc->radius * cos(angle),
+                                             arc->center[1] + arc->radius * sin(angle)};
+            };
+            edge(entity, at(arc->start_angle), at(arc->end_angle));
+        } else if (def->type == PRO_2D_CIRCLE || def->type == PRO_2D_ELLIPSE) {
+            standalone++;
+        } else if (def->type == PRO_2D_SPLINE) {
+            auto spline = (Pro2dSplinedef *)def;
+            if (spline->n_points < 2)
+                unsupported++;
+            else if (spline->tangency_type == PRO_2D_SPLINE_TAN_PERIODIC)
+                standalone++;
+            else
+                edge(entity, {spline->point_arr[0][0], spline->point_arr[0][1]},
+                     {spline->point_arr[spline->n_points - 1][0],
+                      spline->point_arr[spline->n_points - 1][1]});
+        } else if (def->type == PRO_2D_POLYLINE) {
+            auto polyline = (Pro2dPolylinedef *)def;
+            if (polyline->n_points < 2)
+                unsupported++;
+            else
+                edge(entity, {polyline->point_arr[0][0], polyline->point_arr[0][1]},
+                     {polyline->point_arr[polyline->n_points - 1][0],
+                      polyline->point_arr[polyline->n_points - 1][1]});
+        }
+    }
+    std::vector<int> degrees(representatives.size(), 0);
+    std::vector<std::vector<std::pair<int, int>>> adjacency(representatives.size());
+    for (int index = 0; index < (int)edges.size(); index++) {
+        degrees[edges[index].first]++;
+        degrees[edges[index].second]++;
+        adjacency[edges[index].first].push_back({index, edges[index].second});
+        adjacency[edges[index].second].push_back({index, edges[index].first});
+    }
+    std::vector<bool> used(edges.size(), false);
+    int contours = 0, closed = 0, open_ends = 0, branched = 0;
+    std::string open_log;
+    for (size_t seed = 0; seed < edges.size(); seed++) {
+        if (used[seed])
+            continue;
+        contours++;
+        bool all_closed = true;
+        std::vector<int> stack = {(int)seed}, component_edges, component_nodes;
+        while (!stack.empty()) {
+            int current = stack.back();
+            stack.pop_back();
+            if (used[current])
+                continue;
+            used[current] = true;
+            component_edges.push_back(current);
+            int nodes[2] = {edges[current].first, edges[current].second};
+            for (int end : nodes) {
+                component_nodes.push_back(end);
+                for (auto neighbour : adjacency[end])
+                    if (!used[neighbour.first])
+                        stack.push_back(neighbour.first);
+            }
+        }
+        std::sort(component_nodes.begin(), component_nodes.end());
+        component_nodes.erase(std::unique(component_nodes.begin(), component_nodes.end()),
+                              component_nodes.end());
+        for (int current : component_nodes) {
+            if (degrees[current] != 2)
+                all_closed = false;
+            if (degrees[current] == 1) {
+                open_ends++;
+                char line[256];
+                snprintf(line, sizeof(line),
+                         "SECTION_PROFILE_OPEN phase=%s entity=%d point=%.9f,%.9f\n", phase,
+                         node_entity[current], representatives[current][0],
+                         representatives[current][1]);
+                open_log += line;
+            } else if (degrees[current] > 2)
+                branched++;
+        }
+        if (all_closed)
+            closed++;
+    }
+    contours += standalone;
+    closed += standalone;
+    summary = {{"available", true},
+               {"entities", curves + standalone},
+               {"curves", curves},
+               {"standalone_curves", standalone},
+               {"contours", contours},
+               {"closed_contours", closed},
+               {"open_ends", open_ends},
+               {"branched_points", branched},
+               {"construction_entities", construction},
+               {"reference_entities", references},
+               {"unsupported_entities", unsupported},
+               {"tolerance_mm", tolerance}};
+    log("SECTION_PROFILE phase=%s entities=%d curves=%d standalone=%d contours=%d closed=%d "
+        "open_ends=%d branched=%d construction=%d references=%d unsupported=%d tolerance_mm=%.9g\n",
+        phase, curves + standalone, curves, standalone, contours, closed, open_ends, branched,
+        construction, references, unsupported, tolerance);
+    if (!open_log.empty())
+        log("%s", open_log.c_str());
+    if (ids)
+        ProArrayFree((ProArray *)&ids);
+    return summary;
+}
 static J sketch(const J &op) {
     Frame frame = sketch_frame(op);
     ProSelection plane_ref = selection(frame.surface, PRO_SURFACE),
@@ -1191,18 +1363,25 @@ static J sketch(const J &op) {
     CK(ProFeatureElemtreeFree(&f, root));
     ProSelectionFree(&plane_ref);
     ProSelectionFree(&orient);
-    if (!coordinate_plan.is_null()) {
-        ProSection saved = nullptr;
-        CK(ProFeatureSectionCopy(&f, 0, &saved));
+    ProSection saved = nullptr;
+    ProError copy_code = ProFeatureSectionCopy(&f, 0, &saved);
+    J native_section = {{"available", false}, {"query_code", copy_code}};
+    if (!copy_code) {
         try {
-            solver_info["coordinate_geometry_after_creation"] = verify_coordinate_plan(
-                saved, coordinate_plan["targets"], coordinate_plan["origin_id"]);
+            native_section = section_profile_summary(saved, "sketch");
+            if (!coordinate_plan.is_null())
+                solver_info["coordinate_geometry_after_creation"] = verify_coordinate_plan(
+                    saved, coordinate_plan["targets"], coordinate_plan["origin_id"]);
         } catch (...) {
             ProSectionFree(&saved);
             throw;
         }
         CK(ProSectionFree(&saved));
-    }
+    } else if (!coordinate_plan.is_null())
+        check(copy_code, "CopySketchSection");
+    else
+        log("SECTION_PROFILE_UNAVAILABLE phase=sketch copy_code=%d\n", copy_code);
+    solver_info["native_section"] = native_section;
     J ids = J::object();
     for (auto item : entities)
         ids[item.first] = item.second;
@@ -1222,16 +1401,16 @@ static J sketch(const J &op) {
          {"section_normal_sign", dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1}});
     if (op.contains("profile"))
         aliases[op["label"].get<std::string>()]["airfoil"] = op["profile"];
-    return {{"surface_id", frame.surface},
-            {"origin", frame.origin},
-            {"normal", frame.n},
-            {"u_axis", frame.u},
-            {"v_axis", frame.v}};
+    return {{"surface_id", frame.surface}, {"origin", frame.origin},
+            {"normal", frame.n},           {"u_axis", frame.u},
+            {"v_axis", frame.v},           {"native_section", native_section}};
 }
 // ProFeatureWithoptionsCreate reports an invalid section only as a bare code;
-// Toolkit validation stays authoritative, so explain the likely causes here
-// instead of duplicating the check.
-static std::string section_create_failure(const J &op, bool revolve, ProError error) {
+// Toolkit validation stays authoritative. Report the native section counts
+// when they are available and say plainly when they do not identify the cause
+// instead of naming one (R3 §4.2: the old text implied an invalid profile).
+static std::string section_create_failure(const J &op, bool revolve, ProError error,
+                                          const J &section) {
     std::string m = revolve ? "Revolve" : "Extrude";
     m += " feature creation failed (ProFeatureWithoptionsCreate=" + std::to_string(error) + ")";
     if (revolve) {
@@ -1239,8 +1418,21 @@ static std::string section_create_failure(const J &op, bool revolve, ProError er
              "not cross it; entities may touch the axis. The sketch must contain a centerline, "
              "or an explicit axis must be supplied, and the profile must be closed.";
     } else {
-        m += ". The profile must form a valid closed section.";
+        m += ". Toolkit rejected the referenced sketch section; the return code alone does not "
+             "identify whether closure, a geometric condition or the feature tree caused it.";
     }
+    if (section.value("available", false)) {
+        m += " Detected native section: " + std::to_string(section["closed_contours"].get<int>()) +
+             " closed contour(s), " + std::to_string(section["contours"].get<int>()) +
+             " contour(s), " + std::to_string(section["entities"].get<int>()) + " entity(ies), " +
+             std::to_string(section["open_ends"].get<int>()) + " open end(s).";
+        if (section["open_ends"].get<int>() > 0)
+            m += " The section carries open ends, so it is not a closed profile.";
+        else
+            m += " These counts do not identify the cause; the cause is not determined.";
+    } else
+        m += " Native section counts are unavailable (code " +
+             std::to_string(section.value("query_code", 0)) + "); the cause is not determined.";
     if (op["sketch"].is_string())
         m += " Sketch: '" + op["sketch"].get<std::string>() + "'.";
     if (!last_feature_errors.empty())
@@ -1352,7 +1544,15 @@ static J extrude_or_revolve(const J &op, bool revolve) {
         ProElementFree(&root);
         if (last_toolkit_error != "ProFeatureWithoptionsCreate")
             throw;
-        throw std::runtime_error(section_create_failure(op, revolve, error));
+        J section = {{"available", false}};
+        ProSection saved = nullptr;
+        ProError copy_code = ProFeatureSectionCopy(&sketch_f, 0, &saved);
+        if (!copy_code) {
+            section = section_profile_summary(saved, "feature_create_failure");
+            ProSectionFree(&saved);
+        } else
+            section["query_code"] = copy_code;
+        throw std::runtime_error(section_create_failure(op, revolve, error, section));
     }
     CK(ProElementFree(&root));
     remember(op, f);

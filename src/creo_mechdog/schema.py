@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
     RevolveAxis,
@@ -1248,4 +1249,30 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                 references(v, f"{path}.{key}")
 
     references([op for op in dumped if not op["op"].startswith("drawing_")], "operations")
+    sketches = {
+        op["label"]: op
+        for op in dumped
+        if op["op"] == "sketch" and isinstance(op.get("entities"), list)
+    }
+    for index, operation in enumerate(dumped):
+        # A solid extrude/revolve consumes the sketch section as one profile;
+        # thin features may legitimately use open chains. Only same-plan sketch
+        # definitions are visible here, so references to earlier jobs stay with
+        # the native solver.
+        if (
+            operation["op"] in ("extrude", "revolve")
+            and isinstance(operation.get("sketch"), str)
+            and operation.get("mode") != "surface"
+            and operation.get("thin") is None
+        ):
+            source = sketches.get(operation["sketch"])
+            if source:
+                try:
+                    validate_solid_profile(
+                        source["entities"],
+                        source.get("dimensioning", "auto"),
+                        operation["op"],
+                    )
+                except ValueError as error:
+                    raise ValueError(f"operations[{index}]: {error}") from error
     return dumped
