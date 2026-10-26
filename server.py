@@ -23,6 +23,7 @@ import seeds
 from capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
 from creo_mechdog import update_check
 from creo_mechdog.adoption import adopt
+from creo_mechdog.assembly_replay import plan_assembly_rebuild
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
 from creo_mechdog.capability_summary import release_status, support_status
@@ -88,6 +89,8 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
+    "src/creo_mechdog/session_assembly.py",
+    "src/creo_mechdog/assembly_replay.py",
     "src/creo_mechdog/session_erase.py",
     "src/creo_mechdog/model_registry.py",
     "src/creo_mechdog/registry_ops.py",
@@ -424,6 +427,16 @@ async def creo_inspect_session_assembly(
 ) -> dict[str, Any]:
     """Read-only inspection of a resident session assembly (FEAT-045). Select an already-loaded assembly by name from creo_list_session_models; the walk returns components in tree order with occurrence paths (component feature ids from the root), parent paths, name/type/origin/modified, resolved, suppressed and packaged flags, per-constraint snapshots (type, offset, orientation, assembly/component references with raw query codes) and full 4x4 transforms: transform_to_parent maps member coordinates into the owning assembly, transform_to_root into the inspected root; row-vector convention (p' = p * M), translation in the last row; transform_to_parent/transform_to_root are normalized full coordinate maps with millimeters on both sides, while transform_to_parent_raw/transform_to_root_raw keep the raw Creo matrices in the source/target model length units; per-node units (component/parent) and assembly length_unit carry real unit names, query codes and millimeter scales, null when unknown (normalized transforms are then null too, never guessed millimeters); when a parent transform or unit query fails, the unknown root transform propagates to descendants while confirmed local transforms stay available; missing components set subtree_not_visited and incomplete, a failed sub-assembly walk records subassembly_visit_code on the returned node, the depth limit (32) sets depth_limited, and a failed root visit reports root_visit_code instead of discarding the report; constraint offsets stay in the owning assembly's length unit. Missing, suppressed and failed nodes are marked per item instead of failing the report; unresolved components keep their occurrence path. Repeated instances are listed separately. First collection uses the single Toolkit channel (busy rejects immediately); cursor pages read the same frozen ten-minute snapshot within 32 KiB. Inspection never loads components, activates, regenerates, saves, adopts or creates managed revisions. Assembly editing/adoption is not part of this tool."""
     return await invoke(inspect_session_assembly, name, limit, cursor)
+
+
+@mcp.tool(annotations=READ)
+async def creo_plan_assembly_rebuild(
+    snapshot_id: str,
+    component_mapping: list[dict[str, Any]],
+    reference_mapping: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Plan an ordered insert-then-constrain rebuild from a frozen assembly snapshot (FEAT-049). Read-only: no component loading, adoption, save, revision, write job or Toolkit connection. snapshot_id is the snapshot_id returned by creo_inspect_session_assembly (schema_version 3, at most 600 s old, complete and single-level). component_mapping is one entry per snapshot occurrence: {occurrence: occurrence_label or occurrence_path, label: new target component label, source_model_id: managed part/sheetmetal model_id}; every occurrence must be mapped exactly once. reference_mapping maps each source constraint reference: {source: {component: sibling occurrence_label or null for the assembly root, item_type, item_id, side?}, target: execute_plan reference object, target_component?: sibling label for the assembly side, target_side?: yellow|red|none}; references are never inferred across models. The response operations insert every component first (fixed/default placement per the real snapshot semantics, or fixed before constraints) and then set mate/align/mate_offset/align_offset/insert/csys constraints; offsets are converted to millimeters; fixed/default placements stay single placement operations. Every assemble_component carries rebuild_binding (source model, revision, file sha256) that creo_execute_plan re-checks before queueing and the native executor re-checks before loading. Unknown types, missing mappings, unreplayable root references, expired/older snapshots, changed sources, nested occurrences and plans over the 200-operation limit are refused; no operation_results are produced."""
+    return await invoke(plan_assembly_rebuild, snapshot_id, component_mapping, reference_mapping)
 
 
 @mcp.tool(annotations=CREATE)

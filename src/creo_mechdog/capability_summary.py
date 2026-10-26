@@ -85,6 +85,18 @@ def support_status(capability_families: dict[str, dict[str, Any]]) -> dict[str, 
             ),
             "tracking": "FEAT-045",
         },
+        "assembly_replay": {
+            **family_entry(
+                "assembly_replay",
+                "supported_limited",
+                "read-only planning of a single-level assembly rebuild from a frozen "
+                "snapshot: explicit occurrence and reference mappings produce ordered "
+                "insert then constraint operations for creo_execute_plan; fixed/default "
+                "placements keep their real semantics and source revision/digest "
+                "bindings are re-checked at submission; native acceptance pending",
+            ),
+            "tracking": "FEAT-049",
+        },
         "external_file_managed_edit": {
             "status": "not_supported_through_open",
             "summary": "creo_open_file never modifies external files; adopt the opened model "

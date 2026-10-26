@@ -301,7 +301,7 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(direct, (await server.creo_startup_status())["update"])
             tools = {tool.name: tool for tool in await server.mcp.list_tools()}
             tool = tools["creo_check_update"]
-            self.assertEqual(len(tools), 92)
+            self.assertEqual(len(tools), 93)
             self.assertTrue(tool.annotations.read_only_hint)
             self.assertTrue(tool.annotations.open_world_hint)
             self.assertFalse(tool.annotations.destructive_hint)

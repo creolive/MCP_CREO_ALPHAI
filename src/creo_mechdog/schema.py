@@ -780,8 +780,31 @@ class AssemblyConstraint(StrictModel):
     assembly_reference: dict[str, Any]
     component_reference: dict[str, Any]
     offset: float = 0
-    assembly_side: Literal["yellow", "red"] = "yellow"
-    component_side: Literal["yellow", "red"] = "yellow"
+    assembly_side: Literal["yellow", "red", "none"] = "yellow"
+    component_side: Literal["yellow", "red", "none"] = "yellow"
+    # T09: explicit same-level sibling component for the assembly side. Omitted
+    # means the assembly's own geometry; identity is never inferred from an
+    # item_id found in another model. A digit-only string is the stringified ID
+    # branch of the public label-or-ID contract (BUG-073).
+    assembly_component: Any = None
+
+    @field_validator("assembly_component", mode="before")
+    @classmethod
+    def valid_assembly_component(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+            value = int(value)
+        if type(value) is int:
+            if not 0 <= value <= 2147483647:
+                raise ValueError("assembly_component IDs must be nonnegative 32-bit integers")
+            return value
+        if isinstance(value, str) and re.fullmatch(_LABEL_PATTERN, value):
+            return value
+        raise ValueError(
+            "assembly_component must be a component label starting with a lowercase letter "
+            "([a-z0-9_], at most 28 characters) or a nonnegative feature ID"
+        )
 
 
 class AssembleOp(AssemblyPose):
@@ -790,6 +813,9 @@ class AssembleOp(AssemblyPose):
     source_model_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
     placement: Literal["fixed", "default", "constraints"] = "fixed"
     constraints: list[AssemblyConstraint] = []
+    # T09 replay plans bind the source revision and digest they were planned
+    # against; admission and the native executor re-check them before use.
+    rebuild_binding: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def placement_valid(self):

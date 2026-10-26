@@ -3173,23 +3173,58 @@ static J length_unit_json(const InspectionLengthUnits &units, const MillimeterSc
                sdk_query_code_json(scale.conversion_queried, scale.conversion_query_code)}}}};
 }
 
-static J assembly_selection_json(ProSelection selection) {
+// Component feature name (the occurrence label the assembly tree shows) for one
+// sibling component id. Used by the snapshot so a reference can be described by
+// its owning same-level component instead of an id that only means something in
+// the source model. A failed query stays null with its raw code.
+static J component_label_json(ProSolid assembly, int component_id, J &codes, const char *key) {
+    ProModelitem item = {};
+    ProError init_code = ProModelitemInit(assembly, component_id, PRO_FEATURE, &item);
+    ProName name = {};
+    ProError name_code = init_code ? init_code : ProModelitemNameGet(&item, name);
+    codes[key] = name_code;
+    return {{"occurrence_label", name_code ? J(nullptr) : J(utf8(name))},
+            {"occurrence_label_query_code", name_code}};
+}
+
+// T09: describe one constraint reference side. The occurrence scope distinguishes
+// the assembly's own datum (root reference) from a same-level sibling component;
+// a nested path is reported as "nested" and can never be replayed in this phase.
+static J assembly_selection_json(ProSelection selection, ProSolid assembly, J &codes) {
     J reference = J::object();
+    reference["owner_scope"] = "unknown";
     ProAsmcomppath component_path;
     ProError path_code = ProSelectionAsmcomppathGet(selection, &component_path);
     reference["comppath_query_code"] = path_code;
     if (!path_code) {
         ProMdlName owner_name = {};
-        if (!ProMdlMdlnameGet(component_path.owner, owner_name)) {
+        if (!ProMdlMdlnameGet(component_path.owner, owner_name))
             reference["owner_name"] = utf8(owner_name);
-            J ids = J::array();
-            int levels = component_path.table_num;
-            if (levels > PRO_MAX_ASSEM_LEVEL)
-                levels = PRO_MAX_ASSEM_LEVEL; // clamp a garbage count defensively
-            for (int i = 0; i < levels; ++i)
-                ids.push_back(component_path.comp_id_table[i]);
-            reference["occurrence_path"] = ids;
+        J ids = J::array();
+        int levels = component_path.table_num;
+        if (levels > PRO_MAX_ASSEM_LEVEL)
+            levels = PRO_MAX_ASSEM_LEVEL; // clamp a garbage count defensively
+        for (int i = 0; i < levels; ++i)
+            ids.push_back(component_path.comp_id_table[i]);
+        reference["occurrence_path"] = ids;
+        if (levels == 0)
+            reference["owner_scope"] = "assembly";
+        else {
+            reference["owner_scope"] = levels == 1 ? "component" : "nested";
+            const int sibling_id = component_path.comp_id_table[0];
+            reference["occurrence_component_id"] = sibling_id;
+            J label = component_label_json(assembly, sibling_id, codes,
+                                           levels == 1 ? "asm_sibling_label" : "nested_label");
+            for (auto it = label.begin(); it != label.end(); ++it)
+                reference[it.key()] = it.value();
         }
+    } else {
+        // Some root-level assembly selections carry no component path; the
+        // owning model still tells us this is the assembly's own datum instead
+        // of leaving an unidentifiable scope.
+        ProModelitem selected;
+        if (!ProSelectionModelitemGet(selection, &selected) && selected.owner == (ProMdl)assembly)
+            reference["owner_scope"] = "assembly";
     }
     ProModelitem item;
     ProError item_code = ProSelectionModelitemGet(selection, &item);
@@ -3201,7 +3236,27 @@ static J assembly_selection_json(ProSelection selection) {
     return reference;
 }
 
-static J constraint_json(ProAsmcompconstraint constraint) {
+static bool reference_identity_known(const J &reference) {
+    return reference.is_object() && reference.value("item_query_code", -1) == 0 &&
+           reference.contains("item_type") && reference.contains("item_id");
+}
+
+static const char *datum_side_name(ProDatumside side) {
+    static const std::map<int, const char *> side_names = {{PRO_DATUM_SIDE_YELLOW, "yellow"},
+                                                           {PRO_DATUM_SIDE_RED, "red"},
+                                                           {PRO_DATUM_SIDE_NONE, "none"}};
+    auto found = side_names.find((int)side);
+    return found == side_names.end() ? "unknown" : found->second;
+}
+
+// T09: one constraint snapshot with both reference identities, both datum
+// directions, the offset unit and an explicit replay verdict. The six write
+// types this phase can rebuild are mate/align/mate_offset/align_offset/insert/
+// csys; fixed and default placements are reported with their real semantics so
+// the planner never substitutes one for a constraint it cannot replay.
+static J constraint_json(ProAsmcompconstraint constraint, ProAsmcomp *component,
+                         const InspectionLengthUnits &owner_units,
+                         const MillimeterScale &owner_scale) {
 // The shared mapping pins the published ProAsmcompConstrType values; SDK enum
 // drift fails the build instead of silently renaming production symbols.
 #ifndef CREO_CONSTRAINT_CODES_FALLBACK
@@ -3215,39 +3270,103 @@ static J constraint_json(ProAsmcompconstraint constraint) {
     J item = J::object();
     J codes = J::object();
     ProAsmcompConstrType type = PRO_ASM_FIX;
-    int type_code = ProAsmcompconstraintTypeGet(constraint, &type);
+    const int type_code = ProAsmcompconstraintTypeGet(constraint, &type);
     codes["type"] = type_code;
-    if (!type_code) {
-        const char *name = assembly_constraint_type_name((int)type);
-        item["type"] = name ? name : "unknown";
+    const bool type_known = type_code == PRO_TK_NO_ERROR;
+    const char *type_name = type_known ? assembly_constraint_type_name((int)type) : nullptr;
+    item["type"] = type_name ? type_name : "unknown";
+    if (type_known)
         item["type_code"] = (int)type;
-    } else {
-        item["type"] = nullptr;
-    }
     double offset = 0.0;
-    int offset_code = ProAsmcompconstraintOffsetGet(constraint, &offset);
+    const int offset_code = ProAsmcompconstraintOffsetGet(constraint, &offset);
     codes["offset"] = offset_code;
-    item["offset"] = offset_code ? J(nullptr) : J(offset);
+    const bool offset_known = offset_code == PRO_TK_NO_ERROR && std::isfinite(offset);
+    item["offset"] = offset_known ? J(offset) : J(nullptr);
+    item["offset_unit"] = length_unit_json(owner_units, owner_scale);
+    item["offset_mm"] =
+        offset_known && owner_scale.known ? J(offset * owner_scale.scale) : J(nullptr);
     ProSelection selection = nullptr;
-    ProDatumside side = PRO_DATUM_SIDE_NONE;
-    int asm_code = ProAsmcompconstraintAsmreferenceGet(constraint, &selection, &side);
+    ProDatumside asm_side = PRO_DATUM_SIDE_NONE;
+    const int asm_code = ProAsmcompconstraintAsmreferenceGet(constraint, &selection, &asm_side);
     codes["asm_reference"] = asm_code;
-    item["asm_reference"] = asm_code ? J(nullptr) : assembly_selection_json(selection);
-    int comp_code = ProAsmcompconstraintCompreferenceGet(constraint, &selection, &side);
+    item["asm_reference"] =
+        asm_code || !selection
+            ? J(nullptr)
+            : assembly_selection_json(selection, (ProSolid)component->owner, codes);
+    if (!asm_code && selection)
+        ProSelectionFree(&selection);
+    selection = nullptr;
+    ProDatumside comp_side = PRO_DATUM_SIDE_NONE;
+    const int comp_code = ProAsmcompconstraintCompreferenceGet(constraint, &selection, &comp_side);
     codes["comp_reference"] = comp_code;
-    item["comp_reference"] = comp_code ? J(nullptr) : assembly_selection_json(selection);
-    static const std::map<int, const char *> side_names = {{PRO_DATUM_SIDE_YELLOW, "yellow"},
-                                                           {PRO_DATUM_SIDE_RED, "red"},
-                                                           {PRO_DATUM_SIDE_NONE, "none"}};
-    if (!asm_code || !comp_code) {
-        auto found = side_names.find(side);
-        item["orientation"] = found != side_names.end() ? found->second : "unknown";
+    item["comp_reference"] =
+        comp_code || !selection
+            ? J(nullptr)
+            : assembly_selection_json(selection, (ProSolid)component->owner, codes);
+    if (!comp_code && selection)
+        ProSelectionFree(&selection);
+    // Both directions are kept separately; "orientation" stays the legacy
+    // single field and follows the component side unless that query failed.
+    item["asm_side"] = asm_code ? J(nullptr) : J(datum_side_name(asm_side));
+    item["comp_side"] = comp_code ? J(nullptr) : J(datum_side_name(comp_side));
+    item["orientation"] = comp_code ? (asm_code ? J("unknown") : J(datum_side_name(asm_side)))
+                                    : J(datum_side_name(comp_side));
+    // Placement-only constraints keep their real semantics. Anything else must
+    // be one of the six supported write types to be replayable.
+    const bool placement = type_known && (type == PRO_ASM_FIX || type == PRO_ASM_DEF_PLACEMENT);
+    const bool automatic = type_known && type == PRO_ASM_AUTO;
+    if (placement)
+        item["placement_kind"] = type == PRO_ASM_FIX ? "fixed" : "default";
+    else if (automatic)
+        item["placement_kind"] = "auto";
+    const bool supported =
+        type_known && (type == PRO_ASM_MATE || type == PRO_ASM_MATE_OFF || type == PRO_ASM_ALIGN ||
+                       type == PRO_ASM_ALIGN_OFF || type == PRO_ASM_INSERT || type == PRO_ASM_CSYS);
+    const J &asm_reference = item["asm_reference"];
+    const J &comp_reference = item["comp_reference"];
+    const bool asm_known = reference_identity_known(asm_reference);
+    const bool comp_known = reference_identity_known(comp_reference);
+    const std::string asm_scope =
+        asm_reference.is_object() ? asm_reference.value("owner_scope", "unknown") : "unknown";
+    const std::string comp_scope =
+        comp_reference.is_object() ? comp_reference.value("owner_scope", "unknown") : "unknown";
+    const bool comp_own = comp_known && comp_scope == "component" &&
+                          comp_reference.value("occurrence_component_id", -1) == component->id;
+    const bool offset_type = type_known && (type == PRO_ASM_MATE_OFF || type == PRO_ASM_ALIGN_OFF);
+    bool replayable = false;
+    const char *reason = nullptr;
+    if (!type_known) {
+        reason = "type_query_failed";
+    } else if (placement) {
+        replayable = true; // a real fixed/default placement, not a constraint replay
+    } else if (automatic) {
+        reason = "automatic_placement";
+    } else if (!supported) {
+        reason = "unsupported_type";
+    } else if (!asm_known) {
+        reason = "missing_assembly_reference";
+    } else if (!comp_known) {
+        reason = "missing_component_reference";
+    } else if (asm_scope == "nested" || comp_scope == "nested") {
+        reason = "nested_reference";
+    } else if (!comp_own) {
+        reason = "component_reference_not_own_component";
+    } else if (!offset_known) {
+        reason = "offset_query_failed";
+    } else if (offset_type && !owner_scale.known) {
+        reason = "offset_unit_unknown";
+    } else {
+        replayable = true;
     }
+    item["replayable"] = replayable;
+    item["reason"] = reason ? J(reason) : J(nullptr);
     item["query_codes"] = codes;
     return item;
 }
 
-static J component_constraints_json(ProAsmcomp *component, J &codes) {
+static J component_constraints_json(ProAsmcomp *component, J &codes,
+                                    const InspectionLengthUnits &owner_units,
+                                    const MillimeterScale &owner_scale) {
     J constraints = J::array();
     ProAsmcompconstraint *list = nullptr;
     // The comppath form with the owning-assembly path is the supported read;
@@ -3264,7 +3383,8 @@ static J component_constraints_json(ProAsmcomp *component, J &codes) {
         int count = 0;
         if (!ProArraySizeGet((ProArray)list, &count))
             for (int i = 0; i < count; ++i) {
-                constraints.push_back(constraint_json(list[i]));
+                constraints.push_back(
+                    constraint_json(list[i], component, owner_units, owner_scale));
             }
         ProAsmcompconstraintArrayFree(list);
     } else if (code == PRO_TK_E_NOT_FOUND) {
@@ -3306,6 +3426,12 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     item["occurrence_path"] = path_json;
     item["parent_path"] = parent_json;
     item["depth"] = context->depth;
+    // T09: the occurrence label is the same-level component identity a replay
+    // mapping names; the numeric id stays for traceability.
+    J component_label =
+        component_label_json((ProSolid)component->owner, feature->id, codes, "occurrence_label");
+    for (auto it = component_label.begin(); it != component_label.end(); ++it)
+        item[it.key()] = it.value();
     ProFeatStatus feature_status = PRO_FEAT_ACTIVE;
     int status_code = ProFeatureStatusGet(feature, &feature_status);
     codes["feature_status"] = status_code;
@@ -3405,7 +3531,7 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
     // the report incomplete; the node's own known local maps stay observable.
     if (!parent_map_known || !step.root_mm_known || !step.root_raw_known)
         walk.mark_incomplete();
-    item["constraints"] = component_constraints_json(component, codes);
+    item["constraints"] = component_constraints_json(component, codes, parent_units, parent_scale);
     item["query_codes"] = codes;
     const size_t node_index = walk.record_node(item);
     if (walk.truncated)

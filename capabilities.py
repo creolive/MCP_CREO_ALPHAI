@@ -157,6 +157,44 @@ def families() -> dict:
                 "or managed revision; assembly editing/adoption not included"
             ),
         },
+        "assembly_replay": {
+            "enabled": True,
+            "tool": "creo_plan_assembly_rebuild",
+            "snapshot_schema_version": 3,
+            "supported_constraints": [
+                "mate",
+                "align",
+                "mate_offset",
+                "align_offset",
+                "insert",
+                "csys",
+            ],
+            "scope": (
+                "Read-only planning of a single-level assembly rebuild from a frozen "
+                "creo_inspect_session_assembly snapshot: explicit occurrence and "
+                "source-reference mappings produce ordered assemble_component then "
+                "component_constraints operations for creo_execute_plan"
+            ),
+            "placement_semantics": (
+                "fixed and default placements are replayed as their real placement "
+                "operations; a constrained component is inserted fixed and then its "
+                "constraints are set; a component without recorded constraints is "
+                "frozen at its observed pose and labelled packaged/unconstrained"
+            ),
+            "binding": (
+                "each assemble_component carries the source model, revision and file "
+                "sha256; creo_execute_plan and the native executor re-check the binding "
+                "before the source is used. The 600-second snapshot window is planning "
+                "evidence, not a long-lived write authorization"
+            ),
+            "limits": (
+                "snapshot schema 3, complete single-level assemblies and managed "
+                "part/sheetmetal sources only; unknown constraint types, missing, "
+                "ambiguous or nested references, older/expired snapshots, changed "
+                "sources and plans over the 200-operation limit are refused; no split "
+                "transactions, no FEAT-050 comparison, no new constraint types"
+            ),
+        },
         "disk_open": {
             "enabled": True,
             "tool": "creo_open_file",

@@ -29,6 +29,45 @@
    `status=succeeded`、`saved_file_reloaded_and_verified=true`、`revision+1`；
    再用 `creo_list_components` 核对组件集、位姿与约束。
 
+## 约束快照回放（DEV-047 T09 / FEAT-049）
+
+`creo_inspect_session_assembly` 的快照 schema 3 为每个约束补充双侧引用身份
+（`asm_reference`/`comp_reference` 的 `owner_scope`、`occurrence_label`、
+`item_type`/`item_id`）、双侧方向（`asm_side`/`comp_side`）、偏移单位
+（`offset_unit`、毫米口径 `offset_mm`）和 `replayable`/`reason`。schema 2 及更早
+的快照没有这些证据，回放工具明确拒绝，不会静默升级。
+
+只读规划工具：
+
+```text
+creo_plan_assembly_rebuild(snapshot_id, component_mapping, reference_mapping)
+```
+
+- `snapshot_id` 来自 `creo_inspect_session_assembly`，必须 schema 3、完整
+  （`complete=true`、未截断/未限深）且在 600 秒内。十分钟只是规划证据窗口，
+  不是长期写入授权；计划本身绑定源件 revision/摘要，提交时重新核验。
+- `component_mapping`：每个 occurrence 一条
+  `{occurrence: occurrence_label 或 occurrence_path, label: 新目标组件标签,
+  source_model_id: 受管 part/sheetmetal}`；全部 occurrence 必须唯一覆盖，重复的
+  occurrence label 用 `occurrence_path` 区分。
+- `reference_mapping`：每个源引用一条
+  `{source: {component: 同层组件 occurrence_label 或 null(装配根), item_type,
+  item_id, side?}, target: execute_plan 引用对象, target_component?:
+  装配侧目标组件标签, target_side?: yellow|red|none}`。引用身份必须显式给出，
+  不凭 item_id 跨模型推断；同一源引用多条匹配视为歧义拒绝。
+- 输出 `operations` 先插入全部组件（fixed/default 按快照真实语义单列；带约束
+  组件先以 fixed 插入，再执行 `component_constraints`），随后按快照顺序设置
+  `mate`/`align`/`mate_offset`/`align_offset`/`insert`/`csys`；偏移统一换算为
+  毫米。装配侧同层兄弟引用通过约束内的 `assembly_component` 明确表达。
+- 每个 `assemble_component` 带 `rebuild_binding`（源 model_id、revision、文件
+  sha256）。`creo_execute_plan` 受理时在通道锁内重读 registry 与文件字节，原生
+  执行器加载源件前再核对 revision。源件变化、过期/旧快照、缺映射、未知类型、
+  嵌套引用和超过 200 操作的规划都明确拒绝，不拆成多个事务；执行失败仍由既有
+  单作业事务整批回滚。
+- 规划本身不加载、不收养、不修改原装配或源件，不创建作业/revision，不连接
+  Toolkit，也不产生 `operation_results`；未覆盖 FEAT-050 公共比对、嵌套装配和
+  新约束类型。
+
 ## 位姿与矩阵约定
 
 - `translation` 为 XYZ 毫米；`rotation` 为 XYZ Euler 度（先 X 后 Y 再 Z）；

@@ -288,6 +288,13 @@ def submit(
                     raise ValueError(
                         "Nested assembly copying is not yet supported; insert owned part/sheetmetal models"
                     )
+        # DEV-047 T09: a replay plan binds the source revision/file digest it was
+        # planned against. Re-read the registry and file bytes under the channel
+        # lock so a source edit or external byte change is refused before a job
+        # exists; the native executor re-checks the revision again before loading.
+        from creo_mechdog.assembly_replay import validate_source_bindings
+
+        validate_source_bindings(operations, models_root=MODELS)
         aliases = model_registry.aliases_of(model) if not new else {}
         # Deleted labels are tombstones: they can never name a new feature
         # (FEAT-027), so they are reserved exactly like existing aliases.

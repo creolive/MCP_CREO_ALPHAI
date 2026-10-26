@@ -17,7 +17,19 @@ PAGE_BYTES = 32 * 1024
 # only raw native matrices (no real units, root_visit_code or depth_limited).
 # A cursor must never re-describe those values in millimeters; such snapshots
 # are rejected explicitly instead of KeyError-ing or guessing units.
-SNAPSHOT_SCHEMA_VERSION = 2
+# DEV-047 T09: schema 3 adds both reference identities, both datum directions,
+# the offset unit in millimeters and a replayable/reason verdict per constraint.
+# Version 2 snapshots stay readable only through their own cursor semantics and
+# are refused by creo_plan_assembly_rebuild, never silently upgraded.
+SNAPSHOT_SCHEMA_VERSION = 3
+CONSTRAINT_REPLAY_NOTE = (
+    "constraint snapshots carry asm_reference/comp_reference identity with owner_scope "
+    "(assembly root, same-level component or nested), occurrence_label for sibling "
+    "components, asm_side/comp_side directions, offset plus offset_unit/offset_mm and a "
+    "replayable/reason verdict; pass the snapshot_id to creo_plan_assembly_rebuild to "
+    "plan an insert-then-constrain rebuild"
+)
+REPLAY_SUPPORTED_TYPES = ["mate", "align", "mate_offset", "align_offset", "insert", "csys"]
 REFRESH_GUIDANCE = (
     "Omit cursor to re-collect the assembly snapshot; a query carrying a cursor "
     "keeps reading its frozen snapshot and never reflects later session changes"
@@ -158,6 +170,14 @@ def inspect_session_assembly(name: str, limit: int = 20, cursor: str | None = No
         "root_visit_code": snapshot["root_visit_code"],
         "next_cursor": None,
         "snapshot_only": True,
+        "snapshot_schema_version": snapshot.get("schema_version"),
+        "constraint_replay": {
+            "supported": True,
+            "tool": "creo_plan_assembly_rebuild",
+            "types": list(REPLAY_SUPPORTED_TYPES),
+            "read_only": True,
+            "note": CONSTRAINT_REPLAY_NOTE,
+        },
         "snapshot_age_seconds": max(0, int(time.time() - snapshot["created"])),
         "expires_in_seconds": max(0, int(SNAPSHOT_SECONDS - (time.time() - snapshot["created"]))),
         "refresh_guidance": REFRESH_GUIDANCE,

@@ -356,20 +356,23 @@ static void fix_component(ProAsmcomp *c) {
     ProAsmcompconstraintArrayFree(list);
     check(e, "FixComponent");
 }
+static J component_aliases_for(int component_id, const J &saved_aliases) {
+    J result = J::object();
+    for (auto item : saved_aliases)
+        if (item.value("feature_id", -1) == component_id)
+            result = item.value("component_aliases", J::object());
+    if (component_aliases_in_flight.count(component_id))
+        result = component_aliases_in_flight.at(component_id);
+    return result;
+}
 static ProSelection component_reference(ProAsmcomp *component, const J &reference) {
     ProMdl child;
     CK(ProAsmcompMdlGet(component, &child));
     ProMdl saved = board;
     J saved_aliases = aliases;
-    J child_aliases = J::object();
-    for (auto item : saved_aliases)
-        if (item.value("feature_id", -1) == component->id)
-            child_aliases = item.value("component_aliases", J::object());
-    if (component_aliases_in_flight.count(component->id))
-        child_aliases = component_aliases_in_flight.at(component->id);
     ProSelection local;
     board = child;
-    aliases = child_aliases;
+    aliases = component_aliases_for(component->id, saved_aliases);
     try {
         local = resolve(reference);
     } catch (...) {
@@ -390,17 +393,65 @@ static ProSelection component_reference(ProAsmcomp *component, const J &referenc
     CK(ProSelectionAlloc(&path, &mi, &contextual));
     return contextual;
 }
-static ProSelection assembly_reference(const J &reference) {
-    ProSelection local = resolve(reference);
+// T09: the assembly side of a constraint is either the assembly's own geometry
+// (no assembly_component) or a same-level sibling component named explicitly by
+// label or feature id. The sibling's model is the resolution context, so a
+// reference such as {kind:surface,id:...} means that component's own geometry;
+// identity is never inferred from an item_id in another model.
+static ProSelection assembly_reference(const J &constraint) {
+    const J &reference = constraint.at("assembly_reference");
+    const bool sibling =
+        constraint.contains("assembly_component") && !constraint.at("assembly_component").is_null();
+    ProMdl saved = board;
+    J saved_aliases = aliases;
+    ProFeature sibling_row = {};
+    ProAsmcomp *sibling_component = nullptr;
+    if (sibling) {
+        sibling_row = feature(constraint.at("assembly_component"));
+        ProFeattype type;
+        CK(ProFeatureTypeGet(&sibling_row, &type));
+        if (type != PRO_FEAT_COMPONENT)
+            throw std::runtime_error("assembly_component must name a component of this assembly");
+        sibling_component = (ProAsmcomp *)&sibling_row;
+        ProMdl child;
+        CK(ProAsmcompMdlGet(sibling_component, &child));
+        board = child;
+        aliases = component_aliases_for(sibling_component->id, saved_aliases);
+    }
+    ProSelection local;
+    try {
+        local = resolve(reference);
+    } catch (...) {
+        board = saved;
+        aliases = saved_aliases;
+        throw;
+    }
+    board = saved;
+    aliases = saved_aliases;
     ProModelitem mi;
     CK(ProSelectionModelitemGet(local, &mi));
     ProSelectionFree(&local);
     ProIdTable ids = {};
+    int levels = 0;
+    if (sibling_component) {
+        ids[0] = sibling_component->id;
+        levels = 1;
+    }
     ProAsmcomppath context;
-    CK(ProAsmcomppathInit((ProSolid)board, ids, 0, &context));
+    CK(ProAsmcomppathInit((ProSolid)board, ids, levels, &context));
     ProSelection result;
     CK(ProSelectionAlloc(&context, &mi, &result));
     return result;
+}
+static ProDatumside constraint_side(const J &spec, const char *key) {
+    std::string value = spec.value(key, "yellow");
+    if (value == "yellow")
+        return PRO_DATUM_SIDE_YELLOW;
+    if (value == "red")
+        return PRO_DATUM_SIDE_RED;
+    if (value == "none")
+        return PRO_DATUM_SIDE_NONE;
+    throw std::runtime_error(std::string(key) + " must be yellow, red or none");
 }
 static void component_constraints(ProAsmcomp *c, const J &constraints) {
     ProAsmcompconstraint *list = nullptr;
@@ -413,18 +464,21 @@ static void component_constraints(ProAsmcomp *c, const J &constraints) {
                                                          {"csys", PRO_ASM_CSYS}};
     for (size_t i = 0; i < constraints.size(); i++) {
         auto spec = constraints[i];
+        const std::string type = spec.value("type", "");
+        auto found = types.find(type);
+        if (found == types.end())
+            throw std::runtime_error("Unsupported assembly constraint type: " + type);
+        if (spec.contains("assembly_component") && !spec.at("assembly_component").is_null() &&
+            feature_id(spec.at("assembly_component")) == c->id)
+            throw std::runtime_error("A component constraint cannot reference its own component "
+                                     "as the assembly side");
         CK(ProAsmcompconstraintAlloc(&list[i]));
-        CK(ProAsmcompconstraintTypeSet(list[i], types.at(spec["type"])));
-        ProSelection a = assembly_reference(spec["assembly_reference"]),
+        CK(ProAsmcompconstraintTypeSet(list[i], found->second));
+        ProSelection a = assembly_reference(spec),
                      b = component_reference(c, spec["component_reference"]);
-        CK(ProAsmcompconstraintAsmreferenceSet(list[i], a,
-                                               spec.value("assembly_side", "yellow") == "yellow"
-                                                   ? PRO_DATUM_SIDE_YELLOW
-                                                   : PRO_DATUM_SIDE_RED));
+        CK(ProAsmcompconstraintAsmreferenceSet(list[i], a, constraint_side(spec, "assembly_side")));
         CK(ProAsmcompconstraintCompreferenceSet(list[i], b,
-                                                spec.value("component_side", "yellow") == "yellow"
-                                                    ? PRO_DATUM_SIDE_YELLOW
-                                                    : PRO_DATUM_SIDE_RED));
+                                                constraint_side(spec, "component_side")));
         ProSelectionFree(&a);
         ProSelectionFree(&b);
         CK(ProAsmcompconstraintOffsetSet(list[i], spec.value("offset", 0.0)));
@@ -433,10 +487,33 @@ static void component_constraints(ProAsmcomp *c, const J &constraints) {
     ProAsmcompconstraintArrayFree(list);
     check(e, "ComponentConstraints");
 }
+// T09: a replay plan binds the source revision and file digest. The Python
+// admission already re-read the registry and file bytes; the native executor
+// re-checks the revision it actually received before loading the source so a
+// plan cannot silently rebuild from a different revision.
+static void verify_rebuild_binding(const J &op, const J &source) {
+    if (!op.contains("rebuild_binding") || op.at("rebuild_binding").is_null())
+        return;
+    const J &binding = op.at("rebuild_binding");
+    if (!binding.is_object())
+        throw std::runtime_error("rebuild_binding must be an object");
+    const std::string model_id = op.at("source_model_id").get<std::string>();
+    if (binding.value("source_model_id", "") != model_id)
+        throw std::runtime_error(
+            "Rebuild binding names a different source model than source_model_id");
+    const int bound = binding.value("source_revision", -1);
+    const int current = source.value("revision", -1);
+    if (bound != current)
+        throw std::runtime_error("Rebuild source revision changed after planning (bound " +
+                                 std::to_string(bound) + ", current " + std::to_string(current) +
+                                 "); collect a new snapshot and plan again instead of rebuilding "
+                                 "from a different revision");
+}
 static void assemble_component(const J &op) {
     ProMatrix position;
     assembly_rigid_transform(op, position);
     J source = component_sources.at(op["source_model_id"].get<std::string>());
+    verify_rebuild_binding(op, source);
     ProPath file;
     path(file, wide(source["part_file"]));
     ProMdl child;
