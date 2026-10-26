@@ -58,6 +58,62 @@
       "detail": {
         "model_type": "part"
       }
+    },
+    {
+      "at": "2026-10-25T15:29:05.792784+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed b2d_bad_df1a9e76",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-25T15:29:36.676843+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed b2w_bad_1531cc2b",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-25T15:34:44.760810+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed b2d_ok_c2f2e753",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-25T15:58:59.220065+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed wb_ext_clean",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-26T00:30:53.581162+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed pipe_orig_asm_574f25cd",
+      "detail": {
+        "model_type": "assembly"
+      }
+    },
+    {
+      "at": "2026-10-26T00:36:31.256517+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed wb_ext_clean",
+      "detail": {
+        "model_type": "part"
+      }
+    },
+    {
+      "at": "2026-10-26T00:36:39.764306+00:00",
+      "tool": "creo_open_file",
+      "summary": "displayed b2w_pipeline_a_039a0a37",
+      "detail": {
+        "model_type": "part"
+      }
     }
   ]
 }
