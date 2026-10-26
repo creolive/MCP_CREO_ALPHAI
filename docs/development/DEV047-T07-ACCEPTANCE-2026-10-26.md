@@ -64,7 +64,7 @@
 | `python tools/test_t07_preview.py` | 输出 `OFFLINE ONLY`，未创建 MCP 客户端；期望体积 disk=60318.579、after_cut=56548.668、after_pattern=45238.934 mm³ |
 | `python tools/test_t07_preview.py --live`（缺确认标志） | 按设计拒绝并退出，未连接 |
 | 变更 Python 的 Ruff check / format --check | `src/creo_mechdog/preview.py`、`bridge.py`、`generic_bridge.py`、`tools/test_t07_preview.py`、`tests/unit/test_t07_preview.py` 全部通过，未新增风格基线豁免 |
-| 项目 clang-format 对 `native/preview.h`、`native/worker.cpp`、`native/generic.cpp`、`native/drawing.cpp` | `--dry-run --Werror` 通过；格式化差异只落在本次新增/修改区域，无存量格式清理 |
+| 项目 clang-format 23.1.3 对 `native/preview.h`、`native/worker.cpp`、`native/generic.cpp`、`native/drawing.cpp` | `--style=file --fallback-style=none --dry-run --Werror` 通过；格式化差异只落在本次新增/修改区域，无存量格式清理 |
 | `python bridge.py build` | 匹配 SDK 原生执行器构建通过；`build/creo_worker.exe` SHA256 `0BC7F894EF18828F121741E16735FC5AC72CA86516717B2A5314CC1349D8A3E8`，该生成物不入库 |
 | `python tools/dev_check.py --work-item BUG-066` | exit 0、`success=true`、`unit_tests=passed`、`native_validation=not_run`；`style_summary` 为既有基线（lint 30、未格式化 16），无新增违规；证据 `build/development_check.json`、`build/t07-devcheck.log` |
 
