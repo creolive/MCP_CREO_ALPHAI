@@ -89,4 +89,4 @@ R1 §5 P1-5是旧“未变”跟踪且未复测MX_DOWN，不能推翻本卡0.5.2
 
 T06 为多闭环草图补充可定位诊断：草图结果新增 `profile`（输入解析的闭环/开链数、实体数、解析面积、嵌套深度及相交/自交/相切/零面积/近容差/开链/分叉分类计数）与 `native_section`（求解后 section 的真实闭环、实体、开端点和分叉点计数，含查询/释放码），compact 投影保留两者。准入仅拒绝由输入证明非法的同计划实心拉伸/回转；近容差只在显式 coordinates（原生 epsilon 1e-9 mm）下致命，避免以统一阈值替代原生判断。拉伸/回转创建失败信息改为引用实际 section 计数：仅当 `open_ends>0` 说明非闭合，否则明确“原因未确定”，保留 `ProFeatureWithoptionsCreate` 原码与元素错误。
 
-本次不新增诊断工具或根因猜测，不改变既有 `failed_stage`/`failed_toolkit_call` 语义；实机触发、真实失败码与保存/回滚证据由 T13 收口。详见 [T06 记录](../development/DEV047-T06-ACCEPTANCE-2026-10-26.md)，提交 `38c1606`、`7182ef0`。
+本次不新增诊断工具或根因猜测，不改变既有 `failed_stage`/`failed_toolkit_call` 语义；实机触发、真实失败码与保存/回滚证据由 T13 收口。详见 [T06 记录](../development/DEV047-T06-ACCEPTANCE-2026-10-26.md)，提交 `38c1606`、`7182ef0`、`565b5bc`。

@@ -1,6 +1,6 @@
 # DEV-047 / T06 多闭环截面与诊断离线验收
 
-日期：2026-10-26（Asia/Shanghai）。条目：[BUG-049](../work-items/BUG-049.md)（主项）、[FEAT-006](../work-items/FEAT-006.md)（诊断子项）。任务分支：`codex/dev047-t06-multi-contours`，基线 `27eebd1`（集成分支 `codex/dev047-feedback052`，含 T00/T01/T02/T03/T04/T05）。源码提交 `38c1606`（实现）与 `7182ef0`（最终受测，补充无闭合轮廓拒绝）。受测服务源码版本仍为 0.6.1，目标 0.7.0 的集成与 Release 由 T13 完成。
+日期：2026-10-26（Asia/Shanghai）。条目：[BUG-049](../work-items/BUG-049.md)（主项）、[FEAT-006](../work-items/FEAT-006.md)（诊断子项）。任务分支：`codex/dev047-t06-multi-contours`，基线 `27eebd1`（集成分支 `codex/dev047-feedback052`，含 T00/T01/T02/T03/T04/T05）。源码提交 `38c1606`（实现）、`7182ef0`（无闭合轮廓拒绝）与 `565b5bc`（最终受测，回转中心线不计入 section 计数）。受测服务源码版本仍为 0.6.1，目标 0.7.0 的集成与 Release 由 T13 完成。
 
 ## 范围与素材边界
 
@@ -21,7 +21,7 @@
 - `schema.validate_operations` 对**同一计划内定义**的实体草图与其后的实心 `extrude`/`revolve` 做准入检查：只拒绝上述已由输入证明非法的组合；没有任何可确认闭环的草图同样拒绝；`mode="surface"`、`thin`（允许开链）以及引用计划外既有草图的实体不做静态判定。准入拒绝发生在作业创建前，不产生 job/model。
 - `near_tolerance` 仅在显式 `dimensioning="coordinates"` 时视为致命：坐标模式的原生求解 epsilon 为 1e-9 mm，1e-4 级别的缝隙会以开链进入内核；`auto`/`autodim` 的 1e-4 epsilon 由原生决定，本轮不以静态检查替代。
 - 合法多环（分离与合法嵌套）不分组、不并集、不吸附顶点，也没有新增“最多两个轮廓”的限制；一次 `extrude`/`revolve` 仍只引用一张草图并生成一个原生特征。
-- 原生 `generic.cpp` 新增 `section_profile_summary`：按本机 SDK 头文件核对后使用 `ProSectionEntityIdsGet`、`ProSectionEntityGet`、`ProSectionEntityIsConstruction`、`ProSectionEntityIsProjection` 读取**求解后的 section**。统计排除构造几何、投影参照与坐标系实体，按 1e-6 mm 端点聚类给出 `entities`、`curves`、`standalone_curves`、`contours`、`closed_contours`、`open_ends`、`branched_points` 及查询/释放码，日志前缀 `SECTION_PROFILE`、`SECTION_PROFILE_OPEN`。空/失败查询只记录 `available=false` 与原始码，不使草图创建失败。
+- 原生 `generic.cpp` 新增 `section_profile_summary`：按本机 SDK 头文件核对后使用 `ProSectionEntityIdsGet`、`ProSectionEntityGet`、`ProSectionEntityIsConstruction`、`ProSectionEntityIsProjection` 读取**求解后的 section**。统计排除构造几何、投影参照、坐标系与回转中心线实体，按 1e-6 mm 端点聚类给出 `entities`、`curves`、`standalone_curves`、`contours`、`closed_contours`、`open_ends`、`branched_points` 及查询/释放码，日志前缀 `SECTION_PROFILE`、`SECTION_PROFILE_OPEN`。空/失败查询只记录 `available=false` 与原始码，不使草图创建失败。
 - 草图操作结果新增 `native_section`（上述真实计数）。`operation_results.annotate_profiles` 在持久化前为草图结果附加 `profile`（输入解析的环数、实体数、面积、各分类计数），`server.py`/`bridge.py` 的 compact 投影保留 `profile` 与 `native_section`。T02 的 `index`、`execution_status`、`effect_status` 及回滚语义未改。
 - `section_create_failure` 不再断言“轮廓必须构成有效闭合截面”。有原生 section 计数时返回实际环数/实体数/开端点；`open_ends>0` 才明确说明不是闭合截面，否则明确“计数不能定位原因、原因未确定”，并保留 `ProFeatureWithoptionsCreate` 原码。该修改针对 R3 §4.2 的误导性报错，不以裸 -1 推断重叠或 contour 标记原因。
 - `capabilities.py` 与 `creo_create_sketch` 说明补充多环支持、准入边界与诊断字段。未新增/停用 MCP 工具，未改忙拒、不排队、不重试、unknown 保护、T03 帧字段、T04 坐标回读门槛、T05 轴字段。
@@ -37,14 +37,14 @@
 | 检查 | 结果 |
 | --- | --- |
 | `python -m unittest tests.unit.test_t06_multi_contours -q` | 15 项通过；覆盖 2/5/10 圆、5/10 四弧环、2 圆+5 四弧环、合法嵌套、五个非法类别分别拒绝、无闭合轮廓拒绝、近似容差在 coordinates/autodim 的差异、开链薄拉伸、surface/既有草图边界、椭圆跳过、结果与 compact 投影、按标签匹配 |
-| `python -m unittest discover -s tests -q` | 837 项通过，耗时 217.784 秒（dev_check 内 204.828 秒）；既有套件无回归 |
+| `python -m unittest discover -s tests -q` | 837 项通过，耗时 213.894 秒（dev_check 内 213.492 秒）；既有套件无回归 |
 | 变更 Python 的 Ruff check / format --check | 10 个文件通过，未新增风格基线豁免 |
-| 项目 clang-format 23.1.3 对 `native/generic.cpp` | 通过；格式化差异只落在本次新增/修改行，无存量格式清理 |
-| `python bridge.py build` | 匹配 SDK 原生执行器构建通过；`build/creo_worker.exe` SHA256 `AE3480D89918C651D9893580497C100EB4C2BD0FE7E69CA621CAD47C3444D5E8`，该生成物不入库 |
+| 项目 clang-format 23.1.3 对 `native/generic.cpp` | 通过（格式化后与原文件逐字节一致）；差异只落在本次新增/修改行，无存量格式清理 |
+| `python bridge.py build` | 匹配 SDK 原生执行器构建通过；`build/creo_worker.exe` SHA256 `BE3608EF34E8F70A31FBDADFC83877B6737F3F9EE0BE15C6B06A06DF33DCF98A`，该生成物不入库 |
 | `python tools/test_t06_native.py` | 输出 `OFFLINE ONLY`，未创建 MCP 客户端、未连接 Toolkit |
 | `python tools/dev_check.py --work-item BUG-049` | exit 0、`success=true`、`unit_tests=passed`、`native_validation=not_run`；`style_summary` 为既有基线（lint 30、未格式化 16），无新增违规；证据 `build/development_check.json`、`build/t06-devcheck.log` |
 
-最终 dev_check 指纹（`build/development_check.json`）：基线提交 `7182ef0b5008b5dcf63ae803a80727a667d45ad0`（dirty=true，仅既有 `session_activity.json` 本地改写与未跟踪运行文件），受测源码 `checked_source_sha256=50a030557cbe573ff9d26cafe13fb354b689ce41fcd23d26b6ee7f7d336c67ca`，生成时间 `2026-10-26T16:02:35Z`；单元结果 `Ran 837 tests in 204.828s` → `OK`。提交后仅追加本记录与台账文档，未再改源码。
+最终 dev_check 指纹（`build/development_check.json`）：基线提交 `565b5bce3ac965b474a7e5665a678d557a12fb37`（dirty=true，仅既有 `session_activity.json` 本地改写与未跟踪运行文件），受测源码 `checked_source_sha256=b1d9e3d024aefc0421bceb10bfa8de131b3bc6447dcbc1a0cd034180d7b663b0`，生成时间 `2026-10-26T16:16:05Z`；单元结果 `Ran 837 tests in 213.492s` → `OK`。提交后仅追加本记录与台账文档，未再改源码。
 
 ### 夹具与解析断言（离线）
 
