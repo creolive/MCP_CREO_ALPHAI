@@ -51,3 +51,10 @@ T05 毫米几何矩阵此前已在该通道通过（18/18，见 T05 记录 Live0
 
 - **BUG-078 三个旧现场落定**：`de6f0bb5…`/`bebe7e2b…`/`57294ff8…` 实测均 status=failed 且仅 `restore_baseline` 可用（需显式 apply+证据+幂等键），accept_saved/accept_live 均不可用——与 BUG-078 2026-10-22 记录一致，FEAT-006 2026-10-24"已 accept 收口"说法不成立。三现场维持**待操作者选择**，本轮未 apply、未清保护、未改登记；口径冲突以本实测为准落定。
 - **T11 真实世代只读盘点**：`creo_callback_status.generation_inventory` 取得本机 build/ 实际三态（records_status/current_generation_key/注册与回退保留等，详见证据文件）；未删除任何真实目录。
+
+## T13 补充：既有装配专项复跑（2026-10-26）
+
+- `python tools/test_assembly_matrix.py --session-health-verified`（config 临时守卫后恢复）：`success=true`、38 个作业，毫米/英寸组件矩阵与已知点对照在 0.7.0 结果契约下复跑通过；报告 `build/assembly_matrix_live_20261026T204440Z/report.json`。
+- `python tools/test_assembly_units.py`（离线 SDK 替身编译测试）：exit 0；报告在 `build/assembly_units_test/`。
+
+至此 T13 约定范围内仍未完成的仅剩：T05 原生非毫米/unknown 单位覆盖、T07 预览图像人工目视复核、安装解包冒烟，以及 0.7.0 版本/发布（main 合入+标签+Release 附件，须全部约定验收完成且用户指派最终交付后实施）。
