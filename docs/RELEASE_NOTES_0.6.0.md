@@ -1,7 +1,8 @@
-# MCP_CREO_MechDog 0.6.0 版本说明（发布候选）
+# MCP_CREO_MechDog 0.6.0 版本说明
 
-日期：2026-10-26。**本文件描述合入 main 前的发布候选；远端 GitHub Release 尚不存在，
-发布由控制者在合入实际主干提交后按 [RELEASING](development/RELEASING.md) 执行并核对。**
+日期：2026-10-26。第二批可靠装配重建管线的开发、实机与安装证据见
+[发布验收记录](validation/RELEASE-0.6.0.md)，主干提交、正式附件与完整 SHA256 见
+[GitHub Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.6.0)。
 本次为 0.5.0 反馈整合计划第二批（可靠的装配重建管线，MINOR），基于 0.5.3。当前注册
 公开工具 92 个（前一版本 0.5.3 为 91，本版新增
 `creo_adopt_file`，实际可见清单以 `creo_capabilities` 为准）。
@@ -56,9 +57,13 @@
   same-key 回放、依赖探针分支）；最终管线 10 父作业全成功（快照刷新新唯一 label，
   7200→7800、12384→12984、装配 rev 3→4）；独立全量 dev_check 748 项 0 失败 0 错误
   （b86 干净树）。以上均为开发者 MCP 实机证据，**不是 WorkBuddy 黑盒**。
+- 最终候选 a2a3913 再次完成公开 MCP 实机：矩阵 38 父作业（含预设失败成功回滚）、
+  管线 10 父作业全成功；六项收养 2 成功/4 拒绝、原键回放和只读补充核验通过。
+  全新解包目录完成 setup.ps1、依赖/包/9 种子校验、常量重新生成与 SDK 复编，
+  安装后导入版本 0.6.0。原失败报告保留，范围与详细证据见发布验收记录。
 - WorkBuddy 黑盒：用户已于 2026-10-26 明确取消本批 WorkBuddy 测试，**未执行**，
   不记为通过。
-- 发布候选检查：0.6.0 元数据工作树（BASE beb8408、dirty=true）全量 dev_check
+- 0.6.0 定版检查：0.6.0 元数据工作树（BASE beb8408、dirty=true）全量 dev_check
   748 项通过，0 失败 0 错误，受测源码 SHA256
   `f4dd3524c864ce6679bf02703bece60f4657c393781af0e555c83f122223e9e5`；
   SDK 构建成功，原生源码未变、复用匹配执行器。报告与完整日志见
@@ -80,12 +85,12 @@
   [BUG-064](work-items/BUG-064.md)：外部 -11、非原点轴阵列、surface 平面引用
   待复现。
 
-## 附件（发布后由控制者核对）
+## 附件与校验
 
 - 源码包 `MCP_CREO_MechDog-0.6.0-source.zip` 与种子包
   `MCP_CREO_MechDog-0.6.0-seed-library.zip` 须从合入后的实际 main 提交生成；
   Release body 必须列出两包完整文件名与 64 位 SHA256 并回下载核对。
-- 候选阶段种子包（本批源码生成，9 种子、24 文件）：
+- 定版准备的确定性种子包（本批源码生成，9 种子、24 文件）：
   `build/release_candidate_0.6.0_20261026T005954Z/MCP_CREO_MechDog-0.6.0-seed-library.zip`，
   SHA256 `e17563e66e24a1f879ecab91fff0b98ed7cfca94821ea103516e5e9bcc87166a`
   （最终发布附件从实际主干提交重打，必须与上述哈希及 `seeds.py` 一致）。

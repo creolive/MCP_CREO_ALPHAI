@@ -6,7 +6,7 @@
 
 当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.6.0**（0.5.0 反馈整合第二批：可靠的装配重建管线，MINOR，新增公开工具 `creo_adopt_file`，工具数 92；远端 Release 待本候选合入 main 后由控制者发布，当前为发布候选状态），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.6.0.md)。本版交付：装配姿态唯一嵌套 3×3 `rotation_matrix`（行向量局部到父级、1e-6 正交校验、与 Euler 互斥，[FEAT-012](docs/work-items/FEAT-012.md)/[BUG-045](docs/work-items/BUG-045.md)）；按路径及批量收养 `creo_adopt_file`（inspect/apply、证据令牌与幂等键、逐件独立提交、不改变当前窗口、源文件只读，[FEAT-048](docs/work-items/FEAT-048.md)，契约见 [FILE_ADOPTION](docs/FILE_ADOPTION.md)）；官方装配重建管线示例与说明、组件变更摘要 `component_changes`、约束 `type_name` 符号名（[FEAT-008](docs/work-items/FEAT-008.md)，见 [ASSEMBLY_REBUILD](docs/ASSEMBLY_REBUILD.md)）。开发者实机验收已通过（本机 Creo 12.4，证据见 [BATCH2-LIVE-ACCEPTANCE-2026-10-26](docs/development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)）；本批 WorkBuddy 黑盒经用户 2026-10-26 决定取消，未执行、不记为通过。已知问题：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，根因定位为损坏会话级，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.5.3（外部 Creo 9 反馈整合阶段一+阶段三）见[版本说明](docs/RELEASE_NOTES_0.5.3.md)。
+当前服务／源码版本为 **0.6.0**（0.5.0 反馈整合第二批：可靠装配重建管线，MINOR，公开工具 91→92）。本版新增按路径及批量收养 `creo_adopt_file`、装配 `rotation_matrix`、组件变更摘要及约束符号名，提供官方重建流程与示例。源件编辑不会自动更新既有 `source_snapshot`；当前通过删除并以新标签插入再生成。开发检查 748 项、本机 Creo 12.4 对应实机及新目录安装通过；WorkBuddy 经用户决定取消本批，未执行、不记通过。功能、兼容与已知问题见[版本说明](docs/RELEASE_NOTES_0.6.0.md)，验收见[发布记录](docs/validation/RELEASE-0.6.0.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.5.3](docs/RELEASE_NOTES_0.5.3.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 

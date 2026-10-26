@@ -158,5 +158,5 @@
 装配 rev 3→4）。raw 报告关键值与文件 SHA256 见
 [development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。
 WorkBuddy 黑盒经用户 2026-10-26 决定取消本批（未执行、不记通过）；上述配套随
-0.6.0 发布候选交付，远端 Release 待合入 main 后由控制者发布；并发、unknown
-自然分支、其他 Creo 版本未实机。
+0.6.0 交付，见[发布记录](validation/RELEASE-0.6.0.md)；并发、unknown 自然分支、
+其他 Creo 版本未实机。
