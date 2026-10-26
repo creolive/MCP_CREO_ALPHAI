@@ -1,18 +1,20 @@
 # 第二批可靠装配重建管线：开发者实机验收综合证据（2026-10-26）
 
 范围：FEAT-012/BUG-045 矩阵子项、FEAT-048 按路径/批量收养、FEAT-008 官方装配重建管线
-（DEV-046 第二批）。本轮只做开发者验收证据与文档收口：不改生产代码/测试逻辑/版本，
-不连接新 Toolkit、不启动/结束 Creo、不清 unknown、不故障注入、不合入 main/推送/发版。
+（DEV-046 第二批）。本文汇总实际执行的开发者验收与证据复核，未改生产代码/版本，
+未结束 Creo、清 unknown 或故障注入；未合入 main/推送/发版。
 
-分支 `codex/feat012-matrix-pipeline` HEAD `b86fa4a7c1184767c50b1ecc12352114c070d386`，
-工作树干净（`git status --porcelain` 空）；`c50fd65` 与 main `b5ad5d5` 均为祖先；
+受测分支 `codex/feat012-matrix-pipeline` 的源码提交为
+`b86fa4a7c1184767c50b1ecc12352114c070d386`；该次开发检查时工作树干净
+（`git status --porcelain` 空），后续证据提交只改文档；`c50fd65` 与 main `b5ad5d5` 均为祖先；
 21 个暂存文件由 d563958 保全（tree `08ba93a34409f539145686ea91541ce34fb34102`，
 备份 `E:\Projects\md050-preservation\20261025-165659`）。canonical
 `E:\Projects\MCP_CREO_MechDog` 为 detached 同一 b86 候选（本机 dev 服务规范），
 main ref 仍 b5、版本仍 0.5.3；canonical 仅多 tracked 运行账本 session_activity.json
 自然变化与既有 untracked，保留不还原/不提交。
 
-**以下全部为重启后的真实开发者 MCP 实机证据，不是 WorkBuddy 黑盒。** 环境：Windows 11
+**以下全部为真实开发者 MCP 实机证据，不是 WorkBuddy 黑盒。** 第 2～6 节运行于
+2026-10-25 23:07（Asia/Shanghai）那次重启之后、10-26 06:58 再次重启之前。环境：Windows 11
 x64 / Python 3.12.14 / Creo 12.4.0.0 匹配 SDK+MSVC；重启后 parametric 进程 4516 /
 xtop 17932，session fingerprint `1841692455511503772`。canonical native worker
 SHA256 `9b25859862fffecbb79bfc655795bbb35cabba0d5f6e5dd41a60955966ad35ad`，
@@ -42,10 +44,13 @@ native 生产源码本轮未再变。所有 raw 报告关键值已经人工核�
   job `b0292449d74345f582858540bc30ea81`，`toolkit_code=-23`，
   `rollback_succeeded=true`，`component_changes.status=rolled_back`，装配 revision
   与位姿恢复后后续作业继续成功）。覆盖 11 组姿态、实际查询矩阵基向量/已知点、
-  非法互斥/形状/NaN/反射输入拒绝、revision 递进、native 保存重载、约束数字码 13
+  Euler/矩阵互斥输入拒绝、revision 递进、native 保存重载、约束数字码 13
   + `type_name="fix"` 并存、装配体积 330（11×30）独立几何断言（原生质量属性，
   保存重载后复检）；记录 bbox 为源盒×回读矩阵的**预期派生值**，不是 Creo 实测
   装配 bbox。
+  该驱动没有逐项调用形状、字符串、布尔、非有限数、反射、缩放及非正交负例；
+  不能由这份实机报告判为 MCP 入口全部已测；标准 JSON 可表达的 8 类负例随后由
+  第 6 节另行实测，数值 NaN/Infinity 仍只离线覆盖。
 - 配套 guard `build/guarded_live_20261025T162020624286/report.json`
   （SHA256 `ec9eaf6a88f484715a12b3954a56a47d9bd6266133e7e7065532ed618b7cf45`）：
   **总体 `success=false`（不写通过）**——旧管线驱动 step 9e 以原 label 复用
@@ -108,8 +113,8 @@ native 生产源码本轮未再变。所有 raw 报告关键值已经人工核�
   源 A 7200→7800（外伸凸台 tab 体积 600）；新旧装配快照总体积均 12384；源编辑后
   原生 regenerate+保存重载仍 12384（list_components 缓存不变，仅缓存非实时证明）；
   单作业 remove `plate_a` + 新唯一 label `plate_a_refreshed` 重插后 12984，
-  装配 rev 3→4，`component_changes` committed（removed 旧 feature_id / added 新
-  feature_id 与新 copy name、当前 source_revision）；三 occurrence（含 B 重复 +
+  装配 rev 3→4，`component_changes` committed（removed 旧 feature_id 40 / added 新
+  feature_id 49、source_revision=2），组件回读另确认新 copy name；三 occurrence（含 B 重复 +
   非对称组合旋转 R）按实际 occurrence_path 与 mm transform 重建并回读匹配冻结
   快照；源只读 hash 不变、原装配只读检查不改动。保留原 label 需两个独立作业，
   第二失败不回滚首个删除；生产 alias 预检规则未改。
@@ -119,10 +124,47 @@ native 生产源码本轮未再变。所有 raw 报告关键值已经人工核�
   succeeded；释放时无 md050 native worker 存活且通道锁空闲。旧 24 个历史
   pending/running 登记不属本轮，不核销、不清保护。
 
+## 6. 四条真实 MCP 路径的 32 个矩阵拒绝输入（canonical，源码 b86）
+
+- `md050/build/matrix_entry_reject_20261025T173627Z/report.json`
+  （SHA256 `d2fb3fc87d2d1494f339b7d7d2e720dd49be4f594e3a3f18381a4fac9d36fdc7`）：
+  8 类输入分别调用独立 `creo_assemble_component`、独立
+  `creo_component_placement`、plan assemble、plan placement，共 32 次真实调用。
+  输入包括 Euler 与矩阵并传、平铺 9 元素、缺列、字符串元素、布尔元素、反射、
+  缩放和剪切（非正交量 `0.000002`）。全部为服务入口校验拒绝，原始错误命中对应
+  矩阵原因，未因 busy、revision、模型或标签错误掩盖；`accepted_job_count=0`。
+  model `fc8b1c60f0b947debba6ca84726fcc90` 的完整 components/aliases 前后相等，
+  仍为 11 个组件、revision 40。NaN/Infinity 没有以非标准 JSON 发送，不判其 MCP
+  数值输入已实测。
+- 临时驱动仅保存在忽略目录，未改生产测试：`matrix_entry_reject.py` SHA256
+  `e298faaeee525bc05b97ec770e8e7d9a252f6bce87106b40c677fc5bc55d3fcd`。
+  canonical 工作树只有既有运行账本变化和 untracked；md050 当时有本文等 4 份文档
+  修订，生产源码与 b86 相同。
+- 成功 guard `canonical/build/guarded_live_20261025T173855736205/report.json`
+  （SHA256 `dd7c4e50a9e35a5da97bb4bcaeabee4b846356c617fcd27058bc5721bc4fd646`）：
+  `success=true`、子进程 exit 0、quiet/released，未发现新增作业、无 native worker
+  存活。前次临时驱动的局部变量错误在发送负例前退出，guard
+  `guarded_live_20261025T173751464498` 为 `success=false`、exit 1、quiet/released，
+  未新增作业；失败原件保留，不计通过。
+
+## 7. 第二次停电重启后的恢复核对（2026-10-26）
+
+Windows boot 06:58:15（Asia/Shanghai）；当前 parametric PID 20180、xtop PID 20164
+于 08:07 启动。只读画面是正常 Creo 起始页，无模型或阻塞对话框；00:19:21 UTC
+公开 `creo_session_status` 返回 `connected=true`、connect/disconnect code 0，
+visible Creo 窗口无挂起，当前模型为空。该次启动历史显示
+`launched_by_coordinator=true`，不是沿用前次进程。这里仅证明新会话连接正常，
+不替代前六节几何验收，也不重写其会话指纹。
+
+恢复复核：原 21 文件 tree 不变，856 份旧 model 控制文件 SHA256 不变；main
+`b5ad5d5` 的 338 个 `docs/validation/` 文件与当前逐字节一致。未清历史 pending、
+unknown 或其他保护。新会话的 WorkBuddy 场景需重新读取驻留状态并打开只读原装配。
+
 ## WorkBuddy 与未测范围（必须保留）
 
-- WorkBuddy 黑盒**仍未运行**：重启后 Codeg 把 WB 窗口 w17 置为 read 非 control；
-  已备独立纯 MCP 提示词 `build/workbuddy_batch2_20261026/PROMPT.txt`，但无黑盒结果。
+- WorkBuddy 黑盒**仍未运行**：最新重启后工具看到整个屏幕为 read，WorkBuddy
+  窗口最小化且没有单独 control 共享；须由用户在 Computer use 改为读取和操作。
+  已备独立纯 MCP 提示词 `build/workbuddy_batch2_20261026/PROMPT-UTF8.txt`，但无黑盒结果。
   **当前不能判整批交付或发布。**
 - 未实机：并发/通道忙交错、unknown 自然分支与断连故障注入、其他 Creo 版本
   （9/10 未复验）、modified/wrong-origin/token 超时等收养准入分支（仅离线）、

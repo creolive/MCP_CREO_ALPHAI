@@ -1,6 +1,6 @@
 # 统一开发台账
 
-建立：2026-10-13；最近更新：2026-10-26（第二批开发者实机验收收口；最新发布仍为 0.5.3）。当前开发服务/源码版本：0.5.3（0.5.0/0.5.1 外部 Creo 9 反馈整合阶段一+阶段三，codex/feedback05051-phase1 整合批次；发布核对见 [RELEASE-0.5.3.md](validation/RELEASE-0.5.3.md)）；前一发布 0.5.2（[发布核对](validation/RELEASE-0.5.2.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）。阶段三离线全量与实机收口见[收口证据](validation/PHASE3-CLOSEOUT-2026-10-25.md)。第二批（codex/feat012-matrix-pipeline，HEAD b86fa4a）开发者实机已通过、WorkBuddy 黑盒待验收，证据见[第二批实机验收](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)，未发版。
+建立：2026-10-13；最近更新：2026-10-26（第二批开发者实机验收收口；最新发布仍为 0.5.3）。当前开发服务/源码版本：0.5.3（0.5.0/0.5.1 外部 Creo 9 反馈整合阶段一+阶段三，codex/feedback05051-phase1 整合批次；发布核对见 [RELEASE-0.5.3.md](validation/RELEASE-0.5.3.md)）；前一发布 0.5.2（[发布核对](validation/RELEASE-0.5.2.md)）；0.4.6 反馈整合计划两批已全部随版交付（0.4.8+0.5.0）。阶段三离线全量与实机收口见[收口证据](validation/PHASE3-CLOSEOUT-2026-10-25.md)。第二批（codex/feat012-matrix-pipeline，受测源码 b86fa4a）开发者实机已通过、WorkBuddy 黑盒待验收，证据见[第二批实机验收](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)，未发版。
 
 本页只安排未完成工作和单列的历史观察；完成结论见[完成档案](BACKLOG_COMPLETED.md)。各固定 ID 只出现一条任务记录，工作卡和原始证据保存详细输入、历史过程与已测范围。
 
@@ -23,13 +23,13 @@
 | 开发中 | 4 | 继续已登记的分期工作 |
 | 待复现 | 19 | 补齐输入与环境，复现并定位（BUG-081 转验收中、BUG-082 转待开发后下调 2） |
 | 待核实 | 12 | 明确输入、规则或预期后再定性 |
-| 验收中 | 28 | 按卡补齐剩余验证，不重复计入旧成功（BUG-081、BUG-083 转入） |
+| 验收中 | 29 | 按卡补齐剩余验证，不重复计入旧成功（FEAT-048 按当前工作卡归类；BUG-081、BUG-083 转入） |
 | 待规划 | 45 | 确定范围、兼容规则与验收方法 |
 | 待开发 | 1 | 范围已明确，安排实施批次（BUG-082 autodim 改角） |
 | 观察中 | 2 | 出现新证据后再转回调查 |
 | 已交付/已修复/已验收（未收口，状态保留） | 6 | 归类口径：已交付2、已修复，WorkBuddy复验通过（待发布）1、已修复（验收中）2、已验收（本机）1；均有另期保留范围，按各卡待收口下一步收口后再移档，不改原状态凑数 |
 
-共 117 项：115 项未完成工作、2 项历史观察。历史观察的原优先级仅保留来源，不代表当前排期或发布阻断。本轮修正 FEAT-048 此前在"待开发"与"验收中"重复计数的矛盾（另见该卡 2026-10-26 实机验收节），完成数不变。
+共 118 项：116 项未完成工作、2 项历史观察。历史观察的原优先级仅保留来源，不代表当前排期或发布阻断。本轮按 118 个唯一 ID 实际记录复核计数，将汇总表中 FEAT-048 的旧“待开发”分类改归“验收中”，总数与完成数不变。
 
 - 收到失败报告不等于根因已确认；部分实现/通过只缩小剩余范围，不批量关闭。状态变化同时同步工作卡，完成项及时移入档案。
 - 新工作先登记固定 ID、目标、范围、环境与验收要求；执行过程写入工作卡或证据，使用[模板](templates/WORK_ITEM.md)。
@@ -149,7 +149,7 @@
 | FEAT-005 | P2 | 待规划 | 未排期 | revision 冲突时，返回 model_id、current_revision 和 expected_revision，让调用者看到哪个版本不一致。继续拒绝过期请求，拒绝时不创建 job。 |
 | [FEAT-006](work-items/FEAT-006.md) | P2 | 验收完成 | 0.5.2 | 接管空窗口结构化与预检阶段诊断已随0.4.5交付；收养拒绝有界逐特征诊断（0.5.0反馈计划第一批P1-5）已实现并通过单元/编译/dev_check（2026-10-24 回收核对独立复跑558例通过；整合树561例通过），实机取证与 WorkBuddy 黑盒均通过（unhealthy_features 本码+真实抑制特征明细+会话不变性，NO_CURRENT_MODEL 分支同日闭环，[记录](validation/BUG080-FEAT006-LIVE-2026-10-24.md)）；剩余其他操作的原生失败特征/引用/错误详情、轮廓自交预检方案和union长错误精简，未知原因不得猜测。 |
 | FEAT-007 | P2 | 待规划 | 未排期 | 长任务应显示已完成和总操作数、当前操作，以及正在建模、保存、重载、登记、回滚还是等人工处理。已执行的操作可能还没保存；没有可靠进度或结果未知时，不显示编造的完成百分比。曲面反馈另建议 creo_get_job 增加 wait_seconds 长轮询（现单 job 需 4～6 次轮询，长链路耗时翻倍），完成即返回并与 MCP progress 机制配合。 |
-| [FEAT-008](work-items/FEAT-008.md) | P2 | 待规划 | 未排期 | 2026-10-25 第二批第二阶段配套已交付离线实现：官方装配重建管线示例与说明（docs/ASSEMBLY_REBUILD.md + examples）、source_snapshot 语义与再生成方式、组件变更摘要、list_components 约束符号名、实机驱动与 WorkBuddy 场景文档；实机/WorkBuddy 待验收。继续底板holes真实数组、对称深度与编辑、平面引用/构造三项首批及逐工具引用/矩阵/源件说明。0.4.5摘要用法与拒绝说明已交付，装配只读检查另见 FEAT-045。**2026-10-26 实机收口小修**：管线实机 step 9e 以原 label 复用 remove+re-assemble 被入口拒绝（`Feature labels already exist: ['plate_a']`，无新作业，证据 `build/assembly_pipeline_live_20261025T162553Z`）；驱动/示例/说明改为一个作业内 remove 旧 label+新唯一 label 重插（同 source、原 pose），保留原 label 须拆两个作业各自 revision+1；别名预检离线回归 3 项，见卡与 [development 记录](development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md)。**同日最终管线 b86 实机重跑通过**（`build/assembly_pipeline_live_20261025T170907Zf5978fb3`，guard `guarded_live_20261025T170905774374` 子 exit 0、settle quiet/released、16 个新发现作业全 success）：10 父作业全成功，快照刷新新唯一 label `plate_a_refreshed`（体积 12384→12984、装配 rev 3→4、removed/added 实际 feature_id），源编辑 +600 后 regenerate+保存重载仍 12384；源只读 hash 不变，见卡与 [实机验收证据](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。 |
+| [FEAT-008](work-items/FEAT-008.md) | P2 | 待规划 | 未排期 | 2026-10-25 第二批第二阶段配套已交付离线实现：官方装配重建管线示例与说明（docs/ASSEMBLY_REBUILD.md + examples）、source_snapshot 语义与再生成方式、组件变更摘要、list_components 约束符号名、实机驱动与 WorkBuddy 场景文档；开发者实机通过，WorkBuddy 待验收。继续底板holes真实数组、对称深度与编辑、平面引用/构造三项首批及逐工具引用/矩阵/源件说明。0.4.5摘要用法与拒绝说明已交付，装配只读检查另见 FEAT-045。**2026-10-26 实机收口小修**：管线实机 step 9e 以原 label 复用 remove+re-assemble 被入口拒绝（`Feature labels already exist: ['plate_a']`，无新作业，证据 `build/assembly_pipeline_live_20261025T162553Z`）；驱动/示例/说明改为一个作业内 remove 旧 label+新唯一 label 重插（同 source、原 pose），保留原 label 须拆两个作业各自 revision+1；别名预检离线回归 3 项，见卡与 [development 记录](development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md)。**同日最终管线 b86 实机重跑通过**（`build/assembly_pipeline_live_20261025T170907Zf5978fb3`，guard `guarded_live_20261025T170905774374` 子 exit 0、settle quiet/released、16 个新发现作业全 success）：10 父作业全成功，快照刷新新唯一 label `plate_a_refreshed`（体积 12384→12984、装配 rev 3→4、removed/added 实际 feature_id），源编辑 +600 后 regenerate+保存重载仍 12384；源只读 hash 不变，见卡与 [实机验收证据](development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。 |
 | FEAT-009 | P2 | 待规划 | 未排期 | 扩展放样切除、曲面、非平行截面及相切/曲率控制。7～20 截面种子、截面增删和模式转换分别测试，不能用其中一项通过代表全部可用。可乐瓶任务书第 2 步（两 50° 截面放样曲面）直接命中：0.3.5 的 loft 仅 solid/add/XY 平行截面/默认 body，外部只能用 revolve{new_body} 几何等价绕道，见[曲面反馈](validation/feedback-0.3.5-surface-2026-10-18/report.md)；曲面模式与 FEAT-039 的 MVR 第 4 步联动。 |
 | FEAT-010 | P2 | 待规划 | 未排期 | 给坐标草图增加明确的驱动尺寸和基础约束，并逐种测试。基础约束可用，不代表任意约束组合都支持。0.3.5/Creo 10 反馈请求解除 coordinates 的主平面限制（倾斜面被拒后只能退 autodim，失去坐标保真度；坐标尺寸本身与平面无关，见[能力边界反馈](validation/FEEDBACK-0.3.5-CAPABILITY-2026-10-18.md) §4.1）。 |
 | FEAT-011 | P2 | 待规划 | 未排期 | 增加复合轨迹、可变截面和螺旋扫掠，分别明确范围并测试。 |

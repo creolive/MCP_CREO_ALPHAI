@@ -161,5 +161,5 @@ md050 原生 worker 存活（checkpoint `native_pid` 身份与 `creo_worker.exe`
   分支。此前两种私有 SDK 夹具均普通失败，原报告保留，不宣称成功。
 - 未实机泛化：modified / wrong-origin / token 超时等准入分支仍只离线覆盖；
   unknown/并发/断连注入与其他 Creo 版本未实机；WorkBuddy 黑盒未运行
-  （提示词已备 `build/workbuddy_batch2_20261026/PROMPT.txt`）。本卡其余范围
+  （提示词已备 `build/workbuddy_batch2_20261026/PROMPT-UTF8.txt`）。本卡其余范围
   （不健康收养、装配整体收养等）继续按"不包含"开放。

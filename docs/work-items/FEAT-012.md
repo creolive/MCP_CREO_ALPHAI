@@ -84,12 +84,15 @@ matrix 实机驱动补真实普通失败后的回滚断言。实机验收仍待�
 - 矩阵实机 38 父作业（源码 fc86231）：37 成功 + 1 故意普通失败（无效组件
   引用）成功回滚（`rollback_succeeded=true`、revision/位姿恢复、
   `component_changes=rolled_back`）；11 组姿态按实际查询矩阵基向量/已知点
-  验证、非法互斥/输入拒绝、revision 递进、native 保存重载、约束数字码 13+
+  验证、Euler/矩阵互斥拒绝、revision 递进、native 保存重载、约束数字码 13+
   `type_name="fix"`、装配体积 330 独立几何断言；记录 bbox 为预期派生值非
   Creo 实测。组合 guard 总体 exit 1（旧管线同 label 被入口拒绝），matrix 子
   exit 0，guard 总体不写通过。
 - 补充 4 次真实改变位姿：独立工具矩阵 / execute_plan 矩阵 / Euler 兼容 /
   恢复基线，rev 36→40 逐步真实回读一致、保存重载 true。
+- 后续另测 8 类非法输入 × 4 条真实 MCP 路径，共 32 次入口拒绝，0 个作业，
+  完整组件快照和 revision 40 不变；标准 JSON 无法表达的数值 NaN/Infinity
+  仍只离线覆盖。详见综合证据第 6 节。
 - 独立全量 dev_check（b86 干净树）748 项 0 失败 0 错误；此前并行 726 误报
   原件保留不计通过。
 - 未实机：WorkBuddy 黑盒、并发/unknown 自然分支/断连注入、其他 Creo 版本；
