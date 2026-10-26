@@ -17,6 +17,7 @@ SECTIONS = (
     "edges",
     "bodies",
     "datum_planes",
+    "datum_axes",
     "parameters",
     "aliases",
     "components",
@@ -73,6 +74,8 @@ def inspection_summary(inspection: Any) -> dict[str, Any]:
                 "has_solid",
                 "units",
                 "units_query_code",
+                "length_unit",
+                "center_of_gravity",
                 "model_type",
                 "volume_mm3",
                 "volume_query_code",
@@ -186,7 +189,7 @@ def section_records(model: dict[str, Any], section: str) -> list[Any] | None:
             {
                 key: val
                 for key, val in f.items()
-                if key not in ("dimensions", "geometry_items", "sketch_dimensions")
+                if key not in ("dimensions", "geometry_items", "sketch_dimensions", "datum_axes")
             }
             for f in values
         ]

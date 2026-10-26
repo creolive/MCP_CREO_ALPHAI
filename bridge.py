@@ -1369,6 +1369,9 @@ def compact_job(manifest: dict) -> dict:
                     "normal",
                     "u_axis",
                     "v_axis",
+                    "datum_axes",
+                    "axes_query_code",
+                    "length_unit",
                     "elapsed_seconds",
                     "message",
                 )

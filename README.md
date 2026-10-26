@@ -162,6 +162,8 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 平面也可传入 `{"reference":{"kind":"surface","id":实际ID},"origin":[x,y,z],"u_axis":[x,y,z]}`，用于已有平面面或基准面。默认原点是世界原点到该平面的垂足；指定原点必须在平面内。基准面的方向和生成几何由 Toolkit 决定，应按查询结果使用。
 
+`creo_datum_axis` 的操作详情包含 `datum_axes` 与 `axes_query_code`；`creo_inspect_model(detail="full", section="datum_axes")` 分页返回已保存快照中的原生轴几何。`origin` 是原生轴线上的一个点（不保证是离原点最近点），`direction` 是原生两端点差的单位向量。坐标使用实际模型长度单位；同层 `length_unit` 提供单位名、到毫米的比例及原始查询码。查询失败/未执行或几何退化时使用 null/`geometry_known:false`，不得把输入引用猜成几何。巡检 `center_of_gravity` 同样使用原生长度单位，查询结果由 `volume_query_code` 记录；尚无实体或质量查询失败时为 null。上述接口已离线构建，当前倾斜拉伸/两平面轴/偏心阵列的本机验收仍待 [T05 实机检查](docs/development/DEV047-T05-ACCEPTANCE-2026-10-26.md)。
+
 常用引用：
 
 ```json

@@ -4,6 +4,7 @@
 #include "recovery_deadline.h"
 #include "adoption_source.h"
 #include "inspection_units.h"
+#include "axis_geometry.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
 #include "constraint_names.h"
@@ -54,6 +55,8 @@ static std::set<int> visited_edges;
 static std::wstring generic_job;
 static int temporarily_suppressed_loft = -1;
 static J operation_results = J::array();
+static J datum_axes = J::array();
+static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale);
 // Snapshot of unhealthy features captured by inspection() right before it
 // throws, so the failure response can carry feature-level diagnostics
 // (BUG-082 H4) instead of only the generic regeneration message.
@@ -193,6 +196,35 @@ static ProError collect_geom_ids(ProGeomitem *item, ProError status, ProAppData 
         ((J *)data)->push_back({{"id", item->id}, {"type", (int)item->type}});
     return PRO_TK_NO_ERROR;
 }
+static ProError inspect_axis(ProGeomitem *item, ProError status, ProAppData data) {
+    J record = {{"id", item->id},
+                {"feature_id", *(int *)data},
+                {"visit_query_code", status},
+                {"origin", nullptr},
+                {"direction", nullptr},
+                {"geometry_known", false},
+                {"data_query_code", nullptr},
+                {"line_query_code", nullptr},
+                {"free_query_code", nullptr}};
+    if (!status) {
+        AxisGeometry geometry = inspect_axis_geometry(item);
+        record["data_query_code"] = geometry.data_code;
+        record["line_query_code"] = geometry.line_code ? J(*geometry.line_code) : J(nullptr);
+        record["free_query_code"] = geometry.free_code ? J(*geometry.free_code) : J(nullptr);
+        record["geometry_known"] = geometry.known;
+        if (geometry.known) {
+            record["origin"] = geometry.origin;
+            record["direction"] = geometry.direction;
+        }
+    }
+    datum_axes.push_back(record);
+    return PRO_TK_NO_ERROR;
+}
+static J feature_axes(ProFeature *feature) {
+    datum_axes = J::array();
+    ProError code = ProFeatureGeomitemVisit(feature, PRO_AXIS, inspect_axis, nullptr, &feature->id);
+    return {{"datum_axes", datum_axes}, {"axes_query_code", code}};
+}
 static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     if (status)
         return PRO_TK_NO_ERROR;
@@ -243,6 +275,11 @@ static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     J geometry = J::array();
     ProFeatureGeomitemVisit(f, PRO_TYPE_UNUSED, collect_geom_ids, nullptr, &geometry);
     item["geometry_items"] = geometry;
+    if (t == PRO_FEAT_DATUM_AXIS) {
+        J axes = feature_axes(f);
+        item["axes_query_code"] = axes["axes_query_code"];
+        item["datum_axes"] = axes["datum_axes"];
+    }
     gfeatures.push_back(item);
     return PRO_TK_NO_ERROR;
 }
@@ -408,6 +445,7 @@ static J inspection(bool require_healthy = true) {
             if (f["type"].get<int>() == PRO_FEAT_COMPONENT)
                 solid = true;
     auto length_units = inspect_length_units(board);
+    J length_unit = length_unit_json(length_units, length_scale_to_mm(board, length_units));
     // Coordinates/dimensions retain model units. Do not label native in^3 as mm^3.
     J units = length_units.code || !length_units.length.name[0] ? J(nullptr)
                                                                 : J(utf8(length_units.length.name));
@@ -418,8 +456,18 @@ static J inspection(bool require_healthy = true) {
                 {"healthy", healthy},
                 {"units", units},
                 {"units_query_code", length_units.code},
+                {"length_unit", length_unit},
                 {"has_solid", solid},
+                {"center_of_gravity", nullptr},
+                {"volume_query_code", nullptr},
                 {"volume_mm3", nullptr}};
+    J axes = J::array();
+    for (const auto &f : gfeatures)
+        if (f.contains("datum_axes")) {
+            for (const auto &axis : f["datum_axes"])
+                axes.push_back(axis);
+        }
+    result["datum_axes"] = axes;
     result["model_type"] = isasm ? "assembly" : "part";
     if (isasm)
         result["components"] = assembly_inspection();
@@ -434,6 +482,11 @@ static J inspection(bool require_healthy = true) {
                                                         PRO_MP_DENS_USE_ALWAYS, 1, &mp);
         result["volume_query_code"] = e;
         if (!e) {
+            bool finite = true;
+            for (double value : mp.center_of_gravity)
+                finite = finite && std::isfinite(value);
+            if (finite)
+                result["center_of_gravity"] = xyz(mp.center_of_gravity);
             auto volume = length_units.volume_mm3(mp.volume);
             if (volume)
                 result["volume_mm3"] = *volume;
@@ -1906,6 +1959,9 @@ static void execute_operation(const J &op) {
         ProFeature f = create(root);
         CK(ProElementFree(&root));
         remember(op, f);
+        details = feature_axes(&f);
+        auto units = inspect_length_units(board);
+        details["length_unit"] = length_unit_json(units, length_scale_to_mm(board, units));
     } else if (kind == "set_dimensions") {
         for (auto v : op["values"]) {
             ProDimension d;
@@ -2585,7 +2641,7 @@ static J matrix_json(const ProMatrix matrix) {
 // raw query code; name and scale stay null on failure instead of pretending
 // millimeters.
 static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale) {
-    return {{"name", units.code ? J(nullptr) : J(utf8(units.length.name))},
+    return {{"name", units.code || !units.length.name[0] ? J(nullptr) : J(utf8(units.length.name))},
             {"query_code", units.code},
             {"scale_to_mm", scale.known ? J(scale.scale) : J(nullptr)},
             {"scale_to_mm_known", scale.known},

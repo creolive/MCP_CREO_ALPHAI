@@ -117,6 +117,8 @@ _SOURCE_NAMES = (
     "native/constraint_compare.h",
     "native/adoption_source.h",
     "native/inspection_units.h",
+    "native/axis_geometry.h",
+    "native/assembly_units.h",
     "native/drawing.cpp",
     "native/result_delivery.h",
     "native/recovery_deadline.h",
@@ -1770,7 +1772,7 @@ async def creo_inspect_model(
 
     Use detail=full for geometry; large snapshots return data grouped by section,
     complete=false and next_cursor. Repeat with the same detail/section and cursor.
-    Sections: features, dimensions, surfaces, edges, bodies, datum_planes,
+    Sections: features, dimensions, surfaces, edges, bodies, datum_planes, datum_axes,
     parameters, aliases, components, feature_geometry, sketch_dimensions.
     Drawings also support sheets/views/notes/tables/models/shown_dimensions;
     metadata preserves additional inspection fields.

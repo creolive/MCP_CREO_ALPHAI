@@ -35,7 +35,7 @@ struct MillimeterScale {
 inline MillimeterScale length_scale_to_mm(ProMdl mdl, const InspectionLengthUnits &units) {
     MillimeterScale result;
     result.unit_query_code = units.code;
-    if (units.code != PRO_TK_NO_ERROR)
+    if (units.code != PRO_TK_NO_ERROR || !units.length.name[0])
         return result;
     ProUnititem mm_unit = {};
     result.mm_unit_queried = true;
