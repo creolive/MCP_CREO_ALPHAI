@@ -75,7 +75,7 @@ T02—T07 的既有字段（`unchanged`、`native_geometry_verified`、帧/轴/�
 | `python -m unittest discover -s tests -q` | 888 项通过，耗时 208.835 秒；既有套件无回归 |
 | `python tools/test_t08_feature_state.py` | 输出 `OFFLINE ONLY`，9 组计划输入全部 `valid`；期望体积 base=96000、with_pad=97570.796327 mm³ |
 | `python tools/test_t08_feature_state.py --live`（缺确认标志） | 按设计拒绝并退出（exit 2），未连接 |
-| 变更 Python 的 Ruff check / format --check | 11 个变更 Python 文件全部通过，未新增风格基线豁免 |
+| 变更 Python 的 Ruff check / format --check | 10 个变更 Python 文件全部通过，未新增风格基线豁免 |
 | clang-format 23.1.3 对 `native/generic.cpp`、`native/feature_state.cpp` | `--style=file --fallback-style=none --dry-run --Werror` 通过；`generic.cpp` 的格式化差异只落在本次新增区域 |
 | `python bridge.py build` | 匹配 SDK 原生执行器构建通过；`build/creo_worker.exe` SHA256 `3A6FC9050CF0429C5267F42EFE962175B43DB220B183105FE0F8A9A6D729D80F`，该生成物不入库 |
 | `python tools/dev_check.py --work-item FEAT-036` | exit 0、`success=true`、`unit_tests=passed`（888 项）、`native_validation=not_run`；`style_summary` 为既有基线（lint 30、未格式化 16），无新增违规；证据 `build/development_check.json`、`build/t08-devcheck.log` |
