@@ -37,3 +37,10 @@
 - **截面回读对中心线只核对垂直位置轴**：沿轴端点坐标不参与 0.00001 mm 偏差判定（无限轴语义）；成形实体、圆/弧、半径与角度的核对和阈值不变。新增逐实体偏差日志 `COORDINATE_DEVIATION` 便于定位漂移来源。
 - **约束引用改为实体上的真实参考点**（BUG-068）：`coincident` 等约束的 whole/start/end/center 引用按实体几何计算参考点（线端点/中点、圆与弧的圆心或圆上点），不再使用固定原点——弧圆心与截面原点重合时旧实现会因方位角退化返回 -2。
 - 公开回归扩至 8 用例：新增 `bug068_coincident`（弧圆心在原点 + coincident + 拉伸体积断言）与 `bug050_centerline_coordinates`（31 点折线 + 构造中心线 + 坐标模式）。证据见 [BUG-068/BUG-050 记录](validation/BUG-068-BUG-050-repro-2026-10-18.md)。
+
+## 2026-10-26 增补（BUG-082：就地编辑的 autodim 升级路由）
+
+- **`creo_update_sketch_geometry` 的 `auto` 与 `autodim` 在主平面同样升级坐标尺寸**：此前仅 `auto` 编辑在主平面、实体类型受支持且截面含坐标系时改用完全约束的坐标尺寸（BUG-079）。BUG-082 根因实证后（见 [根因记录](development/BUG082-AUTODIM-ROOT-CAUSE.md)），原生 `ProSectionAutodim` 在重建截面上仅生成 0–1 个尺寸，截面级再生容忍该欠约束方案，但 `ProFeatureWithoptionsRedefine` 后的特征级再生从尺寸方案重解失败（`REV_SK` 与下游回转均 `PRO_FEAT_UNREGENERATED`，特征尺寸值被清零）；创建路径不受影响，因为新特征初次构建直接采用截面实体几何。显式 `autodim` 编辑现与 `auto` 走同一升级路由。
+- **非静默**：升级记录在响应的 `solver` 信息中（`requested="autodim"`、`used="coordinates"`），模型 aliases 的 `last_dimensioning` 仍保留请求值；不升级时（非主平面或实体类型不受支持）保持 autodim，编辑失败按既有保护回滚。
+- **`coordinates` 语义不变**；显式 `coordinates` 在非主平面依旧被拒绝。创建路径（`creo_create_sketch`、计划 `sketch`）的 dimensioning 选择不变。
+- 公开回归：编辑专项新增/改造用例 `onaxis_sector_auto_to_autodim_edit`（外部报告组合，修复后成功）、`onaxis_sector_autodim_edit`（autodim 创建→四次 autodim 编辑）、`onaxis_sector_auto_edit`（auto 组合）与 `onaxis_sector_open_profile_failure`（开环剖面非法几何：失败、回滚与 `failed_features` 诊断，不再依赖保留本缺陷制造失败）。

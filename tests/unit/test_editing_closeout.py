@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-from tools.test_editing_closeout import Closeout, StartupObserver
+from tools.test_editing_closeout import (
+    Closeout,
+    StartupObserver,
+    onaxis_sector_volume,
+    verify_onaxis_edits,
+)
 
 
 class EditingCloseoutSafety(unittest.IsolatedAsyncioTestCase):
@@ -58,6 +64,90 @@ class EditingCloseoutSafety(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AssertionError):
                 await suite.job("creo_execute_plan", {"operations": []})
         self.assertEqual(client.call_tool.await_count, 2)
+        self.assertEqual(client.call_tool.await_args_list[-1].args[0], "creo_get_job")
+
+    async def test_failed_job_returns_full_failure_and_persists_it(self):
+        result = {"rollback_succeeded": True, "message": "Regeneration produced a failed feature"}
+        values = [
+            SimpleNamespace(
+                is_error=False, structured_content={"job_id": "job", "model_id": "model"}
+            ),
+            SimpleNamespace(is_error=False, structured_content={"status": "running"}),
+            SimpleNamespace(is_error=False, structured_content={"status": "failed"}),
+            SimpleNamespace(
+                is_error=False, structured_content={"status": "failed", "result": result}
+            ),
+        ]
+        client = SimpleNamespace(call_tool=AsyncMock(side_effect=values))
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("tools.test_editing_closeout.asyncio.sleep", new=AsyncMock()),
+        ):
+            report = Path(directory) / "report.json"
+            suite = Closeout(client, report)
+            value = await suite.failed_job("creo_update_sketch_geometry", {"expected_revision": 3})
+            persisted = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(value["status"], "failed")
+        self.assertIs(value["result"]["rollback_succeeded"], True)
+        self.assertEqual(value["model_id"], "model")
+        self.assertEqual(value["job_id"], "job")
+        # No job-level revision in the terminal response: the evidence keeps
+        # failed.get("revision") as None instead of borrowing a model value.
+        self.assertIsNone(value.get("revision"))
+        self.assertEqual(client.call_tool.await_count, 4)
+        self.assertEqual(
+            client.call_tool.await_args_list[-1].args,
+            ("creo_get_job", {"job_id": "job", "detail": "full"}),
+        )
+        self.assertEqual(persisted["calls"][-1]["tool"], "creo_get_job")
+        self.assertEqual(persisted["calls"][-1]["payload"]["status"], "failed")
+        self.assertEqual(persisted["calls"][-1]["payload"]["result"], result)
+
+    async def test_failed_job_rejects_non_failed_terminal_and_persists_it(self):
+        result = {"rollback_succeeded": False, "message": "unexpected success"}
+        terminal = {"status": "succeeded", "revision": 4, "result": result}
+        values = [
+            SimpleNamespace(
+                is_error=False, structured_content={"job_id": "job", "model_id": "model"}
+            ),
+            SimpleNamespace(is_error=False, structured_content=terminal),
+            SimpleNamespace(is_error=False, structured_content=terminal),
+        ]
+        client = SimpleNamespace(call_tool=AsyncMock(side_effect=values))
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            suite = Closeout(client, report)
+            with self.assertRaises(AssertionError):
+                await suite.failed_job("creo_update_sketch_geometry", {"expected_revision": 3})
+            persisted = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(client.call_tool.await_count, 3)
+        self.assertEqual(client.call_tool.await_args_list[-1].args[0], "creo_get_job")
+        self.assertEqual(persisted["calls"][-1]["payload"]["status"], "succeeded")
+        self.assertEqual(persisted["calls"][-1]["payload"]["result"], result)
+
+    async def test_failed_job_busy_is_not_resubmitted(self):
+        response = SimpleNamespace(is_error=True, structured_content={"status": "busy"})
+        client = SimpleNamespace(call_tool=AsyncMock(return_value=response))
+        with tempfile.TemporaryDirectory() as directory:
+            suite = Closeout(client, Path(directory) / "report.json")
+            with self.assertRaisesRegex(RuntimeError, "busy"):
+                await suite.failed_job("creo_update_sketch_geometry", {"expected_revision": 3})
+        client.call_tool.assert_awaited_once()
+
+    async def test_failed_job_unknown_outcome_is_not_resubmitted(self):
+        values = [
+            SimpleNamespace(
+                is_error=False, structured_content={"job_id": "job", "model_id": "model"}
+            ),
+            SimpleNamespace(is_error=False, structured_content={"status": "unknown_outcome"}),
+            SimpleNamespace(is_error=False, structured_content={"status": "unknown_outcome"}),
+        ]
+        client = SimpleNamespace(call_tool=AsyncMock(side_effect=values))
+        with tempfile.TemporaryDirectory() as directory:
+            suite = Closeout(client, Path(directory) / "report.json")
+            with self.assertRaises(AssertionError):
+                await suite.failed_job("creo_update_sketch_geometry", {"expected_revision": 3})
+        self.assertEqual(client.call_tool.await_count, 3)
         self.assertEqual(client.call_tool.await_args_list[-1].args[0], "creo_get_job")
 
     async def test_accepted_job_polls_same_id_and_requires_one_revision_increment(self):
@@ -111,6 +201,90 @@ class EditingCloseoutSafety(unittest.IsolatedAsyncioTestCase):
                 [case["name"] for case in suite.report["cases"]], ["reorder_noop_revision_plus_one"]
             )
             client.call_tool.assert_not_awaited()
+
+
+class EditingEvidence(unittest.TestCase):
+    def test_snapshot_keeps_revision_actual_part_bytes_and_references(self):
+        import hashlib
+
+        from tools.test_editing_closeout import model_evidence
+
+        with tempfile.TemporaryDirectory() as directory:
+            part = Path(directory) / "own.prt.1"
+            part.write_bytes(b"native-checkpoint")
+            model = {
+                "revision": 3,
+                "status": "ready",
+                "part_file": str(part),
+                "pending_job": None,
+                "recovery_pending": None,
+                "inspection": {"healthy": True, "volume_mm3": 2094.395102392602},
+                "aliases": {"rev_sk": {"feature_id": 40}, "rev1": {"feature_id": 51}},
+            }
+            row = model_evidence(model)
+        self.assertEqual(row["revision"], 3)
+        self.assertEqual(row["part_sha256"], hashlib.sha256(b"native-checkpoint").hexdigest())
+        self.assertEqual(row["feature_ids"], {"rev_sk": 40, "rev1": 51})
+        self.assertIsNone(row["pending_job"])
+        self.assertEqual(len(row["inspection_sha256"]), 64)
+        self.assertEqual(len(row["aliases_sha256"]), 64)
+
+
+class OnaxisSectorGeometry(unittest.TestCase):
+    def test_sector_volume_formula_matches_reference_values(self):
+        # Analytical expectations for the BUG-082 fixture; native Creo
+        # observations may differ within the 0.01 mm3 tolerance instead of
+        # matching digit for digit.
+        self.assertLess(abs(onaxis_sector_volume(10, 90) - 2094.3951023931954), 1e-9)
+        self.assertLess(abs(onaxis_sector_volume(10, 80) - 2062.5765347076162), 1e-9)
+        self.assertLess(abs(onaxis_sector_volume(12, 90) - 3619.1147369354417), 1e-9)
+
+
+class OnaxisSectorEdits(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _aliases(job):
+        return {"rev_sk": {"feature_id": 40}, "rev1": {"feature_id": 51}}
+
+    async def test_four_edits_chain_revisions_with_explicit_mode(self):
+        created = {"model_id": "m", "job_id": "j1", "revision": 1}
+        edits = [{"model_id": "m", "job_id": f"j{r}", "revision": r} for r in (2, 3, 4, 5)]
+        suite = SimpleNamespace(
+            job=AsyncMock(side_effect=[created, *edits]),
+            aliases=Mock(side_effect=self._aliases),
+            volume=Mock(),
+            created=set(),
+        )
+        result = await verify_onaxis_edits(suite, "autodim")
+        self.assertEqual([job["job_id"] for job in result], ["j1", "j2", "j3", "j4", "j5"])
+        self.assertEqual(suite.job.await_count, 5)
+        create_call = suite.job.await_args_list[0]
+        self.assertEqual(create_call.args[0], "creo_execute_plan")
+        self.assertEqual(create_call.args[1]["operations"][0]["dimensioning"], "autodim")
+        self.assertIn("m", suite.created)
+        expected = created["revision"]
+        for call, job in zip(suite.job.await_args_list[1:], edits):
+            self.assertEqual(call.args[0], "creo_update_sketch_geometry")
+            self.assertEqual(call.args[1]["dimensioning"], "autodim")
+            self.assertEqual(call.args[1]["expected_revision"], expected)
+            self.assertEqual(call.args[1]["sketch"], "rev_sk")
+            expected = job["revision"]
+        thetas = [
+            call.args[1]["entities"][2]["end_angle"] for call in suite.job.await_args_list[1:]
+        ]
+        self.assertEqual(thetas, [80, 90, 90, 90])
+        self.assertEqual(suite.volume.call_count, 5)
+
+    async def test_any_edit_failure_stops_subsequent_submissions(self):
+        created = {"model_id": "m", "job_id": "j1", "revision": 1}
+        suite = SimpleNamespace(
+            job=AsyncMock(side_effect=[created, RuntimeError("status != succeeded")]),
+            aliases=Mock(side_effect=self._aliases),
+            volume=Mock(),
+            created=set(),
+        )
+        with self.assertRaisesRegex(RuntimeError, "status != succeeded"):
+            await verify_onaxis_edits(suite, "autodim")
+        self.assertEqual(suite.job.await_count, 2)
 
 
 if __name__ == "__main__":

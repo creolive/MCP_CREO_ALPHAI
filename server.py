@@ -840,7 +840,7 @@ async def creo_update_sketch_geometry(
     entities: list[Entity],
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto",
 ) -> dict[str, Any]:
-    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation."""
+    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On principal planes, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone is kept off principal planes, where a failed edit rolls back cleanly."""
     return await invoke(
         general.submit,
         [

@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import model_registry
+from creo_mechdog import inspection_refs, model_registry
 from tools.dev_check import git_state
 from tools.mcp_readiness import wait_for_startup
 from version import VERSION
@@ -72,6 +72,27 @@ def onaxis_sector_volume(radius, theta_max):
     return (2 * math.pi * radius**3 / 3) * math.sin(math.radians(theta_max))
 
 
+def model_evidence(model: dict) -> dict:
+    part = Path(model["part_file"]) if model.get("part_file") else None
+    full = inspection_refs.full_inspection(model)
+    aliases = model_registry.aliases_of(model)
+    return {
+        "revision": model["revision"],
+        "status": model["status"],
+        "pending_job": model.get("pending_job"),
+        "recovery_pending": model.get("recovery_pending"),
+        "part_sha256": hashlib.sha256(part.read_bytes()).hexdigest() if part else None,
+        "inspection_sha256": inspection_refs.content_digest(full) if full is not None else None,
+        "aliases_sha256": inspection_refs.content_digest(aliases),
+        "inspection_summary": inspection_refs.summary_of(model),
+        "feature_ids": {
+            name: row["feature_id"]
+            for name, row in aliases.items()
+            if isinstance(row, dict) and "feature_id" in row
+        },
+    }
+
+
 CASES = (
     "label_dimension_edit",
     "integer_dimension_edit",
@@ -84,7 +105,10 @@ CASES = (
     "entity_branch_native_verification",
     "arc_radius_inplace_edit",
     "onaxis_sector_coordinate_edit",
-    "onaxis_sector_autodim_failure",
+    "onaxis_sector_auto_to_autodim_edit",
+    "onaxis_sector_autodim_edit",
+    "onaxis_sector_auto_edit",
+    "onaxis_sector_open_profile_failure",
     "reorder_noop_revision_plus_one",
 )
 
@@ -287,8 +311,10 @@ class Closeout:
             )
             self.save()
 
-    def case(self, name, jobs):
-        self.report["cases"].append({"name": name, "jobs": jobs, "passed": True})
+    def case(self, name, jobs, *, evidence=None):
+        self.report["cases"].append(
+            {"name": name, "jobs": jobs, "evidence": evidence, "passed": True}
+        )
         self.save()
         print("CASE_PASS " + name, flush=True)
 
@@ -710,10 +736,53 @@ class Closeout:
                 [initial, angled, back, grown, restored, direct_80, direct_r12],
             )
 
-        if "onaxis_sector_autodim_failure" in self.selected_cases:
-            # BUG-082 failure path: autodim 90->80 fails (SKETCH_SOLVE=-1) and
-            # must roll back cleanly, now with feature-level diagnostics in the
-            # response (failed_features) from the H4 inspection fix.
+        if "onaxis_sector_auto_to_autodim_edit" in self.selected_cases:
+            # BUG-082 regression (formerly the autodim failure case): the
+            # external-report combination — implicit auto creation, explicit
+            # autodim edit — now rides the BUG-079 coordinate upgrade on
+            # principal planes and must succeed with identities preserved.
+            initial = await self.job(
+                "creo_execute_plan",
+                {
+                    "model_name": "cache_" + uuid.uuid4().hex[:12],
+                    "operations": [
+                        {
+                            "op": "sketch",
+                            "label": "rev_sk",
+                            "plane": "XZ",
+                            "entities": onaxis_sector(90, 10),
+                        },
+                        {"op": "revolve", "label": "rev1", "sketch": "rev_sk", "angle": 360},
+                    ],
+                },
+            )
+            self.created.add(initial["model_id"])
+            self.volume(initial, onaxis_sector_volume(10, 90))
+            identities = {
+                name: self.aliases(initial)[name]["feature_id"] for name in ("rev_sk", "rev1")
+            }
+            angled = await self.job(
+                "creo_update_sketch_geometry",
+                {
+                    "model_id": initial["model_id"],
+                    "expected_revision": initial["revision"],
+                    "sketch": "rev_sk",
+                    "entities": onaxis_sector(80, 10),
+                    "dimensioning": "autodim",
+                },
+            )
+            self.volume(angled, onaxis_sector_volume(10, 80))
+            for name, feature_id in identities.items():
+                assert self.aliases(angled)[name]["feature_id"] == feature_id
+            self.case("onaxis_sector_auto_to_autodim_edit", [initial, angled])
+
+        if "onaxis_sector_open_profile_failure" in self.selected_cases:
+            # BUG-082 failure fixture after the fix: an OPEN profile (l2 stops
+            # short of the axis) is genuinely illegal geometry for the
+            # downstream revolve, so the edit must fail, roll back cleanly and
+            # publish feature-level diagnostics (failed_features) — without
+            # keeping the old under-constrained autodim defect around just to
+            # produce a failure.
             initial = await self.job(
                 "creo_execute_plan",
                 {
@@ -732,13 +801,26 @@ class Closeout:
             self.created.add(initial["model_id"])
             self.volume(initial, onaxis_sector_volume(10, 90))
             before = general.model_info(initial["model_id"])
+            before_evidence = model_evidence(before)
             failed = await self.failed_job(
                 "creo_update_sketch_geometry",
                 {
                     "model_id": initial["model_id"],
                     "expected_revision": initial["revision"],
                     "sketch": "rev_sk",
-                    "entities": onaxis_sector(80, 10),
+                    "entities": [
+                        {"type": "centerline", "name": "axis", "start": [0, 0], "end": [0, 20]},
+                        {"type": "line", "name": "l1", "start": [0, 0], "end": [10, 0]},
+                        {
+                            "type": "arc",
+                            "name": "prof_arc",
+                            "center": [0, 0],
+                            "radius": 10,
+                            "start_angle": 0,
+                            "end_angle": 90,
+                        },
+                        {"type": "line", "name": "l2", "start": [0, 10], "end": [0, 5]},
+                    ],
                     "dimensioning": "autodim",
                 },
             )
@@ -747,20 +829,90 @@ class Closeout:
             assert features, failed
             assert any(f["status"] != 0 for f in features), features
             after = general.model_info(initial["model_id"])
-            assert after["revision"] == before["revision"], after
-            assert after["part_sha256"] == before["part_sha256"], after
-            assert (
-                abs(
-                    after["inspection_summary"]["volume_mm3"]
-                    - before["inspection_summary"]["volume_mm3"]
+            after_evidence = model_evidence(after)
+            assert after_evidence["revision"] == before_evidence["revision"]
+            for key in ("part_sha256", "inspection_sha256", "aliases_sha256", "feature_ids"):
+                assert after_evidence[key] == before_evidence[key], (
+                    key,
+                    before_evidence,
+                    after_evidence,
                 )
-                < 0.01
-            )
-            self.case("onaxis_sector_autodim_failure", [initial, failed])
+            assert after_evidence["pending_job"] == before_evidence["pending_job"]
+            assert after_evidence["recovery_pending"] == before_evidence["recovery_pending"]
+            evidence = {
+                "before": before_evidence,
+                "after": after_evidence,
+                "job_revision": failed.get("revision"),
+            }
+            self.case("onaxis_sector_open_profile_failure", [initial, failed], evidence=evidence)
+
+        if "onaxis_sector_autodim_edit" in self.selected_cases:
+            # BUG-082 success target: explicit autodim on-axis edits (angle
+            # 90->80->90, radius 10->12->10) must succeed with preserved
+            # sketch/revolve identities. Expected to fail before the
+            # regeneration fix lands; the autodim_failure case above is the
+            # diagnostic contrast and stays regardless of this case's outcome.
+            jobs = await verify_onaxis_edits(self, "autodim")
+            self.case("onaxis_sector_autodim_edit", jobs)
+
+        if "onaxis_sector_auto_edit" in self.selected_cases:
+            # Diagnostic contrast for BUG-082: an implicit "auto" edit routes
+            # to coordinate dimensions on principal planes (BUG-079), so this
+            # exercises the production default path over the same edits.
+            jobs = await verify_onaxis_edits(self, "auto")
+            self.case("onaxis_sector_auto_edit", jobs)
 
         self.report["success"] = True
         self.save()
         print("EDITING_CLOSEOUT_SUCCESS=1", flush=True)
+
+
+async def verify_onaxis_edits(suite, mode):
+    """BUG-082 success target: four in-place on-axis sector edits in one mode.
+
+    Creation and every edit use the same explicit ``mode`` (autodim for the
+    new success case; coordinates also works as the proven contrast). Each
+    edit must succeed, bump the revision, follow the spherical-sector volume
+    and keep both feature identities; any failure stops the run instead of
+    resubmitting.
+    """
+    initial = await suite.job(
+        "creo_execute_plan",
+        {
+            "model_name": "cache_" + uuid.uuid4().hex[:12],
+            "operations": [
+                {
+                    "op": "sketch",
+                    "label": "rev_sk",
+                    "plane": "XZ",
+                    "entities": onaxis_sector(90, 10),
+                    "dimensioning": mode,
+                },
+                {"op": "revolve", "label": "rev1", "sketch": "rev_sk", "angle": 360},
+            ],
+        },
+    )
+    suite.created.add(initial["model_id"])
+    suite.volume(initial, onaxis_sector_volume(10, 90))
+    identities = {name: suite.aliases(initial)[name]["feature_id"] for name in ("rev_sk", "rev1")}
+    jobs = [initial]
+    for theta, radius in ((80, 10), (90, 10), (90, 12), (90, 10)):
+        edited = await suite.job(
+            "creo_update_sketch_geometry",
+            {
+                "model_id": initial["model_id"],
+                "expected_revision": initial["revision"],
+                "sketch": "rev_sk",
+                "entities": onaxis_sector(theta, radius),
+                "dimensioning": mode,
+            },
+        )
+        suite.volume(edited, onaxis_sector_volume(radius, theta))
+        for name, feature_id in identities.items():
+            assert suite.aliases(edited)[name]["feature_id"] == feature_id
+        jobs.append(edited)
+        initial = edited
+    return jobs
 
 
 async def main(*, retry_startup=False, from_case=CASES[0]):

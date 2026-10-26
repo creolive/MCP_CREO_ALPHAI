@@ -67,3 +67,10 @@
   - `creo_validate_seed(two_smooth)`：`available=true`、`native_status=not_verified_for_current_session`、`observation_job_ids` 含本次作业（`fe8bf5ed…`、`7e2c0273…`）、`seed_build_version=null`、`seed_build_version_status=unknown`、UGC 头 `#UGC:2 PART 2128 …` 仍为 `unverified_clue`。
 - 偏差：该脚本在 `seed_straight` 之后因 `KeyError('inspection')` 退出 1——字段已改名 `inspection_summary`，属测试脚本过期，**不是建模失败**（作业终态为 succeeded、保存重载 true）；`smooth` 与 validate 另行执行成功。
 - 未测范围：生产版本仍无可追溯生成记录（UGC 值不建立版本映射）；Creo 9/10 等其他环境的实际加载未复验（Creo 9 -16 归 [BUG-034](BUG-034.md)）；9 种子安装库回归与种子重生成未执行。因此保持“验收中”，不迁入完成档案。
+
+## 2026-10-26：测试驱动修复与九种子矩阵部分实证（0.6.0 基线反馈计划 Task 3）
+
+- **驱动修复**（离线 20 项单测过，`tests/unit/test_seed_regression_contract.py` 新建）：`tools/test_installation_loft.py` 经 `native_result_details`（`inspection_refs.full_inspection` + `model_registry.aliases_of`）读取完整 inspection/aliases，基础矩阵由 manifest 驱动（9 个 `matrix_*` 场景 + 6 个既有附加场景），mismatch 负例改为与所选种子相反插值；`tools/test_feedback037_modeling.py` 的 seeds 体积断言改读 `inspection_refs.summary_of`，补 ROOT 路径插入；observations 断言改为尊重有界历史（registry 仅保留按记录名序最近 2 条，新作业可能合法地不在列，本次加载证据以作业自身 `seed_load_evidence` 为准），并给安装驱动补 `wait_for_startup`。
+- **实机部分证据**（Creo 12.4.0.0 会话，修复批同源码）：`--cases seeds` 两种子 smoke 通过（`seed_straight` job `cda3ba3f…`、`seed_smooth` job `49268b14…`，volume 4900π/3 断言经 summary 读取通过）。安装矩阵执行至第 2 场景：`matrix_five_smooth` 完整通过（blend id 93、revision 1→2、体积 69220.871→70471.929、创建与编辑保存重载 true、源件哈希核对通过）；`matrix_four_smooth` 创建成功（job `6c8ed77b…`，blend id 82、体积 32554.802），并实证**种子行为差异**：four 类种子的 SECTION_n_PLANE datum 尺寸（10/20/30）不镜像请求 offsets（0/20/40/60）且不驱动 Blend（平面尺寸 +5 后体积不变），驱动已改为编辑 section_1 草图的真实非零尺寸。
+- **环境受阻**：第三次矩阵重跑时 Toolkit 通道断开（worker exit 20、`connection_state=not_found_or_unreadable`，coordinator 两次显式 retry 均超时；xtop 主窗口在、隐藏"重新生成进度"框残留、无可见模态框；通道断开前最后一轮完整作业为编辑专项 16/16）。按 BUG-001 纪律未处置 Creo。按驱动清单重新核数：共 15 个正向场景（9 种子 + 6 附加），仅 matrix_five_smooth 完整通过；matrix_four_smooth 尚缺编辑闭环，其后 13 个正向场景及 2 个负例待会话恢复后补跑；作业级证据保留于 `jobs/471d5301…`、`633de212…`、`6c8ed77b…`、`14560f1b…`。
+- 种子重生成与生产版本来源不变（仍环境受阻/无绑定记录）；本节不改变 `available` 语义与 `seed_build_version=null` 口径。
