@@ -59,3 +59,15 @@ Live01 受测提交 `1a53f3419c31767e678c8e7d1b81b85c0fb193d0`、dirty=true，�
 每次工具尝试在 await 前持久化工具名/输入和 response_received=false/outcome=unknown；传输异常保留类型/消息，仍为未收到响应、结果未知，不合成原生结果、不声称提交被拒绝、不自动重试。离线模拟覆盖完整毫米矩阵也不能产生整体 passed，并在抛出 TimeoutError 前检查磁盘已有调用输入，抛出后检查异常与 unknown 保留且只尝试一次。
 
 复核命令：`python -m unittest tests.unit.test_t05_geometry tests.unit.test_model_queries tests.unit.test_t03_plane_reference tests.unit.test_helper_layout -q`，42 项通过（1.931 秒）；两项变更文件 Ruff check 与 format 通过。本次没有再运行原生驱动或 SDK 构建，生产原生源码未改；最终语言检查与定向复审由根协调者补录。**T05 几何与原生非毫米/unknown 验收均仍未完成。**
+
+## Live02：可用会话核验后发生的真实 auto/autodim 失败
+
+根协调者按 BUG-005 已记录的主机路径对照，在同一 worker SHA256 `873AA876...`、同一 Creo 进程下观察到 Codex 直接路径及注册探测均 9 秒超时，而经已核实相同用户、相同 Windows 会话的 Explorer 隐藏桌面路径执行只读探测成功。`build/t05-desktop-probe.json`（SHA256 `F5929FF475DC999E766879A8E26B1AABF1D8EC2479364F1751F01186FCE1FBD8`）记录 connected=true、Toolkit code=0、release=44、disconnect=0。可判定结果与调用路径有关，尚不能确定具体主机限制；没有修改安全设置或重启 Creo。既有会话核验已取得真实成功，不再以缺少人工桌面答复作为本次验收前置阻塞。以下实机调用仍由根协调者独占通道执行。
+
+Live02 在 `492c069d6e5373d017e7910ff65daeb437c556ed`、dirty=true 上运行，驱动源码指纹 `c189cc2d9165be2d10c1210caae23a2749dfffef38847e6d4d2f81fb9250f640`。原始报告 `build/t05-native-02.json`（SHA256 `35F5F4397568D901F5F8B15945BDC697E0F5FB8CA84A99B59D2F5C1A6A006583`）和日志（SHA256 `ED8A4BACF801A2ABF471FEDDFB70BA7970BD4FDBAB6AC99DE41964A29329AF3F`）保持不变。19 次调用中 1 次 execute_plan，0 个完成的几何案例。首个计划 job=`a0118745eee04db8a88e569bb737538e`、model=`0e1528ad4d0442f78f5d8376bc39ba07`，在零基操作 2 创建矩形草图时失败；拉伸尚未执行。
+
+原生日志 `jobs/a0118745eee04db8a88e569bb737538e/native.log`（SHA256 `C9FB097C2069BE0F557CD07FC6546192ABE71ED4D0F2AEC5E9309E759F0F1603`）确认实际目标平面法向 `(0.587785,0.809017,0)`，输入 U=+Z，10×20 居中矩形；section 矩阵也记录实际平面帧。输入 dimensioning=auto 路由 autodim，`SKETCH_SOLVE=-1`、`AutodimensionSketch=-1`，section error count=0；投影参考 2/4 各返回 -2。终态 failed，disconnect=0，无 unknown；该新模型没有保存基线，rollback_succeeded=false，未将它误称为回滚成功。以上仅证实该准确引用下的 auto/autodim 草图路径失败；投影错误与求解错误的因果、T03/T04 完整覆盖及下游拉伸/轴/阵列根因仍不能据此推断。
+
+为单独验证 T05 下游几何，本次将解析驱动的矩形和圆显式请求 `dimensioning="coordinates"`，并在报告记录 fixture_sketch_dimensioning。它们的坐标/尺寸已完全给定，已有 T04 路径接受这些图元和任意有效平面；没有改变生产 solver 路由、容差或算法，也没有把原来的 auto/autodim 失败隐藏、关闭或标为通过。BUG-064 保留该真实失败，coordinates 的本次实机行为仍须由后续 Live03 取得证据。
+
+覆盖回归检查主平面/倾斜字典平面下 rectangle/circle 的 coordinates 请求经公共 schema 保留；`python -m unittest tests.unit.test_t05_geometry tests.unit.test_model_queries tests.unit.test_t03_plane_reference tests.unit.test_helper_layout -q` 共 43 项通过（2.251 秒），两文件 Ruff check/format 通过。修改仅驱动、离线回归与分阶段记录；本实现者未运行实机，原生代码/worker 未改。

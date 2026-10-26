@@ -129,6 +129,20 @@ class AcceptanceOracleTests(unittest.TestCase):
         ]
         self.assertEqual(len(validate_operations(operations)), 4)
 
+    def test_analytical_rectangle_and_circle_explicitly_select_coordinates(self):
+        for plane in (
+            "XY",
+            {"reference": {"kind": "datum_feature", "label": "tilted"}, "u_axis": [0, 0, 1]},
+        ):
+            for entity in (fixture.rectangle(10, 20), fixture.circle([16, -3], 1)):
+                with self.subTest(plane=plane, entity=entity["type"]):
+                    operation = fixture.sketch("profile", plane, entity)
+                    self.assertEqual(operation["dimensioning"], "coordinates")
+                    validated = validate_operations([operation])[0]
+                    self.assertEqual(validated["dimensioning"], "coordinates")
+                    self.assertEqual(validated["plane"], plane)
+                    self.assertEqual(validated["entities"][0]["type"], entity["type"])
+
     def test_default_and_import_have_no_client_or_native_calls(self):
         with (
             patch.object(fixture, "live", side_effect=AssertionError("must not connect")),

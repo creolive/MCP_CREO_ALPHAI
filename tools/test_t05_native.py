@@ -106,7 +106,15 @@ def match_centers(actual: list, expected: list) -> None:
 
 
 def sketch(label: str, plane: Any, entity: dict) -> dict:
-    return {"op": "sketch", "label": label, "plane": plane, "entities": [entity]}
+    # These analytical primitives have fully specified coordinates. Keep T05's
+    # geometry oracle independent of the separately observed auto/autodim failure.
+    return {
+        "op": "sketch",
+        "label": label,
+        "plane": plane,
+        "entities": [entity],
+        "dimensioning": "coordinates",
+    }
 
 
 def rectangle(a: float, b: float) -> dict:
@@ -223,6 +231,7 @@ class Acceptance:
         self.output = output
         self.report: dict = {
             "task": "DEV-047 T05",
+            "fixture_sketch_dimensioning": "coordinates",
             "started_at": time.time(),
             "cases": [],
             "native_acceptance": "running",
