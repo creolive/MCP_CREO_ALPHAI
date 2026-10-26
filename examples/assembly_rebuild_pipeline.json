@@ -1,0 +1,145 @@
+{
+  "description": "FEAT-008 batch-2 official rebuild pipeline: inspect the original assembly -> adopt source files by path -> create a managed assembly -> insert multiple components in a single execute_plan job -> unified save/erase/reload -> readback verification. First stage scope: flat assemblies of healthy, millimeter, dependency-free independent part/sheetmetal sources only. Every placeholder <...> is captured from the previous step; poll each accepted job with creo_get_job until a terminal status and never resubmit.",
+  "steps": [
+    {
+      "step": 1,
+      "purpose": "Inspect the original (resident) assembly: read-only snapshot with normalized millimeter row-vector 4x4 transforms per occurrence, raw matrices, per-node units and constraint snapshots.",
+      "tool": "creo_inspect_session_assembly",
+      "arguments": {"name": "<original assembly name as shown in the Creo session>"},
+      "capture": {
+        "components[].occurrence_path": "tree order of the components to rebuild",
+        "components[].transform_to_parent": "normalized full coordinate map in millimeters (row-vector 4x4, translation in the last row)",
+        "components[].transform_to_parent_raw": "raw Creo matrix in source units; do NOT feed raw matrices back as poses"
+      },
+      "failure_branch": "assembly not resident / snapshot incomplete: no writes happen; fix the session state and inspect again"
+    },
+    {
+      "step": 2,
+      "purpose": "Adopt source files by path (inspect): per-file selection, identity hashing, native health/units/dependency admission without changing the current window; source files stay read-only.",
+      "tool": "creo_adopt_file",
+      "arguments": {
+        "file_path": [
+          "E:/<sources>/plate_a.prt.1",
+          "E:/<sources>/plate_b.prt.1"
+        ],
+        "mode": "inspect"
+      },
+      "capture": {
+        "evidence_token": "600-second token for step 3",
+        "items[].model_id": "eligible items only",
+        "items[].source.source_state.provenance": "fresh or existing_resident"
+      },
+      "failure_branch": "an unhealthy / non-millimeter / dependent / duplicate item is refused per item; other items stay eligible"
+    },
+    {
+      "step": 3,
+      "purpose": "Adopt source files by path (apply): one parent job, independent durable commits per item; known refusals continue, unknown outcome stops the remainder and keeps protection.",
+      "tool": "creo_adopt_file",
+      "arguments": {
+        "file_path": [
+          "E:/<sources>/plate_a.prt.1",
+          "E:/<sources>/plate_b.prt.1"
+        ],
+        "mode": "apply",
+        "evidence_token": "<evidence_token from step 2>",
+        "idempotency_key": "rebuild-pipeline-0001"
+      },
+      "capture": {"items[].model_id": "adopted managed model ids used as source_model_id below"},
+      "failure_branch": "replay with the same idempotency key returns the same parent job; never resubmit under a new key"
+    },
+    {
+      "step": 4,
+      "purpose": "Create the new managed assembly (native metric template).",
+      "tool": "creo_new_assembly",
+      "arguments": {"model_name": "rebuilt_demo_asm"},
+      "capture": {"model_id": "assembly model id", "revision": "terminal revision reported by this creo_new_assembly call (capture the ACTUAL value; do not assume 0)"},
+      "failure_branch": "channel busy: request is rejected, not queued; retry later with the same or a new name only after the blocking job ends"
+    },
+    {
+      "step": 5,
+      "purpose": "Insert all components in ONE job: each operation is a revision snapshot of its source at the current source revision; repeated occurrences reuse the same source_model_id with distinct labels. Pose convention: row vectors, local to parent, p_parent_mm = p_local_mm * rotation_matrix + translation_mm; normalized millimeter transforms from step 1 can be reused directly as rotation_matrix (3x3) + translation; raw matrices must NOT be reused.",
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "model_id": "<assembly model_id from step 4>",
+        "expected_revision": "<actual terminal revision captured in step 4>",
+        "operations": [
+          {
+            "op": "assemble_component",
+            "label": "plate_a",
+            "source_model_id": "<adopted model_id of plate_a from step 3>",
+            "translation": [0, 0, 0],
+            "placement": "fixed"
+          },
+          {
+            "op": "assemble_component",
+            "label": "plate_b",
+            "source_model_id": "<adopted model_id of plate_b from step 3>",
+            "translation": [0, 0, 45],
+            "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
+            "placement": "fixed"
+          },
+          {
+            "op": "assemble_component",
+            "label": "plate_b_second",
+            "source_model_id": "<adopted model_id of plate_b from step 3>",
+            "translation": [120, 0, 45],
+            "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
+            "placement": "fixed"
+          }
+        ]
+      },
+      "capture": {"job_id": "poll until terminal"},
+      "failure_branch": "any failure rolls the assembly back to its checkpoint; component_changes reports status rolled_back (only when the native result confirms rollback_succeeded) and nothing is claimed as effective"
+    },
+    {
+      "step": 6,
+      "purpose": "Verify the unified save/erase/reload of the single batch job.",
+      "tool": "creo_get_job",
+      "arguments": {"job_id": "<job_id from step 5>", "detail": "full"},
+      "expect": [
+        "status == succeeded",
+        "result.saved_file_reloaded_and_verified == true",
+        "revision == expected_revision + 1",
+        "component_changes.status == committed with one added entry per operation",
+        "result.preview_file present (existing preview reuse)"
+      ]
+    },
+    {
+      "step": 7,
+      "purpose": "Readback verification of the rebuilt assembly (last verified snapshot).",
+      "tool": "creo_list_components",
+      "arguments": {"model_id": "<assembly model_id>"},
+      "expect": [
+        "three components with labels plate_a, plate_b, plate_b_second",
+        "transforms match the requested poses within 1e-6",
+        "constraints carry numeric type plus type_name \"fix\"",
+        "aliases expose source_model_id/source_revision/source_snapshot per component"
+      ],
+      "snapshot_note": "later source edits do NOT update these components; regenerate via remove_component + assemble_component (step 8) or rebuild the assembly"
+    },
+    {
+      "step": 8,
+      "purpose": "Optional regeneration after a source edit: in ONE job, remove the stale snapshot and re-insert from the same source_model_id (now at its newer revision) with the original pose but a NEW unique assemble label — the entry refuses an assemble label that already exists on the model, even when the same plan removes it first. To keep the original label instead, run two jobs (remove, then assemble), each revision+1 and independently submitted; a failure of the second job never undoes the first. Constraints and references must be re-checked afterwards.",
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "model_id": "<assembly model_id>",
+        "expected_revision": "<current assembly revision>",
+        "operations": [
+          {"op": "remove_component", "component": "plate_b"},
+          {
+            "op": "assemble_component",
+            "label": "plate_b_refreshed",
+            "source_model_id": "<same adopted model_id of plate_b>",
+            "translation": [0, 0, 45],
+            "rotation_matrix": [[0, 1, 0], [-1, 0, 0], [0, 0, 1]],
+            "placement": "fixed"
+          }
+        ]
+      },
+      "expect": [
+        "component_changes lists one removed (plate_b, old feature_id) and one added entry (plate_b_refreshed, committed)",
+        "the re-inserted component reflects the current source revision (new native copy name)"
+      ]
+    }
+  ]
+}

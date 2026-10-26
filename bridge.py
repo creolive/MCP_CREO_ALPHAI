@@ -1054,6 +1054,11 @@ def run_job(job_id: str) -> None:
 
         run(job_id, manifest)
         return
+    if manifest.get("kind") == "adoption_file":
+        from creo_mechdog.file_adoption import run
+
+        run(job_id, manifest)
+        return
     if manifest.get("kind") == "adoption":
         from creo_mechdog.adoption import run
 
@@ -1191,6 +1196,10 @@ def get_job(job_id: str, detail: str = "full") -> dict:
         from creo_mechdog.adoption import resume_committed
 
         manifest = resume_committed(job_id) or manifest
+    elif manifest.get("kind") == "adoption_file":
+        from creo_mechdog.file_adoption import resume_committed
+
+        manifest = resume_committed(job_id) or manifest
     native_log = directory / "native.log"
     if native_log.exists():
         tail = native_log.read_bytes()[-8000:].decode("utf-8", errors="replace")
@@ -1203,12 +1212,18 @@ def get_job(job_id: str, detail: str = "full") -> dict:
         age = (
             datetime.now(timezone.utc) - datetime.fromisoformat(manifest["created_at"])
         ).total_seconds()
-        timeout = (
-            config().get("generic_timeout_seconds", 600)
-            if manifest.get("kind") in ("generic", "reconciliation", "adoption", "open_file")
-            else config()["native_timeout_seconds"]
-        )
-        if age > 120 + 180 + timeout + 30:
+        if manifest.get("kind") in ("adoption_file", "adoption_file_inspect"):
+            from creo_mechdog.file_adoption import lifetime_seconds
+
+            lifetime = lifetime_seconds(manifest["item_count"])
+        else:
+            timeout = (
+                config().get("generic_timeout_seconds", 600)
+                if manifest.get("kind") in ("generic", "reconciliation", "adoption", "open_file")
+                else config()["native_timeout_seconds"]
+            )
+            lifetime = 120 + 180 + timeout + 30
+        if age > lifetime:
             manifest.update(
                 status="unknown_outcome",
                 message="Job exceeded its expected lifetime; inspect runner.log and Creo before retrying",
@@ -1266,7 +1281,18 @@ def compact_job(manifest: dict) -> dict:
         "action",
         "idempotency_key",
         "adoption_action",
+        "parent_job_id",
+        "batch_id",
+        "items",
+        "item_count",
+        "item_counts",
+        "all_adopted",
+        "partial_result",
+        "evidence_token",
+        "expires_in_seconds",
+        "available",
         "model_evidence_error",
+        "component_changes",
     )
     summary = {key: manifest[key] for key in keys if key in manifest}
     summary["detail"] = "compact"

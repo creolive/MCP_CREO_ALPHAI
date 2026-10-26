@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
-from creo_mechdog import model_registry
+from creo_mechdog import component_changes, model_registry
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -414,6 +414,29 @@ def run_generic_job(job_id: str, manifest: dict):
     request = bridge.read_json(directory / "request.json")
     model = request["model"]
     path = model_path(model["model_id"])
+    # Pre-job verified state snapshot for the bounded component change
+    # summary, captured BEFORE the worker can mutate the control record, and
+    # ONLY when the request actually targets components — plain part jobs
+    # never touch the alias/inspection sidecars. A read failure is recorded
+    # and later degrades the summary to status=unavailable; it never affects
+    # the native run or the confirmed terminal state.
+    prior_state = {"aliases": None, "inspection": None, "error": None}
+    if any(op.get("op") in component_changes.CHANGE_OPS for op in request["operations"]):
+        try:
+            prior = model_registry.read_control(path)
+        except (OSError, ValueError):
+            # Seed/recovery fixtures may run without a persisted control
+            # record; fall back to the request view (which may carry detail
+            # references instead of payloads).
+            prior = model
+        try:
+            prior_state["aliases"] = model_registry.aliases_of(prior)
+            prior_state["inspection"] = model_registry.inspection_of(prior)
+        except Exception as exc:  # noqa: BLE001 - summary-only read failure
+            prior_state["error"] = exc
+    result_aliases = None
+    result_inspection = None
+    result = None
     worker_started = False
     try:
         with bridge.toolkit_lock(
@@ -452,6 +475,8 @@ def run_generic_job(job_id: str, manifest: dict):
                     model["status"] = "unknown_outcome"
                 else:
                     result = bridge.read_json(result_file)
+                    result_aliases = result.get("aliases")
+                    result_inspection = result.get("inspection")
                     # Job manifests keep only summaries and controlled references;
                     # a repeated full-payload result would regrow the read budget
                     # problem inside job.json (BUG-077).
@@ -582,5 +607,63 @@ def run_generic_job(job_id: str, manifest: dict):
             busy=exc.payload,
             recovery_required="Model reservation retained; inspect before recovery",
         )
+    # The summary is auxiliary: it rides on the confirmed terminal state and
+    # native evidence, and a summary failure must never rewrite that state or
+    # leave a persisted job stuck in running. All reads that exist ONLY for
+    # the summary are failure-isolated; sidecar failures or read-budget
+    # errors degrade to component_changes.status=unavailable.
+    try:
+        summary = _component_summary(
+            request,
+            manifest,
+            result,
+            worker_started,
+            result_aliases,
+            result_inspection,
+            prior_state,
+        )
+    except Exception as exc:  # noqa: BLE001 - auxiliary path, state stays authoritative
+        summary = component_changes.unavailable(exc)
+    if summary is not None:
+        manifest["component_changes"] = summary
     manifest["finished_at"] = bridge.now()
     bridge.write_json(directory / "job.json", manifest)
+
+
+def _component_summary(
+    request: dict,
+    manifest: dict,
+    result: dict | None,
+    worker_started: bool,
+    result_aliases: dict | None,
+    result_inspection: dict | None,
+    prior_state: dict,
+) -> dict | None:
+    """Build the summary from the pre-job snapshot plus native evidence.
+
+    Returns None (no component_changes key at all) when the request targeted
+    no component. A pre-job snapshot read failure is raised only when the
+    summary status would actually use the prior state (committed net diff,
+    rolled-back label resolution); statuses that never read the prior state
+    (busy rejection, preflight refusal, unknown outcome) keep their original
+    semantics instead of being masked as unavailable.
+    """
+    targeted = [op for op in request["operations"] if op.get("op") in component_changes.CHANGE_OPS]
+    if not targeted:
+        return None
+    if prior_state.get("error") is not None:
+        uses_prior = manifest["status"] == "succeeded" or (
+            isinstance(result, dict) and result.get("rollback_succeeded") is True
+        )
+        if uses_prior:
+            raise prior_state["error"]
+    return component_changes.summarize(
+        request["operations"],
+        job_status=manifest["status"],
+        rollback=result,
+        executed=worker_started,
+        prior_aliases=prior_state.get("aliases"),
+        prior_inspection=prior_state.get("inspection"),
+        result_aliases=result_aliases,
+        result_inspection=result_inspection,
+    )

@@ -1,3 +1,6 @@
+#include "assembly_pose.h"
+#include "constraint_names.h"
+
 // Native feature families added for version 0.21. Included after generic helpers.
 static J component_sources = J::object();
 static std::map<int, J> component_aliases_in_flight;
@@ -344,23 +347,6 @@ static void generic_sheetmetal_flange(const J &op) {
     extra["section_path"] = J::array({PRO_E_STD_SECTION, PRO_E_SKETCHER});
     remember(op, f, extra);
 }
-static void rigid_transform(const J &op, ProMatrix matrix) {
-    V angles = vec(op["rotation"]);
-    for (auto &a : angles)
-        a *= acos(-1.0) / 180;
-    double cx = cos(angles[0]), sx = sin(angles[0]), cy = cos(angles[1]), sy = sin(angles[1]),
-           cz = cos(angles[2]), sz = sin(angles[2]);
-    double R[3][3] = {{cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx},
-                      {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx},
-                      {-sy, cy * sx, cy * cx}};
-    memset(matrix, 0, sizeof(ProMatrix));
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
-            matrix[i][j] = R[j][i];
-    for (int j = 0; j < 3; j++)
-        matrix[3][j] = op["translation"][j];
-    matrix[3][3] = 1;
-}
 static void fix_component(ProAsmcomp *c) {
     ProAsmcompconstraint *list = nullptr;
     CK(ProArrayAlloc(1, sizeof(ProAsmcompconstraint), 1, (ProArray *)&list));
@@ -448,6 +434,8 @@ static void component_constraints(ProAsmcomp *c, const J &constraints) {
     check(e, "ComponentConstraints");
 }
 static void assemble_component(const J &op) {
+    ProMatrix position;
+    assembly_rigid_transform(op, position);
     J source = component_sources.at(op["source_model_id"].get<std::string>());
     ProPath file;
     path(file, wide(source["part_file"]));
@@ -476,8 +464,6 @@ static void assemble_component(const J &op) {
     ProMdl copy;
     CK(ProMdlnameCopy(child, copy_name, &copy));
     child = copy;
-    ProMatrix position;
-    rigid_transform(op, position);
     ProAsmcomp comp;
     CK(ProAsmcompAssemble((ProAssembly)board, (ProSolid)child, position, &comp));
     component_aliases_in_flight[comp.id] = source["aliases"];
@@ -536,6 +522,10 @@ static J inspect_constraints(ProAsmcomp *comp) {
         ProAsmcompConstrType type;
         CK(ProAsmcompconstraintTypeGet(list[i], &type));
         J item = {{"type", (int)type}};
+        // Keep the numeric SDK code and add the shared readable symbol; an
+        // unrecognized code stays numeric with an explicit "unknown" symbol.
+        const char *type_name = assembly_constraint_type_name((int)type);
+        item["type_name"] = type_name ? type_name : "unknown";
         if (type == PRO_ASM_FIX || type == PRO_ASM_DEF_PLACEMENT) {
             result.push_back(item);
             continue;
@@ -607,9 +597,9 @@ static void modify_component(const J &op) {
     if (action == "component_constraints")
         component_constraints(&comp, op["constraints"]);
     else if (action == "component_placement") {
-        CK(ProAsmcompAllConstrRemove(&comp));
         ProMatrix position;
-        rigid_transform(op, position);
+        assembly_rigid_transform(op, position);
+        CK(ProAsmcompAllConstrRemove(&comp));
         CK(ProAsmcompPositionSet(nullptr, &comp, position));
         fix_component(&comp);
     } else {

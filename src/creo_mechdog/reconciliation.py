@@ -329,6 +329,8 @@ def _deployment(deadline: float) -> str:
         "src/creo_mechdog/legacy_recovery.py",
         "src/creo_mechdog/windows_boot.py",
         "src/creo_mechdog/adoption.py",
+        "src/creo_mechdog/file_adoption.py",
+        "native/adoption_source.h",
         "native/generic.cpp",
         "native/result_delivery.h",
         "native/recovery_deadline.h",

@@ -121,6 +121,16 @@ def families() -> dict:
                 "creo_reconcile_model abandon_new"
             ),
         },
+        "file_adoption": {
+            "enabled": True,
+            "tool": "creo_adopt_file",
+            "actions": ["inspect", "apply"],
+            "maximum_paths": 20,
+            "scope": "Healthy independent millimeter parts/sheetmetal; ordered independent commits; no display/window switching",
+            "limits": "Duplicate origins refused; modified/ambiguous residents refused; existing_resident disk/content equality before inspection unknown; unknown stops remainder and preserves protection",
+            "evidence_seconds": 600,
+            "native_acceptance": "Pending Creo 12.4 / WorkBuddy validation",
+        },
         "session_models": {
             "enabled": True,
             "tool": "creo_list_session_models",
@@ -364,7 +374,29 @@ def families() -> dict:
         },
         "assembly": {
             "enabled": True,
+            "orientation_input": (
+                "XYZ Euler degrees (X then Y then Z), or exclusive nested 3x3 rotation_matrix; "
+                "row vectors local to parent, translation separately in mm; finite real numbers, "
+                "orthogonality and determinant +1 within 1e-6, without repair or transpose"
+            ),
+            "matrix_validation": "offline production helper and MCP/schema regression; live placement/save-reload unverified",
             "native_test": "part snapshots, rigid placement, removal, 3 datum-plane align constraints and 20 mm offset",
-            "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots; mate/insert/csys/default placement need further validation",
+            "component_changes": (
+                "jobs with component operations report a bounded manifest component_changes "
+                "summary (also present in detail=compact): committed (real native feature "
+                "identities; moved carries queried from/to transforms), rolled_back ONLY "
+                "with native rollback_succeeded evidence (requested intents only, never "
+                "reported as effective), no_effect (busy rejection/worker not started or "
+                "native model_unchanged; nothing attempted or mutated) or unknown_outcome "
+                "(empty; failed-after-execution without confirmed rollback, or unconfirmed "
+                "outcome; protection retained)"
+            ),
+            "constraint_names": (
+                "list_components constraints keep the numeric SDK type code and add type_name "
+                "from the same mapping as inspect_session_assembly; unknown codes stay numeric "
+                "with type_name unknown"
+            ),
+            "pipeline": "single execute_plan job inserts multiple components (distinct labels per occurrence); official rebuild pipeline: docs/ASSEMBLY_REBUILD.md with examples/assembly_rebuild_pipeline.json",
+            "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots (regenerate via remove + re-assemble or rebuild); mate/insert/csys/default placement need further validation",
         },
     }

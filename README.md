@@ -4,9 +4,9 @@
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **91 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.5.3**（0.5.0/0.5.1 外部 Creo 9 反馈整合：阶段一登记 + 阶段三兼容修复与说明，PATCH，无新增公开工具，工具数 91 不变），变更、验收与限制见[版本说明](docs/RELEASE_NOTES_0.5.3.md)。本版交付：`creo_migrate_registry` 迁移 owner 拒绝诊断与 inspect 预检（有界 `owner_block`：recorded/observed、Windows 错误、reason_code 与 next_steps，停止判定语义未改，[BUG-081](docs/work-items/BUG-081.md)）；再生失败响应新增结构化 `failed_features` 特征级诊断（[BUG-082](docs/work-items/BUG-082.md)，autodim 改角再生失败本体仍在并随版披露，coordinates 改角/改半径实机成功路径 7/7）；`revolve.axis` 非法结构入口预检与原生边界统一拒绝（[BUG-083](docs/work-items/BUG-083.md)，省略/显式轴双路径实机通过）；种子来源与兼容信息透明化（[FEAT-030](docs/work-items/FEAT-030.md)/[BUG-034](docs/work-items/BUG-034.md)，加载失败保留原始 API/错误码/阶段与种子哈希，不硬写版本不兼容）；及四项小修（FEAT-045 装配检查状态对齐、BUG-058 挂起指引区分、FEAT-020 更新失败文案、BUG-019 参数对照示例）。已知问题：恢复 accept 路径 native 保存调用稳定失败（[BUG-078](docs/work-items/BUG-078.md)，根因定位为损坏会话级，建模代码零改动，`restore_baseline`／`abandon_new` 不受影响）。剩余工作见[统一台账](docs/BACKLOG.md)。前一版本 0.5.2（装配变换单位契约与收养逐特征诊断）见[版本说明](docs/RELEASE_NOTES_0.5.2.md)。
+当前服务／源码版本为 **0.6.0**（0.5.0 反馈整合第二批：可靠装配重建管线，MINOR，公开工具 91→92）。本版新增按路径及批量收养 `creo_adopt_file`、装配 `rotation_matrix`、组件变更摘要及约束符号名，提供官方重建流程与示例。源件编辑不会自动更新既有 `source_snapshot`；当前通过删除并以新标签插入再生成。开发检查 748 项、本机 Creo 12.4 对应实机及新目录安装通过；WorkBuddy 经用户决定取消本批，未执行、不记通过。功能、兼容与已知问题见[版本说明](docs/RELEASE_NOTES_0.6.0.md)，验收见[发布记录](docs/validation/RELEASE-0.6.0.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.5.3](docs/RELEASE_NOTES_0.5.3.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
@@ -74,7 +74,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 基准与重复 | `creo_datum_plane`、`creo_datum_axis`、`creo_dimension_pattern`：偏移/角度基准面、基准轴、一方向尺寸阵列 |
 | 镜像、扫掠、拔模 | `creo_mirror`：整体/几何镜像；`creo_sweep`：恒定截面及命名截面尺寸；`creo_draft`：恒角、不分割拔模 |
 | 钣金 | `creo_new_sheetmetal`、`creo_sheetmetal_wall`、`creo_sheetmetal_flange`、`creo_sheetmetal_unbend`、`creo_sheetmetal_bend_back`、`creo_sheetmetal_flat_pattern`：首壁、弯曲法兰、展开、折弯回去和平展；保留原生特征树 |
-| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本副本、定位、约束、删除和查询 |
+| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本快照、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；含组件操作的作业附 `component_changes` 有界变更摘要（committed/rolled_back/unknown_outcome），`list_components` 约束保留数字 `type` 并附 `type_name` 符号；单作业插入多个组件与官方重建管线见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)；矩阵放置与收养实机验收待完成，见 [FEAT-012](docs/work-items/FEAT-012.md) |
 | 新增曲面与实体 | `creo_surface_fill`、`creo_thicken`、`creo_solidify`、`creo_boolean_bodies`、`creo_rib` |
 | 新增基准 | `creo_datum_csys`、`creo_datum_points` |
 | 原生工程图 | `creo_new_drawing`；图纸、一般/投影视图、尺寸显示、注释、表格及编辑/删除；原生 DRW 与 PDF 输出 |
@@ -138,7 +138,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 随后 `creo_set_sketch_dimensions` 使用 `sketch:"profile", values:{"diameter":24}` 修改直径；拉伸实体随之更新。`creo_set_dimensions` 接收查询结果中的模型尺寸 ID，例如 `values:[{"id":18,"value":40}]`；实际 ID 由 Creo 生成。
 
-完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
+完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划；装配重建管线与单作业多组件示例见 `examples/assembly_rebuild_pipeline.json` 与 `examples/assembly_multicomponent_plan.json`（说明见 [docs/ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)）。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
 
 ## 坐标、引用与参数
 
@@ -205,6 +205,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 目前高层工具覆盖上述常见实体特征，仍有明确范围：
 
 - 持续修改支持本服务创建、登记的零件、钣金模型和装配；用户已在 Creo 打开的未登记模型可通过 `creo_adopt_current_model` 显式接管为受管副本（原件与原会话对象不动，首批独立 part/钣金、mm 单位、无外部依赖；身份按 origin 路径 + 文件哈希 + live 快照证明，不信任显示名）。
+- Development branch: `creo_adopt_file` accepts 1-20 ordered source paths with inspect/apply, independent per-item commits and no display/window activation. Existing unmodified exact-origin residents are copied as explicitly inspected session state; their pre-inspection disk/content equality is unknown. Duplicate sources are refused with reuse guidance; unknown outcomes stop remaining items and retain protection. See [path-adoption contract and pending native acceptance](docs/FILE_ADOPTION.md).
 - 各类尺寸/约束的复杂组合、极端几何及外部人工修改的自动接管仍需后续扩展。
 - 孔为直孔，尚未封装螺纹、沉头、沉孔标准孔；倒角为等距，阵列支持一方向尺寸阵列和原生轴阵列。
 - 普通混合支持平行 XY 截面的种子复用及直接创建/追加。随包九个种子覆盖 2/3/4/6 截面的直线和平滑，以及 5 截面平滑；其他数量需显式兼容种子或直接创建并本机验证。直接混合仅支持受管草图、Z 严格递增和默认实体增材。不支持自动增减种子截面、转换连接模式、非平行截面或端点相切/曲率控制。数量上限不代表每种数量都已实测。新零件整体可用原生定位特征移动或旋转。

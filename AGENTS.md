@@ -23,7 +23,7 @@
 
 ## 请求流与运行时架构
 
-一次建模请求的实际路径：MCP 客户端（stdio）→ `server.py`（工具数以 capabilities 为准，本开发分支84个）→ `bridge.py`（revision 校验、保护策略、子进程与终态登记）→ `generic_bridge.py` → 由 `native/*.cpp` 编译出的 Creo Toolkit 执行器（单一通道串行）→ Creo Parametric 进程。客户端只看到任务 `job_id` 与 `model_id`；几何计算全部在原生执行器内完成，Python 侧不模拟 Creo 行为。
+一次建模请求的实际路径：MCP 客户端（stdio）→ `server.py`（工具数以 capabilities 为准，本开发分支92个）→ `bridge.py`（revision 校验、保护策略、子进程与终态登记）→ `generic_bridge.py` → 由 `native/*.cpp` 编译出的 Creo Toolkit 执行器（单一通道串行）→ Creo Parametric 进程。客户端只看到任务 `job_id` 与 `model_id`；几何计算全部在原生执行器内完成，Python 侧不模拟 Creo 行为。
 
 两条并存的 Python 轨道：`src/creo_mechdog/` 是标准可编辑包（安装声明见 `pyproject.toml`），新业务模块放包内；根目录同名的 `schema.py`、`airfoil.py`、`profile_checks.py` 及 `server.py`、`bridge.py`、`version.py` 保留兼容包装。包内实现与根包装同时进入源码身份清单，二者对同一类型必须共享定义，不能出现两套模型。
 

@@ -1,6 +1,6 @@
 # FEAT-008：工具输入、引用与能力说明的一致性
 
-日期：2026-10-16 补全。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-16 补全，2026-10-26 0.6.0收口更新。类型：功能。优先级：P2。状态：待规划（第二批官方装配重建管线配套已随 0.6.0 交付，开发者实机通过、WorkBuddy 黑盒经用户 2026-10-26 决定取消未执行）。目标版本：未排期（第二批配套随 0.6.0）。
 
 ## 当前进度（2026-10-21）
 
@@ -70,6 +70,232 @@ list_models 的 complete=false / next_cursor 为报告方实际分页正例，�
 同日后续非毫米inspect则返回结构化available=false/reason，而assembly为工具级错误，两种不可接管形式的兼容与稳定原因分类继续归本卡；本轮两种保护均有通过报告。非毫米载荷内units="mm"及未换算volume_mm3是独立真实摘要缺陷，已登记[BUG-072](BUG-072.md)，不混作本卡错误格式问题。
 
 后续外部依赖及含抑制特征的健康拒绝亦通过；健康理由合并failed/suppressed/incomplete，没有公开逐特征原因。若后续增加细粒度诊断，保持稳定原因分类与原错误兼容，不能从feature_count=9推断具体DTM1状态，也不能据抑制用例判真实再生失败已验收。当前仅补改进线索，不新增同义条目或扩大本卡首批范围。
+
+## 2026-10-25：0.5.0 反馈第二批第二阶段（官方装配重建管线配套）
+
+来源：[0.5.0 反馈整合计划第二批](../development/0.5.0-FEEDBACK-PLAN-2026-10-22.md)与
+[装配编辑流程改进建议](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_装配编辑流程改进建议.md)
+P1-2/P2-3/P3 及 §3。范围（本阶段实现，实机/WorkBuddy 仍待验收）：
+
+1. **官方流程示例与说明**：`examples/assembly_rebuild_pipeline.json`（检查原装配→
+   按路径收养→新建托管装配→单个 execute_plan 多组件→统一保存重载→回读验证）
+   与 `examples/assembly_multicomponent_plan.json`（单作业批量插入）；配套
+   `docs/ASSEMBLY_REBUILD.md` 说明 inspect 归一化毫米变换约定（行向量 4×4，
+   3×3 R 加独立毫米 translation，p_parent=p_local·R+t；不自动转置/修正；原
+   变换未知或不支持时明确拒绝）、source_snapshot 语义与变更摘要/type_name 用法；
+   开发者 MCP 集成入口 `tools/test_assembly_pipeline.py`。首期单层、健康毫米
+   独立零件/钣金；重复 occurrence 复用收养 model_id、独立组件 label。
+2. **source_snapshot 明确**：源件编辑不自动更新已插入组件；当前重新生成方式
+   为 remove_component 后重新 assemble_component（按当前源 revision，原 label/
+   位姿需重新指定，引用与约束需重新核对）或新建装配重建；文档与示例不承诺
+   component_placement/regenerate/save 可更新源件快照，不实现显式源件更新与
+   嵌套装配。
+3. **组件变更摘要**：含组件操作的作业结果增加有界 `component_changes`
+   （committed/rolled_back/unknown_outcome 三态；added/moved/constraints_changed/
+   removed 清单，值取自原生操作结果、受管别名与已验证检查，Python 不模拟几何；
+   失败/回滚/unknown 不报为已生效）；复用现有 preview.jpg，不新增同义批量装配
+   工具。
+4. **list_components 约束符号名**：保留 `constraints[].type` 数字码，新增
+   `type_name`（统一复用 FEAT-045 会话装配原生约束映射，未知码保留数字并标
+   `unknown`）；不扩第三批约束回放。
+
+验收：示例参数经真实 schema 校验单测；变更摘要三态单测；约束符号名离线
+helper 与 SDK 编译；matrix/批量收养/管线三个实机驱动编写待用（唯一报告目录）；
+WorkBuddy 纯 MCP 场景文档。环境：Windows 11 x64 / Python 3.12.14 / 本机
+Creo 12.4 SDK 离线编译；不连接 Toolkit、不故障注入。底板 holes/对称深度/
+平面引用等首批范围不受影响，整卡不关闭。
+
+### 2026-10-25 第二阶段实现与离线结果
+
+已实现并离线验证（提交见批次证据
+[BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md](../development/BATCH2-STAGE2-IMPLEMENTATION-2026-10-25.md)）：
+
+- 示例：`examples/assembly_rebuild_pipeline.json`（八步官方管线，含快照再
+  生成步骤）、`examples/assembly_multicomponent_plan.json`（单作业三组件），
+  参数与真实 MCP schema 一致并由 `tests/unit/test_assembly_examples.py` 锁定；
+  说明文档 `docs/ASSEMBLY_REBUILD.md`（毫米行向量约定、source_snapshot 语义、
+  变更摘要与 type_name 用法、开发者入口）。
+- `component_changes`：含组件操作的 generic 作业 manifest 增加有界摘要
+  （committed/rolled_back/unknown_outcome 三态；added 含真实
+  feature_id/source_revision，moved 含查询矩阵 from/to，removed 按既有别名
+  解析 label）；失败/回滚/unknown 不报为已生效；现有结果字段不变；
+  `src/creo_mechdog/component_changes.py` + `tests/unit/test_component_changes.py`
+  （纯契约 6 项 + run_generic_job 挂载 4 项）。
+- `list_components` 约束符号名：原生 `native/constraint_names.h` 统一
+  FEAT-045 会话装配与受管组件清单映射（SDK 枚举 static_assert 钉住数值，
+  离线回退值仅供无 SDK harness）；`inspect_constraints` 保留数字 `type` 并新增
+  `type_name`，未知码输出 `"unknown"`；离线 harness
+  `tools/test_constraint_names.py`（13 组符号 + 未知码）通过，SDK 编译 exit 0。
+- 实机驱动：`tools/test_assembly_matrix.py` 补真实普通失败后回滚断言与
+  type_name/数字码断言、唯一报告目录；`tools/test_file_adoption.py` 补
+  provenance/拒绝原因断言、唯一报告目录；新增
+  `tools/test_assembly_pipeline.py`（单作业多组件、预览/摘要/符号名、快照
+  语义与再生成）。三者仅编写待用，未连接 Toolkit。
+- WorkBuddy 纯 MCP 场景：`docs/WORKBUDDY_FEAT008_PIPELINE.md`。
+
+未测：实机放置/收养/管线、保存重载、WorkBuddy 黑盒、其他 Creo 版本；第三
+批约束回放（FEAT-049）未扩。
+
+### 2026-10-25 第二批第三阶段登记（复审收口，行为修改前）
+
+上游逐段读码复审确认六项缺陷，本阶段最小修复（不改写历史 validation
+与 stage1/2 测试事实，新证据另建）：
+
+1. **旧装配约束记录不兼容（真实生产缺陷）**：`native/advanced.cpp`
+   `inspect_constraints` 新增展示性 `type_name` 后，`native/generic.cpp`
+   `verify_saved` 仍整段 JSON 严格比较 `constraints`；旧保存检查点只有
+   `{"type":13}`，新查询为 `{"type":13,"type_name":"fix"}`，旧装配后续编辑
+   被误报 "Saved assembly constraints changed"。修复：提取生产 helper 只把
+   `type_name` 从兼容比较中投影掉，数字 `type`/`offset`/引用/方向/数量/顺序
+   校验完整保留；真实 helper 离线 harness 证明旧→新等价通过、真实变化仍拒绝。
+2. **变更摘要不得编造回滚**：`component_changes` 对一切非 succeeded 作业一律称
+   `rolled_back`；busy 拒绝/未执行分支并无回滚证据。改为按原生
+   `rollback_succeeded`/`model_unchanged`/终态/保护信息区分：确证回滚才称
+   `rolled_back`；未执行（busy/未启动）称 `no_effect`；执行后失败但回滚未确证
+   称 `unknown_outcome`；汇总异常只报 `unavailable` 且不得改变已确认终态
+   （成功作业不得滞留 running 或被改成 unknown）。同 job remove+reinsert 同
+   label 时 removed 用旧 feature_id、added 用结果别名新 id。compact 投影纳入
+   `component_changes`（有界）。
+3. **guard 异常收尾**：`tools/guarded_live_run.py` 原假定“driver 退出=作业终态”，
+   改为启动前记录基线作业集，成功/失败/异常后持 main guard 期间轮询本轮新
+   作业到终态并探针确认 md050 通道静止后才释放；unknown 停止后续 driver、保留
+   md050 保护，不证明静止不得声称安全释放；文档不再把“子进程退出前必终态”写成
+   已验证保证。
+4. **管线驱动修夹具与快照对象**：`tools/test_assembly_pipeline.py` 原把 MCP
+   托管输出直接送收养（必被 `managed_output` 拒绝）、快照场景编辑原 source
+   而非收养副本、重建场景非可靠验证。改为制备唯一命名外部夹具（记录源 SHA、
+   只读）、编辑实际收养 `source_model_id` 并真实改变几何（外伸凸台，体积/bbox
+   可核）、用 inspect 归一化毫米变换+来源映射重建并对上冻结快照；fixture 名
+   每次唯一。
+5. **矩阵驱动补真实回滚与独立几何断言**：单作业先合法移动再以无效 native
+   组件引用失败，要求 failed+rollback_succeeded、revision 不变、位姿恢复、
+   后续合法修改成功；增加原生保存重载 inspection 体积/bbox 独立物理断言
+   （源盒 8 角刚体变换期望边界，非自证矩阵）。
+6. **文档/示例/提示词**：`assembly_rebuild_pipeline.json` 不再固定
+   `capture.revision=0`；guard 文档给可直接运行的 `--run` PowerShell 单行；
+   WorkBuddy 回滚场景改为“先成功变更再普通 native 失败”；快照场景编辑实际
+   source_model_id 并区分缓存与刚实测原生数据。
+
+验收：针对性单测、全量 dev_check、约束比较生产 helper harness、Creo 12.4 SDK
+离线编译；记录提交/dirty/指纹/SHA/命令/未测范围。不放宽 style baseline；
+实机/WorkBuddy 仍待统一安排，本卡不关闭；首批底板 holes 等继续开放。
+
+### 2026-10-25 第三阶段实现与离线结果
+
+六项复审缺陷已全部最小修复并离线验收：约束兼容比较生产 helper
+（`native/constraint_compare.h` + 离线 harness，旧→新等价、真实变化拒绝）；
+变更摘要四态（`rolled_back` 仅回滚确证、新增 `no_effect`/`unavailable`、
+compact 投影、remove+reinsert 双身份）；guard 异常路径终态确认释放
+（基线+轮询+通道探针，unknown 保留，exit 3 不声称安全，7 项离线回归）；
+管线驱动外部夹具制备/收养副本编辑/inspect 归一化变换重建与体积取证；
+矩阵驱动单作业真实回滚 + 原生体积/bbox 独立断言；文档/示例/提示词/CLI
+修正（`--run` 单行命令、`revision=0` 固定值移除、WorkBuddy 回滚与快照
+场景重写）。676 项单测、全量 dev_check（exit 0）、三个 C++ helper harness、
+Creo 12.4 SDK 编译通过；未放宽 style baseline。完整证据见
+[BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE3-REVIEW-CLOSEOUT-2026-10-25.md)。
+实机/WorkBuddy 仍待统一安排，本卡不关闭。
+
+### 2026-10-25 第四阶段复审收口（残余缺陷最小修复）
+
+上游最终源码读码确认的四项残余缺陷已最小修复并离线验收：
+
+1. **guard 真实锁释放语义**：释放 main 真实锁唯一条件是本轮全部受理作业
+   终态 + 无 md050 原生 worker 存活（checkpoint `native_pid` 进程身份 +
+   `creo_worker.exe` 镜像只读扫描双证据，空闲锁不算）+ 字节锁探针空闲；
+   unknown 安静后可释放但返回失败并保留 unknown 保护；不可证实时
+   `--settle-timeout` 只写报警，入口持续存活持真锁直至可证实，Ctrl+C
+   唯一提前退出。`_snapshot_jobs/_new_jobs` 仅 FileNotFoundError 当空，
+   每轮重新发现累计晚到作业。11 项离线回归用独立进程真实抢锁断言。
+2. **管线驱动**：原生模型/外部源名改用 tag 的 SHA256[:8] 短后缀（≤31，
+   旧 24 字符 tag 命名被真实 `normalize_model_name` 拒绝已锁定）；末尾
+   replace 操作保留 `op`；全部动态请求提取为 builder 并用真实
+   `normalize_model_name`/`validate_operations` 离线校验（+8 项单测）。
+3. **矩阵驱动**：AABB 体积不变量仅对有符号置换旋转断言（`[30,90,60]`
+   严格增大已数学锁定，+4 项单测）；记录 bbox 明确为预期派生值而非
+   Creo 实测装配 bbox。
+4. **摘要辅助路径**：作业前快照只对有组件操作的请求读取，读取失败仅
+   降级 `component_changes.status=unavailable`（busy/no_effect/unknown
+   原语义不变）；committed 摘要改为按真实 feature_id 的净变更
+   （add+move→仅 added、add+remove→无净变更、重插双身份、连续 move
+   单次净移动、缺结果别名→unavailable，+9 项单测）。
+
+全量 701 项单测、dev_check（exit 0）、四个 C++ helper harness、
+Creo 12.4 SDK 编译通过；未放宽 style baseline。证据见
+[BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
+实机/WorkBuddy 仍待统一安排，本卡不关闭。
+
+### 2026-10-26 第二批实机收口：快照刷新改用新唯一 label（最小修复）
+
+实机证据：`build/assembly_pipeline_live_20261025T162553Z6eec525a`（guard
+`build/guarded_live_20261025T162020624286`，child_1.log 只读）9 个父作业全部
+成功（两源件、两项独立收养、原装配三组件、只读检查、重建 3 组件位姿与体积
+匹配、收养源追加凸台体积 +600、装配 regenerate 后仍旧快照），最后 step 9e 把
+同一 execute_plan `[remove_component component='plate_a',
+assemble_component label='plate_a'（同一已编辑源）]` 再次提交，被入口以
+`Feature labels already exist: ['plate_a']` 拒绝，未受理、无新 job。
+
+根因/契约：入口按计划内 assemble label 与目标既有别名求交拒绝，**即使同一
+计划先 remove 该 label**——这是现有生产契约，本批不为它扩展生产功能，也不
+包含显式 source 更新 API。最小修复：
+
+- `tools/test_assembly_pipeline.py`：`replace_operations` 改为一个原子作业内
+  remove 旧 `plate_a` + 以**新唯一 label** `plate_a_refreshed` 重新 assemble
+  （同一 `source_model_id` 当前 revision、原冻结位姿、`op` 字段保留）；
+  step 9e 下游断言按新 label 读取——`component_changes` 保留
+  removed(旧 label/旧 feature_id)+added(新 label/新 feature_id/
+  当前 source_revision)、最终 aliases 旧 label 已消失、新组件变换匹配冻结
+  快照、副本名为新原生拷贝、装配体积 origin+600；约束数字码+`type_name`
+  断言（step 6/8）不变。
+- 需保留原 label 的用户：先 remove 一个作业、再 assemble 另一个作业，各自
+  revision+1、独立提交；第二步失败不会撤销第一步。不得声称同 label 同作业
+  可行。
+- 回归（offline，无真实 server/native 执行/runner mock）：
+  `tests/unit/test_pipeline_replace_alias_precheck.py` 3 项——真实
+  `generic_bridge.submit` 预检在既有别名环境（真实样式 32-hex id、托管
+  output 命名、基线 sha256、组件别名 sidecar）下先复现原 remove+同 label
+  计划被拒（无作业、无 runner、无 pending_job），再确认新 remove+新 label
+  计划通过同一预检并入队，另锁定普通 reassemble 既有 label 同样被拒；
+  `tests/unit/test_assembly_pipeline_requests.py` 同步更新（label 重命名、
+  输入 pose 不被 builder 篡改）。
+- 文档/示例同步：`docs/ASSEMBLY_REBUILD.md` source_snapshot 再生成方式、
+  `docs/WORKBUDDY_FEAT008_PIPELINE.md` step 6、
+  `examples/assembly_rebuild_pipeline.json` step 8（新 label 与两步替代路径）；
+  单作业插入多组件主流程、原装配只读、嵌套/FEAT-049/050/世代回收范围不变；
+  未改 `docs/validation/` 任何原件。
+
+验证：针对性单测 23 项通过（上述两文件）、示例契约单测通过、Ruff 无新增、
+`tools/test_assembly_pipeline.py --help` 正常；证据与命令见
+[development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md](../development/BATCH2-PIPELINE-REPLACE-LABEL-2026-10-26.md)。
+
+### 2026-10-26 开发者实机收口结果（本阶段管线重跑已通过，WorkBuddy 待）
+
+最终管线 b86 实机重跑成功（`build/assembly_pipeline_live_20261025T170907Zf5978fb3`，
+guard `guarded_live_20261025T170905774374` 子 exit 0、settle quiet/released、
+本轮 16 个新发现作业全部 succeeded）：10 个父作业全成功——两外部源件制备与
+按路径收养（独立 durable 提交）、原装配三组件（含重复 occurrence + 非对称
+组合旋转）、原装配只读检查、按 inspect 归一化 mm 变换重建并回读匹配冻结
+快照（新旧体积均 12384）、收养源编辑真实 +600（7200→7800）后 regenerate+
+保存重载仍 12384（list_components 缓存不变仅作缓存证据）、单作业 remove
+`plate_a` + 新唯一 label `plate_a_refreshed` 重插后 12984、装配 rev 3→4、
+`component_changes` committed（removed 旧 feature_id / added 新 feature_id 与
+当前 source_revision）；源只读 hash 不变、原装配只读不改动。保留原 label
+须两独立作业（第二失败不回滚首个删除），生产 alias 预检规则未改。矩阵实机
+（fc86231，38 父作业）与 4 次真实改变位姿、批量收养两批实机、独立全量
+dev_check 748 项一并通过；证据与文件 SHA256 见
+[BATCH2-LIVE-ACCEPTANCE-2026-10-26.md](../development/BATCH2-LIVE-ACCEPTANCE-2026-10-26.md)。
+
+未测：WorkBuddy 黑盒（经用户 2026-10-26 决定取消本批，未执行、不记通过；
+提示词已备 `build/workbuddy_batch2_20261026/PROMPT-UTF8.txt`）、
+并发/unknown 自然分支/断连注入/其他 Creo 版本；首批底板 holes/对称深度/
+平面引用继续开放，整卡不关闭。
+
+### 2026-10-26 0.6.0 发布候选收口
+
+第二批配套（官方管线示例与说明、source_snapshot 语义、组件变更摘要、约束
+`type_name` 符号名）随 0.6.0 发布候选交付：用户当日明确取消本批 WorkBuddy
+测试（未执行，不冒充通过）并授权合入 main+Release；候选只改版本元数据与种子
+包 digest，业务实现自 b86 起未变。合入、标签、Release 与附件由控制者执行；
+首批底板 holes/对称深度/平面引用等范围继续开放。
 
 ## 2026-10-20：0.4.1 顶层支持状态与接管拒绝稳定原因
 

@@ -1,0 +1,477 @@
+"""FEAT-012/BUG-045 live MCP assembly matrix acceptance scenarios.
+
+Run only after independently verifying session health and authorization under
+AGENTS.md. This task adds these scenarios without running them. Does not erase
+the session, recover unknown outcomes, or retry rejected submissions.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import math
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from mcp import Client
+from mcp.client.stdio import StdioServerParameters
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from creo_mechdog.paths import SOURCE_PATHS
+from tools.dev_check import git_state, source_hash
+from tools.mcp_readiness import wait_for_startup
+
+ROOT = SOURCE_PATHS.resource_root
+IDENTITY = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+POSES = [
+    ([0, 0, 0], IDENTITY, [2, 3, 5]),
+    ([90, 0, 0], [[1, 0, 0], [0, 0, 1], [0, -1, 0]], [2, -5, 3]),
+    ([-90, 0, 0], [[1, 0, 0], [0, 0, -1], [0, 1, 0]], [2, 5, -3]),
+    ([0, 90, 0], [[0, 0, -1], [0, 1, 0], [1, 0, 0]], [5, 3, -2]),
+    ([0, -90, 0], [[0, 0, 1], [0, 1, 0], [-1, 0, 0]], [-5, 3, 2]),
+    ([0, 0, 90], [[0, 1, 0], [-1, 0, 0], [0, 0, 1]], [-3, 2, 5]),
+    ([0, 0, -90], [[0, -1, 0], [1, 0, 0], [0, 0, 1]], [3, -2, 5]),
+    ([90, 0, 90], [[0, 1, 0], [0, 0, 1], [1, 0, 0]], [5, 2, 3]),
+    ([90, 90, 90], [[0, 0, -1], [0, 1, 0], [1, 0, 0]], [5, 3, -2]),
+    ([90, -90, 90], [[0, 0, 1], [0, -1, 0], [1, 0, 0]], [5, -3, 2]),
+    (
+        [30, 90, 60],
+        [[0, 0, -1], [-0.5, math.sqrt(3) / 2, 0], [math.sqrt(3) / 2, 0.5, 0]],
+        [-1.5 + 5 * math.sqrt(3) / 2, 3 * math.sqrt(3) / 2 + 2.5, -2],
+    ),
+]
+
+
+def compact_inspection(payload: dict) -> dict:
+    """Extract the saved/reload inspection block from a real compact
+    ``creo_inspect_model`` payload.
+
+    Real public contract (live MCP evidence, 2026-10-25): volume, units and
+    their query codes live under ``payload["inspection"]`` — never at the
+    top level; ``revision`` stays top-level. BUG-072 semantics are preserved:
+    non-millimeter or unknown units yield ``volume_mm3=None`` with a non-zero
+    query code, so a missing/unverified volume is a hard failure here, never
+    defaulted to 0 or a pass.
+    """
+    inspection = payload.get("inspection")
+    assert isinstance(inspection, dict) and inspection, payload
+    assert inspection.get("inspection_available") is True, inspection
+    assert inspection.get("units") == "mm", inspection
+    assert inspection.get("units_query_code") == 0, inspection
+    assert inspection.get("volume_query_code") == 0, inspection
+    volume = inspection.get("volume_mm3")
+    assert isinstance(volume, (int, float)) and not isinstance(volume, bool) and volume > 0, (
+        inspection
+    )
+    assert "revision" in payload, payload
+    return {
+        "revision": payload["revision"],
+        "volume_mm3": volume,
+        "units": inspection["units"],
+        "volume_query_code": inspection["volume_query_code"],
+        "inspection_source": inspection.get("inspection_source"),
+    }
+
+
+def full_section_records(payload: dict, section: str) -> list:
+    """Full-detail section records of ``creo_inspect_model`` live under
+    ``payload["data"][section]`` (e.g. ``data.bodies[].bbox``); there is no
+    top-level ``payload[section]`` in the real contract."""
+    data = payload.get("data")
+    assert isinstance(data, dict), payload
+    records = data.get(section)
+    assert isinstance(records, list) and records, payload
+    return records
+
+
+def verify_rolled_back_failure(
+    failed: dict, assembly_revision: int, before: dict, after: dict
+) -> None:
+    """Verify a genuinely failed job that rolled back, against queried state.
+
+    A failed job manifest may legitimately omit the top-level ``revision``
+    (the live run build/assembly_matrix_live_20261025T151808Z reported the
+    compound move+remove job 47d5dfc90089459080fb5a0b7e57674a without one,
+    while rollback_succeeded stayed true with inspection_source
+    "rollback_verified"), so the model revision is verified from an actual
+    ``creo_list_components`` query instead of being assumed present. When the
+    failed manifest does carry a revision it must match the assembly; no
+    default success value is fabricated for a missing field.
+    """
+    assert failed["status"] == "failed", failed
+    assert failed["result"]["rollback_succeeded"] is True, failed
+    if "revision" in failed:
+        assert failed["revision"] == assembly_revision, failed
+    assert failed["component_changes"]["status"] == "rolled_back", failed
+    assert after["revision"] == assembly_revision, after
+    assert before == after  # the accepted move was rolled back too
+
+
+def is_signed_permutation(rotation) -> bool:
+    """True only for axis-aligned rotations (each row/column a unit +/- basis).
+
+    For those — and only those — the axis-aligned bounding box of a rotated
+    body keeps the source box volume. Arbitrary rotations change the AABB
+    (it grows), so volume invariance must never be asserted for them.
+    """
+    for i in range(3):
+        for j in range(3):
+            value = abs(rotation[i][j])
+            if value > 1e-9 and abs(value - 1.0) > 1e-9:
+                return False
+    for i in range(3):
+        if sum(1 for j in range(3) if abs(rotation[i][j]) > 1e-9) != 1:
+            return False
+        if sum(1 for r in range(3) if abs(rotation[r][i]) > 1e-9) != 1:
+            return False
+    return True
+
+
+async def run() -> None:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    destination = ROOT / f"build/assembly_matrix_live_{stamp}/report.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "work_items": ["FEAT-012", "BUG-045"],
+        "source": git_state(ROOT),
+        "source_fingerprints": {
+            name: source_hash(ROOT / name)
+            for name in (
+                "server.py",
+                "generic_bridge.py",
+                "src/creo_mechdog/schema.py",
+                "native/advanced.cpp",
+                "native/assembly_pose.h",
+                "tools/test_assembly_matrix.py",
+            )
+        },
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "calls": [],
+        "jobs": [],
+        "success": False,
+        "session_health": "operator attested before invocation",
+        "workbuddy": "not performed by this developer integration script",
+    }
+
+    def save():
+        destination.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    parameters = StdioServerParameters(
+        command=sys.executable, args=[str(ROOT / "server.py")], cwd=ROOT
+    )
+    try:
+        async with Client(parameters, mode="legacy", read_timeout_seconds=90) as client:
+
+            async def call(name, arguments, error=False):
+                reply = await client.call_tool(name, arguments)
+                report["calls"].append(
+                    {"tool": name, "arguments": arguments, "reply": reply.model_dump(mode="json")}
+                )
+                save()
+                assert reply.is_error == error, str(reply)
+                return reply.structured_content
+
+            async def job(name, arguments):
+                created = await call(name, arguments)
+                deadline = asyncio.get_running_loop().time() + 330
+                while asyncio.get_running_loop().time() < deadline:
+                    result = await call(
+                        "creo_get_job", {"job_id": created["job_id"], "detail": "full"}
+                    )
+                    if result["status"] not in ("queued", "running"):
+                        break
+                    await asyncio.sleep(1)
+                else:
+                    raise TimeoutError("Poll existing job only; do not resubmit")
+                report["jobs"].append(result)
+                save()
+                assert result["status"] == "succeeded", result
+                assert result["result"]["saved_file_reloaded_and_verified"] is True, result
+                if "expected_revision" in arguments:
+                    assert result["revision"] == arguments["expected_revision"] + 1, result
+                return result
+
+            async def terminal_job(name, arguments):
+                # Poll to a terminal status without assuming success.
+                created = await call(name, arguments)
+                deadline = asyncio.get_running_loop().time() + 330
+                result = created
+                while asyncio.get_running_loop().time() < deadline:
+                    result = await call(
+                        "creo_get_job", {"job_id": created["job_id"], "detail": "full"}
+                    )
+                    if result["status"] not in ("queued", "running"):
+                        break
+                    await asyncio.sleep(1)
+                else:
+                    raise TimeoutError("Poll existing job only; do not resubmit")
+                report["jobs"].append(result)
+                save()
+                return result
+
+            def identity(result):
+                return {"model_id": result["model_id"], "expected_revision": result["revision"]}
+
+            async def check(result, label, rotation, mapped):
+                listed = await call("creo_list_components", {"model_id": result["model_id"]})
+                component_id = listed["aliases"][label]["feature_id"]
+                component = next(c for c in listed["components"] if c["feature_id"] == component_id)
+                actual = component["transform"]
+                # Fixed placement reports the numeric SDK code plus the shared
+                # readable symbol; both stay available (FEAT-008 batch 2).
+                assert component["constraints"][0]["type_name"] == "fix", component
+                assert type(component["constraints"][0]["type"]) is int, component
+                expected = [row + [0] for row in rotation] + [[7, -8, 9, 1]]
+                assert all(
+                    abs(a - b) < 1e-6 for ar, er in zip(actual, expected) for a, b in zip(ar, er)
+                ), actual
+                # Basis directions and known point using the actual native query matrix.
+                for i in range(3):
+                    assert all(abs(actual[i][j] - rotation[i][j]) < 1e-6 for j in range(3))
+                point = [
+                    sum(v * actual[k][j] for k, v in enumerate([2, 3, 5])) + actual[3][j]
+                    for j in range(3)
+                ]
+                assert all(abs(point[j] - mapped[j] - [7, -8, 9][j]) < 1e-6 for j in range(3)), (
+                    point
+                )
+                return listed
+
+            await wait_for_startup(client, report, destination)
+            report["environment"] = await call("creo_check_environment", {})
+            source = await job(
+                "creo_execute_plan",
+                {
+                    "operations": [
+                        {
+                            "op": "sketch",
+                            "label": "profile",
+                            "plane": "XY",
+                            "entities": [
+                                {"type": "rectangle", "name": "box", "min": [0, 0], "max": [2, 3]}
+                            ],
+                        },
+                        {"op": "extrude", "label": "solid", "sketch": "profile", "depth": 5},
+                    ]
+                },
+            )
+            assembly = await job("creo_new_assembly", {})
+            for index, (euler, rotation, mapped) in enumerate(POSES):
+                label = f"matrix_{index}"
+                create = {
+                    "op": "assemble_component",
+                    "label": label,
+                    "source_model_id": source["model_id"],
+                    "translation": [7, -8, 9],
+                    "rotation_matrix": rotation,
+                }
+                if index % 2:
+                    assembly = await job(
+                        "creo_execute_plan", {**identity(assembly), "operations": [create]}
+                    )
+                else:
+                    assembly = await job(
+                        "creo_assemble_component",
+                        {**identity(assembly), **{k: v for k, v in create.items() if k != "op"}},
+                    )
+                await check(assembly, label, rotation, mapped)
+                assembly = await job(
+                    "creo_component_placement",
+                    {
+                        **identity(assembly),
+                        "component": label,
+                        "translation": [7, -8, 9],
+                        "rotation": euler,
+                    },
+                )
+                await check(assembly, label, rotation, mapped)
+                update = {
+                    "op": "component_placement",
+                    "component": label,
+                    "translation": [7, -8, 9],
+                    "rotation_matrix": rotation,
+                }
+                if index % 2:
+                    assembly = await job(
+                        "creo_component_placement",
+                        {**identity(assembly), **{k: v for k, v in update.items() if k != "op"}},
+                    )
+                else:
+                    assembly = await job(
+                        "creo_execute_plan", {**identity(assembly), "operations": [update]}
+                    )
+                before = await check(assembly, label, rotation, mapped)
+                await call(
+                    "creo_component_placement",
+                    {
+                        **identity(assembly),
+                        "component": label,
+                        "translation": [0, 0, 0],
+                        "rotation": [0, 0, 0],
+                        "rotation_matrix": rotation,
+                    },
+                    error=True,
+                )
+                after = await call("creo_list_components", {"model_id": assembly["model_id"]})
+                assert (
+                    before == after
+                )  # invalid request leaves revision/placement/constraints intact
+            # One genuine ordinary failure INSIDE a single job: the first op
+            # legally moves an existing component, the second op references an
+            # invalid native component id (valid schema, unknown to the native
+            # lookup). The job must fail, roll back the accepted move, keep
+            # revision and geometry, and only then may a later legal move
+            # succeed. An entry-level refusal would not count as a rollback.
+            before = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            failed = await terminal_job(
+                "creo_execute_plan",
+                {
+                    **identity(assembly),
+                    "operations": [
+                        {
+                            "op": "component_placement",
+                            "component": "matrix_0",
+                            "translation": [11, -8, 9],
+                            "rotation": [0, 0, 0],
+                        },
+                        {"op": "remove_component", "component": 424242},
+                    ],
+                },
+            )
+            after = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            verify_rolled_back_failure(failed, assembly["revision"], before, after)
+            # A later legal modification on the untouched assembly succeeds.
+            assembly = await job(
+                "creo_component_placement",
+                {
+                    **identity(assembly),
+                    "component": "matrix_0",
+                    "translation": [7, -8, 9],
+                    "rotation": [0, 0, 0],
+                },
+            )
+
+            # Independent physical geometry assertions from the native
+            # saved/reload inspection: the assembly volume (Creo mass
+            # property, not the returned matrices) must equal 11 times the
+            # native source volume, and a final native regenerate job re-checks
+            # it server-side via verify_assertions.
+            source_inspect = await call(
+                "creo_inspect_model", {"model_id": source["model_id"], "detail": "compact"}
+            )
+            source_info = compact_inspection(source_inspect)
+            source_volume = source_info["volume_mm3"]
+            expected_volume = len(POSES) * source_volume
+            assembly_inspect = await call(
+                "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
+            )
+            assembly_info = compact_inspection(assembly_inspect)
+            assert abs(assembly_info["volume_mm3"] - expected_volume) <= 0.01, (
+                assembly_info["volume_mm3"],
+                expected_volume,
+            )
+            assembly = await job(
+                "creo_execute_plan",
+                {
+                    **identity(assembly),
+                    "operations": [{"op": "regenerate"}],
+                    "assertions": {"volume_mm3": expected_volume, "volume_tolerance": 0.01},
+                },
+            )
+            verified = await call(
+                "creo_inspect_model", {"model_id": assembly["model_id"], "detail": "compact"}
+            )
+            verified_info = compact_inspection(verified)
+            assert abs(verified_info["volume_mm3"] - expected_volume) <= 0.01, verified_info
+
+            # Expected bounding-box derivation anchored on the NATIVE source
+            # bbox: the 8 corners measured by the native saved/reload source
+            # inspection, mapped through the expected rigid poses and through
+            # the returned matrices, must agree (1e-6). The per-component
+            # expected box volume equals the source box volume ONLY for
+            # signed-permutation (axis-aligned) rotations — for arbitrary
+            # rotations the axis-aligned box grows, so that invariant is
+            # asserted solely where it is mathematically true. The recorded
+            # assembly bbox below is the EXPECTED derived value (source bbox
+            # crossed with the returned matrices); it is not a bbox measured
+            # by Creo on the assembled model, and it is not an independent
+            # physical pose verification on its own. The independent physical
+            # anchors here are the Creo mass-property volumes above plus the
+            # native matrices/basis vectors/known points.
+            source_bodies = await call(
+                "creo_inspect_model",
+                {"model_id": source["model_id"], "detail": "full", "section": "bodies"},
+            )
+            body = next(
+                b for b in full_section_records(source_bodies, "bodies") if b.get("has_geometry")
+            )
+            lo, hi = body["bbox"]
+            corners = [
+                [x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])
+            ]
+            source_box_volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
+
+            def map_point(matrix, point):
+                return [
+                    sum(v * matrix[k][j] for k, v in enumerate(point)) + matrix[3][j]
+                    for j in range(3)
+                ]
+
+            listed = await call("creo_list_components", {"model_id": assembly["model_id"]})
+            assembly_min = [float("inf")] * 3
+            assembly_max = [float("-inf")] * 3
+            for index, (euler, rotation, mapped) in enumerate(POSES):
+                label = f"matrix_{index}"
+                feature_id = listed["aliases"][label]["feature_id"]
+                component = next(c for c in listed["components"] if c["feature_id"] == feature_id)
+                actual = component["transform"]
+                expected = [list(row) + [0] for row in rotation] + [[7, -8, 9, 1]]
+                component_min = [float("inf")] * 3
+                component_max = [float("-inf")] * 3
+                for corner in corners:
+                    mapped_expected = map_point(expected, corner)
+                    mapped_actual = map_point(actual, corner)
+                    for axis in range(3):
+                        assert abs(mapped_expected[axis] - mapped_actual[axis]) <= 1e-6
+                        component_min[axis] = min(component_min[axis], mapped_expected[axis])
+                        component_max[axis] = max(component_max[axis], mapped_expected[axis])
+                box_volume = 1.0
+                for axis in range(3):
+                    box_volume *= component_max[axis] - component_min[axis]
+                    assembly_min[axis] = min(assembly_min[axis], component_min[axis])
+                    assembly_max[axis] = max(assembly_max[axis], component_max[axis])
+                if is_signed_permutation(rotation):
+                    # True only for axis-aligned poses; [30,90,60] and any
+                    # non-permutation rotation legitimately enlarge the AABB.
+                    assert abs(box_volume - source_box_volume) <= 1e-6, (label, box_volume)
+                else:
+                    # A genuine rotation strictly enlarges the axis-aligned
+                    # box (AABB volume >= solid volume, equality only when
+                    # the box stays axis-aligned).
+                    assert box_volume > source_box_volume + 1e-9, (label, box_volume)
+            report["expected_assembly_bbox_mm"] = [assembly_min, assembly_max]
+            save()
+            report.setdefault("assertions", []).append(
+                "independent geometry: native assembly volume == 11 x native source volume "
+                "(Creo mass property on saved/reload, re-checked natively via assertions); "
+                "bbox corners anchored on the native source box; per-component expected box "
+                "volume invariance asserted only for signed-permutation rotations; the "
+                "recorded assembly bbox is an EXPECTED derived value (source bbox crossed "
+                "with the returned matrices), not a Creo-measured assembly bbox"
+            )
+            report["success"] = True
+    except Exception as exc:
+        report["error"] = str(exc)
+        raise
+    finally:
+        save()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--session-health-verified", action="store_true", required=True)
+    parser.parse_args()
+    asyncio.run(run())

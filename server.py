@@ -25,6 +25,7 @@ from creo_mechdog import update_check
 from creo_mechdog.adoption import adopt
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
+from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
@@ -38,6 +39,7 @@ from creo_mechdog.schema import (
     AirfoilValues,
     Entity,
     Operation,
+    RotationMatrix,
     SketchConstraint,
     SketchDimension,
     SketchOp,
@@ -73,6 +75,8 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/reconciliation.py",
     "src/creo_mechdog/legacy_recovery.py",
     "src/creo_mechdog/adoption.py",
+    "src/creo_mechdog/file_adoption.py",
+    "src/creo_mechdog/component_changes.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
@@ -100,6 +104,10 @@ _SOURCE_NAMES = (
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/component_transform.h",
+    "native/assembly_pose.h",
+    "native/constraint_names.h",
+    "native/constraint_compare.h",
+    "native/adoption_source.h",
     "native/inspection_units.h",
     "native/drawing.cpp",
     "native/result_delivery.h",
@@ -375,6 +383,17 @@ async def creo_adopt_current_model(
 ) -> dict[str, Any]:
     """Explicitly adopt the current window model as a managed copy; the original is never saved, erased or renamed. File sources use read-only inspect then evidence-bound apply. A never-saved model requires prepare with an idempotency_key: poll its job and review result.adoption, then apply that model_id/evidence_token with a new key. prepare freezes a copy at native execution time without switching the current window; status stays adopt_pending/revision=0. Confirmation adopts that frozen snapshot at revision=1, displays the managed copy and excludes later edits to the original. inspect(model_id=...) renews ten-minute snapshot evidence without copying. Same-key replay never repeats native execution. Supported: healthy independent part/sheetmetal, millimeters, no external dependencies. Poll accepted jobs only; uncertain outcomes keep protection and resolve through reconcile abandon_new. Upgrade source code then restart the MCP connector and verify runtime identity/tool list before using new modes."""
     return await invoke(adopt, mode, model_id, evidence_token, model_name, idempotency_key)
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_adopt_file(
+    file_path: str | list[str],
+    mode: Literal["inspect", "apply"] = "inspect",
+    evidence_token: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Adopt 1?20 ordered disk paths without displaying or switching windows. Inspect selects an exact numeric version or highest version, reports source provenance and per-item findings, and returns a 600-second evidence token. Apply takes the same paths, token and an 8?80 character idempotency key, returning one parent job_id; poll only that job. Healthy millimeter independent parts/sheetmetal only. Existing unmodified exact-origin resident sources are explicitly labeled existing_resident: disk/resident content equality before inspection is unknown. Absent names are retrieved without display, with any added resident reported. Source files/models are never saved, erased or renamed. Each successful item saves/reloads a separate managed copy at revision 1. Duplicate origins are refused with duplicate_of; already managed origins give reuse guidance. Known refusals continue; unknown execution or commit stops remaining items and retains protection. Replay never executes native work; changed ordered paths, selected bytes or evidence under the key refuse."""
+    return await invoke(adopt_file, file_path, mode, evidence_token, idempotency_key)
 
 
 @mcp.tool(annotations=READ)
@@ -1588,10 +1607,14 @@ async def creo_assemble_component(
     rotation: list[float] | None = None,
     placement: Literal["fixed", "default", "constraints"] = "fixed",
     constraints: list[dict[str, Any]] | None = None,
+    rotation_matrix: RotationMatrix | None = None,
 ) -> dict[str, Any]:
     """Insert a revision snapshot of a verified MCP part/sheetmetal model as a native assembly component.
 
     Translation is XYZ mm; rotation is XYZ Euler degrees, applied X then Y then Z.
+    Alternatively use a nested 3x3 rotation_matrix: row vectors, local to parent,
+    p_parent = p_local * rotation_matrix + translation. Matrix and explicit Euler
+    are mutually exclusive; matrix must be finite, orthogonal and det +1 within 1e-6.
     Sources must be ready and saved; later source edits do not update the component snapshot.
     Native placement can be fixed, default or mate/align/insert/csys constraints. Nested subassemblies are not supported yet.
     """
@@ -1603,7 +1626,8 @@ async def creo_assemble_component(
                 "label": label,
                 "source_model_id": source_model_id,
                 "translation": translation or [0, 0, 0],
-                "rotation": rotation or [0, 0, 0],
+                **({"rotation": rotation} if rotation is not None else {}),
+                **({"rotation_matrix": rotation_matrix} if rotation_matrix is not None else {}),
                 "placement": placement,
                 "constraints": constraints or [],
             }
@@ -1621,8 +1645,14 @@ async def creo_component_placement(
     component: str | int,
     translation: list[float],
     rotation: list[float] | None = None,
+    rotation_matrix: RotationMatrix | None = None,
 ) -> dict[str, Any]:
-    """Replace a component's existing placement constraints with fixed placement at the specified rigid transform."""
+    """Replace component constraints with fixed placement. Translation is XYZ mm.
+
+    Use XYZ Euler rotation degrees (X then Y then Z), or a nested 3x3 rotation_matrix,
+    never both. Row-vector mapping: p_parent = p_local * rotation_matrix + translation.
+    Matrix requires finite real numbers, orthogonality and det +1 within 1e-6.
+    """
     return await invoke(
         general.submit,
         [
@@ -1630,7 +1660,8 @@ async def creo_component_placement(
                 "op": "component_placement",
                 "component": component,
                 "translation": translation,
-                "rotation": rotation or [0, 0, 0],
+                **({"rotation": rotation} if rotation is not None else {}),
+                **({"rotation_matrix": rotation_matrix} if rotation_matrix is not None else {}),
             }
         ],
         model_id,

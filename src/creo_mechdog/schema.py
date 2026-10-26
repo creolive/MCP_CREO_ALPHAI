@@ -29,6 +29,50 @@ Label = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,27}$")]
 Positive = Annotated[float, Field(gt=0, le=100000)]
 
 
+def _rotation_matrix(value: Any) -> Any:
+    if not isinstance(value, list) or len(value) != 3:
+        raise ValueError("rotation_matrix must be a nested 3x3 array")
+    for row in value:
+        if not isinstance(row, list) or len(row) != 3:
+            raise ValueError("rotation_matrix must be a nested 3x3 array")
+        if any(type(v) not in (int, float) or not -math.inf < v < math.inf for v in row):
+            raise ValueError("rotation_matrix requires finite real numbers")
+    for i in range(3):
+        for j in range(3):
+            dot = sum(value[i][k] * value[j][k] for k in range(3))
+            if abs(dot - (i == j)) > 1e-6 or not math.isfinite(dot):
+                raise ValueError("rotation_matrix must be orthogonal within 1e-6")
+    a, b, c = value
+    determinant = (
+        a[0] * (b[1] * c[2] - b[2] * c[1])
+        - a[1] * (b[0] * c[2] - b[2] * c[0])
+        + a[2] * (b[0] * c[1] - b[1] * c[0])
+    )
+    if abs(determinant - 1) > 1e-6:
+        raise ValueError("rotation_matrix determinant must be +1 within 1e-6")
+    return value
+
+
+RotationMatrix = Annotated[
+    list[Point3], Field(min_length=3, max_length=3), BeforeValidator(_rotation_matrix)
+]
+
+
+class AssemblyPose(StrictModel):
+    translation: Point3 = [0, 0, 0]
+    rotation: Point3 | None = None
+    rotation_matrix: RotationMatrix | None = None
+
+    @model_validator(mode="after")
+    def orientation_valid(self):
+        if self.rotation_matrix is not None:
+            if self.rotation is not None:
+                raise ValueError("rotation and rotation_matrix are mutually exclusive")
+        elif self.rotation is None:
+            self.rotation = [0, 0, 0]
+        return self
+
+
 def _normalize_sketch_ref(value: Any) -> Any:
     # Some public clients stringify the integer branch of str|int anyOf
     # (BUG-073); digit-only strings cannot be feature labels (labels start
@@ -713,12 +757,10 @@ class AssemblyConstraint(StrictModel):
     component_side: Literal["yellow", "red"] = "yellow"
 
 
-class AssembleOp(StrictModel):
+class AssembleOp(AssemblyPose):
     op: Literal["assemble_component"]
     label: Label
     source_model_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
-    translation: Point3 = [0, 0, 0]
-    rotation: Point3 = [0, 0, 0]
     placement: Literal["fixed", "default", "constraints"] = "fixed"
     constraints: list[AssemblyConstraint] = []
 
@@ -731,11 +773,9 @@ class AssembleOp(StrictModel):
         return self
 
 
-class ComponentPlacementOp(StrictModel):
+class ComponentPlacementOp(AssemblyPose):
     op: Literal["component_placement"]
     component: str | int
-    translation: Point3 = [0, 0, 0]
-    rotation: Point3 = [0, 0, 0]
 
 
 class ComponentConstraintsOp(StrictModel):

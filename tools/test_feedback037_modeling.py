@@ -176,6 +176,7 @@ async def run(args: argparse.Namespace) -> bool:
         "native/generic.cpp",
         "native/loft_seed.cpp",
         "native/component_transform.h",
+        "native/assembly_pose.h",
         "tools/test_feedback037_modeling.py",
     )
     report = {

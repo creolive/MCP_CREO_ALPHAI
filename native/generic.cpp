@@ -2,9 +2,12 @@
 #include "third_party/json.hpp"
 #include "callback_identity.h"
 #include "recovery_deadline.h"
+#include "adoption_source.h"
 #include "inspection_units.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
+#include "constraint_names.h"
+#include "constraint_compare.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2002,7 +2005,13 @@ static void verify_saved(const J &before, const J &after) {
             if (a.value("packaged", false) != b.value("packaged", false) ||
                 a.value("underconstrained", false) != b.value("underconstrained", false))
                 throw std::runtime_error("Saved assembly placement state changed");
-            if (a.contains("constraints") && a["constraints"] != b["constraints"])
+            // Compare through the shared projection: checkpoints saved before
+            // constraints gained the display-only type_name symbol must stay
+            // compatible, while numeric type, offsets, references, sides and
+            // count/order stay fully verified (constraint_compare.h).
+            if (a.contains("constraints") &&
+                !mechdog_constraints::match_for_verification(a["constraints"],
+                                                             b.value("constraints", J::array())))
                 throw std::runtime_error("Saved assembly constraints changed");
         }
     if (before.value("model_type", "part") != after.value("model_type", "part"))
@@ -2559,29 +2568,24 @@ static J assembly_selection_json(ProSelection selection) {
 }
 
 static J constraint_json(ProAsmcompconstraint constraint) {
-    static const std::map<int, const char *> type_names = {
-        {PRO_ASM_FIX, "fix"},
-        {PRO_ASM_MATE, "mate"},
-        {PRO_ASM_MATE_OFF, "mate_offset"},
-        {PRO_ASM_ALIGN, "align"},
-        {PRO_ASM_ALIGN_OFF, "align_offset"},
-        {PRO_ASM_INSERT, "insert"},
-        {PRO_ASM_ORIENT, "orient"},
-        {PRO_ASM_CSYS, "csys"},
-        {PRO_ASM_TANGENT, "tangent"},
-        {PRO_ASM_PNT_ON_SRF, "pnt_on_srf"},
-        {PRO_ASM_EDGE_ON_SRF, "edge_on_srf"},
-        {PRO_ASM_DEF_PLACEMENT, "default"},
-        {PRO_ASM_AUTO, "auto"},
-    };
+// The shared mapping pins the published ProAsmcompConstrType values; SDK enum
+// drift fails the build instead of silently renaming production symbols.
+#ifndef CREO_CONSTRAINT_CODES_FALLBACK
+    static_assert(PRO_ASM_MATE == 0 && PRO_ASM_MATE_OFF == 1 && PRO_ASM_ALIGN == 2 &&
+                      PRO_ASM_ALIGN_OFF == 3 && PRO_ASM_INSERT == 4 && PRO_ASM_ORIENT == 5 &&
+                      PRO_ASM_CSYS == 6 && PRO_ASM_TANGENT == 7 && PRO_ASM_PNT_ON_SRF == 8 &&
+                      PRO_ASM_EDGE_ON_SRF == 9 && PRO_ASM_DEF_PLACEMENT == 10 &&
+                      PRO_ASM_FIX == 13 && PRO_ASM_AUTO == 14,
+                  "ProAsmcompConstrType drifted; refresh native/constraint_names.h");
+#endif
     J item = J::object();
     J codes = J::object();
     ProAsmcompConstrType type = PRO_ASM_FIX;
     int type_code = ProAsmcompconstraintTypeGet(constraint, &type);
     codes["type"] = type_code;
     if (!type_code) {
-        auto found = type_names.find(type);
-        item["type"] = found != type_names.end() ? found->second : "unknown";
+        const char *name = assembly_constraint_type_name((int)type);
+        item["type"] = name ? name : "unknown";
         item["type_code"] = (int)type;
     } else {
         item["type"] = nullptr;
@@ -3554,6 +3558,116 @@ static J health_details(const J &features) {
             {"items", items}};
 }
 
+// FEAT-048: this selector never depends on the current window. Resident origin
+// plus modification state proves session provenance, not a historical byte
+// comparison with disk. That distinction is explicit in source_state.
+static J path_source_state(ProMdl source, const J &choice, const std::string &provenance) {
+    ProPath origin = {};
+    CK(ProMdlOriginGet(source, origin));
+    std::wstring selected = wide(choice.at("origin").get<std::string>());
+    if (_wcsicmp(origin, selected.c_str()))
+        throw std::runtime_error(
+            "source_origin_mismatch: resident origin is not the selected file");
+    ProBoolean modified = PRO_B_TRUE;
+    CK(ProMdlModificationVerify(source, &modified));
+    if (modified != PRO_B_FALSE)
+        throw std::runtime_error("modified_source: source has unsaved session changes");
+    const std::string sha = mechdog_callback::sha256(selected);
+    if (sha.empty() || sha != choice.at("origin_sha256").get<std::string>())
+        throw std::runtime_error("source_changed: selected file bytes changed");
+    int id = -1;
+    CK(ProMdlIdGet(source, &id));
+    ProWVerstamp stamp = nullptr;
+    CK(ProMdlVerstampGet(source, &stamp));
+    char *text = nullptr;
+    ProError code = ProVerstampStringGet(stamp, &text);
+    std::string version = !code && text ? text : "";
+    if (text)
+        ProVerstampStringFree(&text);
+    ProVerstampFree(&stamp);
+    check(code, "ProVerstampStringGet");
+    if (version.empty())
+        throw std::runtime_error("source_identity_unknown: source version stamp is empty");
+    return {{"origin", choice.at("origin")},
+            {"sha256", sha},
+            {"modified", false},
+            {"session_model_id", id},
+            {"version_stamp", version},
+            {"provenance", provenance},
+            {"disk_resident_content_equality",
+             provenance == "fresh_retrieval" ? "retrieved_from_selected_file" : "unknown"}};
+}
+
+static ProMdl select_adoption_path(const J &choice, J &report) {
+    report["path_source_checked"] = true;
+    report["path_copy_started"] = false;
+    report["resident_set_changed"] = false;
+    std::filesystem::path file(wide(choice.at("origin").get<std::string>()));
+    std::wstring base = file.filename().wstring();
+    size_t dot = base.rfind(L'.');
+    if (dot != std::wstring::npos) {
+        std::wstring tail = base.substr(dot + 1);
+        if (!tail.empty() && tail.find_first_not_of(L"0123456789") == std::wstring::npos)
+            base = base.substr(0, dot);
+    }
+    dot = base.rfind(L'.');
+    if (dot == std::wstring::npos || _wcsicmp(base.substr(dot + 1).c_str(), L"prt"))
+        throw std::runtime_error("unsupported_model_type: path adoption requires a native part");
+    base = base.substr(0, dot);
+    if (base.empty() || base.size() >= PRO_NAME_SIZE || base.find(L'.') != std::wstring::npos)
+        throw std::runtime_error("invalid_source_name: cannot identify selected native part");
+    ProName name = {};
+    wcscpy_s(name, base.c_str());
+    ProMdl source = nullptr;
+    ProError found = ProMdlInit(name, PRO_MDL_PART, &source);
+    std::string provenance = "existing_resident";
+    if (found == PRO_TK_E_NOT_FOUND) {
+        if (choice.contains("source_state"))
+            throw std::runtime_error("source_changed: inspected resident is no longer present");
+        // Check the exact selected bytes before retrieval as well as afterwards.
+        if (mechdog_callback::sha256(file.wstring()) !=
+            choice.at("origin_sha256").get<std::string>())
+            throw std::runtime_error("source_changed: selected file changed before retrieval");
+        ProPath selected = {};
+        path(selected, file.wstring());
+        // Even a failed retrieval may add residents; report this conservatively.
+        report["resident_set_changed"] = "possible";
+        CK(ProMdlFiletypeLoad(selected, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &source));
+        report["resident_set_changed"] = true;
+        provenance = "fresh_retrieval";
+    } else
+        check(found, "ProMdlInit(path source)");
+    ProMdlType type = PRO_MDL_UNUSED;
+    CK(ProMdlTypeGet(source, &type));
+    if (type != PRO_MDL_PART)
+        throw std::runtime_error("unsupported_model_type: selected source is not a part");
+    J state = path_source_state(source, choice, provenance);
+    if (choice.contains("source_state")) {
+        mechdog_adoption::require_source_state(state, choice.at("source_state"));
+        // A later call sees a resident; preserve original inspect provenance.
+        state["inspection_provenance"] = choice["source_state"].at("provenance");
+    }
+    report["path_source_state"] = state;
+    return source;
+}
+
+static int adoption_window() {
+    int window = -1;
+    CK(ProWindowCurrentGet(&window));
+    return window;
+}
+
+static void verify_path_source(ProMdl source, const J &choice, J &report, int window) {
+    J current = path_source_state(source, choice, "existing_resident");
+    mechdog_adoption::require_source_state(current, report.at("path_source_state"));
+    if (recovery_session_fingerprint() != report.at("live").at("session_fingerprint"))
+        throw std::runtime_error("source_changed: Creo session changed before copying");
+    if (adoption_window() != window)
+        throw std::runtime_error("window_changed: active window changed during path adoption");
+    report["source_unchanged"] = true;
+    report["window_unchanged"] = true;
+}
+
 static void adopt_native(const J &request, J &report) {
     const J &choice = request.at("adoption");
     const std::string action = choice.at("action");
@@ -3562,11 +3676,21 @@ static void adopt_native(const J &request, J &report) {
         return;
     }
     bool preparing = action == "prepare";
+    const bool from_path = choice.value("path_source", false);
+    if (from_path) {
+        report["path_source_checked"] = true;
+        report["path_copy_started"] = false;
+    }
+    const int path_window = from_path ? adoption_window() : -1;
     const std::string session = recovery_session_fingerprint();
     if (choice.contains("session_fingerprint") && choice["session_fingerprint"] != session)
         throw std::runtime_error("Adoption refused: Creo session changed since recorded evidence");
     ProMdl current = nullptr;
-    ProError current_code = ProMdlCurrentGet(&current);
+    ProError current_code = PRO_TK_NO_ERROR;
+    if (from_path)
+        current = select_adoption_path(choice, report);
+    else
+        current_code = ProMdlCurrentGet(&current);
     if (current_code == PRO_TK_BAD_CONTEXT)
         // -8 is "no current model", not a connection failure; keep the call name
         // and raw code so the original evidence stays machine-checkable.
@@ -3611,6 +3735,11 @@ static void adopt_native(const J &request, J &report) {
                       {"inspection", live}};
     if (name_code == PRO_TK_NO_ERROR)
         report["live"]["display_name"] = utf8(display);
+    if (from_path) {
+        report["live"]["source_state"] = report.at("path_source_state");
+        report["live"]["resident_set_changed"] = report.at("resident_set_changed");
+        verify_path_source(current, choice, report, path_window);
+    }
     if (action == "inspect") {
         board = nullptr;
         report["success"] = true;
@@ -3668,6 +3797,10 @@ static void adopt_native(const J &request, J &report) {
                                  "this Creo session (adoption refused)");
     if (found != PRO_TK_E_NOT_FOUND)
         check(found, "CheckAdoptedName");
+    if (from_path) {
+        verify_path_source(current, choice, report, path_window);
+        report["path_copy_started"] = true;
+    }
     CK(ProMdlnameCopy(current, adopted, &board));
     if (!millimeter_units(board))
         throw std::runtime_error(
@@ -3697,8 +3830,10 @@ static void adopt_native(const J &request, J &report) {
         CK(ProWindowCurrentSet(original_window));
         CK(ProWindowActivate(original_window));
         window_restore.window = -1;
-    } else
+    } else if (!from_path)
         display_adopted_model();
+    if (from_path)
+        verify_path_source(current, choice, report, path_window);
     report.update({{"success", true},
                    {"saved_file_reloaded_and_verified", true},
                    {"inspection", after},

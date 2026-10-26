@@ -37,6 +37,28 @@
 2. 调用 `creo_new_assembly`，轮询完成，记录装配 `model_id` 和 `revision`。
 3. 调用 `creo_assemble_component`，传入装配的 `model_id`、最新 `expected_revision`、标签如 `first`、源零件的 `source_model_id`。默认在原点固定放置。
 4. 插入第二个组件时，可传 `translation:[25,0,0]`、`rotation:[0,0,90]`。顺序为先绕 X、Y、Z，再应用平移。
+
+创建与 `creo_component_placement` 更新放置（也适用于 `creo_execute_plan` 对应
+operation）可改用唯一嵌套 3×3 `rotation_matrix`，例如：
+
+```json
+{"rotation_matrix": [[0,0,-1],[0,1,0],[1,0,0]], "translation": [25,0,0]}
+```
+
+这是右手主动旋转的行向量、局部到父级映射：
+`p_parent_mm = p_local_mm * rotation_matrix + translation_mm`。例如上面的矩阵
+使局部 +X 映到父级 −Z，+Y 映到 +Y，+Z 映到 +X；它与旧 Euler `[0,90,0]`
+相同。旧 Euler 保持先绕固定 X、Y、Z 的语义，查询矩阵按行向量存储，不翻转角度。
+4×4 查询矩阵的姿态是左上 3×3、平移是末行前三项；重用时读取 BUG-080 的
+已知毫米正规化结果，勿直接使用单位未知或带单位缩放的 raw 矩阵。
+
+矩阵与显式 `rotation` 互斥（即使 Euler 是 `[0,0,0]`）；公开工具省略或传
+`rotation: null` 均视为未提供。只接受嵌套 3×3，拒绝平铺九元素、布尔和字符串。
+每个数必须有限，行向量内积与单位阵元素之差、行列式与 +1 之差均不能超过
+`1e-6`；反射、缩放及超容差输入拒绝，容差内按原值使用，不转置、不修正。
+平移独立为 XYZ 毫米。组件创建仍是源件 revision 的快照，源件修改不会自动更新，
+嵌套插入仍不支持。此新增矩阵管线已做离线校验；实际 Creo 放置、revision 和
+保存重载及 WorkBuddy 结果本次未验证，见 [FEAT-012](work-items/FEAT-012.md)。
 5. 用 `creo_list_components` 查看最近已验证的装配快照；人工改动后用 `creo_refresh_model` 查看实况。
 6. 用 `creo_component_placement` 和 `component:"second"` 改变位置。此操作会替换原约束为固定定位。用 `creo_remove_component` 删除这个装配副本。
 
