@@ -25,6 +25,7 @@ from creo_mechdog import update_check
 from creo_mechdog.adoption import adopt
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
+from creo_mechdog.capability_summary import release_status, support_status
 from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
@@ -60,6 +61,7 @@ if SOURCE_PATHS.resource_root != _CODE_ROOT:
     )
 _SOURCE_NAMES = (
     "server.py",
+    "capabilities.py",
     "bridge.py",
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
@@ -85,6 +87,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/registry_ops.py",
     "src/creo_mechdog/open_file.py",
     "src/creo_mechdog/capability_pages.py",
+    "src/creo_mechdog/capability_summary.py",
     "src/creo_mechdog/model_queries.py",
     "src/creo_mechdog/startup_state.py",
     "src/creo_mechdog/windows_boot.py",
@@ -462,53 +465,7 @@ async def creo_list_jobs(
 
 def _support_status() -> dict[str, Any]:
     """Explicit capability boundaries so callers need not infer them (FEAT-008)."""
-    return {
-        "disk_open": {
-            "status": "supported",
-            "tool": "creo_open_file",
-            "summary": (
-                "read-only retrieval and display of existing on-disk .prt/.asm "
-                "(explicit or highest numeric version); never saves, erases, renames "
-                "or adopts, and creates no managed model"
-            ),
-        },
-        "session_enumeration": {
-            "status": "supported",
-            "tool": "creo_list_session_models",
-            "summary": "read-only session inventory with frozen pagination; no loading or activation",
-        },
-        "adoption": {
-            "status": "supported_limited",
-            "tool": "creo_adopt_current_model",
-            "summary": (
-                "explicit managed-copy adoption of part/sheetmetal only (millimeter "
-                "units, no external dependencies, healthy features); assembly/drawing "
-                "and repeat adoption of the same file are refused"
-            ),
-        },
-        "assembly_checks": {
-            "status": "supported_limited",
-            "tool": "creo_inspect_session_assembly",
-            "tracking": "FEAT-045",
-            "summary": (
-                "read-only inspection of a resident session assembly: tree-order "
-                "components, per-constraint snapshots and unit-aware 4x4 transforms "
-                "(millimeter-normalized plus raw matrices; unknown units stay null); "
-                "nested sub-assemblies, repeated instances, suppressed and missing "
-                "components are reported per node and were not live-triggered on the "
-                "reference machine. No write path: no loading, activation, save, "
-                "adoption or managed revision; assembly adoption/reconcile stays "
-                "refused"
-            ),
-        },
-        "external_file_managed_edit": {
-            "status": "not_supported_through_open",
-            "summary": (
-                "creo_open_file never modifies external files; adopt the opened model "
-                "with creo_adopt_current_model first if managed editing is required"
-            ),
-        },
-    }
+    return support_status(families())
 
 
 def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -628,7 +585,7 @@ def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
         "complete_creo_coverage": False,
         "seed_library": seeds.list_seeds(),
         "direct_blend_callback": callback_setup_status(bridge.ROOT / "build"),
-        "release_status": "pre-release candidate; requested complete coverage has not been achieved",
+        "release_status": release_status(VERSION),
         "families": families(),
         "unavailable_operations": UNAVAILABLE_OPERATIONS,
         "evidence_directory": str(bridge.ROOT / "build"),

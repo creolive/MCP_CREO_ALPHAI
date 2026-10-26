@@ -22,6 +22,14 @@ Python 包迁移前两批已完成，更新检查、输入模型及轮廓／翼�
 
 模型引用须按具体工具的参数形状选择，见[引用格式](docs/REFERENCE_SYNTAX.md)。
 
+### 0.5.2 反馈的矩阵与结果迁移口径
+
+`creo_inspect_session_assembly` 的 `transform_to_parent` / `transform_to_root` 是**毫米归一化**的行向量 4×4 矩阵：局部毫米坐标乘矩阵得到父级／根级毫米坐标，平移在末行。`*_raw` 保留 Creo 查询所得原始矩阵及其源／目标模型单位，不可直接作为毫米放置参数。每个节点的 `units.component` / `units.parent` 和装配的 `assembly.length_unit` 提供实际单位名、毫米换算和查询码；缺失或未确认时相应值为 `null`，不能把未知当作毫米。
+
+例如组件为英寸、父装配为毫米时，先确认双方单位及查询结果，再使用完整的 `transform_to_parent` 映射毫米点。若把 raw 定义为 `p_parent_raw = p_local_raw × R_raw + t_raw`，且组件、父级每原始单位分别为 `s_local`、`s_parent` 毫米，则 `p_parent_mm = p_local_mm × (s_parent/s_local × R_raw) + s_parent × t_raw`。混合单位影响 3×3 块与平移，不能只缩放平移。回放位姿时只从**有效的** `transform_to_parent` 取左上 3×3 和末行前三项，并满足 `rotation_matrix` 的正交／行列式校验；单位未知或矩阵不能表达刚体位姿时停止，重新取得证据，不猜测坐标。详见[装配重建管线](docs/ASSEMBLY_REBUILD.md#位姿与矩阵约定)。
+
+`unchanged=true` 只说明对应操作走了**原生几何核验过的同几何快捷路径**；不能据此假定所有写操作都无效果，也不能把同值 `creo_set_dimensions` 自动视为 `unchanged`。成功作业仍按接口保存、重载并推进约定的 revision。批量结果的执行与最终提交／回滚语义以[DEV-047 共享基线](docs/work-items/DEV-047.md#interface-baseline)为准。
+
 ## 安装
 
 升级后先重启目标 MCP 连接器，再核对实际路径、启动指纹和工具清单；现有模型接管流程与未测边界见[接管说明](docs/ADOPTION.md)。
@@ -166,7 +174,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 {"kind":"datum_axis_feature","label":"axis"}
 ```
 
-`plane` 选择实际实体平面面，必须唯一；有多个匹配面时使用查询得到的 `surface` ID。`datum_plane` 的零偏移主平面选择模板中最早的对应基准，避免与 Creo 自动生成的内部基准混淆。非零偏移仍要求唯一。草图/拉伸等特征间用 `label` 引用；标签由小写字母、数字和下划线组成，以字母开头，最多 28 字符。
+`plane` 选择实际实体平面面，必须唯一；有多个匹配面时使用查询得到的 `surface` ID。`datum_plane` 的零偏移主平面选择模板中最早的对应基准，避免与 Creo 自动生成的内部基准混淆。非零偏移仍要求唯一。草图/拉伸等特征间用 `label` 引用；标签须匹配 `^[a-z][a-z0-9_]{0,27}$`，即以小写字母开头，其余仅用小写字母、数字或下划线，总长最多 28 字符，例如 `i001_part1`。服务不会自动改名。
 
 显式尺寸支持长度、半径、直径、点间距离/水平距离/垂直距离、线间距离、夹角、圆弧角度和椭圆半轴。约束接口包含水平、垂直、重合、点在线上、相切、垂直、等半径、平行、等长、共线；实测包括水平/垂直约束及驱动直径尺寸，其余组合由原生求解器验证。
 

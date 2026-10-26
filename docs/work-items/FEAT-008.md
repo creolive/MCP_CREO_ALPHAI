@@ -317,3 +317,19 @@ dev_check 748 项一并通过；证据与文件 SHA256 见
 R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求及§6复测；R2 §2.3—§2.5/§7单位规范与迁移；R3 §6.2标签、§6.4批量、§6.5拔模及§7正例。T01补摘要/版本/标签/单位契约；assembly_checks已在基线修为supported_limited，不重开。T12复用既有execute_plan、0.6.0多组件管线、matrix和draft：既有零件批量追加、一次revision/回滚、真实面上的11°内拔模及圆台解析验收，不新增apply_plan或extrude.draft_angle。底板holes等父卡其他范围保持。
 
 共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
+
+## 2026-10-26 T01 实现前登记：能力、版本、标签和单位契约
+
+用户继续指派 [T01](../development/0.5.2-FEEDBACK-TASKS-2026-10-26.md)，依赖 T00 `90421c6` 已快进纳入集成分支，任务分支 `codex/dev047-t01-contracts`。范围依照 DEV-047 已确认基线，不新增工具或版本、不推进其他任务。
+
+- 新增包内 `capability_summary.py`，以 capabilities.families 的启用状态、工具名和模式生成支持摘要；server 的原入口保留薄适配。补 prepare、按路径/批量 inspect/apply、会话擦除、登记健康/迁移，纠正文件收养已验收范围的陈旧描述。
+- release_status 从 version.py 的 VERSION 语义版本元数据派生为 stable/pre-release/unknown；complete_creo_coverage 继续独立，远端 update.is_prerelease 和缓存状态不改变本地成熟度。
+- schema.Label 保留现有 pattern 和接受集合，只改模式不匹配的错误信息，包含完整规则及小写示例，Pydantic 字段路径和错误类型保留，不自动改名。
+- README 补 normalized/raw、单位和混合坐标映射迁移、unchanged 适用操作；DEVELOPMENT/CODING_STANDARD/RELEASING 加单位验收与支持摘要发布核对要求。
+- 离线回归覆盖摘要与公开注册/分页一致、禁用状态、正式/候选及未知/陈旧更新缓存隔离、标签合法/非法/字段路径与无提交；执行统一 dev_check 和全量单元。只使用本机 Windows/Python，提交前记录实际指纹与 dirty；不启动服务 lifespan、不连接 Toolkit、不构建原生、不修改历史 validation。
+
+### T01 离线实现与验收
+
+按上述范围已补 `support_status` 的 prepare、文件路径收养、会话擦除和登记维护摘要；条目从 `capabilities.families()` 取得启用状态、工具与动作，公开工具仍为 92 个。`release_status` 由本地 `VERSION` 的语义版本后缀决定，远端更新缓存与完整覆盖声明保持独立。`Label` 原正则和可接受输入保持，模式不匹配时给字段路径、28 字符上限、字符集和 `i001_part1` 示例；类型错误仍保留原类别。README 与开发、编码、发布规范补单位和矩阵迁移口径。本次不实现 T02 的结果字段改造。
+
+[T01 验收记录](../development/DEV047-T01-ACCEPTANCE-2026-10-26.md)：Windows / Python 3.12.14，`tools/dev_check.py` 通过（769 个单元测试）；最后补充的两项边界断言后 T01 定向 10/10、最终风格与源码指纹复核通过。未连接 Toolkit、未构建或执行原生建模、未实机验证非毫米行为；整张 FEAT-008 保持开放，T12 与 T13 继续本批后续验收。

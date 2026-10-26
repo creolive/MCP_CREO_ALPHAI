@@ -129,7 +129,7 @@ def families() -> dict:
             "scope": "Healthy independent millimeter parts/sheetmetal; ordered independent commits; no display/window switching",
             "limits": "Duplicate origins refused; modified/ambiguous residents refused; existing_resident disk/content equality before inspection unknown; unknown stops remainder and preserves protection",
             "evidence_seconds": 600,
-            "native_acceptance": "Pending Creo 12.4 / WorkBuddy validation",
+            "native_acceptance": "Creo 12.4 developer validation in 0.6.0; WorkBuddy was canceled and was not run",
         },
         "session_models": {
             "enabled": True,
