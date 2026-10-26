@@ -16,6 +16,7 @@ import json
 import math
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -44,11 +45,12 @@ def near(actual: Any, expected: Any, tolerance: float = TOL) -> None:
     assert abs(actual - expected) <= max(tolerance, abs(expected) * 1e-6), (actual, expected)
 
 
-def sketch(label: str, entities: list[dict]) -> dict:
+def sketch(label: str, entities: list[dict], offset: float = 0.0) -> dict:
     return {
         "op": "sketch",
         "label": label,
         "plane": "XY",
+        "offset": offset,
         "entities": entities,
         "dimensioning": "coordinates",
     }
@@ -80,10 +82,13 @@ def base_plate() -> list[dict]:
 
 
 def pad(label: str = "pad", profile: str = "pad_sketch") -> list[dict]:
+    # The pad grows from the plate's top face; sketched at z=0 it would sit
+    # fully inside the plate and change no volume at all.
     return [
         sketch(
             profile,
             [{"type": "circle", "name": "boss", "center": [0, 0], "radius": PAD_RADIUS}],
+            offset=BASE_DEPTH,
         ),
         extrude(label, profile),
     ]
@@ -334,9 +339,12 @@ class Acceptance:
 
     @classmethod
     def feature_by_label(cls, snapshot: dict, label: str) -> dict:
-        entry = snapshot.get("aliases", {}).get(label)
-        assert isinstance(entry, dict), (label, snapshot.get("aliases"))
-        wanted = entry["feature_id"]
+        if label.startswith("#"):
+            wanted = int(label[1:])
+        else:
+            entry = snapshot.get("aliases", {}).get(label)
+            assert isinstance(entry, dict), (label, snapshot.get("aliases"))
+            wanted = entry["feature_id"]
         for feature in cls.features(snapshot):
             if feature["id"] == wanted:
                 return feature
@@ -362,6 +370,77 @@ class Acceptance:
                     entry.get("feature_id") == feature["id"]
                     for entry in state["suppressed"].values()
                 ), feature
+
+    async def feature_state_submit(
+        self,
+        action: str,
+        targets: list[Any],
+        previous: dict,
+        *,
+        success: bool = True,
+        assertions: dict | None = None,
+    ) -> tuple[dict, list[Any]]:
+        """Submit feature_state; on Creo's unlisted-cascade refusal, adopt the listed ids.
+
+        Creo suppresses/deletes companion datums of the listed features on its
+        own; the native post-check refuses that attempt and names the affected
+        ids, which become part of the explicit target set on the one retry.
+        """
+        final = list(targets)
+        report = self.report.setdefault("cascade_discovery", [])
+        for attempt in (1, 2):
+            accepted = await self.call(
+                "creo_execute_plan",
+                {
+                    "operations": [feature_state(action, final)],
+                    "model_id": previous["model_id"],
+                    "expected_revision": previous["revision"],
+                    **({"assertions": assertions} if assertions is not None else {}),
+                },
+            )
+            deadline = time.monotonic() + 360
+            while time.monotonic() < deadline:
+                terminal = await self.call("creo_get_job", {"job_id": accepted["job_id"]})
+                if terminal["status"] not in ("queued", "running"):
+                    break
+                await asyncio.sleep(1)
+            else:
+                raise TimeoutError(accepted["job_id"])
+            if (
+                attempt == 1
+                and terminal["status"] == "failed"
+                and "do not cover every affected dependency" in str(terminal.get("message", ""))
+                and '"feature_id"' in str(terminal.get("message", ""))
+            ):
+                message = str(terminal["message"])
+                ids = [int(value) for value in re.findall(r'"feature_id":\s*(\d+)', message)]
+                ids = [value for value in ids if value not in final]
+                assert ids, message
+                report.append(
+                    {
+                        "action": action,
+                        "initial_targets": list(targets),
+                        "refusal_job_id": accepted["job_id"],
+                        "listed_ids": ids,
+                        "rollback_succeeded": terminal["result"].get("rollback_succeeded"),
+                    }
+                )
+                self.save()
+                final = final + ids
+                # The refused attempt rolled the model back; the snapshot used
+                # as previous still describes it, so resubmit against it.
+                continue
+            assert terminal["status"] == ("succeeded" if success else "failed"), terminal
+            if success:
+                assert terminal["result"]["saved_file_reloaded_and_verified"] is True, terminal
+            else:
+                assert terminal["result"]["rollback_succeeded"] is True, terminal
+            return terminal, final
+        raise AssertionError("feature_state cascade retry did not conclude")
+
+    @staticmethod
+    def registry_keys(targets: list[Any]) -> set[str]:
+        return {f"#{target}" if isinstance(target, int) else str(target) for target in targets}
 
     async def run(self) -> None:
         base = await self.plan(base_plate())
@@ -393,26 +472,30 @@ class Acceptance:
         message = await self.expect_rejection(
             [feature_state("delete", ["pad_sketch"])],
             "do not cover every affected dependency",
+            previous=pad_job,
         )
         self.report["admission_rejections"][-1]["dependency_ids_returned"] = [
             feature["id"] for feature in (pad_feature, pad_sketch) if str(feature["id"]) in message
         ]
         self.save()
 
-        suppress = await self.plan([feature_state("suppress", ["pad_sketch", "pad"])], pad_job)
+        suppress, suppress_targets = await self.feature_state_submit(
+            "suppress", ["pad_sketch", "pad"], pad_job
+        )
         suppressed = await self.snapshot(suppress["model_id"])
         self.check_volume(suppressed, BASE_VOLUME)
-        self.check_feature_state(suppressed, {"pad_sketch", "pad"})
+        self.check_feature_state(suppressed, self.registry_keys(suppress_targets))
         operation = suppress["result"]["operations"][0]
         assert operation["execution_status"] == "succeeded", operation
         assert operation["effect_status"] == "committed", operation
-        assert operation["target_count"] == 2, operation
+        assert operation["target_count"] == len(suppress_targets), operation
         assert {item["effect"] for item in operation["targets"]} == {"suppressed"}, operation
         self.report["cases"].append(
             {
                 "case": "suppress",
                 "job_id": suppress["job_id"],
                 "model_id": suppress["model_id"],
+                "targets": suppress_targets,
                 "volume_mm3": suppressed["inspection"]["volume_mm3"],
                 "operation": operation,
                 "passed": True,
@@ -420,7 +503,9 @@ class Acceptance:
         )
         self.save()
 
-        resume = await self.plan([feature_state("resume", ["pad_sketch", "pad"])], suppress)
+        resume, resume_targets = await self.feature_state_submit(
+            "resume", suppress_targets, suppress
+        )
         resumed = await self.snapshot(resume["model_id"])
         self.check_volume(resumed, TOTAL_VOLUME)
         self.check_feature_state(resumed, set())
@@ -439,8 +524,9 @@ class Acceptance:
         # Failed assertion after a real suppress: the job must roll back, keep
         # the revision, the volume and the empty suppression registry.
         before_failure = await self.snapshot(resume["model_id"])
-        failed = await self.plan(
-            [feature_state("suppress", ["pad_sketch", "pad"])],
+        failed, _failed_targets = await self.feature_state_submit(
+            "suppress",
+            resume_targets,
             resume,
             success=False,
             assertions={"volume_mm3": TOTAL_VOLUME, "volume_tolerance": 0.01},
@@ -466,16 +552,18 @@ class Acceptance:
 
         # Stale revision never creates a job.
         await self.expect_rejection(
-            [feature_state("resume", ["pad_sketch", "pad"])],
+            [feature_state("resume", resume_targets)],
             "Stale revision",
             previous=restored,
             expected_revision=restored["revision"] - 1,
         )
 
-        delete = await self.plan([feature_state("delete", ["pad_sketch", "pad"])], restored)
+        delete, delete_targets = await self.feature_state_submit("delete", resume_targets, restored)
         deleted = await self.snapshot(delete["model_id"])
         self.check_volume(deleted, BASE_VOLUME)
-        assert deleted["feature_state"]["tombstone_count"] == 2, deleted["feature_state"]
+        assert deleted["feature_state"]["tombstone_count"] == len(delete_targets), deleted[
+            "feature_state"
+        ]
         assert not set(deleted["aliases"]).intersection({"pad_sketch", "pad"}), deleted["aliases"]
         assert "pad" not in {feature.get("name", "").lower() for feature in self.features(deleted)}
         self.report["cases"].append(
@@ -483,6 +571,7 @@ class Acceptance:
                 "case": "delete",
                 "job_id": delete["job_id"],
                 "model_id": delete["model_id"],
+                "targets": delete_targets,
                 "volume_mm3": deleted["inspection"]["volume_mm3"],
                 "tombstones": deleted["feature_state"]["tombstones"],
                 "passed": True,
@@ -499,6 +588,7 @@ class Acceptance:
                 )
             ],
             "deleted labels cannot be reused",
+            previous=delete,
         )
 
         legal = await self.plan(pad("pad2", "pad2_sketch"), delete)

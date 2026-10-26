@@ -47,6 +47,12 @@ def frustum_volume() -> float:
     return math.pi * BOSS_HEIGHT / 3.0 * (BOSS_RADIUS**2 + BOSS_RADIUS * r + r**2)
 
 
+def flared_volume() -> float:
+    """Creo's default draft direction flares this boss outward; verify both."""
+    r = BOSS_RADIUS + BOSS_HEIGHT * math.tan(math.radians(DRAFT_ANGLE_DEG))
+    return math.pi * BOSS_HEIGHT / 3.0 * (BOSS_RADIUS**2 + BOSS_RADIUS * r + r**2)
+
+
 def cylinder_volume() -> float:
     return math.pi * BOSS_RADIUS**2 * BOSS_HEIGHT
 
@@ -349,42 +355,52 @@ class Acceptance:
         raise AssertionError("boss cylindrical face not found in inspection surfaces")
 
     async def draft_boss_case(self) -> None:
-        boss = [
-            self.sketch(
-                "boss_profile",
-                [{"type": "circle", "name": "boss", "center": [0, 0], "radius": BOSS_RADIUS}],
-            ),
-            {
-                "op": "extrude",
-                "label": "boss_solid",
-                "sketch": "boss_profile",
-                "depth": BOSS_HEIGHT,
-            },
-        ]
-        prismatic = await self.plan(boss)
-        before = await self.snapshot(prismatic["model_id"])
-        self.check_volume(before, cylinder_volume())
-        face_id = self.boss_face(before)
         document = load_example("dev047_t12_draft_boss.json")
-        operations = materialize(document)
-        operations[2]["surfaces"][0]["id"] = face_id
-        terminal = await self.plan(operations, before)
-        self.check_contract(terminal, 3)
-        after = await self.snapshot(terminal["model_id"])
-        expected = frustum_volume()
-        self.check_volume(after, expected)
-        self.report["draft_boss"] = {
-            "model_id": terminal["model_id"],
-            "job_id": terminal["job_id"],
-            "draft_face_id": face_id,
-            "angle_deg": DRAFT_ANGLE_DEG,
-            "r_top_mm": r_top(),
-            "prismatic_volume_mm3": cylinder_volume(),
-            "expected_volume_mm3": expected,
-            "actual_volume_mm3": after["inspection"]["volume_mm3"],
-            "base_job_id": prismatic["job_id"],
-            "passed": True,
-        }
+        example_operations = materialize(document)
+        assert example_operations[2]["op"] == "draft"
+        self.report["draft_boss"] = {}
+        # The example documents the single-plan flow (create boss, then draft).
+        # This staged variant first creates and inspects a boss to obtain the
+        # real face id, then submits only the draft operation. The default
+        # direction flares outward on this machine, so both directions are
+        # asserted against their own analytic frustum volumes.
+        for flip, expected in ((False, flared_volume()), (True, frustum_volume())):
+            boss = [
+                self.sketch(
+                    "boss_profile",
+                    [{"type": "circle", "name": "boss", "center": [0, 0], "radius": BOSS_RADIUS}],
+                ),
+                {
+                    "op": "extrude",
+                    "label": "boss_solid",
+                    "sketch": "boss_profile",
+                    "depth": BOSS_HEIGHT,
+                },
+            ]
+            prismatic = await self.plan(boss)
+            before = await self.snapshot(prismatic["model_id"])
+            self.check_volume(before, cylinder_volume())
+            face_id = self.boss_face(before)
+            operations = [copy.deepcopy(example_operations[2])]
+            operations[0]["surfaces"][0]["id"] = face_id
+            operations[0]["flip"] = flip
+            terminal = await self.plan(operations, before)
+            self.check_contract(terminal, 1)
+            after = await self.snapshot(terminal["model_id"])
+            self.check_volume(after, expected)
+            self.report["draft_boss"][f"flip_{str(flip).lower()}"] = {
+                "model_id": terminal["model_id"],
+                "job_id": terminal["job_id"],
+                "draft_face_id": face_id,
+                "angle_deg": DRAFT_ANGLE_DEG,
+                "prismatic_volume_mm3": cylinder_volume(),
+                "expected_volume_mm3": expected,
+                "actual_volume_mm3": after["inspection"]["volume_mm3"],
+                "base_job_id": prismatic["job_id"],
+                "passed": True,
+            }
+            self.save()
+        self.report["draft_boss"]["r_top_mm"] = r_top()
         self.save()
 
     async def run(self) -> None:

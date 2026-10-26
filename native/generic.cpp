@@ -481,19 +481,28 @@ static J inspection(bool require_healthy = true) {
     visited_edges.clear();
     CK(ProSolidFeatVisit((ProSolid)board, inspect_feature, nullptr, nullptr));
     // System-required objects: the model's default coordinate system and the
-    // template datum planes (a datum feature that is neither embedded nor
-    // constrained by a parent feature). Both facts come from the live model.
+    // template datum planes. A template datum is a parentless, non-embedded
+    // datum from the model's initial block: sketch/extrude companions created
+    // later by this service are also parentless, so only datums preceding the
+    // first non-datum, non-csys feature count as template geometry.
     int default_csys_id = -1;
-    for (auto &f : gfeatures)
-        if (f["type"].get<int>() == PRO_FEAT_CSYS) {
-            default_csys_id = f["id"].get<int>();
-            break;
-        }
+    int first_feature_id = -1;
     for (auto &f : gfeatures) {
-        bool system = f["id"].get<int>() == default_csys_id;
+        if (f["type"].get<int>() == PRO_FEAT_CSYS && default_csys_id < 0) {
+            default_csys_id = f["id"].get<int>();
+            continue;
+        }
+        int type = f["type"].get<int>();
+        if (first_feature_id < 0 && type != PRO_FEAT_CSYS && type != PRO_FEAT_DATUM)
+            first_feature_id = f["id"].get<int>();
+    }
+    for (auto &f : gfeatures) {
+        int id = f["id"].get<int>();
+        bool system = id == default_csys_id;
         if (!system && f["type"].get<int>() == PRO_FEAT_DATUM &&
             (f["embedded"].is_boolean() && !f["embedded"].get<bool>()) &&
-            f["parents_query_code"] == 0 && f["parent_ids"].empty())
+            f["parents_query_code"] == 0 && f["parent_ids"].empty() &&
+            (first_feature_id < 0 || id < first_feature_id))
             system = true;
         f["system_required"] = system;
     }

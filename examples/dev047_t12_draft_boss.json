@@ -26,6 +26,6 @@
     "job": "status succeeded; result.saved_file_reloaded_and_verified is true; the revision advances by 1 for the whole job",
     "operations": "three input operations produce exactly three ordered results with zero-based index 0-2 under the 0.7.0 result contract",
     "geometry": "top radius r_top = 3 - 3*tan(11 deg) ~= 2.416859 mm; final volume = pi*h/3*(R^2 + R*r_top + r_top^2) with R=3, h=3 gives ~= 69.403 mm^3 versus the prismatic 27*pi ~= 84.823 mm^3, i.e. the draft removes ~= 15.420 mm^3; assert the frustum volume itself via volume_mm3, not only the removed difference",
-    "direction": "angle is measured against the neutral plane; if the first attempt flares outward instead (volume grows), the assertion fails and flip:true is the documented remedy - do not silently accept either direction"
+    "direction": "angle is measured against the neutral plane; on the verified Creo 12.4 machine the default direction flares the boss outward (volume grows to the flared frustum), and flip:true produces the narrowing draft with r_top = 3 - 3*tan(11 deg). Assert the frustum volume of the direction you intended; never silently accept either one"
   }
 }

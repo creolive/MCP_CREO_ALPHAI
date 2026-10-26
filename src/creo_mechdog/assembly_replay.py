@@ -498,6 +498,7 @@ def _constraint_operations(
 ) -> list[dict]:
     target_names = set(target_labels.values())
     operations = []
+    constraints: list[dict] = []
     for position, row in enumerate(node["constraints"]):
         path = f"snapshot.components[{node_index}].constraints[{position}]"
         ctype = row["type"]
@@ -554,8 +555,13 @@ def _constraint_operations(
         }
         if assembly_component is not None:
             constraint["assembly_component"] = assembly_component
+        constraints.append(constraint)
+    # One component_constraints operation per component: the native setter
+    # replaces the component's whole constraint set, so per-constraint
+    # operations would silently drop every constraint but the last.
+    if constraints:
         operations.append(
-            {"op": "component_constraints", "component": target, "constraints": [constraint]}
+            {"op": "component_constraints", "component": target, "constraints": constraints}
         )
     return operations
 

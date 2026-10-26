@@ -41,6 +41,7 @@ TOL = 1e-5
 BASE_WIDTH, BASE_HEIGHT, BASE_DEPTH = 120.0, 80.0, 10.0
 BOSS_RADIUS, BOSS_HEIGHT = 10.0, 20.0
 PIN_RADIUS, PIN_HEIGHT = 9.0, 30.0
+PIN_BLOCK, PIN_BOSS_HEIGHT = 24.0, 10.0
 SUPPORTED_TYPES = ("mate", "align", "mate_offset", "align_offset", "insert", "csys")
 
 
@@ -87,12 +88,30 @@ def base_part() -> list[dict]:
 
 
 def pin_part() -> list[dict]:
+    # The block provides the planar side faces the align/align_offset
+    # constraints need (a bare cylinder has none) and the boss provides the
+    # cylinder for insert; all reference faces stay geometry-discoverable.
     return [
         sketch(
             "pin_profile",
-            [{"type": "circle", "name": "pin", "center": [0, 0], "radius": PIN_RADIUS}],
+            [
+                {
+                    "type": "rectangle",
+                    "name": "block",
+                    "min": [-PIN_BLOCK / 2, -PIN_BLOCK / 2],
+                    "max": [PIN_BLOCK / 2, PIN_BLOCK / 2],
+                }
+            ],
         ),
         extrude("pin", "pin_profile", PIN_HEIGHT),
+        {
+            **sketch(
+                "pin_boss_profile",
+                [{"type": "circle", "name": "boss", "center": [0, 0], "radius": PIN_RADIUS}],
+            ),
+            "offset": PIN_HEIGHT,
+        },
+        extrude("pin_boss", "pin_boss_profile", PIN_BOSS_HEIGHT),
     ]
 
 
@@ -321,6 +340,19 @@ class Acceptance:
                 raise TimeoutError("Startup observation budget exceeded; no modeling submitted")
             await asyncio.sleep(1)
 
+    async def wait_terminal(self, accepted: dict) -> dict:
+        """Poll an accepted async job (e.g. creo_new_assembly) to terminal."""
+        deadline = time.monotonic() + 360
+        while time.monotonic() < deadline:
+            terminal = await self.call("creo_get_job", {"job_id": accepted["job_id"]})
+            if terminal["status"] not in ("queued", "running"):
+                break
+            await asyncio.sleep(1)
+        else:
+            raise TimeoutError(accepted["job_id"])
+        assert terminal["status"] == "succeeded", terminal
+        return terminal
+
     async def plan(self, operations: list, model: dict | None = None) -> dict:
         args: dict = {"operations": operations}
         if model:
@@ -364,17 +396,18 @@ class Acceptance:
         entries = []
         seen = set()
         for node in snapshot["components"]:
-            owner_label = node["occurrence_label"]
-            source_id = self.source_ids[owner_label]
-            inspection = inspections[source_id]
+            node_part = self.base_id if node["occurrence_label"].lower() == "base" else self.pin_id
             for row in node["constraints"]:
                 for key in ("asm_reference", "comp_reference"):
                     reference = row.get(key)
                     if not isinstance(reference, dict):
                         continue
                     owner = None
+                    owner_part = node_part
                     if reference.get("owner_scope") == "component":
                         owner = reference.get("occurrence_label")
+                        owner_part = self.base_id if str(owner).lower() == "base" else self.pin_id
+                    inspection = inspections[owner_part]["inspection"]
                     identity = (
                         owner,
                         reference.get("item_type"),
@@ -411,7 +444,13 @@ class Acceptance:
         self.report["sources"] = {"base": self.base_id, "pin": self.pin_id}
 
     def surfaces(self, inspection: dict) -> dict[str, int]:
-        """Pick reference faces from the real inspection by geometry, not by id."""
+        """Pick reference faces from the real inspection by geometry, not by id.
+
+        The inspection reports the geometric plane normal, whose sign does not
+        follow the outward orientation (the bottom face also reports +z), so
+        selection relies on the bounding box, never on the normal sign. The
+        cylinder may arrive split into coaxial pieces; any piece identifies it.
+        """
         planar = [
             surface
             for surface in inspection.get("surfaces", [])
@@ -422,21 +461,11 @@ class Acceptance:
             for surface in inspection.get("surfaces", [])
             if not isinstance(surface.get("normal"), list)
         ]
-        top = max(
-            (s for s in planar if s["normal"][2] > 0.99),
-            key=lambda s: s["bbox"][1][2],
-            default=None,
-        )
-        bottom = max(
-            (s for s in planar if s["normal"][2] < -0.99),
-            key=lambda s: s["bbox"][0][2],
-            default=None,
-        )
-        side = max(
-            (s for s in planar if s["normal"][0] > 0.99),
-            key=lambda s: s["bbox"][1][0],
-            default=None,
-        )
+        horizontal = [s for s in planar if abs(s["normal"][2]) > 0.99]
+        vertical_x = [s for s in planar if abs(s["normal"][0]) > 0.99]
+        top = max(horizontal, key=lambda s: s["bbox"][1][2], default=None)
+        bottom = min(horizontal, key=lambda s: s["bbox"][0][2], default=None)
+        side = max(vertical_x, key=lambda s: s["bbox"][1][0], default=None)
         if not all((top, bottom, side)) or not curved:
             raise RuntimeError("Fixture faces were not found in the native inspection")
         return {
@@ -447,10 +476,12 @@ class Acceptance:
         }
 
     async def build_source_assembly(self) -> dict:
-        created = await self.call("creo_new_assembly", {"model_name": self.source_name})
+        created = await self.wait_terminal(
+            await self.call("creo_new_assembly", {"model_name": self.source_name})
+        )
         source = {"model_id": created["model_id"], "revision": created["revision"]}
-        base_faces = self.surfaces(await self.snapshot(self.base_id))
-        pin_faces = self.surfaces(await self.snapshot(self.pin_id))
+        base_faces = self.surfaces((await self.snapshot(self.base_id))["inspection"])
+        pin_faces = self.surfaces((await self.snapshot(self.pin_id))["inspection"])
         result = await self.plan(
             [
                 {
@@ -468,6 +499,7 @@ class Acceptance:
                     "constraints": [
                         {
                             "type": "mate",
+                            "assembly_component": "base",
                             "assembly_reference": {"kind": "surface", "id": base_faces["top"]},
                             "component_reference": {
                                 "kind": "surface",
@@ -476,6 +508,7 @@ class Acceptance:
                         },
                         {
                             "type": "align",
+                            "assembly_component": "base",
                             "assembly_reference": {"kind": "surface", "id": base_faces["side"]},
                             "component_reference": {"kind": "surface", "id": pin_faces["side"]},
                         },
@@ -490,6 +523,7 @@ class Acceptance:
                     "constraints": [
                         {
                             "type": "mate_offset",
+                            "assembly_component": "base",
                             "assembly_reference": {"kind": "surface", "id": base_faces["top"]},
                             "component_reference": {
                                 "kind": "surface",
@@ -499,6 +533,7 @@ class Acceptance:
                         },
                         {
                             "type": "align_offset",
+                            "assembly_component": "base",
                             "assembly_reference": {"kind": "surface", "id": base_faces["side"]},
                             "component_reference": {"kind": "surface", "id": pin_faces["side"]},
                             "offset": 20,
@@ -586,10 +621,10 @@ class Acceptance:
             if row["type"] in ("mate_offset", "align_offset")
         )
         assert any(
-            row.get("asm_reference", {}).get("owner_scope") == "component"
+            (row.get("asm_reference") or {}).get("owner_scope") == "component"
             for node in snapshot["components"]
             for row in node["constraints"]
-            if row["type"] != "csys"
+            if row["type"] not in ("csys", "default")
         ), "no same-level sibling reference in the snapshot"
 
         inspections = {
@@ -599,8 +634,10 @@ class Acceptance:
         component_mapping = [
             {
                 "occurrence": node["occurrence_label"],
-                "label": f"t_{node['occurrence_label']}",
-                "source_model_id": self.source_ids[node["occurrence_label"]],
+                "label": f"t_{node['occurrence_label'].lower()}",
+                "source_model_id": (
+                    self.base_id if node["occurrence_label"].lower() == "base" else self.pin_id
+                ),
             }
             for node in snapshot["components"]
         ]
@@ -629,7 +666,9 @@ class Acceptance:
         )
         assert all("rebuild_binding" in op for op in operations if op["op"] == "assemble_component")
 
-        target = await self.call("creo_new_assembly", {"model_name": self.target_name})
+        target = await self.wait_terminal(
+            await self.call("creo_new_assembly", {"model_name": self.target_name})
+        )
         executed = await self.plan(operations, target)
         self.report["replay"].update(
             target_model_id=executed["model_id"],
@@ -835,13 +874,16 @@ class Acceptance:
         source_after = await self.snapshot(self.pin_id)
         assert target_after["revision"] == target_before["revision"], "target model changed"
         assert source_after["revision"] == source_after_edit["revision"], "source changed again"
-        assert source_after["volume_mm3"] == source_after_edit["volume_mm3"]
+        assert (
+            source_after["inspection"]["volume_mm3"]
+            == source_after_edit["inspection"]["volume_mm3"]
+        )
         self.report["invariance"].append(
             {
                 "target_revision_before": target_before["revision"],
                 "target_revision_after": target_after["revision"],
                 "source_revision": source_after["revision"],
-                "source_volume_mm3": source_after["volume_mm3"],
+                "source_volume_mm3": source_after["inspection"]["volume_mm3"],
                 "source_unchanged_by_rejected_call": True,
             }
         )
@@ -854,7 +896,7 @@ class Acceptance:
 
     def _reference_id(self, snapshot: dict, occurrence: str, ctype: str, side: str) -> int:
         for node in snapshot["components"]:
-            if node["occurrence_label"] != occurrence:
+            if str(node["occurrence_label"]).lower() != occurrence.lower():
                 continue
             for row in node["constraints"]:
                 if row["type"] != ctype:

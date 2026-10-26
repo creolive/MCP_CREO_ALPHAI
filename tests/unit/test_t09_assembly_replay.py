@@ -350,9 +350,9 @@ class OperationPlan(ReplayFixture):
         operations = result["operations"]
         self.assertEqual(
             [op["op"] for op in operations],
-            ["assemble_component"] * 2 + ["component_constraints"] * 6,
+            ["assemble_component"] * 2 + ["component_constraints"],
         )
-        self.assertEqual(result["operation_count"], 8)
+        self.assertEqual(result["operation_count"], 3)
         for operation in operations[:2]:
             self.assertEqual(operation["placement"], "fixed")
             self.assertEqual(operation["constraints"], [])
@@ -371,12 +371,13 @@ class OperationPlan(ReplayFixture):
             ("insert", 0.0, "yellow", "yellow", "t_base"),
             ("csys", 0.0, "yellow", "yellow", None),
         ]
-        for operation, (ctype, offset, asm_side, comp_side, sibling) in zip(
-            operations[2:], expected, strict=True
+        (operation,) = operations[2:]
+        self.assertEqual(operation["op"], "component_constraints")
+        self.assertEqual(operation["component"], "t_pin")
+        self.assertEqual(len(operation["constraints"]), 6)
+        for row, (ctype, offset, asm_side, comp_side, sibling) in zip(
+            operation["constraints"], expected, strict=True
         ):
-            self.assertEqual(operation["op"], "component_constraints")
-            self.assertEqual(operation["component"], "t_pin")
-            (row,) = operation["constraints"]
             self.assertEqual(row["type"], ctype)
             self.assertEqual(row["offset"], offset)
             self.assertEqual(row["assembly_side"], asm_side)
@@ -739,7 +740,7 @@ class SchemaAndNativeGuards(ReplayFixture):
         nodes = pins()
         result = self.plan(snapshot(nodes), mappings(nodes), references())
         checked = validate_operations(result["operations"])
-        self.assertEqual(len(checked), 8)
+        self.assertEqual(len(checked), 3)
         self.assertTrue(checked[1]["rebuild_binding"]["source_part_sha256"])
         self.assertEqual(checked[2]["constraints"][0]["assembly_component"], "t_base")
 

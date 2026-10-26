@@ -396,10 +396,10 @@ class Acceptance:
     async def rejection_cases(self) -> None:
         for name, factory in fixtures.INVALID.items():
             await self.expect_rejection(
-                [sketch("rejected", factory()), extrude("rejected_solid")], name
+                [sketch("rejected", factory()), extrude("rejected_solid", "rejected")], name
             )
         await self.expect_rejection(
-            [sketch("open", fixtures.open_chain()), extrude("open_solid")], "open"
+            [sketch("open", fixtures.open_chain()), extrude("open_solid", "open")], "open"
         )
 
     async def failure_then_legal(self) -> None:

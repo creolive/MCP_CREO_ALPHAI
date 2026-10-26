@@ -397,12 +397,14 @@ class Acceptance:
         assert len(operations) == 1, operations
         operation = operations[0]
         assert operation.get("op") == "export", operation
+        assert operation.get("execution_status") == "succeeded", operation
         record["operation_file"] = operation.get("file")
         assert record["operation_file"] and Path(record["operation_file"]).is_file(), record
+        # The export operation carries the exported file; the capture evidence
+        # (raw step codes, window/view checks) lives on the job-level preview
+        # block that the shared T07 projection attaches to the result.
+        record["exported_image"] = self.keep_image("explicit_jpeg_export", Path(operation["file"]))
         record["job_preview"] = self.check_preview("export_job_preview", terminal)
-        record["export_preview"] = self.check_preview(
-            "export_operation", terminal, operation=operation
-        )
         self.report["cases"].append(record)
         self.save()
         return record

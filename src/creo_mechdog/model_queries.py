@@ -264,6 +264,10 @@ def inspect_page(
             resolved = aliases_of(model)
             if isinstance(resolved, dict):
                 whole["aliases"] = resolved
+        # The T08 registries ride in model_summary; the whole fast path serves
+        # the same bounded feature_state section the paged shape serves, so the
+        # two full shapes cannot disagree about tombstones/suppressions.
+        whole["feature_state"] = response["feature_state"]
         if (
             serialized_size(whole) <= RESPONSE_BUDGET
             and max((len(section_records(model, name) or []) for name in SECTIONS), default=0)

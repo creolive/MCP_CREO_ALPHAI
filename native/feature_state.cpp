@@ -284,6 +284,47 @@ static J generic_feature_state(const J &op) {
     for (const auto &feature : after_state["features"])
         after_by_id[feature["id"].get<int>()] = feature;
 
+    // No automatic cascade: Creo suppresses/deletes companions of the listed
+    // features (e.g. their datum planes) on its own, so the actually affected
+    // set is compared with the explicit targets before anything is recorded.
+    // Every id the operation touched beyond the targets must have been listed
+    // by the caller (or already sit in the recorded intentional suppression
+    // set); otherwise the plan fails with the affected list instead of
+    // silently widening the recorded state.
+    if (action == "delete" || action == "suppress") {
+        std::vector<int> affected;
+        if (action == "suppress") {
+            for (const auto &entry : after_by_id)
+                if (entry.second.value("status", PRO_FEAT_INVALID) == PRO_FEAT_SUPPRESSED &&
+                    !target_set.count(entry.first) && !recorded_suppressed.count(entry.first))
+                    affected.push_back(entry.first);
+        } else {
+            for (const auto &entry : by_id)
+                if (!after_by_id.count(entry.first) && !target_set.count(entry.first))
+                    affected.push_back(entry.first);
+        }
+        if (!affected.empty()) {
+            J listed = J::array();
+            for (int id : affected) {
+                const J &feature = action == "delete"
+                                       ? by_id.at(id)
+                                       : (by_id.count(id) ? by_id.at(id) : after_by_id.at(id));
+                listed.push_back({{"feature_id", id},
+                                  {"label", feature_state_label_for(id).empty()
+                                                ? J(nullptr)
+                                                : J(feature_state_label_for(id))},
+                                  {"name", feature.value("name", "")},
+                                  {"type_name", feature.value("type_name", "")},
+                                  {"status", feature.value("status", PRO_FEAT_INVALID)}});
+            }
+            log("FEATURE_STATE_UNLISTED_AFFECTED=%s\n", listed.dump().c_str());
+            throw std::runtime_error(
+                "feature_state targets do not cover every affected dependency; Creo also " +
+                std::string(action == "delete" ? "deleted" : "suppressed") +
+                " these features; list them explicitly (no automatic cascade): " + listed.dump());
+        }
+    }
+
     J details = J::array();
     for (size_t i = 0; i < ids.size(); i++) {
         int id = ids[i];
