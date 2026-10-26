@@ -65,6 +65,8 @@
 
 单测直接断言环数、实体数、解析面积与各分类计数；未把 Python 解析当作 Creo 内核判定。原生侧的真实环数/实体数只能由实机 `native_section` 提供。
 
+失败检查点与回滚不新增状态机：离线覆盖沿用 T02 的 fake-worker 单测（[`tests/unit/test_t02_operation_results.py`](../../tests/unit/test_t02_operation_results.py) 的首项/中项失败、`rolled_back`/`not_executed` 与 revision 不推进）；T06 只保证新增的 `profile`/`native_section` 不改变该契约。多环输入下的“失败后合法操作可用”端到端证据由 `tools/test_t06_native.py` 的 `failure_then_legal` 在 T13 取得。
+
 ## 未测范围与 T13 实机矩阵（本次未执行）
 
 1. 对每个合法夹具：先建立草图作业，断言 `native_section.closed_contours/entities/open_ends` 与输入一致；再以第二次作业拉伸，核对 `saved_file_reloaded_and_verified=true`、体积等于解析面积×深度、特征增量恰为 1 个 `protrusion`。
