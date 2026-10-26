@@ -7,9 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-from tools.test_editing_closeout import Closeout, StartupObserver
+from tools.test_editing_closeout import (
+    Closeout,
+    StartupObserver,
+    onaxis_sector_volume,
+    verify_onaxis_edits,
+)
 
 
 class EditingCloseoutSafety(unittest.IsolatedAsyncioTestCase):
@@ -223,6 +228,63 @@ class EditingEvidence(unittest.TestCase):
         self.assertIsNone(row["pending_job"])
         self.assertEqual(len(row["inspection_sha256"]), 64)
         self.assertEqual(len(row["aliases_sha256"]), 64)
+
+
+class OnaxisSectorGeometry(unittest.TestCase):
+    def test_sector_volume_formula_matches_reference_values(self):
+        # Analytical expectations for the BUG-082 fixture; native Creo
+        # observations may differ within the 0.01 mm3 tolerance instead of
+        # matching digit for digit.
+        self.assertLess(abs(onaxis_sector_volume(10, 90) - 2094.3951023931954), 1e-9)
+        self.assertLess(abs(onaxis_sector_volume(10, 80) - 2062.5765347076162), 1e-9)
+        self.assertLess(abs(onaxis_sector_volume(12, 90) - 3619.1147369354417), 1e-9)
+
+
+class OnaxisSectorEdits(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _aliases(job):
+        return {"rev_sk": {"feature_id": 40}, "rev1": {"feature_id": 51}}
+
+    async def test_four_edits_chain_revisions_with_explicit_mode(self):
+        created = {"model_id": "m", "job_id": "j1", "revision": 1}
+        edits = [{"model_id": "m", "job_id": f"j{r}", "revision": r} for r in (2, 3, 4, 5)]
+        suite = SimpleNamespace(
+            job=AsyncMock(side_effect=[created, *edits]),
+            aliases=Mock(side_effect=self._aliases),
+            volume=Mock(),
+            created=set(),
+        )
+        result = await verify_onaxis_edits(suite, "autodim")
+        self.assertEqual([job["job_id"] for job in result], ["j1", "j2", "j3", "j4", "j5"])
+        self.assertEqual(suite.job.await_count, 5)
+        create_call = suite.job.await_args_list[0]
+        self.assertEqual(create_call.args[0], "creo_execute_plan")
+        self.assertEqual(create_call.args[1]["operations"][0]["dimensioning"], "autodim")
+        self.assertIn("m", suite.created)
+        expected = created["revision"]
+        for call, job in zip(suite.job.await_args_list[1:], edits):
+            self.assertEqual(call.args[0], "creo_update_sketch_geometry")
+            self.assertEqual(call.args[1]["dimensioning"], "autodim")
+            self.assertEqual(call.args[1]["expected_revision"], expected)
+            self.assertEqual(call.args[1]["sketch"], "rev_sk")
+            expected = job["revision"]
+        thetas = [
+            call.args[1]["entities"][2]["end_angle"] for call in suite.job.await_args_list[1:]
+        ]
+        self.assertEqual(thetas, [80, 90, 90, 90])
+        self.assertEqual(suite.volume.call_count, 5)
+
+    async def test_any_edit_failure_stops_subsequent_submissions(self):
+        created = {"model_id": "m", "job_id": "j1", "revision": 1}
+        suite = SimpleNamespace(
+            job=AsyncMock(side_effect=[created, RuntimeError("status != succeeded")]),
+            aliases=Mock(side_effect=self._aliases),
+            volume=Mock(),
+            created=set(),
+        )
+        with self.assertRaisesRegex(RuntimeError, "status != succeeded"):
+            await verify_onaxis_edits(suite, "autodim")
+        self.assertEqual(suite.job.await_count, 2)
 
 
 if __name__ == "__main__":

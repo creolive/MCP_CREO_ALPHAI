@@ -432,13 +432,21 @@ static void generic_sketch_edit(const J &op) {
             throw std::runtime_error("Coordinate editing requires a principal sketch plane");
         mode = "autodim";
     }
-    if (mode == "autodim" && op.value("dimensioning", "auto") == "auto") {
+    if (mode == "autodim" && op.value("dimensioning", "auto") != "coordinates") {
         // BUG-079: autodim after an in-place rebuild can under-dimension the
         // redefined section (an arc radius change dropped the position
         // dimension), leaving an orphaned sketch-feature dimension that fails
         // feature regeneration. Exact coordinate dimensions fully constrain
         // the section and remap cleanly, so prefer them for automatic edits
         // on principal planes when every entity type supports them.
+        // BUG-082: an explicit "autodim" edit rides the same route.
+        // ProSectionAutodim left 0-1 dimensions on the rebuilt on-axis sector; the section-level
+        // regenerate tolerated it, but ProFeatureWithoptionsRedefine forces the
+        // feature to re-solve from the dimension scheme and REV_SK plus the
+        // downstream revolve stayed PRO_FEAT_UNREGENERATED (status 6, values
+        // zeroed) while the identical creation succeeded because a new feature
+        // adopts the section geometry directly. The upgrade is recorded in the
+        // solver info (requested=autodim, used=coordinates), never silent.
         bool coordinate_compatible = true;
         for (auto it = names.begin(); it != names.end(); ++it) {
             std::string type = it.value();
