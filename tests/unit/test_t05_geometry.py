@@ -3,6 +3,7 @@
 import argparse
 import copy
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -162,6 +163,54 @@ class AcceptanceOracleTests(unittest.TestCase):
 
 
 class ReadinessObservationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_metric_matrix_success_does_not_claim_all_unit_acceptance_passed(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(fixture, "local_provenance", return_value={}),
+        ):
+            runner = fixture.Acceptance(None, Path(directory) / "report.json")
+            runner.tilted = AsyncMock()
+            runner.pattern = AsyncMock()
+            await runner.metric_matrix()
+            self.assertEqual(runner.tilted.await_count, 9)
+            self.assertEqual(runner.pattern.await_count, 9)
+            self.assertEqual(runner.report["metric_geometry_matrix"], "passed")
+            self.assertEqual(runner.report["native_acceptance"], "partial")
+            self.assertEqual(runner.report["native_unit_coverage"]["millimeter"], "passed")
+            for name in ("non_millimeter_coordinates", "unknown_units_and_query_failures"):
+                self.assertEqual(runner.report["native_unit_coverage"][name], "pending")
+                self.assertIn(name, runner.report["pending_native_acceptance"])
+
+    async def test_transport_exception_keeps_attempt_and_unknown_outcome_without_retry(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(fixture, "local_provenance", return_value={}),
+        ):
+            output = Path(directory) / "report.json"
+            client = unittest.mock.Mock()
+            args = {"operations": [{"op": "datum_axis", "label": "axis"}]}
+
+            async def transport_error(name, inputs):
+                attempted = json.loads(output.read_text(encoding="utf-8"))["calls"][0]
+                self.assertEqual(attempted["tool"], name)
+                self.assertEqual(attempted["args"], inputs)
+                self.assertFalse(attempted["response_received"])
+                self.assertEqual(attempted["outcome"], "unknown")
+                raise TimeoutError("no response received")
+
+            client.call_tool = AsyncMock(side_effect=transport_error)
+            runner = fixture.Acceptance(client, output)
+            with self.assertRaises(TimeoutError):
+                await runner.call("creo_execute_plan", args)
+            client.call_tool.assert_awaited_once_with("creo_execute_plan", args)
+            record = json.loads(output.read_text(encoding="utf-8"))["calls"][0]
+            self.assertFalse(record["response_received"])
+            self.assertEqual(record["outcome"], "unknown")
+            self.assertEqual(record["client_exception"]["type"], "TimeoutError")
+            self.assertNotIn("result", record)
+            self.assertNotIn("is_error", record)
+            self.assertEqual(len(runner.report["calls"]), 1)
+
     async def test_startup_observation_waits_without_submitting_or_restarting(self):
         with (
             tempfile.TemporaryDirectory() as directory,

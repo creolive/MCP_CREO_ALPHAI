@@ -2,7 +2,7 @@
 
 日期：2026-10-26（Asia/Shanghai）。条目：BUG-063/064/065，关联 BUG-084。基线 `479ee5a`（T00/T01/T03/T04 已纳入）；分支 `codex/dev047-t05-axis-geometry`；本次源码版本仍为 0.6.1，目标 0.7.0 的集成和发布留待后续交付。
 
-## 当前结论
+## 首次离线交付阶段结论（截至 1a53f34）
 
 轴几何观测、单位/质量查询元数据、公共投影和解析验收驱动已离线实现。**没有连接 Toolkit，也没有完成 T05 原生验收。** 现有 BUG-001 会话限制保持，没有会话探测、故障注入、清理 unknown 保护或结束 Creo。原报告中的拉伸全局 Z、两平面建轴退化和独立阵列算法缺陷均未被本次证实；本次没有修改这些算法。
 
@@ -45,3 +45,17 @@ SDK 替身首次链接遇到 `ProUnitInit` 声明中 `wchar_t *` 与替身 `cons
 完整 dev_check 指纹：基线提交 `479ee5a7fa6574f237d32e33a8f2a358c478a654`、dirty=true，时间 `2026-10-26T12:06:25.778463+00:00`，`checked_source_sha256=f17b7c8953bb97aafea152796cdc5bcce278b370f4f900a01686e6d65f93153c`。最终语言检查相同基线、dirty=true，`checked_source_sha256=4e6f16f6b8cbc82c1fad41258af4d178f2f3655a4ea550771c97b4c089c335bc`（覆盖并替代较早 `9048b1fc...` 的中间诊断检查）。后者包含最终源码身份、驱动安全/证据和准备态观察变更。替身报告 `build/axis_geometry_test/report.json` 另记录实际源码/协作头文件与三个 SDK 头文件 SHA256。
 
 工作区原有 `session_activity.json` 内容 SHA256 为 `CF869B454E9492DD314FD10B296F6995334E2C6128803A28365FFCB1E1028378`，保持不变。未跟踪 `.codebuddy/`、`.workbuddy/`、`.zcode/`、PRT 和 session_erase 运行记录保持原状。历史 `docs/validation/` 不变；源码提交与最终 dirty/指纹由任务报告及后续集成记录补录。
+
+## 人工确认后的 Live01 尝试与审查修正
+
+用户随后明确确认 Creo 已恢复并授权继续本次实机测试。根协调者独占 Toolkit 通道运行受控驱动；运行包装临时将忽略的本机配置 `auto_start_creo` 设为 false，并在 finally 恢复原始文件字节。本实现者和审查者没有额外连接 Toolkit、重试、关闭 Creo 或清除保护。
+
+Live01 受测提交 `1a53f3419c31767e678c8e7d1b81b85c0fb193d0`、dirty=true，驱动 provenance 源码指纹 `7d6367a493c40f3f18a2e3889b25d1edb8fc5cc926b0d8715d5605d4500decd4`。原始证据 `build/t05-native-01.json`（SHA256 `FD82406D7D72126CFE69046CF670E5D60ACF2D16102E8640AC2B43F503A6E5CB`）及 `build/t05-native-01.log`（SHA256 `9849591807939C2DECD469B5EC4A6F0675BAB3E92B373B62E729080D65B5A495`）保持不变。报告记录 14 次公开能力/环境/启动状态调用，**0 次 execute_plan、0 个几何案例**。启动准备的 9 秒状态探测于 `2026-10-26T12:29:50Z` 返回 `probe_timeout`、`toolkit_code=null`，未取得可用连接核验结果，驱动在非 ready 状态停止。探测覆盖连接、当前模型、版本和断开等原生步骤，现有证据无法定位停在哪一个调用，也不能证明从未建立过连接。没有模型提交或几何失败可以据此分析；它不能证明 T05 通过、不能证明建模算法存在缺陷，也不能把探测超时等同 Creo 已卡死。
+
+根协调者补充的桌面观察：Computer Use 读到 Creo 12 欢迎页，截图为黑色；激活尝试遇到 `GetCursorPos` 拒绝访问 `0x80070005`。这些观察未确定原因或证明会话可操作；人工桌面核对仍待完成，不据此主动重启、结束进程或清除保护。
+
+独立审查未发现重要生产代码缺陷，指出 P2 驱动完成毫米矩阵后不能报告整个 T05 native_acceptance=passed，以及 P3 客户端异常时未记录实际尝试调用。本次只修正驱动报告与证据逻辑：毫米矩阵成功时为 `metric_geometry_matrix=passed`，整体为 `native_acceptance=partial`；实际非毫米坐标、unknown 单位/查询失败原生覆盖明确 pending，混合单位标为单零件矩阵不适用并要求独立装配证据。非毫米验收需要另行限定的只读原生夹具，本次不扩展非毫米受管编辑。
+
+每次工具尝试在 await 前持久化工具名/输入和 response_received=false/outcome=unknown；传输异常保留类型/消息，仍为未收到响应、结果未知，不合成原生结果、不声称提交被拒绝、不自动重试。离线模拟覆盖完整毫米矩阵也不能产生整体 passed，并在抛出 TimeoutError 前检查磁盘已有调用输入，抛出后检查异常与 unknown 保留且只尝试一次。
+
+复核命令：`python -m unittest tests.unit.test_t05_geometry tests.unit.test_model_queries tests.unit.test_t03_plane_reference tests.unit.test_helper_layout -q`，42 项通过（1.931 秒）；两项变更文件 Ruff check 与 format 通过。本次没有再运行原生驱动或 SDK 构建，生产原生源码未改；最终语言检查与定向复审由根协调者补录。**T05 几何与原生非毫米/unknown 验收均仍未完成。**

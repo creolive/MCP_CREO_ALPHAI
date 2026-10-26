@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import hashlib
 import itertools
 import json
@@ -225,6 +226,16 @@ class Acceptance:
             "started_at": time.time(),
             "cases": [],
             "native_acceptance": "running",
+            "metric_geometry_matrix": "not_run",
+            "native_unit_coverage": {
+                "millimeter": "not_run",
+                "non_millimeter_coordinates": "pending",
+                "unknown_units_and_query_failures": "pending",
+                "mixed_units": {
+                    "status": "not_applicable_to_single_part_matrix",
+                    "reason": "Each part has one principal length unit; assembly mixed units require separate evidence",
+                },
+            },
             "calls": [],
             "toolkit_serial": True,
             "provenance": local_provenance(),
@@ -237,20 +248,55 @@ class Acceptance:
         )
 
     async def call(self, name: str, args: dict) -> dict:
-        result = await self.client.call_tool(name, args)
-        self.report["calls"].append(
-            {
-                "tool": name,
-                "args": args,
-                "is_error": result.is_error,
-                "result": result.structured_content,
-                "content": str(result.content),
-            }
+        record = {
+            "tool": name,
+            "args": copy.deepcopy(args),
+            "started_at": time.time(),
+            "response_received": False,
+            "outcome": "unknown",
+            "call_state": "awaiting_response",
+        }
+        self.report["calls"].append(record)
+        self.save()
+        try:
+            result = await self.client.call_tool(name, args)
+        except Exception as error:
+            record.update(
+                call_state="client_exception",
+                finished_at=time.time(),
+                client_exception={"type": type(error).__name__, "message": str(error)},
+            )
+            self.save()
+            raise
+        record.update(
+            response_received=True,
+            outcome="response_received",
+            call_state="returned",
+            finished_at=time.time(),
+            is_error=result.is_error,
+            result=result.structured_content,
+            content=str(result.content),
         )
         self.save()
         if result.is_error:
             raise RuntimeError(f"{name}: {result.content}")
         return result.structured_content
+
+    async def metric_matrix(self) -> None:
+        self.report["metric_geometry_matrix"] = "running"
+        for direction in ("positive", "negative", "symmetric"):
+            await self.tilted(direction)
+            await self.tilted(direction, principal=True)
+            await self.tilted(direction, through=True)
+        for count, increment, cylinder in itertools.product((2, 10), (36, -36), (False, True)):
+            await self.pattern(count, increment, cylinder)
+        await self.pattern(10, 36, False, origin=True)
+        self.report.update(metric_geometry_matrix="passed", native_acceptance="partial")
+        self.report["native_unit_coverage"]["millimeter"] = "passed"
+        self.report["pending_native_acceptance"] = [
+            "non_millimeter_coordinates",
+            "unknown_units_and_query_failures",
+        ]
 
     async def snapshot(self, model_id: str) -> dict:
         from creo_mechdog.query_client import read_full_model
@@ -574,14 +620,7 @@ async def live(output: Path) -> None:
             await acceptance.wait_ready()
             status = await acceptance.call("creo_session_status", {})
             assert status["connected"], status
-            for direction in ("positive", "negative", "symmetric"):
-                await acceptance.tilted(direction)
-                await acceptance.tilted(direction, principal=True)
-                await acceptance.tilted(direction, through=True)
-            for count, increment, cylinder in itertools.product((2, 10), (36, -36), (False, True)):
-                await acceptance.pattern(count, increment, cylinder)
-            await acceptance.pattern(10, 36, False, origin=True)
-            acceptance.report["native_acceptance"] = "passed"
+            await acceptance.metric_matrix()
         except Exception as error:
             acceptance.report.update(
                 native_acceptance="failed", error=f"{type(error).__name__}: {error}"
