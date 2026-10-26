@@ -2,7 +2,7 @@
 
 本项目按可交付的 Creo MCP 工具维护，采用功能条目驱动、短分支和分批整理。日常开发从 [统一台账](BACKLOG.md) 选择条目；新增工作先登记，复杂条目复制 [模板](templates/WORK_ITEM.md)。开发准入对小修复同样适用，内容可精简为几行。
 
-服务／源码版本以 [version.py](../version.py) 为准，当前为 0.6.0（第二批可靠装配重建管线，新增 creo_adopt_file，公开工具 92 个）。版本说明见 [RELEASE_NOTES_0.6.0.md](RELEASE_NOTES_0.6.0.md)，开发检查、实机、安装与交付核对见[发布记录](validation/RELEASE-0.6.0.md)。WorkBuddy 经用户决定取消本批，未执行；本机通过不外推为其他环境通过。当前安排见[台账](BACKLOG.md)，完成事项见[档案](BACKLOG_COMPLETED.md)。
+服务／源码版本以 [version.py](../version.py) 为准，当前为 0.6.1（BUG-082 主平面 autodim 就地编辑修复，公开工具仍为 92 个）。版本说明见 [RELEASE_NOTES_0.6.1.md](RELEASE_NOTES_0.6.1.md)，检查与交付核对见[发布记录](validation/RELEASE-0.6.1.md)。修复批本机 Creo 12.4 编辑专项 16/16 通过；种子矩阵部分通过后 Toolkit 连接断开，剩余矩阵、WorkBuddy 与外部 Creo 9 未验收。本轮不连接 Toolkit 或处置 Creo。当前安排见[台账](BACKLOG.md)，完成事项见[档案](BACKLOG_COMPLETED.md)。
 
 本机联调只使用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。先按[根级规范](../AGENTS.md#本机开发联调补充2026-10-17用户要求)核对卡死调查与会话可操作条件，满足门槛后再安排 Toolkit 连接或故障注入；不得擅自结束 Creo 或清除 unknown 保护。文档分类和条目关闭不解除这些限制。
 

@@ -1,4 +1,4 @@
-# MCP_CREO_MechDog
+# MCP_CREO_MechDog 0.6.1
 
 开发维护从 [开发入口](docs/DEVELOPMENT.md) 和 [统一功能台账](docs/BACKLOG.md) 开始。每项工作先定义验收；语言与单元检查、Creo 实机验收分别记录。项目采用渐进布局整理，当前支持环境见 [兼容矩阵](docs/COMPATIBILITY.md)。
 
@@ -6,7 +6,7 @@
 
 当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.6.0**（0.5.0 反馈整合第二批：可靠装配重建管线，MINOR，公开工具 91→92）。本版新增按路径及批量收养 `creo_adopt_file`、装配 `rotation_matrix`、组件变更摘要及约束符号名，提供官方重建流程与示例。源件编辑不会自动更新既有 `source_snapshot`；当前通过删除并以新标签插入再生成。开发检查 748 项、本机 Creo 12.4 对应实机及新目录安装通过；WorkBuddy 经用户决定取消本批，未执行、不记通过。功能、兼容与已知问题见[版本说明](docs/RELEASE_NOTES_0.6.0.md)，验收见[发布记录](docs/validation/RELEASE-0.6.0.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.5.3](docs/RELEASE_NOTES_0.5.3.md)。
+当前服务／源码版本为 **0.6.1**（BUG-082 草图编辑修复，PATCH，公开工具仍为 92 个）。主平面上受支持实体的显式 `autodim` 就地编辑复用坐标尺寸方案，响应 solver 记录 requested/used；新增完整回滚证据及种子回归驱动适配。修复批本机 Creo 12.4 编辑专项 16/16 通过；九种子矩阵部分完成后 Toolkit 通道断开，剩余场景、WorkBuddy 及外部 Creo 9 未验收。功能与边界见[版本说明](docs/RELEASE_NOTES_0.6.1.md)，发布检查见[发布记录](docs/validation/RELEASE-0.6.1.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.6.0](docs/RELEASE_NOTES_0.6.0.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
