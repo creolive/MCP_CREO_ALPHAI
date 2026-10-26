@@ -1,4 +1,69 @@
 // In-place geometry replacement; the native sketch and downstream Blend IDs survive.
+// BUG-082 read-only diagnostics: bounded section-state traces per edit phase.
+// Queries only; a failed query records its raw code and never masks a
+// modeling error raised elsewhere.
+static void trace_section_ids(ProSection section, const char *phase) {
+    ProIntlist ids = nullptr;
+    int count = 0;
+    ProError code = ProSecdimIdsGet(section, &ids, &count);
+    log("BUG082_DIMENSIONS phase=%s code=%d count=%d truncated=%d\n", phase, code, count,
+        count > 128);
+    if (code == PRO_TK_NO_ERROR)
+        for (int i = 0; i < count && i < 128; ++i)
+            log("BUG082_DIMENSION phase=%s id=%d\n", phase, ids[i]);
+    if (ids)
+        ProArrayFree((ProArray *)&ids);
+}
+
+static void trace_section_constraints(ProSection section, const char *phase) {
+    ProIntlist ids = nullptr;
+    int count = 0;
+    ProError code = ProSectionConstraintsIdsGet(section, &ids, &count);
+    log("BUG082_CONSTRAINTS phase=%s code=%d count=%d truncated=%d\n", phase, code, count,
+        count > 128);
+    if (code == PRO_TK_NO_ERROR)
+        for (int i = 0; i < count && i < 128; ++i) {
+            ProConstraintType type;
+            ProConstraintStatus status;
+            int n = 0, *entities = nullptr;
+            ProSectionPointType *points = nullptr;
+            if (ProSectionConstraintsGet(section, ids[i], &type, &status, &n, &entities, &points)) {
+                log("BUG082_CONSTRAINT phase=%s id=%d get_failed\n", phase, ids[i]);
+                continue;
+            }
+            log("BUG082_CONSTRAINT phase=%s id=%d type=%d status=%d refs=%d\n", phase, ids[i],
+                (int)type, (int)status, n);
+            for (int j = 0; j < n; ++j)
+                log("BUG082_CONSTRAINT_REF phase=%s id=%d entity=%d sense=%d\n", phase, ids[i],
+                    entities[j], points[j]);
+            if (entities)
+                ProArrayFree((ProArray *)&entities);
+            if (points)
+                ProArrayFree((ProArray *)&points);
+        }
+    if (ids)
+        ProArrayFree((ProArray *)&ids);
+}
+
+static void trace_section_entities(ProSection section, const char *phase) {
+    ProIntlist ids = nullptr;
+    int count = 0;
+    ProError code = ProSectionEntityIdsGet(section, &ids, &count);
+    log("BUG082_ENTITIES phase=%s code=%d count=%d truncated=%d\n", phase, code, count,
+        count > 128);
+    if (code == PRO_TK_NO_ERROR)
+        for (int i = 0; i < count && i < 128; ++i) {
+            Pro2dEntdef *def = nullptr;
+            if (ProSectionEntityGet(section, ids[i], &def)) {
+                log("BUG082_ENTITY phase=%s id=%d get_failed\n", phase, ids[i]);
+                continue;
+            }
+            log("BUG082_ENTITY phase=%s id=%d type=%d\n", phase, ids[i], (int)def->type);
+        }
+    if (ids)
+        ProArrayFree((ProArray *)&ids);
+}
+
 static J expanded_geometry(const J &input) {
     J result = J::array();
     for (auto e : input) {
@@ -230,6 +295,9 @@ static void generic_sketch_edit(const J &op) {
                                      {"native_geometry_verified", true}});
         return;
     }
+    trace_section_ids(section, "before_delete");
+    trace_section_constraints(section, "before_delete");
+    trace_section_entities(section, "before_delete");
     ProIntlist dimensions = nullptr;
     int count = 0;
     CK(ProSecdimIdsGet(section, &dimensions, &count));
@@ -351,6 +419,9 @@ static void generic_sketch_edit(const J &op) {
             meta["entity_ids"][name] = replacement;
         }
     }
+    trace_section_ids(section, "after_rebuild");
+    trace_section_constraints(section, "after_rebuild");
+    trace_section_entities(section, "after_rebuild");
     J solving_op = op;
     std::string mode = profile_dimensioning(op);
     double principal = 0;
@@ -429,6 +500,8 @@ static void generic_sketch_edit(const J &op) {
             throw std::runtime_error("Coordinate editing requires principal section axes");
     }
     meta["solver"] = solve_profile(section, solving_op);
+    trace_section_ids(section, "after_solve");
+    trace_section_constraints(section, "after_solve");
     meta["solver"]["requested"] = op.value("dimensioning", "auto");
     if (!coordinate_plan.is_null())
         meta["solver"]["coordinate_geometry"] = verify_coordinate_plan(
@@ -436,6 +509,24 @@ static void generic_sketch_edit(const J &op) {
     CK(ProElementSpecialvalueSet(sk, (ProAppData)section));
     redefine(&f, root);
     CK(ProFeatureElemtreeFree(&f, root));
+    {
+        // BUG-082: the live section pointer may be stale after a redefine, so
+        // the after_redefine phase traces a fresh read-only copy of the saved
+        // feature section instead of the pre-redefine handle.
+        ProSection traced = nullptr;
+        ProError copy_code = ProFeatureSectionCopy(&f, 0, &traced);
+        log("BUG082_PHASE phase=after_redefine section_copy=%d\n", copy_code);
+        if (copy_code == PRO_TK_NO_ERROR) {
+            try {
+                trace_section_ids(traced, "after_redefine");
+                trace_section_constraints(traced, "after_redefine");
+            } catch (...) {
+                ProSectionFree(&traced);
+                throw;
+            }
+            CK(ProSectionFree(&traced));
+        }
+    }
     if (!coordinate_plan.is_null()) {
         ProSection saved = nullptr;
         CK(ProFeatureSectionCopy(&f, 0, &saved));

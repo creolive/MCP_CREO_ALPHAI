@@ -67,6 +67,7 @@ static J solve_profile(ProSection section, const J &op) {
         } else
             log("AutodimensionSketch=SKIPPED_COMPLETE_COORDINATE_DIMENSIONS\n");
         ProError regenerated = ProSectionRegenerate(section, &error);
+        log("SectionRegenerate=%d mode=%s\n", regenerated, mode.c_str());
         if (regenerated)
             section_errors(error, "regenerate");
         check(regenerated, "RegenerateSolvedSketch");
