@@ -1,0 +1,31 @@
+{
+  "description": "DEV-047 T12 / BUG-080: draft a D6 x 3 mm boss by 11 degrees with the existing creo_execute_plan draft operation. The draft target is a REAL face reference: first create the boss, then read the cylindrical side face from creo_inspect_model (surfaces entry with type PRO_SRF_CYLINDER, radius 3 and an axis parallel to Z) and pass its geometry id as surfaces[0].id. Never guess or hardcode face ids from another model. With the neutral plane at the boss base (z=0) the top narrows to r_top = 3 - 3*tan(11 deg) and the boss becomes a cone frustum, so the final volume is pi*h/3*(R^2 + R*r_top + r_top^2) with R=3, h=3; verify it against volume_mm3 after the save-reload instead of trusting a screenshot.",
+  "request": {
+    "model_id": "<existing managed part model_id or a fresh creo_new_part result>",
+    "expected_revision": "<current revision from creo_inspect_model>",
+    "operations": [
+      {
+        "op": "sketch",
+        "label": "boss_profile",
+        "plane": "XY",
+        "entities": [{"type": "circle", "name": "boss", "center": [0, 0], "radius": 3}]
+      },
+      {"op": "extrude", "label": "boss_solid", "sketch": "boss_profile", "depth": 3},
+      {
+        "op": "draft",
+        "label": "boss_draft",
+        "surfaces": [
+          {"kind": "surface", "id": "<cylindrical side-face geometry id from creo_inspect_model>"}
+        ],
+        "neutral_plane": {"kind": "plane", "axis": "z", "offset": 0},
+        "angle": 11
+      }
+    ]
+  },
+  "expect": {
+    "job": "status succeeded; result.saved_file_reloaded_and_verified is true; the revision advances by 1 for the whole job",
+    "operations": "three input operations produce exactly three ordered results with zero-based index 0-2 under the 0.7.0 result contract",
+    "geometry": "top radius r_top = 3 - 3*tan(11 deg) ~= 2.416859 mm; final volume = pi*h/3*(R^2 + R*r_top + r_top^2) with R=3, h=3 gives ~= 69.403 mm^3 versus the prismatic 27*pi ~= 84.823 mm^3, i.e. the draft removes ~= 15.420 mm^3; assert the frustum volume itself via volume_mm3, not only the removed difference",
+    "direction": "angle is measured against the neutral plane; if the first attempt flares outward instead (volume grows), the assertion fails and flip:true is the documented remedy - do not silently accept either direction"
+  }
+}

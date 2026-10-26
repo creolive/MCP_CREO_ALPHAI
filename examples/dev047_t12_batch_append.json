@@ -1,0 +1,45 @@
+{
+  "description": "DEV-047 T12 / FEAT-008: append several features to an EXISTING managed part in ONE creo_execute_plan job. Provide model_id plus expected_revision from the latest creo_inspect_model; a stale revision is rejected instead of silently rebased. The whole job is one transaction: it saves, erases and reloads exactly once at the end, so a successful batch increments the revision by 1 (not once per feature), and any failing operation rolls back every feature of this job and leaves the previous revision, aliases and geometry intact. Plans are capped at 200 operations per job; split large migrations into several explicitly sequenced jobs instead of exceeding the cap. The two pads are sketched on the top face (XY offset by the plate height) so every added and removed volume is analytically checkable.",
+  "request": {
+    "model_id": "<existing managed part model_id>",
+    "expected_revision": "<current revision from creo_inspect_model>",
+    "operations": [
+      {
+        "op": "sketch",
+        "label": "pad_profile",
+        "plane": "XY",
+        "offset": 10,
+        "entities": [{"type": "rectangle", "name": "pad", "min": [10, 10], "max": [30, 30]}]
+      },
+      {"op": "extrude", "label": "pad_solid", "sketch": "pad_profile", "depth": 5},
+      {
+        "op": "sketch",
+        "label": "rib_profile",
+        "plane": "XY",
+        "offset": 10,
+        "entities": [{"type": "rectangle", "name": "rib", "min": [-18, -5], "max": [-8, 5]}]
+      },
+      {"op": "extrude", "label": "rib_solid", "sketch": "rib_profile", "depth": 5},
+      {
+        "op": "sketch",
+        "label": "bore_profile",
+        "plane": "XY",
+        "entities": [{"type": "circle", "name": "bore", "center": [0, 0], "radius": 3}]
+      },
+      {
+        "op": "extrude",
+        "label": "bore_cut",
+        "sketch": "bore_profile",
+        "mode": "cut",
+        "depth_type": "through_all"
+      }
+    ]
+  },
+  "expect": {
+    "job": "status succeeded; result.saved_file_reloaded_and_verified is true; the part revision advances by exactly 1 for the whole job",
+    "operations": "six input operations produce exactly six ordered results with zero-based index 0-5; each carries execution_status succeeded (execution fact) and effect_status committed (final persisted effect) under the 0.7.0 result contract",
+    "geometry": "on a 40x40x10 plate this batch adds 20x20x5 + 10x10x5 mm^3 on top and bores a radius-3 hole through the plate, i.e. volume_mm3 = 16000 + 2000 + 500 - 90*pi",
+    "failure": "if any operation fails, earlier features of the same job are rolled back (rollback_succeeded true), the failed entry keeps its real execution/effect status, later entries report not_executed/no_effect, and the model keeps its previous revision and aliases",
+    "limits": "200 operations per job maximum; expected_revision must match the inspected revision of model_id"
+  }
+}

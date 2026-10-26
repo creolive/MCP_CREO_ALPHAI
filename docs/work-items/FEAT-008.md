@@ -333,3 +333,7 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 按上述范围已补 `support_status` 的 prepare、文件路径收养、会话擦除和登记维护摘要；条目从 `capabilities.families()` 取得启用状态、工具与动作，公开工具仍为 92 个。`release_status` 由本地 `VERSION` 的语义版本后缀决定，远端更新缓存与完整覆盖声明保持独立。`Label` 原正则和可接受输入保持，模式不匹配时给字段路径、28 字符上限、字符集和 `i001_part1` 示例；类型错误仍保留原类别。README 与开发、编码、发布规范补单位和矩阵迁移口径。本次不实现 T02 的结果字段改造。
 
 [T01 验收记录](../development/DEV047-T01-ACCEPTANCE-2026-10-26.md)：Windows / Python 3.12.14，`tools/dev_check.py` 通过（769 个单元测试）；最后补充的两项边界断言后 T01 定向 10/10、最终风格与源码指纹复核通过。未连接 Toolkit、未构建或执行原生建模、未实机验证非毫米行为；整张 FEAT-008 保持开放，T12 与 T13 继续本批后续验收。
+
+### T12 离线实现与验收
+
+按 T12 任务书新增批处理官方示例 `examples/dev047_t12_batch_append.json`（一次计划 6 特征、expected_revision、单次 revision、整作业回滚与 200 操作上限）与离线校验/门控实机驱动 `tools/test_t12_examples.py`；README 固定单位矩阵验收模板（毫米/英寸/混合/未知四场景分别取证、未知为 null）。示例输入全部经真实 `validate_operations` 校验、无模型/面 ID 硬编码。专项 6 项、全量 964 项、语言检查与 dev_check 通过，见 [T12 验收记录](../development/DEV047-T12-ACCEPTANCE-2026-10-26.md)。实机批处理与单位矩阵证据归 T13；整卡保持开放。

@@ -255,3 +255,5 @@ Windows 登记文件读取允许共享删除，写入使用单步原子替换；
 ```
 
 摘要命令需要已经完成相应的实机测试；打包命令只选择公开源码及文档。`config.json`、`client-config.json`、虚拟环境、构建结果、任务和模型目录已在 `.gitignore` 中排除。
+
+毫米、英寸与混合装配的单位对照场景由固定矩阵驱动覆盖：`tools/test_assembly_matrix.py`（毫米／英寸组件的 normalized 与 raw 矩阵、已知点对照）和 `tools/test_assembly_units.py`（毫米／英寸／混合与单位查询失败的 null 表达）。这组矩阵是后续新增数值接口（坐标、变换、体积等）的验收模板：新接口必须在毫米、英寸、混合与未知单位四种场景下分别取得证据，未知或查询失败如实为 `null`，不得默认毫米。批处理与拔模官方示例见 `examples/dev047_t12_batch_append.json`（一次计划多特征、单次 revision 与整体回滚）和 `examples/dev047_t12_draft_boss.json`（Ø6×3 凸台 11° 内拔模，`r_top = 3 − 3·tan(11°)` 圆台体积断言）。
