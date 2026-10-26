@@ -619,6 +619,9 @@ static void execute_drawing_operation_body(const J &op) {
         std::string format = op["format"];
         path(output,
              generic_job + L"\\output\\" + model_name + (format == "pdf" ? L".pdf" : L".jpg"));
+        // One staged detail per input (T02); the JPEG capture adds its raw codes
+        // to this record instead of appending another one.
+        J export_detail = {{"op", kind}, {"file", utf8(output)}};
         if (format == "pdf") {
             ProPDFOptions opts;
             CK(ProPDFoptionsAlloc(&opts));
@@ -626,13 +629,26 @@ static void execute_drawing_operation_body(const J &op) {
             ProPDFoptionsFree(opts);
             check(e, "ExportDrawingPDF");
         } else if (format == "jpeg") {
-            CK(ProWindowRefit(win));
-            CK(ProWindowRepaint(win));
-            CK(ProRasterFileWrite(win, PRORASTERDEPTH_24, 12, 8, PRORASTERDPI_100,
-                                  PRORASTERTYPE_JPEG, output));
+            // Shared capture (T07). A drawing owns its view, so the fixed model
+            // view matrix is not applied; the target window, refit/repaint order
+            // and raster call are the same ones the job preview uses.
+            PreviewStepOutcome preview =
+                capture_preview(board, generic_job + L"\\output\\" + model_name + L".jpg", false,
+                                12, 8, PRORASTERTYPE_JPEG);
+            J preview_json = preview_outcome_json(preview);
+            log("PREVIEW=%s\n", preview_json.dump().c_str());
+            export_detail["preview_code"] = preview.raster_code;
+            export_detail["preview"] = preview_json;
+            if (!preview_written(preview)) {
+                stage_operation_result(export_detail);
+                throw std::runtime_error("Drawing preview capture failed at " +
+                                         preview.failed_step + " (code " +
+                                         std::to_string(preview.failed_code) + ", raster code " +
+                                         std::to_string(preview.raster_code) + ")");
+            }
         } else
             throw std::runtime_error("Drawing export supports PDF/JPEG");
-        stage_operation_result({{"op", kind}, {"file", utf8(output)}});
+        stage_operation_result(export_detail);
     } else if (kind != "save" && kind != "regenerate")
         throw std::runtime_error("Unsupported drawing operation: " + kind);
     if (kind != "export")

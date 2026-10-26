@@ -1152,11 +1152,12 @@ def run_job(job_id: str) -> None:
                             "Native result references a missing or unexpected part file"
                         )
                     result["sha256"] = hashlib.sha256(part.read_bytes()).hexdigest()
-                    result["preview_file"] = (
-                        str(directory / "output/preview.jpg")
-                        if result["preview_code"] == 0
-                        else None
-                    )
+                    # Same preview projection as the generic plan path (T07).
+                    # A capture failure is reported beside the verified save and
+                    # never changes this job's succeeded status.
+                    from creo_mechdog import preview
+
+                    preview.apply_preview_projection(result, directory=directory)
                     manifest.update(
                         status="succeeded",
                         stage="verified",
@@ -1316,6 +1317,9 @@ def compact_job(manifest: dict) -> dict:
             "rollback_message",
             "rollback_code",
             "preview_file",
+            "preview_status",
+            "preview_code",
+            "preview",
             "connected",
             "volume_mm3",
             "expected_volume_mm3",
@@ -1385,6 +1389,8 @@ def compact_job(manifest: dict) -> dict:
                     "length_unit",
                     "profile",
                     "native_section",
+                    "preview_code",
+                    "preview",
                     "elapsed_seconds",
                     "message",
                 )

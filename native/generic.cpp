@@ -9,6 +9,7 @@
 #include "assembly_walk.h"
 #include "constraint_names.h"
 #include "constraint_compare.h"
+#include "preview.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2321,12 +2322,25 @@ static void execute_operation_body(const J &op) {
         ProPath output;
         path(output, generic_job + L"\\output\\" + model_name + wide(extension));
         if (format == "jpeg") {
-            CK(ProMdlDisplay(board));
-            CK(ProMdlWindowGet(board, &win));
-            CK(ProWindowRefit(win));
-            CK(ProWindowRepaint(win));
-            CK(ProRasterFileWrite(win, PRORASTERDEPTH_24, 8, 6, PRORASTERDPI_100,
-                                  PRORASTERTYPE_JPEG, output));
+            // Same shared capture as the automatic job preview (T07). Unlike
+            // that preview, this image is the requested operation result, so a
+            // failed capture fails this input (recorded with the raw codes in
+            // its single T02 result record) rather than the whole job silently
+            // claiming an image it did not write.
+            PreviewStepOutcome preview =
+                capture_preview(board, generic_job + L"\\output\\" + model_name + wide(extension),
+                                true, 8, 6, PRORASTERTYPE_JPEG);
+            J preview_json = preview_outcome_json(preview);
+            log("PREVIEW=%s\n", preview_json.dump().c_str());
+            stage_operation_result({{"op", kind},
+                                    {"file", utf8(output)},
+                                    {"preview_code", preview.raster_code},
+                                    {"preview", preview_json}});
+            if (!preview_written(preview))
+                throw std::runtime_error("Preview capture failed at " + preview.failed_step +
+                                         " (code " + std::to_string(preview.failed_code) +
+                                         ", raster code " + std::to_string(preview.raster_code) +
+                                         "): " + utf8(preview.path));
         } else if (format == "stl")
             write_stl(output);
         else {
@@ -4528,28 +4542,26 @@ static int run_generic(const std::wstring &job) {
                 request.value("readonly", false) ? "live_query" : "saved_reloaded";
             state["inspection_available"] = true;
             generic_stage("display_preview");
-            CK(ProMdlDisplay(board));
-            CK(ProMdlWindowGet(board, &win));
-            CK(ProWindowCurrentSet(win));
-            double a = sqrt(.5), b = sqrt(1.0 / 6), c = sqrt(1.0 / 3), d = sqrt(2.0 / 3);
-            ProMatrix view = {{a, -b, c, 0}, {a, b, -c, 0}, {0, d, c, 0}, {0, 0, 0, 1}};
-            CK(ProViewMatrixSet(board, nullptr, view));
-            ProWindowRefit(win);
-            ProWindowRepaint(win);
-            ProWindowActivate(win);
-            ProPath preview;
-            path(preview, job + L"\\output\\preview.jpg");
-            int preview_code = ProRasterFileWrite(win, PRORASTERDEPTH_24, 8, 6, PRORASTERDPI_100,
-                                                  PRORASTERTYPE_JPEG, preview);
+            // Shared capture (T07): target window selection, current-window and
+            // identity checks, fixed view matrix, refit/refresh/repaint order and
+            // the raster call live in native/preview.h. A failed capture is
+            // recorded with its raw codes beside the successful save; it never
+            // turns this job into a failure and never masks the save outcome.
+            PreviewStepOutcome preview = capture_preview(board, job + L"\\output\\preview.jpg",
+                                                         true, 8, 6, PRORASTERTYPE_JPEG);
+            J preview_json = preview_outcome_json(preview);
+            log("PREVIEW=%s\n", preview_json.dump().c_str());
             finalize_operation_results(request, true, false, request.value("readonly", false));
-            report.update({{"success", true},
-                           {"toolkit_code", 0},
-                           {"inspection", state},
-                           {"aliases", aliases},
-                           {"part_file", utf8(saved)},
-                           {"preview_code", preview_code},
-                           {"preview_file", preview_code == 0 ? J(utf8(preview)) : J(nullptr)},
-                           {"operations", operation_results}});
+            report.update(
+                {{"success", true},
+                 {"toolkit_code", 0},
+                 {"inspection", state},
+                 {"aliases", aliases},
+                 {"part_file", utf8(saved)},
+                 {"preview_code", preview.raster_code},
+                 {"preview", preview_json},
+                 {"preview_file", preview_written(preview) ? J(utf8(preview.path)) : J(nullptr)},
+                 {"operations", operation_results}});
             log("BUILD_SUCCESS=1\n");
         }
     } catch (ProError error) {

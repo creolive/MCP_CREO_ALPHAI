@@ -479,6 +479,12 @@ def run_generic_job(job_id: str, manifest: dict):
                         readonly=request["readonly"],
                         inputs=request["operations"],
                     )
+                    # Shared preview projection (T07): raw capture codes live on
+                    # the result, a failed image stays a failed image, and the
+                    # model save/revision outcome is never altered by it.
+                    from creo_mechdog import preview
+
+                    preview.apply_preview_projection(result, directory=directory)
                     result_aliases = result.get("aliases")
                     result_inspection = result.get("inspection")
                     # Job manifests keep only summaries and controlled references;

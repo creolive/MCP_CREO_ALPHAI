@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "geometry.cpp"
+#include "preview.h"
 #include "result_delivery.h"
 
 static std::string utf8(const std::wstring &s) {
@@ -305,9 +306,7 @@ static std::wstring create_plate() {
     CK(ProMdlDisplay(board));
     CK(ProMdlWindowGet(board, &win));
     CK(ProWindowCurrentSet(win));
-    double a = sqrt(0.5), b = sqrt(1.0 / 6), c = sqrt(1.0 / 3), d = sqrt(2.0 / 3);
-    ProMatrix matrix = {{a, -b, c, 0}, {a, b, -c, 0}, {0, d, c, 0}, {0, 0, 0, 1}};
-    CK(ProViewMatrixSet(board, nullptr, matrix));
+    CK(ProViewMatrixSet(board, nullptr, preview_isometric_view));
     CK(ProWindowRefit(win));
     CK(ProWindowRepaint(win));
     CK(ProWindowActivate(win));
@@ -348,6 +347,7 @@ int wmain(int argc, wchar_t *argv[]) {
     bool connected = false;
     std::wstring saved;
     int preview_code = -1;
+    J preview_report;
     double measured = 0;
     ProError disconnect_code = PRO_TK_NO_ERROR;
     if (!probe) {
@@ -431,10 +431,14 @@ int wmain(int argc, wchar_t *argv[]) {
         try {
             saved = create_plate();
             measured = volume();
-            ProPath image;
-            path(image, folder + L"\\preview.jpg");
-            preview_code = ProRasterFileWrite(win, PRORASTERDEPTH_24, 8, 6, PRORASTERDPI_100,
-                                              PRORASTERTYPE_JPEG, image);
+            // Same shared capture as the generic job preview and the explicit
+            // JPEG export (T07). A failed capture is reported beside the saved
+            // model instead of failing the build.
+            PreviewStepOutcome preview =
+                capture_preview(board, folder + L"\\preview.jpg", true, 8, 6, PRORASTERTYPE_JPEG);
+            preview_code = preview.raster_code;
+            preview_report = preview_outcome_json(preview);
+            log("PREVIEW=%s\n", preview_report.dump().c_str());
             log("BUILD_SUCCESS=1\n");
         } catch (ProError e) {
             result = e;
@@ -454,6 +458,11 @@ int wmain(int argc, wchar_t *argv[]) {
         << ",\"preview_code\":" << preview_code << ",\"disconnect_code\":" << disconnect_code
         << ",\"saved_file_reloaded_and_verified\":" << (result ? "false" : "true") << "}";
     J plate_result = J::parse(out.str());
+    if (!preview_report.is_null()) {
+        plate_result["preview"] = preview_report;
+        if (preview_report.value("status", "") == "written")
+            plate_result["preview_file"] = preview_report["path"];
+    }
     // Plate verification currently records feature-type counts, not a complete
     // geometry snapshot. Keep the verified volume; unqueried counts stay null.
     plate_result["inspection"] = {
