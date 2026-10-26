@@ -235,6 +235,33 @@ def families() -> dict:
                 "widening, mid-manifest failures stop and report without resubmitting"
             ),
         },
+        "generation_reclaim": {
+            "enabled": True,
+            "tool": "creo_reclaim_generations",
+            "actions": ["inspect", "apply"],
+            "evidence_seconds": 600,
+            "scope": (
+                "Explicit, evidence-bound reclamation of this project's own loader "
+                "and payload generation directories; no Toolkit connection, no DLL "
+                "load and no automatic cleanup on startup, upgrade or status queries"
+            ),
+            "supported": (
+                "generation directories explicitly listed by "
+                "creo_callback_status.generation_inventory that are provably "
+                "unreferenced in every dimension: no current/registered/runtime "
+                "reference, definitive local records, consistent deployment record "
+                "and flat project-owned content"
+            ),
+            "limits": (
+                "current, registered, runtime-referenced, rollback-retained and "
+                "unprovable (missing/corrupt/conflicting records) generations are "
+                "kept; paths outside build/blend_loader and build/blend_callback, "
+                "links/reparse points, expired evidence, changed content or "
+                "references, and occupied files are refused; apply uses the shared "
+                "channel lock, is idempotent per key and reports per-item "
+                "reclaimed/kept/failed/unknown because deletion is not rolled back"
+            ),
+        },
         "registry_maintenance": {
             "enabled": True,
             "tools": ["creo_registry_health", "creo_migrate_registry"],

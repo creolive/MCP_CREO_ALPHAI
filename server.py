@@ -28,6 +28,7 @@ from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
 from creo_mechdog.capability_summary import release_status, support_status
 from creo_mechdog.file_adoption import adopt_file
+from creo_mechdog.generation_reclaim import reclaim_generations
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
@@ -76,6 +77,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/references.py",
     "src/creo_mechdog/update_check.py",
     "src/creo_mechdog/blend_callback.py",
+    "src/creo_mechdog/generation_reclaim.py",
     "src/creo_mechdog/build_support.py",
     "src/creo_mechdog/seed_distribution.py",
     "src/creo_mechdog/seed_compatibility.py",
@@ -273,6 +275,21 @@ async def creo_callback_status() -> dict[str, Any]:
             instruction="Restart this MCP service to load the deployed code, then query again. Preserve unknown jobs/models.",
         )
     return result
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
+    )
+)
+async def creo_reclaim_generations(
+    mode: Literal["inspect", "apply"] = "inspect",
+    generation_keys: list[dict[str, Any]] | None = None,
+    evidence_token: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Explicitly reclaim selected build generations of this project (DEV-027). No Toolkit connection, no DLL load, no automatic cleanup. generation_keys selects loader/payload generation directories explicitly: [{root: "blend_loader"|"blend_callback", key: <hex generation directory name>}]; only names listed by creo_callback_status.generation_inventory are valid, never paths. inspect(classifies) each target with the existing inventory references and returns per-item status reclaimable|kept with reasons, directory content digest, sizes and a 600-second evidence_token bound to the targets, digests and reference evidence; it deletes nothing. apply(evidence_token, idempotency_key) takes the shared channel lock that builds and generation publication hold (busy rejects immediately), re-verifies that evidence -- an expired token, changed content or changed/new reference refuses the old evidence -- then re-checks each directory (containment in build/blend_loader or build/blend_callback, no symlink/junction/reparse point, owned content only, file occupancy, rollback retention) immediately before deleting it. Current, locally registered, runtime-referenced, rollback-retained and unprovable (missing/corrupt/conflicting records) generations are always kept; 'not current' or 'no record found' never authorizes deletion. Each item reports reclaimed/kept/failed/unknown with reasons and the delete progress; partial deletion is not rolled back. The same idempotency_key replays the recorded result instead of deleting again, and a different target set is refused."""
+    return await invoke(reclaim_generations, mode, generation_keys, evidence_token, idempotency_key)
 
 
 @mcp.tool(annotations=CREATE)

@@ -16,7 +16,7 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shipped_summaries_match_registered_tools_and_family_modes(self):
         tools = {tool.name for tool in await server.mcp.list_tools()}
-        self.assertEqual(len(tools), 93)
+        self.assertEqual(len(tools), 94)
         status = server._support_status()
         families = capabilities.families()
         for summary, family in (

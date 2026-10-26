@@ -64,6 +64,14 @@ def support_status(capability_families: dict[str, dict[str, Any]]) -> dict[str, 
             "inspect selected eligible session models, then apply with evidence; "
             "no disk file deletion, global erase or implicit managed-model recovery",
         ),
+        "generation_reclaim": family_entry(
+            "generation_reclaim",
+            "supported_limited",
+            "inspect explicit loader/payload generation directories, then apply with "
+            "600-second evidence and an idempotency key; current, registered, "
+            "runtime-referenced, rollback-retained and unprovable generations are kept; "
+            "no Toolkit connection, no DLL load and no automatic cleanup",
+        ),
         "registry_maintenance": family_entry(
             "registry_maintenance",
             "supported_limited",
