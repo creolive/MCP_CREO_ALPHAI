@@ -613,6 +613,7 @@ _CATEGORY_TEXT = {
     "tangent": "contours that touch without crossing",
     "zero_area": "a zero-area contour",
     "near_tolerance": "endpoints joined only by the closure tolerance",
+    "no_closed_contour": "no closed contour",
 }
 
 
@@ -633,21 +634,21 @@ def validate_solid_profile(
         # closes only at 1e-4 would reach the kernel as an open profile.
         fatal.append("near_tolerance")
     problems = [name for name in fatal if report["categories"][name]["count"]]
+    if not report["closed_contour_count"] and "no_closed_contour" not in problems:
+        problems.insert(0, "no_closed_contour")
     if not problems:
         return report
     details = []
     for name in problems:
-        entry = report["categories"][name]
+        entry = report["categories"].get(name, {"items": []})
         first = entry["items"][0] if entry["items"] else {}
         names = "/".join(first.get("entities", []))
         point = first.get("point")
         if point is None and first.get("points"):
             point = first["points"][0]
         where = f" near ({point[0]:.9g}, {point[1]:.9g}) mm" if point else ""
-        details.append(
-            f"[{name}] {_CATEGORY_TEXT[name].format(closure=report['closure_tolerance_mm'])} "
-            f"({names}){where}"
-        )
+        detail = _CATEGORY_TEXT[name].format(closure=report["closure_tolerance_mm"])
+        details.append(f"[{name}] {detail} ({names}){where}" if names else f"[{name}] {detail}")
     raise ValueError(
         f"Solid {operation} profile rejected: detected "
         f"{report['closed_contour_count']} closed contour(s), "

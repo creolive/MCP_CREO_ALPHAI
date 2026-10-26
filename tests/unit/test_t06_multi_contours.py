@@ -105,6 +105,13 @@ class InvalidProfileAdmission(unittest.TestCase):
             validate_operations(plan(entities))
         validate_operations(plan(entities, thin=0.5))
 
+    def test_centerline_only_sketch_cannot_be_a_solid_profile(self):
+        entities = [
+            {"type": "centerline", "name": "axis", "start": [0, 0], "end": [20, 0]},
+        ]
+        with self.assertRaisesRegex(ValueError, "no_closed_contour"):
+            validate_operations(plan(entities))
+
     def test_surface_and_existing_sketch_references_keep_native_authority(self):
         entities = fixtures.open_chain()
         validate_operations(plan(entities, mode="surface"))
