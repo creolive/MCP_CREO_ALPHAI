@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
-from creo_mechdog import component_changes, model_registry
+from creo_mechdog import component_changes, model_registry, operation_results
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -474,7 +474,9 @@ def run_generic_job(job_id: str, manifest: dict):
                     )
                     model["status"] = "unknown_outcome"
                 else:
-                    result = bridge.read_json(result_file)
+                    result = operation_results.annotate_native_result(
+                        bridge.read_json(result_file), readonly=request["readonly"]
+                    )
                     result_aliases = result.get("aliases")
                     result_inspection = result.get("inspection")
                     # Job manifests keep only summaries and controlled references;

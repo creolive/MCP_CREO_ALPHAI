@@ -84,6 +84,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/adoption.py",
     "src/creo_mechdog/file_adoption.py",
     "src/creo_mechdog/component_changes.py",
+    "src/creo_mechdog/operation_results.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
@@ -325,7 +326,7 @@ async def creo_create_plate(
 
 @mcp.tool(annotations=READ)
 async def creo_get_job(job_id: str, detail: Literal["compact", "full"] = "full") -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes; full includes complete geometry, aliases and validation. Full remains the compatibility default. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes; full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
     return await invoke(bridge.get_job, job_id, detail)
 
 
@@ -707,6 +708,10 @@ async def creo_execute_plan(
     Sketch/extrude/revolve and later features reference earlier feature labels.
     Existing models require expected_revision. Stops at first error; existing models
     roll back to their saved checkpoint. assertions supports require_solid and volume_mm3.
+    Each accepted input yields one result with a zero-based index, execution_status
+    (succeeded/failed/not_executed/unknown) and effect_status
+    (committed/rolled_back/no_effect/unknown); succeeded only reports execution, not
+    the final transaction outcome.
     round/chamfer use `size` (mm); as a standalone-tool alias they also accept
     radius (round) or distance (chamfer), but providing the alias together with
     size is rejected instead of silently preferring one.

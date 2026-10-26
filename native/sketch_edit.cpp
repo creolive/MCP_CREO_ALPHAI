@@ -288,11 +288,11 @@ static void generic_sketch_edit(const J &op) {
         meta["geometry_stale"] = false;
         meta["last_dimensioning"] = requested;
         CK(ProFeatureElemtreeFree(&f, root));
-        operation_results.push_back({{"op", op["op"]},
-                                     {"sketch", label},
-                                     {"preserved_feature_id", f.id},
-                                     {"unchanged", true},
-                                     {"native_geometry_verified", true}});
+        stage_operation_result({{"op", op["op"]},
+                                {"sketch", label},
+                                {"preserved_feature_id", f.id},
+                                {"unchanged", true},
+                                {"native_geometry_verified", true}});
         return;
     }
     trace_section_ids(section, "before_delete");
@@ -557,5 +557,5 @@ static void generic_sketch_edit(const J &op) {
                        {"parameters", meta.value("airfoil", J::object())}};
     if (identical_payload)
         sketch_result["verification_probe"] = verification_probe_result;
-    operation_results.push_back(sketch_result);
+    stage_operation_result(sketch_result);
 }

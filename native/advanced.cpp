@@ -460,7 +460,7 @@ static void assemble_component(const J &op) {
     ProMdlName copy_name;
     std::wstring token = std::filesystem::path(generic_job).filename().wstring();
     swprintf_s(copy_name, L"c_%s_%u", token.substr(0, 16).c_str(),
-               (unsigned)operation_results.size());
+               (unsigned)generated_identity_index());
     ProMdl copy;
     CK(ProMdlnameCopy(child, copy_name, &copy));
     child = copy;

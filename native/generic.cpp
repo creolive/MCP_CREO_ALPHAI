@@ -55,6 +55,25 @@ static std::set<int> visited_edges;
 static std::wstring generic_job;
 static int temporarily_suppressed_loft = -1;
 static J operation_results = J::array();
+// T02: every requested operation publishes exactly one terminal result. The
+// dispatch branches stage their detail here and the shared tail appends it
+// once; appending from both the branch and the tail duplicated operations.
+static J staged_operation_result = J::object();
+static bool has_staged_operation_result = false;
+// Zero-based position of the operation being executed. Generated model names
+// derive from this stable position instead of the result count so deduplicating
+// the results cannot rename or collide previously created objects (T02).
+static int operation_position = -1;
+static void stage_operation_result(const J &detail) {
+    staged_operation_result = detail;
+    has_staged_operation_result = true;
+}
+static int generated_identity_index() {
+    return operation_position < 0 ? 0 : operation_position;
+}
+static void append_operation_result(J result) {
+    operation_results.push_back(std::move(result));
+}
 static J datum_axes = J::array();
 static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale);
 // Snapshot of unhealthy features captured by inspection() right before it
@@ -1936,9 +1955,11 @@ static J choice_inspection(const J &holder, const char *key);
 #include "blend_create.cpp"
 #include "sketch_edit.cpp"
 #include "placement.cpp"
-static void execute_operation(const J &op) {
+static void execute_operation_body(const J &op) {
     std::string kind = op.at("op");
     J details = J::object();
+    staged_operation_result = J::object();
+    has_staged_operation_result = false;
     log("PHASE=%s%s%s\n", kind.c_str(), op.contains("label") ? ":" : "",
         op.value("label", "").c_str());
     if (kind == "sketch" || kind == "airfoil_sketch")
@@ -2110,7 +2131,7 @@ static void execute_operation(const J &op) {
             ProIntf3DExportType t = format == "step" ? PRO_INTF_EXPORT_STEP : PRO_INTF_EXPORT_IGES;
             CK(ProIntf3DFileWriteWithDefaultProfile((ProSolid)board, t, output));
         }
-        operation_results.push_back({{"op", kind}, {"file", utf8(output)}});
+        stage_operation_result({{"op", kind}, {"file", utf8(output)}});
     } else if (kind == "dump_tree") {
         ProFeature f = feature(op["feature"]);
         ProElement root;
@@ -2119,14 +2140,76 @@ static void execute_operation(const J &op) {
         path(output, generic_job + L"\\output\\feature_" + std::to_wstring(f.id) + L".xml");
         CK(ProElemtreeWrite(root, PRO_ELEMTREE_XML, output));
         CK(ProFeatureElemtreeFree(&f, root));
-        operation_results.push_back({{"op", kind}, {"file", utf8(output)}});
+        stage_operation_result({{"op", kind}, {"file", utf8(output)}});
     } else if (kind != "regenerate" && kind != "save")
         throw std::runtime_error("Operation is not implemented: " + kind);
     if (kind != "export" && kind != "dump_tree" && kind != "udf_inspect")
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
     inspection();
-    details.update({{"op", kind}, {"label", op.value("label", "")}, {"succeeded", true}});
-    operation_results.push_back(details);
+    // One terminal record for this input. Branch details and the staged detail
+    // are merged here; effect_status stays unknown until the job-level
+    // finalizer knows whether the save committed or the rollback restored the
+    // verified baseline (T02).
+    J result = has_staged_operation_result ? staged_operation_result : J::object();
+    result.update(details);
+    result.update({{"op", kind},
+                   {"index", operation_position},
+                   {"label", op.value("label", "")},
+                   {"succeeded", true},
+                   {"execution_status", "succeeded"},
+                   {"effect_status", "unknown"}});
+    append_operation_result(std::move(result));
+}
+// A failing operation still yields exactly one terminal record: execution is
+// failed and the job finalizer decides the effect from real rollback evidence.
+static void execute_operation(const J &op) {
+    try {
+        execute_operation_body(op);
+    } catch (...) {
+        std::string kind = op.at("op");
+        J failure = has_staged_operation_result ? staged_operation_result : J::object();
+        failure.update({{"op", kind},
+                        {"index", operation_position},
+                        {"label", op.value("label", "")},
+                        {"succeeded", false},
+                        {"execution_status", "failed"},
+                        {"effect_status", "unknown"}});
+        append_operation_result(std::move(failure));
+        throw;
+    }
+}
+// Close the per-operation records against the request. Success marks the
+// operations that actually ran as committed (a successful save/reload advanced
+// the revision; read-only jobs confirm no model write instead). Failure keeps
+// the executed/failed records and appends the operations that were never
+// started as not_executed/no_effect. rolled_back is only used when the native
+// rollback restored and verified the saved baseline; without that evidence the
+// effect stays unknown and is never inferred from the job status alone.
+static void finalize_operation_results(const J &request, bool succeeded, bool rolled_back,
+                                       bool readonly) {
+    if (succeeded) {
+        for (auto &item : operation_results)
+            if (item.value("execution_status", "unknown") == "succeeded")
+                item["effect_status"] = readonly ? "no_effect" : "committed";
+        return;
+    }
+    for (auto &item : operation_results) {
+        std::string execution = item.value("execution_status", "unknown");
+        if (execution == "not_executed")
+            item["effect_status"] = "no_effect";
+        else if (execution == "succeeded" || execution == "failed")
+            item["effect_status"] = rolled_back ? "rolled_back" : "unknown";
+    }
+    int count = request.contains("operations") && request["operations"].is_array()
+                    ? (int)request["operations"].size()
+                    : 0;
+    for (int index = (int)operation_results.size(); index < count; index++) {
+        const J &input = request["operations"][index];
+        J entry = {{"op", input.value("op", "")},        {"index", index},
+                   {"label", input.value("label", "")},  {"succeeded", false},
+                   {"execution_status", "not_executed"}, {"effect_status", "no_effect"}};
+        append_operation_result(std::move(entry));
+    }
 }
 static void verify_assertions(const J &state, const J &a) {
     if (a.contains("volume_mm3")) {
@@ -4193,6 +4276,7 @@ static int run_generic(const std::wstring &job) {
             }
             for (auto op : request["operations"]) {
                 ++operation_index;
+                operation_position = operation_index;
                 executing_operation = true;
                 generic_stage("execute_" + op["op"].get<std::string>());
                 log("OPERATION_INDEX=%d INPUT=%s\n", operation_index, op.dump().c_str());
@@ -4204,7 +4288,10 @@ static int run_generic(const std::wstring &job) {
             generic_stage("verify_model");
             if (request.contains("loft_seed")) {
                 suppress_seed_for_profiles(request["loft_seed"]["feature_id"], false);
-                bind_loft_seed(request["loft_seed"], seed_profiles);
+                // The seed rebinding is a plan-level construction step, not a
+                // requested operation: report it beside the operations instead
+                // of appending an extra result (T02: N inputs, N results).
+                report["loft_seed_feature"] = bind_loft_seed(request["loft_seed"], seed_profiles);
             }
             if (!request.value("readonly", false))
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
@@ -4252,6 +4339,7 @@ static int run_generic(const std::wstring &job) {
             path(preview, job + L"\\output\\preview.jpg");
             int preview_code = ProRasterFileWrite(win, PRORASTERDEPTH_24, 8, 6, PRORASTERDPI_100,
                                                   PRORASTERTYPE_JPEG, preview);
+            finalize_operation_results(request, true, false, request.value("readonly", false));
             report.update({{"success", true},
                            {"toolkit_code", 0},
                            {"inspection", state},
@@ -4327,6 +4415,13 @@ static int run_generic(const std::wstring &job) {
             }
         } else
             report["rollback_code"] = loaded;
+    }
+    if (!report["success"].get<bool>()) {
+        finalize_operation_results(request, false, report.value("rollback_succeeded", false),
+                                   request.is_object() && request.value("readonly", false));
+        // Accepted plans always report their per-operation outcome, including
+        // the operations that were never started.
+        report["operations"] = operation_results;
     }
     generic_stage("disconnect");
     if (recovery_deadline)

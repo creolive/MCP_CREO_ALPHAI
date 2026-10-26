@@ -222,7 +222,7 @@ static J validate_loft_seed(const J &binding) {
     return profiles;
 }
 
-static void bind_loft_seed(const J &binding, const J &original_profiles) {
+static J bind_loft_seed(const J &binding, const J &original_profiles) {
     int section_count = (int)original_profiles.size();
     if (section_count != (int)binding.at("sections").size())
         throw std::runtime_error("Blend section mapping size changed");
@@ -336,8 +336,11 @@ static void bind_loft_seed(const J &binding, const J &original_profiles) {
               {"construction", "native_multisection_blend_seed_rebinding"},
               {"seed_sha256", binding["snapshot_sha256"]}};
     aliases[binding["label"].get<std::string>()] = meta;
-    operation_results.push_back({{"op", "loft_seed"},
-                                 {"label", binding["label"]},
-                                 {"feature_id", blend.id},
-                                 {"succeeded", true}});
+    // The seed binding is a plan-level construction step, not one of the
+    // requested operations; it must not add an extra operations[] entry (T02).
+    return {{"op", "loft_seed"},
+            {"label", binding["label"]},
+            {"feature_id", blend.id},
+            {"construction", "native_multisection_blend_seed_rebinding"},
+            {"seed_sha256", binding["snapshot_sha256"]}};
 }

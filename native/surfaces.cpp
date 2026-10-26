@@ -37,11 +37,11 @@ static void generic_csys(const J &op) {
     ProGeomitemdata *data = nullptr;
     CK(ProCsysDataGet(cs, &data));
     auto c = data->data.p_csys_data;
-    operation_results.push_back({{"op", "datum_csys"},
-                                 {"origin", xyz(c->origin)},
-                                 {"x_axis", xyz(c->x_vector)},
-                                 {"y_axis", xyz(c->y_vector)},
-                                 {"z_axis", xyz(c->z_vector)}});
+    stage_operation_result({{"op", "datum_csys"},
+                            {"origin", xyz(c->origin)},
+                            {"x_axis", xyz(c->x_vector)},
+                            {"y_axis", xyz(c->y_vector)},
+                            {"z_axis", xyz(c->z_vector)}});
     ProGeomitemdataFree(&data);
 }
 static void generic_points(const J &op) {

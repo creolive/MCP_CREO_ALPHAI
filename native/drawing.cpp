@@ -336,7 +336,7 @@ static void drawing_model_add(const J &op) {
             "Drawing source snapshots currently require part or sheetmetal models");
     ProMdlName name;
     std::wstring token = std::filesystem::path(generic_job).filename().wstring();
-    swprintf_s(name, L"d_%s_%u", token.substr(0, 16).c_str(), (unsigned)operation_results.size());
+    swprintf_s(name, L"d_%s_%u", token.substr(0, 16).c_str(), (unsigned)generated_identity_index());
     ProMdl copy;
     CK(ProMdlnameCopy(original, name, &copy));
     CK(ProSolidFeatVisit((ProSolid)copy, drawing_hide_datum, nullptr, nullptr));
@@ -404,8 +404,10 @@ static void table_cell(ProDwgtable *table, int row, int column, const std::strin
     ProArrayFree((ProArray *)&lines);
     check(e, "SetTableCell");
 }
-static void execute_drawing_operation(const J &op) {
+static void execute_drawing_operation_body(const J &op) {
     std::string kind = op["op"];
+    staged_operation_result = J::object();
+    has_staged_operation_result = false;
     log("PHASE=%s\n", kind.c_str());
     if (kind == "drawing_model")
         drawing_model_add(op);
@@ -421,7 +423,7 @@ static void execute_drawing_operation(const J &op) {
             wcscpy_s(name, wide(op["name"]).c_str());
             CK(ProDrawingSheetNameSet(drawing(), sheet, name));
         }
-        operation_results.push_back({{"op", kind}, {"sheet", sheet}});
+        stage_operation_result({{"op", kind}, {"sheet", sheet}});
     } else if (kind == "drawing_view" || kind == "drawing_projection") {
         ProView view;
         int sheet = op.value("sheet", 1);
@@ -630,12 +632,37 @@ static void execute_drawing_operation(const J &op) {
                                   PRORASTERTYPE_JPEG, output));
         } else
             throw std::runtime_error("Drawing export supports PDF/JPEG");
-        operation_results.push_back({{"op", kind}, {"file", utf8(output)}});
+        stage_operation_result({{"op", kind}, {"file", utf8(output)}});
     } else if (kind != "save" && kind != "regenerate")
         throw std::runtime_error("Unsupported drawing operation: " + kind);
     if (kind != "export")
         drawing_regenerate();
-    operation_results.push_back({{"op", kind}, {"succeeded", true}});
+    // One terminal record per drawing input (T02); effect_status is finalized
+    // by the job once the save or rollback outcome is known.
+    J result = has_staged_operation_result ? staged_operation_result : J::object();
+    result.update({{"op", kind},
+                   {"index", operation_position},
+                   {"label", op.value("label", "")},
+                   {"succeeded", true},
+                   {"execution_status", "succeeded"},
+                   {"effect_status", "unknown"}});
+    append_operation_result(std::move(result));
+}
+static void execute_drawing_operation(const J &op) {
+    try {
+        execute_drawing_operation_body(op);
+    } catch (...) {
+        std::string kind = op["op"];
+        J failure = has_staged_operation_result ? staged_operation_result : J::object();
+        failure.update({{"op", kind},
+                        {"index", operation_position},
+                        {"label", op.value("label", "")},
+                        {"succeeded", false},
+                        {"execution_status", "failed"},
+                        {"effect_status", "unknown"}});
+        append_operation_result(std::move(failure));
+        throw;
+    }
 }
 static std::wstring latest_drawing_file() {
     std::filesystem::path newest;
@@ -736,7 +763,9 @@ static int run_drawing(const std::wstring &job) {
                                ? read_inspection_ref(model.at("inspection_ref"))
                                : model["inspection"],
                            drawing_inspection());
+        int drawing_operation_index = -1;
         for (auto op : request["operations"]) {
+            operation_position = ++drawing_operation_index;
             if (!request.value("readonly", false))
                 mutated = true;
             execute_drawing_operation(op);
@@ -761,6 +790,7 @@ static int run_drawing(const std::wstring &job) {
             verify_drawing(before, state);
             report["saved_file_reloaded_and_verified"] = true;
         }
+        finalize_operation_results(request, true, false, request.value("readonly", false));
         report.update({{"success", true},
                        {"toolkit_code", 0},
                        {"inspection", state},
@@ -796,6 +826,11 @@ static int run_drawing(const std::wstring &job) {
         } catch (...) {
             report["rollback_message"] = "Drawing checkpoint could not be restored and verified";
         }
+    }
+    if (!report["success"].get<bool>()) {
+        finalize_operation_results(request, false, report.value("rollback_succeeded", false),
+                                   request.is_object() && request.value("readonly", false));
+        report["operations"] = operation_results;
     }
     log("PHASE=disconnect\n");
     int delivered = deliver_native_result(job, report, connected, [&]() {
