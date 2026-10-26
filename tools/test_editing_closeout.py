@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import model_registry
+from creo_mechdog import inspection_refs, model_registry
 from tools.dev_check import git_state
 from tools.mcp_readiness import wait_for_startup
 from version import VERSION
@@ -70,6 +70,27 @@ def onaxis_sector(theta_max, radius):
 def onaxis_sector_volume(radius, theta_max):
     """Spherical-sector volume of the on-axis sector revolved 360 deg."""
     return (2 * math.pi * radius**3 / 3) * math.sin(math.radians(theta_max))
+
+
+def model_evidence(model: dict) -> dict:
+    part = Path(model["part_file"]) if model.get("part_file") else None
+    full = inspection_refs.full_inspection(model)
+    aliases = model_registry.aliases_of(model)
+    return {
+        "revision": model["revision"],
+        "status": model["status"],
+        "pending_job": model.get("pending_job"),
+        "recovery_pending": model.get("recovery_pending"),
+        "part_sha256": hashlib.sha256(part.read_bytes()).hexdigest() if part else None,
+        "inspection_sha256": inspection_refs.content_digest(full) if full is not None else None,
+        "aliases_sha256": inspection_refs.content_digest(aliases),
+        "inspection_summary": inspection_refs.summary_of(model),
+        "feature_ids": {
+            name: row["feature_id"]
+            for name, row in aliases.items()
+            if isinstance(row, dict) and "feature_id" in row
+        },
+    }
 
 
 CASES = (
@@ -287,8 +308,10 @@ class Closeout:
             )
             self.save()
 
-    def case(self, name, jobs):
-        self.report["cases"].append({"name": name, "jobs": jobs, "passed": True})
+    def case(self, name, jobs, *, evidence=None):
+        self.report["cases"].append(
+            {"name": name, "jobs": jobs, "evidence": evidence, "passed": True}
+        )
         self.save()
         print("CASE_PASS " + name, flush=True)
 
@@ -732,6 +755,7 @@ class Closeout:
             self.created.add(initial["model_id"])
             self.volume(initial, onaxis_sector_volume(10, 90))
             before = general.model_info(initial["model_id"])
+            before_evidence = model_evidence(before)
             failed = await self.failed_job(
                 "creo_update_sketch_geometry",
                 {
@@ -747,16 +771,22 @@ class Closeout:
             assert features, failed
             assert any(f["status"] != 0 for f in features), features
             after = general.model_info(initial["model_id"])
-            assert after["revision"] == before["revision"], after
-            assert after["part_sha256"] == before["part_sha256"], after
-            assert (
-                abs(
-                    after["inspection_summary"]["volume_mm3"]
-                    - before["inspection_summary"]["volume_mm3"]
+            after_evidence = model_evidence(after)
+            assert after_evidence["revision"] == before_evidence["revision"]
+            for key in ("part_sha256", "inspection_sha256", "aliases_sha256", "feature_ids"):
+                assert after_evidence[key] == before_evidence[key], (
+                    key,
+                    before_evidence,
+                    after_evidence,
                 )
-                < 0.01
-            )
-            self.case("onaxis_sector_autodim_failure", [initial, failed])
+            assert after_evidence["pending_job"] == before_evidence["pending_job"]
+            assert after_evidence["recovery_pending"] == before_evidence["recovery_pending"]
+            evidence = {
+                "before": before_evidence,
+                "after": after_evidence,
+                "job_revision": failed.get("revision"),
+            }
+            self.case("onaxis_sector_autodim_failure", [initial, failed], evidence=evidence)
 
         self.report["success"] = True
         self.save()
