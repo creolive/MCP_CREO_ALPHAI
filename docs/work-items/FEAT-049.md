@@ -49,3 +49,7 @@ R1 §5 P1-3延续快照无法回放请求，本卡为T09/0.7.0子项。已确认
 本次子项状态：**离线完成，实机未验收**（[T09 验收记录](../development/DEV047-T09-ACCEPTANCE-2026-10-26.md)）。只读快照升级到 schema 3，新增双侧引用身份、`asm_side`/`comp_side`、`offset_unit`/`offset_mm`、`placement_kind` 与 `replayable`/`reason`；旧快照明确拒绝。新增只读 `creo_plan_assembly_rebuild(snapshot_id, component_mapping, reference_mapping)`，按“全部插入 → 设置约束”生成 `creo_execute_plan` 操作，复用 `mate`/`align`/`mate_offset`/`align_offset`/`insert`/`csys` 六种写入类型；装配侧引用可用 `assembly_component` 指向同层兄弟组件。fixed/default 按真实放置语义单列，未知类型、缺失/歧义映射、不可还原根引用、嵌套、过期/旧证据、源件变化及超过 200 操作均明确拒绝，不转 fixed、不拆事务。每个插入绑定源件 revision/摘要，提交与原生使用前复核；规划本身不加载/收养/修改、不建写作业/revision、不连接 Toolkit，也没有 `operation_results`。
 
 `tools/test_t09_assembly_replay.py` 已覆盖六类型、同层引用、随动、保存重载及拒绝/不变性场景，但**未运行**；六类真实约束效果与随动证据仍待 T13。FEAT-050 公共比对、嵌套回放和新约束类型不在本次范围。
+
+### T13 实机矩阵（2026-10-26）
+
+`tools/test_t09_assembly_replay.py --live` 本机 Creo 12.4 通过：六类约束+default 完整回放、同层兄弟引用、偏移与源件编辑两条路径的真实随动、五类拒绝与源/目标不变性。实机发现并修复规划器逐约束生成 component_constraints（原生整组替换只留最后一条）缺陷，改为每组件一条操作。证据 `build/t09_assembly_replay.json`。

@@ -39,3 +39,7 @@ R3 §2 P6、§6.3探针草图残留延续删除需求。已确认T08/0.7.0子项
 删除成功后 alias 移除并登记 `feature_tombstones`，旧标签的新建/目标/引用被明确拒绝；抑制保留特征 ID 并登记 `suppressed_features`，resume 仅接受已抑制对象。有意抑制集合进入健康检查、保存重载和回滚比较，未登记或登记与实际不一致保持 unhealthy，未整体放宽原有 failed/suppressed 检查。每条输入仍只有一条 T02 结果，逐目标 `before`/`after`/`effect` 放在该结果的 `targets` 字段。
 
 专项 32 项、全量单元、语言检查、SDK 构建与 dev_check 证据见 [T08 记录](../development/DEV047-T08-ACCEPTANCE-2026-10-26.md)。`tools/test_t08_feature_state.py` 已编写但**未运行**；本次未连接 Toolkit、未启动/结束 Creo、未清理 unknown 保护。基础拉伸/切除/基准的实机删除/抑制/恢复、特征树与体积、失败回滚和保存重载仍待 T13，父卡其他范围不变。
+
+### T13 实机矩阵（2026-10-26）
+
+`tools/test_t08_feature_state.py --live` 本机 Creo 12.4 通过：suppress/resume/delete、依赖拒绝与墓碑、过期 revision、失败回滚与删除后合法编辑全链路断言；实机发现并修复 Creo 连带抑制伴随基准面未拦截（现按实测集拒绝并要求显式列出）与 system_required 误标两处原生缺陷。证据 `build/t08_feature_state.json`，见 [T13 阶段记录](../development/DEV047-T13-ACCEPTANCE-2026-10-26.md)。
