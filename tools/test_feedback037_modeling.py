@@ -12,6 +12,7 @@ from pathlib import Path
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
+from creo_mechdog import inspection_refs
 from creo_mechdog.paths import SOURCE_PATHS
 from tools.dev_check import git_state, source_hash
 from tools.mcp_readiness import wait_for_startup
@@ -96,7 +97,8 @@ async def seeds(probe: Probe) -> None:
         )
         assert value["native_compatibility"]["status"] == "not_verified_for_current_session"
         if interpolation == "straight":
-            assert abs(result["result"]["inspection"]["volume_mm3"] - 4900 * math.pi / 3) < 0.01
+            summary = inspection_refs.summary_of(result["result"])
+            assert abs(summary["volume_mm3"] - 4900 * math.pi / 3) < 0.01
 
 
 async def rounds(probe: Probe) -> None:

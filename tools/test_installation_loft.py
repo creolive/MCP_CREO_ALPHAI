@@ -8,17 +8,45 @@ import argparse
 import asyncio
 import hashlib
 import json
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
+
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from creo_mechdog import inspection_refs, model_registry
 from tools.test_loft_seed import sections
 from tools.test_multisection_blend import profiles
 from version import VERSION
+
+
+def native_result_details(job: dict) -> tuple[dict, dict]:
+    result = job["result"]
+    inspection = inspection_refs.full_inspection(result)
+    if inspection is None:
+        raise AssertionError("Native result has no full inspection evidence")
+    return inspection, model_registry.aliases_of(result)
+
+
+EXTRA_CASES = (
+    ("rectangle_empty_A", "two_straight", False, False),
+    ("rectangle_explicit_B", "two_straight", True, False),
+    ("rectangle_empty_C", "two_straight", False, False),
+    ("rectangle_smooth_empty", "two_smooth", False, False),
+    ("five_rectangle_empty", "five_smooth", False, False),
+    ("five_airfoil_empty", "five_smooth", False, True),
+)
+
+
+def seed_cases(manifest: dict) -> list[tuple[str, str, bool, bool]]:
+    baseline = [
+        ("matrix_" + seed["name"], seed["name"], False, False)
+        for seed in sorted(manifest["seeds"], key=lambda row: row["name"])
+    ]
+    return baseline + list(EXTRA_CASES)
 
 
 async def main(library: Path):
@@ -70,28 +98,22 @@ async def main(library: Path):
 
         def check(state, seed, fid=None):
             result = state["result"]
+            inspection, aliases = native_result_details(state)
             setting = result["loft_checks"]["after_reload"]["blend"]
             assert setting["interpolation"] == seed["interpolation"]
             assert setting["section_count"] == seed["section_count"]
-            actual = result["aliases"]["blend"]["feature_id"]
+            actual = aliases["blend"]["feature_id"]
             assert fid is None or actual == fid
-            feature = next(f for f in result["inspection"]["features"] if f["id"] == actual)
+            feature = next(f for f in inspection["features"] if f["id"] == actual)
             assert feature["type"] == 917 and feature["status"] == 0 and not feature["incomplete"]
             assert (
-                result["inspection"]["healthy"]
-                and len([b for b in result["inspection"]["bodies"] if b["state"] == 4]) == 1
+                inspection["healthy"]
+                and len([b for b in inspection["bodies"] if b["state"] == 4]) == 1
             )
-            return actual, result["inspection"]["volume_mm3"]
+            return actual, feature, inspection["volume_mm3"]
 
         try:
-            for case, name, dimensions, foil in [
-                ("rectangle_empty_A", "two_straight", False, False),
-                ("rectangle_explicit_B", "two_straight", True, False),
-                ("rectangle_empty_C", "two_straight", False, False),
-                ("rectangle_smooth_empty", "two_smooth", False, False),
-                ("five_rectangle_empty", "five_smooth", False, False),
-                ("five_airfoil_empty", "five_smooth", False, True),
-            ]:
+            for case, name, dimensions, foil in seed_cases(manifest):
                 seed = seeds[name]
                 count = seed["section_count"]
                 ops = sections("rectangle") if count == 2 else profiles(count, foil)[0]
@@ -109,7 +131,7 @@ async def main(library: Path):
                 if count == 2:
                     args["assertions"]["volume_mm3"] = 7000
                 state = await job("creo_new_loft_part", args)
-                fid, initial_volume = check(state, seed)
+                fid, feature, initial_volume = check(state, seed)
                 if dimensions:
                     edit = {
                         "op": "set_sketch_dimensions",
@@ -119,9 +141,8 @@ async def main(library: Path):
                     assertions = {"volume_mm3": 7840}
                 else:
                     label = "TOP_PLANE" if count == 2 else "SECTION_2_PLANE"
-                    plane = next(
-                        f for f in state["result"]["inspection"]["features"] if f["name"] == label
-                    )
+                    inspection, _ = native_result_details(state)
+                    plane = next(f for f in inspection["features"] if f["name"] == label)
                     offset = ops[1 if count == 2 else 2]["offset"]
                     dim = next(d for d in plane["dimensions"] if abs(d["value"] - offset) < 1e-7)
                     edit = {
@@ -140,22 +161,44 @@ async def main(library: Path):
                         "assertions": assertions,
                     },
                 )
-                _, edited_volume = check(edited, seed, fid)
+                _, _, edited_volume = check(edited, seed, fid)
                 assert abs(edited_volume - initial_volume) > 0.01
                 report["cases"][case] = {
                     "success": True,
+                    "seed_name": name,
+                    "seed_sha256": hashes[name],
+                    "job_id": state["job_id"],
+                    "edit_job_id": edited["job_id"],
+                    "model_id": state["model_id"],
+                    "create_revision": state["revision"],
+                    "edit_revision": edited["revision"],
                     "native_blend_id": fid,
+                    "blend_feature": {
+                        "id": feature["id"],
+                        "type": feature["type"],
+                        "status": feature["status"],
+                        "incomplete": feature["incomplete"],
+                    },
                     "section_count": count,
                     "interpolation": seed["interpolation"],
                     "initial_volume_mm3": initial_volume,
                     "edited_volume_mm3": edited_volume,
+                    "volume_changed_by_edit": True,
                     "parameter_edit": edit,
-                    "saved_reloaded_verified": True,
+                    "create_saved_reloaded_verified": state["result"][
+                        "saved_file_reloaded_and_verified"
+                    ],
+                    "edit_saved_reloaded_verified": edited["result"][
+                        "saved_file_reloaded_and_verified"
+                    ],
                 }
                 persist()
             invalid = {**args, "seed_feature_id": 2147483647}
             await job("creo_new_loft_part", invalid, expected_failure=True)
-            mismatch = {**args, "interpolation": "straight"}
+            mismatch = {
+                **args,
+                "interpolation": "smooth" if args["interpolation"] == "straight" else "straight",
+            }
             state = await job("creo_new_loft_part", mismatch, expected_failure=True)
             assert "does not match requested interpolation" in state.get("message", "")
             report["source_files_unchanged"] = all(
