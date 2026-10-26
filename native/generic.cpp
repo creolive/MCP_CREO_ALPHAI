@@ -979,7 +979,9 @@ static J section_profile_summary(ProSection section, const char *phase) {
             unsupported++;
             continue;
         }
-        if (def->type == PRO_2D_LINE || def->type == PRO_2D_CENTER_LINE) {
+        if (def->type == PRO_2D_CENTER_LINE)
+            continue; // Construction axis for revolve; never a profile boundary.
+        if (def->type == PRO_2D_LINE) {
             auto line = (Pro2dLinedef *)def;
             edge(entity, {line->end1[0], line->end1[1]}, {line->end2[0], line->end2[1]});
         } else if (def->type == PRO_2D_ARC) {
