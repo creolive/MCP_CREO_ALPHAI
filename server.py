@@ -53,6 +53,7 @@ from creo_mechdog.schema import (
 )
 from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
+from creo_mechdog.session_health import snapshot as session_health
 from creo_mechdog.session_models import list_session_models
 from version import VERSION
 
@@ -92,6 +93,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/session_assembly.py",
     "src/creo_mechdog/assembly_replay.py",
     "src/creo_mechdog/session_erase.py",
+    "src/creo_mechdog/session_health.py",
     "src/creo_mechdog/model_registry.py",
     "src/creo_mechdog/registry_ops.py",
     "src/creo_mechdog/open_file.py",
@@ -235,9 +237,9 @@ async def creo_check_environment() -> dict[str, Any]:
 
 @mcp.tool(annotations=READ)
 async def creo_session_status() -> dict[str, Any]:
-    """Check the configured/unique Creo session through Toolkit (9 second probe budget, no rebuild). Every return branch carries server_version. Busy returns its occupying job; probe_timeout returns recovery guidance. During startup return its snapshot promptly. connected=true requires verification; ambiguous/stale session selections never fall back to a random session. Includes a read-only creo_process_snapshot (pid/name/created_at/matches) so a failed probe can distinguish a dead IPC endpoint from an exited Creo process."""
+    """Check the configured/unique Creo session through Toolkit (9 second probe budget, no rebuild). Every return branch carries server_version. Busy returns its occupying job; probe_timeout returns recovery guidance. During startup return its snapshot promptly. connected=true requires verification; ambiguous/stale session selections never fall back to a random session. Includes a read-only creo_process_snapshot (pid/name/created_at/matches) so a failed probe can distinguish a dead IPC endpoint from an exited Creo process. session_health reuses this completed probe plus already recorded job results; it never adds a connection, save or session probe."""
     result = await invoke(startup.session_status)
-    return {**result, "server_version": VERSION}
+    return {**result, "server_version": VERSION, "session_health": session_health()}
 
 
 @mcp.tool(annotations=READ)
@@ -275,9 +277,9 @@ async def creo_callback_status() -> dict[str, Any]:
 
 @mcp.tool(annotations=CREATE)
 async def creo_startup_status(retry: bool = False) -> dict[str, Any]:
-    """Read a background snapshot with verified_at, verification_age_seconds and stale. retry=true rechecks the channel within 180s preparation plus configured startup budget; overlapping retries share coordination. Unreadable startup history can be archived/rebuilt only when it predates a verified Windows reboot, both recovery locks are held and no Creo session exists; startup_recovery identifies the backup. Same-boot/unverified history requires manual reconciliation. waiting_for_channel includes busy details. Never closes Creo, clears unknown job/model reservations or replays jobs. Poll until ready; inspect recovery guidance otherwise."""
+    """Read a background snapshot with verified_at, verification_age_seconds and stale. retry=true rechecks the channel within 180s preparation plus configured startup budget; overlapping retries share coordination. Unreadable startup history can be archived/rebuilt only when it predates a verified Windows reboot, both recovery locks are held and no Creo session exists; startup_recovery identifies the backup. Same-boot/unverified history requires manual reconciliation. waiting_for_channel includes busy details. Never closes Creo, clears unknown job/model reservations or replays jobs. Poll until ready; inspect recovery guidance otherwise. session_health is a read-only evidence summary (unknown/suspected_damage/no_failure_observed) built from recorded save/connection results; it opens no connection, saves nothing and is not a health guarantee."""
     result = await invoke(startup.start, retry=True) if retry else await invoke(startup.status)
-    return {**result, "update": updates.snapshot()}
+    return {**result, "update": updates.snapshot(), "session_health": session_health()}
 
 
 @mcp.tool(annotations=NETWORK_READ)

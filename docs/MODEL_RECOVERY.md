@@ -25,6 +25,26 @@
 - **accept 两动作已在健康会话闭环**：accept_saved/accept_live 在健康会话各 3/3 实机通过（[BUG-078 根因记录](validation/BUG078-ROOT-CAUSE-2026-10-22.md)）；若仍遇 Backup -1，保留现场与诊断转 BUG-078，不自行用延迟、重试或替换保存路径规避。
 - **三个历史挂起模型**（`de6f0bb5…`/`bebe7e2b…`/`57294ff8…`）live 已缺失、仅 `restore_baseline` 可用：绝不自动 apply 或清保护，等待操作者明确选择后执行，原始异常历史保留。
 
+## 会话健康证据（session_health，BUG-078）
+
+`creo_startup_status` 与 `creo_session_status` 的响应新增只读字段 `session_health`，用于在**不产生任何新 Toolkit 调用**的前提下说明“这台会话最近的保存/连接事实”。`creo_startup_status()` 本身不连接 Creo，因此该字段可在通道冻结或会话可疑时安全查询；`creo_session_status` 复用本次探测已完成的结果，不额外连接、不保存、不探测。
+
+| `status` | 含义 | 用户下一步 |
+| --- | --- | --- |
+| `unknown` | 无证据、证据不可读、超过证据窗口（600 秒）、会话身份不明，或身份已过期 | 先用 `creo_session_status` 取得一次只读观测；崩溃/失联后按本文件前述流程保留作业并 inspect |
+| `suspected_damage` | 当前会话内记录了保存失败（如 `ProMdlnameBackup` -1）或 `unknown_outcome` 保护 | 立即停止重试，保留原作业与诊断，先持久化 `creo_reconcile_model(mode="inspect")` |
+| `no_failure_observed` | 当前会话在窗口内有一次已验证保存 | 仅表示“近期没观察到失败”，**不是健康保证** |
+
+使用要点：
+
+- **只读**：该字段不取 Toolkit 通道锁、不建连接、不保存、不写文件、不清保护；它只汇总已落盘的作业结果与最近一次探针结果，所以查询它不会改变模型、revision、未知保护或恢复历史。
+- **不是健康保证**：`no_failure_observed` 只代表当前会话在窗口内没有保存失败记录；连接成功和历史成功都不证明下一次 `Backup` 会成功。保存是否成功只看作业的 `saved_file_reloaded_and_verified`。
+- **会话重建会让旧证据失效**：字段里的 `session.identity` 是原生会话指纹。换会话后 `session.changed=true`，旧会话的成功不会被沿用；请重新观测后再写模型。
+- **繁忙如实表达**：`facts.channel.busy=true` 表示通道登记里有正在进行的调用，此时 `next_steps` 首条是等待占用作业；本字段不会因为无法刷新而假装健康，也不会去试锁造成误判。
+- **不可读如实表达**：证据文件权限不足或损坏时返回 `unknown` 且 `reason=evidence_unreadable`，并在 `evidence.jobs_unreadable`/`evidence.problems` 列出，不猜测结论。
+
+`suspected_damage` 的建议顺序（与上面的挂起现场指引一致）：保留原 `job_id`/`model_id`、失败作业与 native 日志 → 持久化 inspect 取得最新 `available/reason` 与 `evidence_token` → 由操作者选择动作并 apply → 若会话已损坏，**人工确认**关闭并重新打开 Creo，本服务不会自动重启 Creo、不会自动清保护 → 重建后重新观测再保存。
+
 ## 明确选择动作
 
 | action | 结果 | revision |
