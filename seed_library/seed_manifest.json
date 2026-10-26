@@ -1,6 +1,6 @@
 {
   "name": "MCP_CREO_MechDog reference seed library",
-  "compatible_server_version": "0.5.3",
+  "compatible_server_version": "0.6.0",
   "tested_creo": "10.0.0.0",
   "source_package_includes_this_library": true,
   "target_computer_runtime_validation_required": true,

@@ -4,9 +4,9 @@
 
 优先级：P1
 
-状态：开发者实机已通过；WorkBuddy 黑盒待验收（不据此判整批交付或发布）
+状态：开发者实机已通过、随 0.6.0 发布候选交付；WorkBuddy 黑盒经用户 2026-10-26 决定取消（未执行、不记通过，不再作为本批发布门槛）
 
-目标版本：下一 MINOR（0.5.0 反馈第二批）
+目标版本：0.6.0（发布候选，远端 Release 待合入 main 后发布；0.5.0 反馈第二批）
 
 来源与关联：[装配编辑流程改进建议 P1-1](../validation/feedback-0.5.0-2026-10-22/2026-10-22_CREO10_v0.5.0_装配编辑流程改进建议.md)（外部 Creo 10 / 0.5.0 实操 asm_mx → asm_edit_demo；P1-2 多组件单作业归 FEAT-008 现有 `creo_execute_plan` 示例与验收，不在本卡）；[0.5.0 反馈整合计划](../development/0.5.0-FEEDBACK-PLAN-2026-10-22.md) 第二批；关联 [FEAT-008](FEAT-008.md)、[DEV-046](DEV-046.md)。
 
@@ -141,7 +141,15 @@ md050 原生 worker 存活（checkpoint `native_pid` 身份与 `creo_worker.exe`
 [BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md](../development/BATCH2-STAGE4-REVIEW-CLOSEOUT-2026-10-25.md)。
 实机仍待统一安排。
 
-### 2026-10-26 开发者实机验收（WorkBuddy 待）
+### 2026-10-26 0.6.0 发布候选收口
+
+用户当日明确取消本批 WorkBuddy 测试（未执行，不冒充通过）并授权符合条件后
+直接合入 main 与发布 Release；本卡已交付范围随 0.6.0 发布候选收口（版本元数据
+与种子包 digest 同步，收养实现自 b86/aac3c84 起未变）。合入、标签、Release 与
+附件核对由控制者执行；本卡其余范围（不健康收养、装配整体收养等）继续按
+"不包含"开放。
+
+### 2026-10-26 开发者实机验收（WorkBuddy 已取消未执行）
 
 两批真实 MCP 实机通过（源码 aac3c84，与最终 production 相同；关键值经人工
 核对 raw 报告；文件 SHA256 见

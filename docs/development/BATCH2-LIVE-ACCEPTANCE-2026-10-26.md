@@ -189,7 +189,19 @@ exit 0 / success / quiet / released。六轮共发现 10 个作业，全部 succ
 三个打开作业各只执行一次，其余为公开只读检查。没有 unknown 或原生失败。
 root 最后只读画面确认健康 A 正常显示，无阻塞对话框。
 
-## WorkBuddy 与未测范围（必须保留）
+## 2026-10-26 最新用户决定（追加）
+
+用户当日明确决定：取消本批 WorkBuddy 黑盒测试（**未执行**，已备提示词
+`build/workbuddy_batch2_20261026/PROMPT-UTF8.txt` 不产生黑盒结果），不再请求
+UI 共享；并授权在符合条件后直接合入 main 与发布 Release。上述第 1～7 节验收
+事实与发生时状态保持原样，WorkBuddy 取消不改变其结论，也不把任何开发者 MCP
+证据改称为 WorkBuddy 通过。0.6.0 发布候选的只读收口（版本元数据、种子包
+digest、当前文档）在业务实现不变的前提下另行提交；合入、标签、Release 与
+附件核对由控制者执行。
+
+## 取消前的 WorkBuddy 状态与未测范围（保留当时事实）
+
+以下共享阻塞是用户取消测试前的记录；当前决定以上一节为准，不再要求 WorkBuddy。
 
 - WorkBuddy 黑盒**仍未运行**：最新重启后工具看到整个屏幕为 read，WorkBuddy
   已恢复显示，但没有单独 control 共享；须由用户在 Codeg 的 Computer use
