@@ -521,7 +521,6 @@
     "tools/test_extended.py": "36f4129426ad39eab16c9ce921279a492f74a22e689a4da501bd0484f045f94d",
     "tools/test_general.py": "f2726dcf004cec6dbfb800fb47b5dae55aeab364da80d8b99f4f486fb5d18e96",
     "tools/test_guards.py": "9437874f26c095e28865de482ca082c1cb0cec8f3a4bc69a83123eeb2fadba91",
-    "tools/test_installation_loft.py": "f3b91b635f17c83b16937ac04b70fa5545d46e042e63a3193757b0323553092e",
     "tools/test_loft_seed.py": "b802fda5c532b3dbe8dd03eb541bd0eb210fc0137e062b7e3f7195a8cfdc48e1",
     "tools/test_mcp.py": "5644154cf4b8d40bc016fc5336c0fe682d367f402985038985f743c4860389f1",
     "tools/test_multisection_blend.py": "640d47ed1747c26c64841ba4990174acd5dea1b403d2f87ae78696a15cd2b4af",
