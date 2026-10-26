@@ -368,6 +368,16 @@ class Acceptance:
             assert len(bodies) == 1, bodies
             near(bodies[0]["bbox"], bounds)
 
+    def alias(self, snapshot: dict, label: str) -> dict:
+        # A snapshot whose aliases section was unavailable has no key at all;
+        # fail with the snapshot shape instead of a bare KeyError.
+        aliases = snapshot.get("aliases") or {}
+        assert label in aliases, {
+            "snapshot_keys": sorted(snapshot),
+            "aliases": aliases,
+        }
+        return aliases[label]
+
     async def tilted(self, direction: str, principal: bool = False, through: bool = False) -> None:
         setup = [] if principal else tilt_setup()
         plane = (
@@ -385,7 +395,7 @@ class Acceptance:
             ]
         )
         before = await self.snapshot(result["model_id"])
-        frame = before["aliases"]["profile"]
+        frame = self.alias(before, "profile")
         if not principal:
             # Datum orientation is native; geometric plane must have the fixed normal line.
             near(abs(dot(frame["normal"], unit(TILTED_NORMAL))), 1, 1e-6)
@@ -425,7 +435,7 @@ class Acceptance:
         self.save()
 
     def axis(self, snapshot: dict, label: str, expected: list) -> dict:
-        feature_id = snapshot["aliases"][label]["feature_id"]
+        feature_id = self.alias(snapshot, label)["feature_id"]
         axes = [a for a in snapshot["inspection"]["datum_axes"] if a["feature_id"] == feature_id]
         assert len(axes) == 1, axes
         axis = axes[0]
@@ -452,7 +462,12 @@ class Acceptance:
             for s in snap["inspection"]["surfaces"]
             if s.get("radius") is not None and abs(s["radius"] - 30) <= TOL
         ]
-        assert len(cylinders) == 1, cylinders
+        # Creo may split the base cylinder where sketch reference lines cross
+        # it; co-axial same-radius pieces are still one analytical cylinder.
+        assert cylinders, snap["inspection"]["surfaces"]
+        assert (
+            len({(round(s["origin"][0], 6), round(s["origin"][1], 6)) for s in cylinders}) == 1
+        ), cylinders
         base_planes = []
         for coordinate in (0, 1):
             candidates = [
@@ -484,7 +499,7 @@ class Acceptance:
         snap = await self.snapshot(result["model_id"])
         refs = []
         for label, coordinate in (("axis_x", 0), ("axis_y", 1)):
-            fid = snap["aliases"][label]["feature_id"]
+            fid = self.alias(snap, label)["feature_id"]
             geometries = [
                 g
                 for f in snap["inspection"]["features"]
@@ -549,10 +564,16 @@ class Acceptance:
             for i in range(count)
         ]
         actual = []
+        seen_centers = set()
         for surface in after["inspection"]["surfaces"]:
             if surface.get("radius") is not None and abs(surface["radius"] - 1) <= TOL:
                 near(abs(dot(surface["axis"], [0, 0, 1])), 1)
-                actual.append([surface["origin"][0], surface["origin"][1], 0])
+                center = (round(surface["origin"][0], 6), round(surface["origin"][1], 6))
+                # A hole whose cylinder Creo split at a reference line still
+                # counts once; each expected hole keeps exactly one center.
+                if center not in seen_centers:
+                    seen_centers.add(center)
+                    actual.append([surface["origin"][0], surface["origin"][1], 0])
         match_centers(actual, expected)
         self.check_snapshot(after, math.pi * (900 - count) * 6)
         near(
@@ -571,15 +592,20 @@ class Acceptance:
         restored = await self.snapshot(result["model_id"])
         assert restored["revision"] == after["revision"], (failed, restored)
         self.check_snapshot(restored, after["inspection"]["volume_mm3"])
+        assert "aliases" in restored and "aliases" in after, {
+            "restored_keys": sorted(restored),
+            "after_keys": sorted(after),
+        }
         assert restored["aliases"] == after["aliases"]
-        match_centers(
-            [
-                [s["origin"][0], s["origin"][1], 0]
-                for s in restored["inspection"]["surfaces"]
-                if s.get("radius") is not None and abs(s["radius"] - 1) <= TOL
-            ],
-            expected,
-        )
+        restored_holes = []
+        restored_seen = set()
+        for s in restored["inspection"]["surfaces"]:
+            if s.get("radius") is not None and abs(s["radius"] - 1) <= TOL:
+                center = (round(s["origin"][0], 6), round(s["origin"][1], 6))
+                if center not in restored_seen:
+                    restored_seen.add(center)
+                    restored_holes.append([s["origin"][0], s["origin"][1], 0])
+        match_centers(restored_holes, expected)
         self.report["cases"].append(
             {
                 "case": "axis_pattern",

@@ -870,6 +870,32 @@ static void redefine(ProFeature *f, ProElement root) {
 }
 #include "sketch_coordinates.cpp"
 #include "sketch_solver.cpp"
+// BUG-064/T05: datum-plane projections into a sketch only succeed when the
+// plane is orthogonal to the support plane. On a tilted support every
+// principal datum plane is oblique, so the sketch is left with the single
+// orientation projection and ProSectionSolve fails. A datum axis parallel to
+// the support plane still projects to a line reference; collect those axes.
+struct AxisRef {
+    int id;
+    V direction;
+};
+static std::vector<AxisRef> axis_refs;
+static ProError axis_ref_cb(ProGeomitem *item, ProError status, ProAppData) {
+    if (status)
+        return PRO_TK_NO_ERROR;
+    AxisGeometry geometry = inspect_axis_geometry(item);
+    if (geometry.known)
+        axis_refs.push_back(
+            {item->id, {geometry.direction[0], geometry.direction[1], geometry.direction[2]}});
+    return PRO_TK_NO_ERROR;
+}
+static ProError axis_feat_cb(ProFeature *f, ProError status, ProAppData) {
+    ProFeattype type;
+    if (!status && ProFeatureTypeGet(f, &type) == PRO_TK_NO_ERROR &&
+        (type == PRO_FEAT_DATUM_AXIS || type == PRO_FEAT_DATUM))
+        ProFeatureGeomitemVisit(f, PRO_AXIS, axis_ref_cb, nullptr, nullptr);
+    return PRO_TK_NO_ERROR;
+}
 static J sketch(const J &op) {
     Frame frame = sketch_frame(op);
     ProSelection plane_ref = selection(frame.surface, PRO_SURFACE),
@@ -907,6 +933,36 @@ static J sketch(const J &op) {
                 break;
             }
         }
+    }
+    if (coordinate_anchors.size() == 1) {
+        // No orthogonal datum plane existed, so the section carries only the
+        // orientation reference and ProSectionSolve fails. Fall back to a
+        // datum axis parallel to the support plane; its projection is a line
+        // reference. An oblique axis would project to a point and is skipped.
+        V orient_normal = frame.n;
+        for (auto &p : planes)
+            if (p.id == frame.orientation)
+                orient_normal = {p.n[0], p.n[1], p.n[2]};
+        V orient_line = cross(frame.n, orient_normal);
+        double length = sqrt(dot(orient_line, orient_line));
+        axis_refs.clear();
+        CK(ProSolidFeatVisit((ProSolid)board, axis_feat_cb, nullptr, nullptr));
+        for (auto &a : axis_refs) {
+            if (fabs(dot(a.direction, frame.n)) > 1e-6)
+                continue;
+            if (length > 1e-9 && fabs(dot(a.direction, orient_line)) / length > 1 - 1e-6)
+                continue;
+            ProSelection s = selection(a.id, PRO_AXIS);
+            ProError e = ProSectionEntityFromProjection(section, s, &projected);
+            ProSelectionFree(&s);
+            log("PROJECT_REFERENCE_AXIS=%d code=%d entity=%d\n", a.id, e, projected);
+            if (!e) {
+                coordinate_anchors.push_back(projected);
+                break;
+            }
+        }
+        if (coordinate_anchors.size() == 1)
+            log("SKETCH_REFERENCE_INCOMPLETE axes=%d\n", (int)axis_refs.size());
     }
     ProMatrix loc;
     CK(ProSectionLocationGet(section, loc));
@@ -1256,12 +1312,18 @@ static J extrude_or_revolve(const J &op, bool revolve) {
     } else {
         ProElement dep = node(root, PRO_E_STD_EXT_DEPTH), from = node(dep, PRO_E_EXT_DEPTH_FROM),
                    to = node(dep, PRO_E_EXT_DEPTH_TO);
-        integer(from, PRO_E_EXT_DEPTH_FROM_TYPE, PRO_EXT_DEPTH_FROM_NONE);
+        bool through_all = op.value("depth_type", "blind") == "through_all";
+        // A symmetric through-all cut must pierce both directions; TO_ALL with
+        // FROM_NONE only removes material on one side (measured as half the
+        // expected volume in the T05 acceptance matrix).
+        integer(from, PRO_E_EXT_DEPTH_FROM_TYPE,
+                through_all && direction == "symmetric" ? PRO_EXT_DEPTH_FROM_ALL
+                                                        : PRO_EXT_DEPTH_FROM_NONE);
         integer(to, PRO_E_EXT_DEPTH_TO_TYPE,
-                op.value("depth_type", "blind") == "through_all" ? PRO_EXT_DEPTH_TO_ALL
-                : direction == "symmetric"                       ? PRO_EXT_DEPTH_SYMMETRIC
-                                                                 : PRO_EXT_DEPTH_TO_BLIND);
-        if (op.value("depth_type", "blind") != "through_all")
+                through_all                ? PRO_EXT_DEPTH_TO_ALL
+                : direction == "symmetric" ? PRO_EXT_DEPTH_SYMMETRIC
+                                           : PRO_EXT_DEPTH_TO_BLIND);
+        if (!through_all)
             real(to, PRO_E_EXT_DEPTH_TO_VALUE, op.at("depth"));
     }
     ProFeature f = {};

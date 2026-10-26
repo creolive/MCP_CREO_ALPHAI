@@ -237,6 +237,19 @@ def inspect_page(
                 "snapshot": response["snapshot"],
             },
         }
+        # Split registry records keep inspection/aliases in sidecars (BUG-077);
+        # resolve them here so this shape carries the same sections the paged
+        # shape serves from section_records, instead of only their *_ref stubs.
+        if "inspection" not in whole and model.get("inspection_ref") is not None:
+            resolved = full_inspection_of_model(model)
+            if resolved:
+                whole["inspection"] = resolved
+        if "aliases" not in whole and model.get("aliases_ref") is not None:
+            from creo_mechdog.model_registry import aliases_of
+
+            resolved = aliases_of(model)
+            if isinstance(resolved, dict):
+                whole["aliases"] = resolved
         if (
             serialized_size(whole) <= RESPONSE_BUDGET
             and max((len(section_records(model, name) or []) for name in SECTIONS), default=0)

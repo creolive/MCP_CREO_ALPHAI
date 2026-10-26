@@ -71,3 +71,57 @@ Live02 在 `492c069d6e5373d017e7910ff65daeb437c556ed`、dirty=true 上运行，�
 为单独验证 T05 下游几何，本次将解析驱动的矩形和圆显式请求 `dimensioning="coordinates"`，并在报告记录 fixture_sketch_dimensioning。它们的坐标/尺寸已完全给定，已有 T04 路径接受这些图元和任意有效平面；没有改变生产 solver 路由、容差或算法，也没有把原来的 auto/autodim 失败隐藏、关闭或标为通过。BUG-064 保留该真实失败，coordinates 的本次实机行为仍须由后续 Live03 取得证据。
 
 覆盖回归检查主平面/倾斜字典平面下 rectangle/circle 的 coordinates 请求经公共 schema 保留；`python -m unittest tests.unit.test_t05_geometry tests.unit.test_model_queries tests.unit.test_t03_plane_reference tests.unit.test_helper_layout -q` 共 43 项通过（2.251 秒），两文件 Ruff check/format 通过。修改仅驱动、离线回归与分阶段记录；本实现者未运行实机，原生代码/worker 未改。
+
+## Live03/Live04：倾斜面草图根因定位、两处原生修复与毫米矩阵全通过
+
+用户指示继续完成 T05 后，本会话先以只读 `creo_startup_status`（retry 刷新，2026-10-26T13:22Z connected=true、toolkit_code=0）核验既有会话可操作，再开始受控实验。Live02 遗留的两次未记录尝试（20:55/20:58，`build/t05-native-03.json`、`build/t05-native-04.json`）先被核对：coordinates 请求仍在倾斜面草图失败（job `f29eb836b18e408e80d66c9d3dd24de1`），且驱动在快照无 `aliases` 键时 `KeyError`。
+
+### 根因定位（变量分离探针）
+
+MCP 连接器对本机 `creo_execute_plan`/`creo_create_sketch` 的复合 union 数组参数校验拒绝（既有已知边界），实验改经 stdio 直连 server 的探针脚本（`build/t05_probe.py`，本机生成物，临时将忽略的 `config.json` `auto_start_creo` 置 false 并在 finally 恢复字节）。P1—P12 变量分离结论（`build/t05-probe-live.json`，SHA256 `0920A4A3112A346B6A44FA94A4F8509F515F8BF20399B4722C71CB5299CCA6C9`）：
+
+- **倾斜支撑面上任何草图都失败**：单线/圆/矩形的 coordinates 与 autodim 全部 `SKETCH_SOLVE=-1`（P1—P4、P9—P11）；与标注模式、实体类型、u_axis 选择、旋转轴无关（P9 省略 u_axis、P10 绕 X 轴倾斜同样失败）。
+- **主平面与新建平行/偏移基准面全部成功**（P5—P8），排除"新建基准面特征"混杂因素。
+- 决定性对照：**第二投影参考线**。成功案例均有一条 orient 之外的正交基准面投影（`PROJECT_REFERENCE code=0`）；倾斜面上主基准面与支撑面法向点积 0.588/0.809（非正交），`ProSectionEntityFromProjection` 全部返回 `PRO_TK_BAD_INPUTS(-2)`，section 只剩 orient 一条参照线，`ProSectionSolve` 随即失败。手工添加普通 construction 线无效（P11）；新建一个与支撑面正交的辅助基准面后同一草图成功（P12）——必须是投影参考实体。
+
+### 修复一：平行基准轴投影回退（native/generic.cpp）
+
+面投影循环无果且 section 仅剩 orient 参照时，枚举基准轴（`ProFeatureGeomitemVisit(PRO_AXIS)`，特征类型含 `PRO_FEAT_DATUM_AXIS`），取与支撑面平行（|dot(direction, normal)|≤1e-6，斜交轴投影为点，跳过）且与 orient 投影线不共线的轴投影为第二参照线，日志 `PROJECT_REFERENCE_AXIS`；仍无可用参照时记录 `SKETCH_REFERENCE_INCOMPLETE`。该回退使 T05 场景（旋转建面必带基准轴）全部恢复；无轴模型保持原失败路径不恶化。首次实现遗漏 `PRO_FEAT_DATUM_AXIS` 类型导致收集为空，已修正并复测。
+
+### 修复二：symmetric+through_all 只切单侧（native/generic.cpp）
+
+第三次矩阵实测验出 Live02 记录预判的元素树疑点：`PRO_E_EXT_DEPTH_FROM_TYPE=FROM_NONE + TO_TYPE=TO_ALL` 使对称贯穿仅单侧去料（实测 2352 mm³，期望 2304，去料 48≠96）。修复为 symmetric+through_all 时 `FROM_ALL + TO_ALL` 双侧贯穿；单向 through_all 与 blind symmetric 的实测正确组合保持不变。
+
+### 修复三：拆分记录的 full 快照丢段（src/creo_mechdog/model_queries.py）
+
+BUG-077 拆分后模型记录只含 `aliases_ref`/`inspection_ref`；`inspect_page` 的小模型 whole 快路径原样返回模型键，`detail=full` 响应丢失 aliases/inspection（`read_full_model` 与驱动由此 `KeyError: 'aliases'`，即 20:58 native-04 的失败形态）。whole 快路径现按受控引用解析并内联两段，与分页形态一致；32 KiB 预算检查在补齐后执行，超预算自然落回分页路径。新增单测 `test_split_small_full_snapshot_resolves_sidecar_sections`。驱动侧同步改为缺键时给出快照形状的明确断言（`alias()` 辅助）。
+
+另修正驱动两处断言假设：Creo 会在草图参照线穿过柱面处将其分割为同轴多面片（本机复现：XY 偏心圆 r30 对称拉伸即得 2 片，与本次修复无关），基体柱面断言改为共轴集合，孔中心收集按位置去重后保持双射核对。
+
+### Live03 最终矩阵结果
+
+受测提交 `5632622` + 本次工作区改动（dirty=true），驱动 provenance 源码指纹 `f22aa24ab9abc78700e03f8afcbdf5062643dfb89b61864960ad11954517b0e5`。原始报告 `build/t05-native-05.json`（SHA256 `D7F188B1C7323C9616CFAEB88DA628916DEFE39620443179881C2B7F09671F80`）与日志（SHA256 `418A5C17F33C70E99B0CC0A07FCE69191489CFEDC94164BFA903785777C5BD4B`）保持不变。821 次公开调用，**18/18 案例通过，`metric_geometry_matrix=passed`、`native_acceptance=partial`**（非毫米/unknown 原生覆盖按既定边界 pending）：
+
+- 拉伸 9 案例：倾斜面与主平面 × 正/负/对称盲深（800 mm³、完整 AABB 与重心）× 正/负/对称 through_all（去料 48/48/96 精确区分单双向）。
+- 阵列 9 案例：偏心 (4,-3) 两平面交线轴与柱面轴 × count=2/10 × ±36°，另含过原点对照；Rodrigues 解析位置与实际孔心逐点双射一致，额外去料 `(count-1)×π×1²×6` 精确。
+- 每个成功作业 `saved_file_reloaded_and_verified=true`；每个阵列后不相交切除按预期 failed、真实回滚（revision/别名/孔位/体积恢复断言）。
+- 轴观测字段（origin/direction/查询码/length_unit）在操作结果与巡检两侧被断言使用。
+
+矩阵完成后的纯格式化（clang-format）重编无语义变化，最终 worker SHA256 `D4D0D1498FE5BE6ACBEA5DF9C1B20E5F63A6234435AC9C066FF514EBF274F42A`，并以 P11/P12 探针冒烟确认行为不变。
+
+### 最终离线检查
+
+| 命令/检查 | 结果 |
+| --- | --- |
+| `python -m unittest tests.unit.test_model_queries -q` | 14 项通过（含新增拆分 whole 快照用例） |
+| `python -m unittest discover -s tests -q` | 全量通过（exit 0，约 800 项） |
+| 变更文件 Ruff check/format | 通过（含 clang-format -i 后 0 回归） |
+| `python bridge.py build` | 通过；最终 `creo_worker.exe` SHA256 `D4D0D149...F274F42A` |
+| `python tools/dev_check.py --work-item BUG-065` | exit 0、success=true、unit_tests=passed；证据 `build/development_check.json`、`build/t05-devcheck-final.log` |
+
+### 未测与保留范围
+
+- 外部 Creo 10 原案例（BUG-063 齿轮阵列、BUG-064 surface 引用与 Zero direction vector 原报文、BUG-065 两平面交线退化）未在外部环境复现；本机 Creo 12.4 的正确行为不外推。
+- 无基准轴模型上倾斜面草图仍失败（`SKETCH_REFERENCE_INCOMPLETE` 日志可判别）；自动创建辅助参照属能力扩展，未实施，待集成负责人决定登记。
+- 非毫米坐标、unknown 单位/查询失败的原生覆盖仍 pending；混合单位仅适用装配证据。
+- 斜交平面建轴、单平面法向建轴、surface+autodim 与 Right ±Z 的完整历史回归未在本轮执行（归 T03/T04 实机矩阵与 T13 集成复跑）。
