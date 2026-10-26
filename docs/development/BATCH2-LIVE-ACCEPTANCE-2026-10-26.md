@@ -160,10 +160,40 @@ visible Creo 窗口无挂起，当前模型为空。该次启动历史显示
 `b5ad5d5` 的 338 个 `docs/validation/` 文件与当前逐字节一致。未清历史 pending、
 unknown 或其他保护。新会话的 WorkBuddy 场景需重新读取驻留状态并打开只读原装配。
 
+随后由“写程序高手”完成开发者只读夹具准备，报告
+`md050/build/fixture_prep_reopen_20261026T002632/report.json`（SHA256
+`4337e4ea936a1af008893cf54d2d70d67a1dc602e156b91a8b1989140dcfb470`），
+仍不是 WorkBuddy 验收。三个公开 `creo_open_file` 作业分别为原装配
+`aaeae77143f44d79a861960c66241c69`、依赖参考件副本
+`85efd21e9e8a470bbff43ffe0d13d49c`、专属健康 A
+`8ba211df64274c02ab64cd9cd27186a8`，均 succeeded、`adopted=false`、
+`model_id=null`、`source_file_changed_during_open=false`。原装配已驻留，
+没有重新收养或推进原装配 revision。
+
+原装配公开只读检查 complete/resolved，occurrence_path 为 [40]/[43]/[46]；
+冻结原始结果 `frozen_assembly.json` SHA256
+`1a6197493593a708e0a9c70fa04a8b2a235ca2c87353246177aa262c1ddece83`。
+最终驻留 6 个对象且全部 modified=false；健康 A 精确来自专属只读夹具路径，
+未收养且为当前模型，B/bad/inch/依赖源件均未加载。session fingerprint 为
+`8109163335419786528`。原装配输出目录、原 model.json 与三个打开输入的 9 个
+唯一文件前后 hash/只读属性相等，root 复核当前字节仍一致；原登记保持
+ready/revision 2/pending=null。准备步骤允许显示不同夹具；后续收养“窗口不变”
+须由 WorkBuddy 以它自己读取的当前窗口为基线判断。
+
+准备驱动共留下 6 份独立 guard 报告：前 5 份 exit 2（驱动 API/字段/轮询检查
+错误或新 MCP 启动尚在 building_worker），不计通过；其中实际打开成功的对象
+留在会话，未重提打开作业，没有清理会话。最终只读核对 guard
+`canonical/build/guarded_live_20261026T003815225709/report.json`（SHA256
+`94e45500b911161a5a68643fbcb27634f90a001c92dd0b7ac25fc6cd5fe0bfde`）
+exit 0 / success / quiet / released。六轮共发现 10 个作业，全部 succeeded；
+三个打开作业各只执行一次，其余为公开只读检查。没有 unknown 或原生失败。
+root 最后只读画面确认健康 A 正常显示，无阻塞对话框。
+
 ## WorkBuddy 与未测范围（必须保留）
 
 - WorkBuddy 黑盒**仍未运行**：最新重启后工具看到整个屏幕为 read，WorkBuddy
-  窗口最小化且没有单独 control 共享；须由用户在 Computer use 改为读取和操作。
+  已恢复显示，但没有单独 control 共享；须由用户在 Codeg 的 Computer use
+  改为读取和操作（不是 WorkBuddy 自身设置）。
   已备独立纯 MCP 提示词 `build/workbuddy_batch2_20261026/PROMPT-UTF8.txt`，但无黑盒结果。
   **当前不能判整批交付或发布。**
 - 未实机：并发/通道忙交错、unknown 自然分支与断连故障注入、其他 Creo 版本
