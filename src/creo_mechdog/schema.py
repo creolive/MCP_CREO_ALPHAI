@@ -816,6 +816,34 @@ class RemoveComponentOp(StrictModel):
     component: str | int
 
 
+def _normalize_feature_target(value: Any) -> Any:
+    if isinstance(value, bool):
+        raise ValueError("Feature targets must be feature labels or nonnegative feature IDs")
+    # A label always starts with a lowercase letter, so a digit-only string is
+    # the stringified ID branch of the public label-or-ID contract (BUG-073).
+    if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+        value = int(value)
+    if type(value) is int and not 0 <= value <= 2147483647:
+        raise ValueError("Feature targets must be nonnegative 32-bit integers")
+    return value
+
+
+FeatureTarget = Annotated[Label | int, BeforeValidator(_normalize_feature_target)]
+
+
+class FeatureStateOp(StrictModel):
+    op: Literal["feature_state"]
+    action: Literal["delete", "suppress", "resume"]
+    targets: Annotated[list[FeatureTarget], Field(min_length=1, max_length=100)]
+
+    @model_validator(mode="after")
+    def distinct_targets(self):
+        keys = [("label", t) if isinstance(t, str) else ("id", t) for t in self.targets]
+        if len(keys) != len(set(keys)):
+            raise ValueError("feature_state targets must be distinct")
+        return self
+
+
 class GenericFeatureOp(StrictModel):
     op: Literal["feature_tree"]
     label: Label
@@ -1166,6 +1194,7 @@ Operation = Annotated[
         ComponentPlacementOp,
         ComponentConstraintsOp,
         RemoveComponentOp,
+        FeatureStateOp,
         GenericFeatureOp,
         SimpleOp,
         ExportOp,

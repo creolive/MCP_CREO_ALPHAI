@@ -713,6 +713,10 @@ async def creo_execute_plan(
     (succeeded/failed/not_executed/unknown) and effect_status
     (committed/rolled_back/no_effect/unknown); succeeded only reports execution, not
     the final transaction outcome.
+    feature_state delete/suppress/resume changes existing part/sheetmetal features by
+    explicit label or nonnegative feature ID. Every affected dependency must be listed;
+    a missing one returns the dependency list and refuses the plan. Deleted labels are
+    tombstones and cannot be reused; resume applies only to suppressed targets.
     round/chamfer use `size` (mm); as a standalone-tool alias they also accept
     radius (round) or distance (chamfer), but providing the alias together with
     size is rejected instead of silently preferring one.

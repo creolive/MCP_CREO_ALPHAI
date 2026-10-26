@@ -103,6 +103,31 @@ def annotate_native_result(
     )
     if inputs is not None:
         annotate_profiles(result, inputs)
+        annotate_feature_state(result, inputs)
+    return result
+
+
+def annotate_feature_state(result: dict[str, Any], inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Project each feature_state input's target detail onto its own record.
+
+    T02 keeps one terminal record per input; the per-target before/after list
+    is a specialized field of that single record. The native executor owns the
+    detail, so a missing list stays missing and is never fabricated here.
+    """
+    from creo_mechdog import feature_state
+
+    operations = result.get("operations")
+    if not isinstance(operations, list) or not isinstance(inputs, list):
+        return result
+    for position, operation in enumerate(operations):
+        if not isinstance(operation, dict) or operation.get("op") != "feature_state":
+            continue
+        source = inputs[position] if position < len(inputs) else None
+        if not (isinstance(source, dict) and source.get("op") == "feature_state"):
+            continue
+        targets = source.get("targets")
+        if isinstance(targets, list):
+            feature_state.project_operation(operation, targets)
     return result
 
 

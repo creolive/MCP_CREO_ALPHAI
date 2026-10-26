@@ -126,6 +126,20 @@ def model_summary(model: dict[str, Any]) -> dict[str, Any]:
     source = model.get("adopted_from")
     result["adopted"] = bool(source and source.get("state") == "completed")
     result["source_kind"] = (source or {}).get("source_kind", "file" if source else "created")
+    from creo_mechdog import feature_state
+
+    tombstones = feature_state.tombstones_of(model)
+    suppressed = feature_state.suppressed_of(model)
+    # Bounded preview: counts stay complete, entries are capped so one registry
+    # can never push a compact model summary past the 32 KiB page budget.
+    limit = 20
+    result["feature_state"] = {
+        "tombstone_count": len(tombstones),
+        "suppressed_count": len(suppressed),
+        "tombstones": dict(list(tombstones.items())[:limit]),
+        "suppressed": dict(list(suppressed.items())[:limit]),
+        "entries_truncated": len(tombstones) > limit or len(suppressed) > limit,
+    }
     return result
 
 

@@ -31,3 +31,11 @@
 R3 §2 P6、§6.3探针草图残留延续删除需求。已确认T08/0.7.0子项接口为execute_plan op=feature_state、action=delete/suppress/resume、显式targets（标签或非负ID），取代历史“接口未定”描述；依赖必须全显式覆盖，缺失返回清单并拒绝，不自动级联。删除标签墓碑归FEAT-027，抑制保留身份，resume只对已抑制对象；有意抑制集合参与健康/保存重载/回滚，系统必需和非法成员操作拒绝。此处固定契约，未实现或实际操作。
 
 共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
+
+## 2026-10-26 T08 离线交付子项
+
+`codex/dev047-t08-feature-state`（基线 `dda9c3c`）实现 `execute_plan` 的 `op="feature_state"`：`action=delete|suppress|resume`，显式标签或非负特征 ID 目标，复用既有 revision、单作业事务、失败回滚和 unknown 保护。巡检新增真实父子依赖、组/阵列成员状态、嵌入状态与系统必需标记；Python 准入与原生执行前复核都要求受影响依赖全部显式列出，缺失返回依赖清单并拒绝，不自动级联；系统必需对象和成员单独操作明确拒绝，assembly/drawing 指向 `remove_component`，组件删除不作为本卡验收。
+
+删除成功后 alias 移除并登记 `feature_tombstones`，旧标签的新建/目标/引用被明确拒绝；抑制保留特征 ID 并登记 `suppressed_features`，resume 仅接受已抑制对象。有意抑制集合进入健康检查、保存重载和回滚比较，未登记或登记与实际不一致保持 unhealthy，未整体放宽原有 failed/suppressed 检查。每条输入仍只有一条 T02 结果，逐目标 `before`/`after`/`effect` 放在该结果的 `targets` 字段。
+
+专项 32 项、全量单元、语言检查、SDK 构建与 dev_check 证据见 [T08 记录](../development/DEV047-T08-ACCEPTANCE-2026-10-26.md)。`tools/test_t08_feature_state.py` 已编写但**未运行**；本次未连接 Toolkit、未启动/结束 Creo、未清理 unknown 保护。基础拉伸/切除/基准的实机删除/抑制/恢复、特征树与体积、失败回滚和保存重载仍待 T13，父卡其他范围不变。

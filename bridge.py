@@ -1336,6 +1336,8 @@ def compact_job(manifest: dict) -> dict:
             "session_erase",
             "loaded",
             "session_fingerprint",
+            "feature_tombstones",
+            "suppressed_features",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary
@@ -1391,6 +1393,11 @@ def compact_job(manifest: dict) -> dict:
                     "native_section",
                     "preview_code",
                     "preview",
+                    "feature_state",
+                    "targets",
+                    "target_count",
+                    "requested_target_count",
+                    "targets_complete",
                     "elapsed_seconds",
                     "message",
                 )

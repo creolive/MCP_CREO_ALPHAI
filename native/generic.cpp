@@ -37,6 +37,7 @@
 #include <ProCurvedata.h>
 #include <ProIntf3dExport.h>
 #include <ProPart.h>
+#include <ProFeature.h>
 #include <ProCollect.h>
 #include <ProCrvcollection.h>
 #include <ProMirror.h>
@@ -79,6 +80,29 @@ static void append_operation_result(J result) {
 }
 static J datum_axes = J::array();
 static J length_unit_json(const InspectionLengthUnits &units, const MillimeterScale &scale);
+// T08: deleted-label tombstones and the intentional suppression registry. Both
+// are persisted per model; only recorded suppression counts as healthy, and the
+// save/reload and rollback comparisons must match the recorded set exactly.
+static J feature_tombstones = J::object();
+static J suppressed_features = J::object();
+static std::set<int> recorded_suppressed;
+// Plan-level effects of the feature_state inputs actually executed, used only
+// for the committed save/reload comparison (never for rollback evidence).
+static J feature_state_effects = J::object();
+static bool feature_state_touched = false;
+// Rebuild the accepted-suppression set from the model's recorded registry.
+// Entries without a real feature ID are ignored here and reported by the
+// comparison that needs them (they never grant permission).
+static void refresh_recorded_suppressed() {
+    recorded_suppressed.clear();
+    for (auto &entry : suppressed_features) {
+        if (!entry.is_object())
+            continue;
+        auto id = entry.find("feature_id");
+        if (id != entry.end() && id->is_number_integer())
+            recorded_suppressed.insert(id->get<int>());
+    }
+}
 // Snapshot of unhealthy features captured by inspection() right before it
 // throws, so the failure response can carry feature-level diagnostics
 // (BUG-082 H4) instead of only the generic regeneration message.
@@ -153,6 +177,11 @@ static int feature_id(const J &ref) {
     }
     if (const J *entry = alias_entry(label))
         return entry->at("feature_id").get<int>();
+    // A deleted label is a tombstone: it must never resolve to another
+    // feature through a later reference (FEAT-027).
+    if (feature_tombstones.contains(label))
+        throw std::runtime_error("Feature label '" + label +
+                                 "' is a tombstone of a deleted feature and cannot be referenced");
     std::string known;
     int count = 0;
     for (auto it = aliases.begin(); it != aliases.end() && count < 10; ++it, ++count)
@@ -297,6 +326,47 @@ static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     J geometry = J::array();
     ProFeatureGeomitemVisit(f, PRO_TYPE_UNUSED, collect_geom_ids, nullptr, &geometry);
     item["geometry_items"] = geometry;
+    // T08 dependency evidence: parent/child feature IDs come from the live
+    // model, never from a guess based on feature order. Group, pattern and
+    // embedded state decide which targets may be operated on individually.
+    int *parents = nullptr;
+    int parent_count = 0;
+    ProError parents_code = ProFeatureParentsGet(f, &parents, &parent_count);
+    J parent_ids = J::array();
+    if (!parents_code) {
+        for (int i = 0; i < parent_count; i++)
+            parent_ids.push_back(parents[i]);
+        ProArrayFree((ProArray *)&parents);
+    }
+    item["parent_ids"] = parent_ids;
+    item["parents_query_code"] = parents_code;
+    int *children = nullptr;
+    int child_count = 0;
+    ProError children_code = ProFeatureChildrenGet(f, &children, &child_count);
+    J child_ids = J::array();
+    if (!children_code) {
+        for (int i = 0; i < child_count; i++)
+            child_ids.push_back(children[i]);
+        ProArrayFree((ProArray *)&children);
+    }
+    item["child_ids"] = child_ids;
+    item["children_query_code"] = children_code;
+    ProGroupStatus group_status = PRO_GROUP_NONE;
+    ProError group_code = ProFeatureGroupStatusGet(f, &group_status);
+    item["group_status"] = group_code ? J(nullptr) : J((int)group_status);
+    item["group_query_code"] = group_code;
+    ProPatternStatus pattern_status = PRO_PATTERN_NONE;
+    ProError pattern_code = ProFeaturePatternStatusGet(f, &pattern_status);
+    item["pattern_status"] = pattern_code ? J(nullptr) : J((int)pattern_status);
+    item["pattern_query_code"] = pattern_code;
+    ProGrppatternStatus grppattern_status = PRO_GRP_PATTERN_NONE;
+    ProError grppattern_code = ProFeatureGrppatternStatusGet(f, &grppattern_status);
+    item["grppattern_status"] = grppattern_code ? J(nullptr) : J((int)grppattern_status);
+    item["grppattern_query_code"] = grppattern_code;
+    ProBoolean embedded = PRO_B_FALSE;
+    ProError embedded_code = ProFeatureIsEmbedded(f, &embedded);
+    item["embedded"] = embedded_code ? J(nullptr) : J(embedded == PRO_B_TRUE);
+    item["embedded_query_code"] = embedded_code;
     if (t == PRO_FEAT_DATUM_AXIS) {
         J axes = feature_axes(f);
         item["axes_query_code"] = axes["axes_query_code"];
@@ -397,7 +467,7 @@ static ProError parameter_cb(ProParameter *param, ProError status, ProAppData da
     return PRO_TK_NO_ERROR;
 }
 static J assembly_inspection();
-static void verify_saved(const J &before, const J &after);
+static void verify_saved(const J &before, const J &after, bool feature_state_commit = false);
 static bool assembly_model() {
     ProMdlType t;
     CK(ProMdlTypeGet(board, &t));
@@ -410,29 +480,64 @@ static J inspection(bool require_healthy = true) {
     failed_features = J::array();
     visited_edges.clear();
     CK(ProSolidFeatVisit((ProSolid)board, inspect_feature, nullptr, nullptr));
+    // System-required objects: the model's default coordinate system and the
+    // template datum planes (a datum feature that is neither embedded nor
+    // constrained by a parent feature). Both facts come from the live model.
+    int default_csys_id = -1;
+    for (auto &f : gfeatures)
+        if (f["type"].get<int>() == PRO_FEAT_CSYS) {
+            default_csys_id = f["id"].get<int>();
+            break;
+        }
+    for (auto &f : gfeatures) {
+        bool system = f["id"].get<int>() == default_csys_id;
+        if (!system && f["type"].get<int>() == PRO_FEAT_DATUM &&
+            (f["embedded"].is_boolean() && !f["embedded"].get<bool>()) &&
+            f["parents_query_code"] == 0 && f["parent_ids"].empty())
+            system = true;
+        f["system_required"] = system;
+    }
+    // Suppression is only healthy when the model's recorded intentional set
+    // says so. A recorded entry that is missing or no longer suppressed marks
+    // the model unhealthy instead of silently widening the accepted state.
+    auto accepted_state = [](const J &f) {
+        if (f["incomplete"].get<bool>())
+            return false;
+        int status = f["status"].get<int>();
+        if (status == PRO_FEAT_ACTIVE)
+            return true;
+        int id = f["id"].get<int>();
+        return recorded_suppressed.count(id) > 0 || id == temporarily_suppressed_loft;
+    };
     bool healthy = true;
     for (auto &f : gfeatures)
-        if (f["incomplete"].get<bool>() || f["status"].get<int>() != PRO_FEAT_ACTIVE)
+        if (!accepted_state(f))
             healthy = false;
-    if (require_healthy && !healthy) {
-        bool expected_only = true;
-        for (auto f : gfeatures)
-            if (f["incomplete"].get<bool>() || (f["status"].get<int>() != PRO_FEAT_ACTIVE &&
-                                                f["id"].get<int>() != temporarily_suppressed_loft))
-                expected_only = false;
-        if (!expected_only) {
-            // Preserve the offending features (id/name/type/type_name/status/
-            // incomplete/geometry_items) before unwinding so the failure
-            // response can publish them (BUG-082 H4).
-            for (const auto &f : gfeatures)
-                if (f["incomplete"].get<bool>() ||
-                    (f["status"].get<int>() != PRO_FEAT_ACTIVE &&
-                     f["id"].get<int>() != temporarily_suppressed_loft))
-                    failed_features.push_back(f);
-            log("UNHEALTHY_FEATURES=%s\n", gfeatures.dump().c_str());
-            throw std::runtime_error(
-                "Regeneration produced a failed, suppressed or incomplete feature");
+    for (int id : recorded_suppressed) {
+        bool found = false, suppressed = false;
+        for (auto &f : gfeatures)
+            if (f["id"].get<int>() == id) {
+                found = true;
+                suppressed = f["status"].get<int>() == PRO_FEAT_SUPPRESSED;
+                break;
+            }
+        if (!found || !suppressed) {
+            healthy = false;
+            log("SUPPRESSION_REGISTRY_MISMATCH={\"feature_id\":%d,\"found\":%s,\"suppressed\":%s}"
+                "\n",
+                id, found ? "true" : "false", suppressed ? "true" : "false");
         }
+    }
+    if (require_healthy && !healthy) {
+        // Preserve the offending features (id/name/type/type_name/status/
+        // incomplete/geometry_items) before unwinding so the failure
+        // response can publish them (BUG-082 H4).
+        for (const auto &f : gfeatures)
+            if (!accepted_state(f))
+                failed_features.push_back(f);
+        log("UNHEALTHY_FEATURES=%s\n", gfeatures.dump().c_str());
+        throw std::runtime_error(
+            "Regeneration produced a failed, suppressed or incomplete feature");
     }
     J bodies = J::array();
     bool isasm = assembly_model(), solid = false;
@@ -2158,6 +2263,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "blend_create.cpp"
 #include "sketch_edit.cpp"
 #include "placement.cpp"
+#include "feature_state.cpp"
 static void execute_operation_body(const J &op) {
     std::string kind = op.at("op");
     J details = J::object();
@@ -2173,6 +2279,8 @@ static void execute_operation_body(const J &op) {
         generic_group(op);
     else if (kind == "reorder_features")
         generic_reorder(op);
+    else if (kind == "feature_state")
+        details = generic_feature_state(op);
     else if (kind == "axis_pattern")
         generic_axis_pattern(op);
     else if (kind == "geometry_transform")
@@ -2437,22 +2545,74 @@ static void verify_assertions(const J &state, const J &a) {
     if (a.value("require_solid", false) && !state["has_solid"].get<bool>())
         throw std::runtime_error("Solid assertion failed");
 }
-static void verify_saved(const J &before, const J &after) {
-    if (before["features"].size() != after["features"].size() ||
-        before["bodies"].size() != after["bodies"].size())
-        throw std::runtime_error("Saved feature/body count changed");
-    for (size_t i = 0; i < before["features"].size(); i++) {
-        auto a = before["features"][i], b = after["features"][i];
-        if (a["id"] != b["id"] || a["type"] != b["type"] || a["name"] != b["name"] ||
-            a["dimensions"].size() != b["dimensions"].size())
-            throw std::runtime_error("Saved feature or dimensions changed");
-        for (size_t j = 0; j < a["dimensions"].size(); j++)
-            if (a["dimensions"][j]["id"] != b["dimensions"][j]["id"] ||
-                fabs(a["dimensions"][j]["value"].get<double>() -
-                     b["dimensions"][j]["value"].get<double>()) > 1e-6)
-                throw std::runtime_error("Saved dimension value changed");
+static void verify_saved(const J &before, const J &after, bool feature_state_commit) {
+    // A committed feature_state plan is the only case where the saved model may
+    // legitimately lose features (delete), gain status changes (suppress/resume)
+    // and change volume. Every other path keeps the strict comparison.
+    std::set<int> deleted_ids;
+    J expected_status = J::object();
+    if (feature_state_commit) {
+        for (auto &id : feature_state_effects.value("deleted_ids", J::array()))
+            deleted_ids.insert(id.get<int>());
+        expected_status = feature_state_effects.value("status_expectations", J::object());
     }
-    if (!before["volume_mm3"].is_null() &&
+    if (!feature_state_commit) {
+        if (before["features"].size() != after["features"].size() ||
+            before["bodies"].size() != after["bodies"].size())
+            throw std::runtime_error("Saved feature/body count changed");
+    }
+    std::map<int, J> after_by_id;
+    for (auto &f : after["features"])
+        after_by_id[f["id"].get<int>()] = f;
+    auto status_of = [](const J &f, const char *key) {
+        return f.contains(key) && f[key].is_number_integer() ? f[key].get<int>() : -1;
+    };
+    if (feature_state_commit)
+        for (int id : deleted_ids)
+            if (after_by_id.count(id))
+                throw std::runtime_error("Saved model still contains a deleted feature");
+    for (size_t i = 0; i < before["features"].size(); i++) {
+        auto a = before["features"][i];
+        int id = a["id"].get<int>();
+        auto found = after_by_id.find(id);
+        if (found == after_by_id.end()) {
+            if (!feature_state_commit)
+                throw std::runtime_error("Saved feature/body count changed");
+            // A grouped/patterned member follows its header and is removed
+            // with it; only such covered removals may be implicit.
+            bool member = status_of(a, "group_status") == PRO_GROUP_MEMBER ||
+                          status_of(a, "pattern_status") == PRO_PATTERN_MEMBER ||
+                          status_of(a, "grppattern_status") == PRO_GRP_PATTERN_MEMBER;
+            if (!member)
+                throw std::runtime_error(
+                    "Saved feature disappeared outside the explicitly deleted set");
+            continue;
+        }
+        auto b = found->second;
+        int expected = a["status"].get<int>();
+        if (feature_state_commit) {
+            std::string key = std::to_string(id);
+            if (expected_status.contains(key))
+                expected = expected_status[key].get<int>();
+        }
+        // A suppressed feature's dimensions are not part of the geometry that
+        // regenerates; the status comparison below is the real assertion for
+        // that transition. Resumed and untouched features keep the full check.
+        bool dimensions_compare = expected != PRO_FEAT_SUPPRESSED;
+        if (a["id"] != b["id"] || a["type"] != b["type"] || a["name"] != b["name"] ||
+            (dimensions_compare && a["dimensions"].size() != b["dimensions"].size()))
+            throw std::runtime_error("Saved feature or dimensions changed");
+        if (dimensions_compare)
+            for (size_t j = 0; j < a["dimensions"].size(); j++)
+                if (a["dimensions"][j]["id"] != b["dimensions"][j]["id"] ||
+                    fabs(a["dimensions"][j]["value"].get<double>() -
+                         b["dimensions"][j]["value"].get<double>()) > 1e-6)
+                    throw std::runtime_error("Saved dimension value changed");
+        if (b["status"].get<int>() != expected)
+            throw std::runtime_error(
+                "Saved feature status does not match the requested feature_state");
+    }
+    if (!feature_state_commit && !before["volume_mm3"].is_null() &&
         (after["volume_mm3"].is_null() ||
          fabs(before["volume_mm3"].get<double>() - after["volume_mm3"].get<double>()) > 0.01))
         throw std::runtime_error("Saved solid volume changed");
@@ -4354,6 +4514,15 @@ static int run_generic(const std::wstring &job) {
         // inline aliases payload; legacy requests keep the inline dict (BUG-077).
         aliases = model.contains("aliases_ref") ? read_inspection_ref(model.at("aliases_ref"))
                                                 : model.at("aliases");
+        feature_tombstones =
+            model.contains("feature_tombstones") && model["feature_tombstones"].is_object()
+                ? model["feature_tombstones"]
+                : J::object();
+        suppressed_features =
+            model.contains("suppressed_features") && model["suppressed_features"].is_object()
+                ? model["suppressed_features"]
+                : J::object();
+        refresh_recorded_suppressed();
         component_sources = request.value("components", J::object());
         for (auto item = component_sources.begin(); item != component_sources.end(); ++item) {
             if (item.value().contains("aliases_ref"))
@@ -4532,8 +4701,19 @@ static int run_generic(const std::wstring &job) {
                 CK(ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board));
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 state = inspection();
-                verify_saved(before, state);
+                verify_saved(before, state, feature_state_touched);
                 verify_assertions(state, request.value("assertions", J::object()));
+                // The reloaded model must reproduce the recorded intentional
+                // suppression set exactly: recorded == actually suppressed.
+                if (feature_state_touched) {
+                    std::set<int> reloaded_suppressed;
+                    for (auto &f : state["features"])
+                        if (f["status"].get<int>() == PRO_FEAT_SUPPRESSED)
+                            reloaded_suppressed.insert(f["id"].get<int>());
+                    if (reloaded_suppressed != recorded_suppressed)
+                        throw std::runtime_error(
+                            "Saved model suppression set does not match the recorded registry");
+                }
                 generic_stage("after_reload_blend_validation");
                 report["loft_checks"]["after_reload"] = verify_loft_settings(L"after_reload");
                 report["saved_file_reloaded_and_verified"] = true;
@@ -4562,6 +4742,12 @@ static int run_generic(const std::wstring &job) {
                  {"preview", preview_json},
                  {"preview_file", preview_written(preview) ? J(utf8(preview.path)) : J(nullptr)},
                  {"operations", operation_results}});
+            if (feature_state_touched) {
+                // Model-level registries ride with the confirmed terminal
+                // state; they are never published from a failed job.
+                report["feature_tombstones"] = feature_tombstones;
+                report["suppressed_features"] = suppressed_features;
+            }
             log("BUILD_SUCCESS=1\n");
         }
     } catch (ProError error) {
@@ -4602,9 +4788,23 @@ static int run_generic(const std::wstring &job) {
             erased ? erased : ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board);
         if (!loaded) {
             try {
+                // Restore the model-level feature registries from the request
+                // before verifying the restored state: a partially executed
+                // suppress/delete must not leak into the accepted set.
+                const J &rollback_model = request["model"];
+                feature_tombstones = rollback_model.contains("feature_tombstones") &&
+                                             rollback_model["feature_tombstones"].is_object()
+                                         ? rollback_model["feature_tombstones"]
+                                         : J::object();
+                suppressed_features = rollback_model.contains("suppressed_features") &&
+                                              rollback_model["suppressed_features"].is_object()
+                                          ? rollback_model["suppressed_features"]
+                                          : J::object();
+                refresh_recorded_suppressed();
+                feature_state_effects = J::object();
+                feature_state_touched = false;
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 J restored = inspection();
-                const J &rollback_model = request["model"];
                 verify_saved(rollback_model.contains("inspection_ref")
                                  ? read_inspection_ref(rollback_model.at("inspection_ref"))
                                  : rollback_model["inspection"],

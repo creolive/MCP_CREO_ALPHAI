@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
-from creo_mechdog import component_changes, model_registry, operation_results
+from creo_mechdog import component_changes, feature_state, model_registry, operation_results
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -289,9 +289,17 @@ def submit(
                         "Nested assembly copying is not yet supported; insert owned part/sheetmetal models"
                     )
         aliases = model_registry.aliases_of(model) if not new else {}
-        duplicate = set(aliases).intersection(op["label"] for op in operations if "label" in op)
+        # Deleted labels are tombstones: they can never name a new feature
+        # (FEAT-027), so they are reserved exactly like existing aliases.
+        feature_state.reject_tombstoned_labels(model if not new else None, operations)
+        reserved = set(aliases) | (feature_state.tombstone_labels(model) if not new else set())
+        duplicate = reserved.intersection(op["label"] for op in operations if "label" in op)
         if duplicate:
             raise ValueError(f"Feature labels already exist: {sorted(duplicate)}")
+        # Part feature lifecycle admission: resolve explicit targets against
+        # the saved inspection, refuse system objects/members, and require every
+        # affected dependency to be listed (native re-checks before executing).
+        feature_state.validate_plan(model if not new else None, operations)
         from creo_mechdog import airfoil
 
         operations = airfoil.prepare(operations, aliases)
@@ -557,6 +565,10 @@ def run_generic_job(job_id: str, manifest: dict):
                             ):
                                 if key in result:
                                     model[key] = result[key]
+                            # Deleted-label tombstones and the intentional
+                            # suppression set are part of the model identity;
+                            # a failed job never rewrites them.
+                            feature_state.apply_result(model, result)
                         manifest.update(
                             status="succeeded",
                             stage="verified",

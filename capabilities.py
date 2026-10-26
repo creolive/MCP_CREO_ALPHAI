@@ -36,6 +36,7 @@ REGISTERED_OPERATIONS = (
     "component_placement",
     "component_constraints",
     "remove_component",
+    "feature_state",
     "set_dimensions",
     "set_sketch_dimensions",
     "set_parameters",
@@ -273,6 +274,36 @@ def families() -> dict:
             "scope": "in-place geometry replacement; entity names/types/counts and sketch feature ID retained; dimensions rebuilt using auto/autodim/coordinates",
             "native_test": "large 19-line and capsule replacements preserve downstream extrusion IDs, geometry, saved reload; failed dimension assertions roll back and live refresh confirms restoration",
             "limits": "replaces prior dimensions/constraints and clears airfoil metadata; query new named dimension IDs after replacement; spline/ellipse retain the original autodim path; coordinate mode cannot be mixed with user constraints",
+        },
+        "feature_lifecycle": {
+            "enabled": True,
+            "tool": "creo_execute_plan",
+            "op": "feature_state",
+            "actions": ["delete", "suppress", "resume"],
+            "scope": (
+                "managed part/sheetmetal ordinary sketches, datums, protrusion/revolve and "
+                "their cuts, group and pattern headers; explicit label/ID targets with real "
+                "before/after status per target"
+            ),
+            "dependency_rule": (
+                "every affected descendant must be listed explicitly; a missing dependency "
+                "returns the dependency list and refuses the plan (native re-checks before "
+                "executing; no automatic cascade)"
+            ),
+            "identity": (
+                "deleted labels become tombstones and are never rebound; suppression keeps "
+                "the feature identity; resume applies only to suppressed targets"
+            ),
+            "suppression_registry": (
+                "intentional suppression is recorded per model/job and participates in health, "
+                "saved-reload and rollback comparison; unrecorded suppression stays unhealthy"
+            ),
+            "limits": (
+                "assembly components use remove_component; system-required objects (default "
+                "coordinate system and template datums) and individually targeted group/pattern "
+                "members are refused; unrecorded or inconsistent suppression is refused; "
+                "native acceptance pending"
+            ),
         },
         "placement": {
             "enabled": True,
