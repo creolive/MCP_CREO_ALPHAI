@@ -54,3 +54,6 @@ docs/validation/workbuddy-0.4.7-nonempty-2026-10-21/report.md -text
 
 # DEV-047 T00: preserve the three v0.5.2 Markdown originals byte for byte.
 docs/validation/feedback-0.5.2-2026-10-26/2026*.md -text
+
+# DEV-048 T00: preserve the four v0.6.0 feedback Markdown originals byte for byte.
+docs/validation/feedback-0.6.0-2026-10-27/2026*.md -text

@@ -1,0 +1,511 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-048",
+  "task": "T00",
+  "archived_at": "2026-10-27T15:43:00+08:00",
+  "timezone": "Asia/Shanghai",
+  "archive_policy": "The four original Markdown files were copied byte-for-byte from the download directory without decoding, re-encoding, newline conversion or formatting. Source bytes and SHA256 were verified against the copies after archiving. Reports are external evidence, not tests executed by T00.",
+  "comparison_baseline": {
+    "main_commit": "2a7835808e1ea2981df411c7e2a4e94d1fd4d92d",
+    "tag": "v0.7.0",
+    "version": "0.7.0",
+    "task_dependency_commit": "2a7835808e1ea2981df411c7e2a4e94d1fd4d92d",
+    "note": "T00 starts from the delivered main/v0.7.0 commit; the two previously untracked plan documents are included in this documentation baseline."
+  },
+  "archive_environment": {
+    "os": "Windows-11-10.0.26100-SP0",
+    "python": "3.12.14",
+    "git": "2.50.1.windows.1",
+    "workspace": "E:\\Projects\\MCP_CREO_MechDog",
+    "toolkit_connected": false,
+    "tests_run": false,
+    "scope": "filesystem copy, local read-only hash comparison and documentation only"
+  },
+  "mapping": "MAPPING.md",
+  "interface_baseline": "../../work-items/DEV-048.md#interface-baseline",
+  "plan": "../../development/0.6.0-FEEDBACK-PLAN-2026-10-27.md",
+  "task_table": "../../development/0.6.0-FEEDBACK-TASKS-2026-10-27.md",
+  "reports": [
+    {
+      "report_id": "R1",
+      "filename": "2026-10-25CREO10.0.0.0-0.5.3工作条目未随发布回填与P1诊断代偿.md",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.6.0\\2026-10-25CREO10.0.0.0-0.5.3工作条目未随发布回填与P1诊断代偿.md",
+      "archive": "docs/validation/feedback-0.6.0-2026-10-27/2026-10-25CREO10.0.0.0-0.5.3工作条目未随发布回填与P1诊断代偿.md",
+      "bytes": 11198,
+      "sha256": "1e5639f210063215366b290331af13e6919b35ded31f784c060d7c2d92aa23e0",
+      "reported_version": "0.5.3",
+      "report_date": "2026-10-25",
+      "evidence_level": "external_upgrade_static_report",
+      "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 / VS2022 BuildTools 14.44.35207 / Windows SDK 10.0.26100.0 / Python 3.13; MCP_CREO_MechDog 0.5.3, 91 tools, 9 seeds",
+      "toolkit_connected": false,
+      "scope": [
+        "callback registration stability across upgrades (eighth version)",
+        "work-item status and target-version backfill gap",
+        "three P1 items delivered as diagnostics only",
+        "follow-up on the previous 0.5.2 recommendations",
+        "0.5.2 report not yet archived",
+        "upgrade execution and static verification"
+      ],
+      "not_verified": [
+        "The report explicitly states no Creo connection and no modeling retest in this round",
+        "All Creo-dependent behaviors it mentions remain unverified in this report",
+        "Upgrade package hashes, file counts and tool counts belong to the reporter environment, not to this workspace"
+      ],
+      "sections": [
+        {
+          "key": "R1-00",
+          "heading": "# CREO 10.0.0.0 · MCP 0.5.3：工作条目的\"状态/目标版本\"未随发布回填（同类问题第二次）；三个 P1 以\"加诊断\"代偿",
+          "line": 1,
+          "mapping": "MAPPING.md#r1-00"
+        },
+        {
+          "key": "R1-01",
+          "heading": "## 0. 摘要",
+          "line": 12,
+          "mapping": "MAPPING.md#r1-01"
+        },
+        {
+          "key": "R1-02",
+          "heading": "## 1. ✅ 注册稳定性连续第八版验证通过",
+          "line": 25,
+          "mapping": "MAPPING.md#r1-02"
+        },
+        {
+          "key": "R1-03",
+          "heading": "## 2. 🔴 核心问题：工作条目的\"状态/目标版本\"未随发布回填",
+          "line": 42,
+          "mapping": "MAPPING.md#r1-03"
+        },
+        {
+          "key": "R1-04",
+          "heading": "### 2.1 具体证据",
+          "line": 44,
+          "mapping": "MAPPING.md#r1-04"
+        },
+        {
+          "key": "R1-05",
+          "heading": "### 2.2 为什么值得提（同类问题第二次）",
+          "line": 52,
+          "mapping": "MAPPING.md#r1-05"
+        },
+        {
+          "key": "R1-06",
+          "heading": "### 2.3 建议",
+          "line": 65,
+          "mapping": "MAPPING.md#r1-06"
+        },
+        {
+          "key": "R1-07",
+          "heading": "## 3. 🟠 观察：三个 P1 本版都以\"加诊断\"交付，其中 BUG-082 本体未修",
+          "line": 76,
+          "mapping": "MAPPING.md#r1-07"
+        },
+        {
+          "key": "R1-08",
+          "heading": "## 4. ❌ 我上轮（0.5.2）三条建议的落地情况",
+          "line": 100,
+          "mapping": "MAPPING.md#r1-08"
+        },
+        {
+          "key": "R1-09",
+          "heading": "## 5. 🟡 我的 0.5.2 报告尚未归档（客观记录）",
+          "line": 113,
+          "mapping": "MAPPING.md#r1-09"
+        },
+        {
+          "key": "R1-10",
+          "heading": "## 6. ✅ 本版值得肯定的两点（读码确认）",
+          "line": 124,
+          "mapping": "MAPPING.md#r1-10"
+        },
+        {
+          "key": "R1-11",
+          "heading": "## 7. 升级执行与静态验证",
+          "line": 136,
+          "mapping": "MAPPING.md#r1-11"
+        },
+        {
+          "key": "R1-12",
+          "heading": "### 未验证（按实机冻结约束）",
+          "line": 151,
+          "mapping": "MAPPING.md#r1-12"
+        },
+        {
+          "key": "R1-13",
+          "heading": "## 8. 需要作者回复的问题",
+          "line": 158,
+          "mapping": "MAPPING.md#r1-13"
+        }
+      ]
+    },    {
+      "report_id": "R2",
+      "filename": "2026-10-26CREO10.0.0.0-0.6.0换行归一化已波及thirdparty与工作条目状态第2次未回填.md",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.6.0\\2026-10-26CREO10.0.0.0-0.6.0换行归一化已波及thirdparty与工作条目状态第2次未回填.md",
+      "archive": "docs/validation/feedback-0.6.0-2026-10-27/2026-10-26CREO10.0.0.0-0.6.0换行归一化已波及thirdparty与工作条目状态第2次未回填.md",
+      "bytes": 11073,
+      "sha256": "13696ecd2ce6b90a2547066621ac8c2e5f7a22e21161d0aa9712f5c73c773080",
+      "reported_version": "0.6.0",
+      "report_date": "2026-10-26",
+      "evidence_level": "external_upgrade_static_report",
+      "reported_environment": "Windows 10 x64 / Creo Parametric 10.0.0.0 / VS2022 BuildTools 14.44.35207 / Windows SDK 10.0.26100.0 / Python 3.13; MCP_CREO_MechDog 0.6.0, 92 tools, 9 seeds",
+      "toolkit_connected": false,
+      "scope": [
+        "callback registration stability across upgrades (ninth version)",
+        "repository-wide newline normalization reaching native/third_party",
+        "work-item status backfill raised for the second time",
+        "follow-up on the previous four recommendations",
+        "0.5.2 and 0.5.3 reports not yet archived",
+        "upgrade execution and static verification"
+      ],
+      "not_verified": [
+        "The report explicitly states no Creo connection and no modeling retest in this round",
+        "FEAT-012 nested matrix, FEAT-048 batch adoption, FEAT-008 pipeline and BUG-078/BUG-082 behavior were not exercised",
+        "Package hashes, the 855-file comparison and the 748-check figures belong to the reporter environment"
+      ],
+      "sections": [
+        {
+          "key": "R2-00",
+          "heading": "# CREO 10.0.0.0 · MCP 0.6.0：仓库级换行归一化已波及 third_party（json.hpp 险些第 10 次失效）；工作条目状态第 2 次未回填",
+          "line": 1,
+          "mapping": "MAPPING.md#r2-00"
+        },
+        {
+          "key": "R2-01",
+          "heading": "## 0. 摘要",
+          "line": 12,
+          "mapping": "MAPPING.md#r2-01"
+        },
+        {
+          "key": "R2-02",
+          "heading": "## 1. ✅ 注册稳定性连续第九版验证通过",
+          "line": 25,
+          "mapping": "MAPPING.md#r2-02"
+        },
+        {
+          "key": "R2-03",
+          "heading": "## 2. 🔴 核心问题：仓库级换行归一化已波及 `native/third_party/`，差一个文件就重演 0.4.0",
+          "line": 43,
+          "mapping": "MAPPING.md#r2-03"
+        },
+        {
+          "key": "R2-04",
+          "heading": "### 2.1 实测证据",
+          "line": 45,
+          "mapping": "MAPPING.md#r2-04"
+        },
+        {
+          "key": "R2-05",
+          "heading": "### 2.2 结论",
+          "line": 60,
+          "mapping": "MAPPING.md#r2-05"
+        },
+        {
+          "key": "R2-06",
+          "heading": "## 3. 🔴 工作条目状态未随发布回填 —— 第 2 次提出，0 进展",
+          "line": 76,
+          "mapping": "MAPPING.md#r2-06"
+        },
+        {
+          "key": "R2-07",
+          "heading": "### 3.1 现状（本轮实测，与上轮完全相同）",
+          "line": 78,
+          "mapping": "MAPPING.md#r2-07"
+        },
+        {
+          "key": "R2-08",
+          "heading": "### 3.2 影响与建议",
+          "line": 93,
+          "mapping": "MAPPING.md#r2-08"
+        },
+        {
+          "key": "R2-09",
+          "heading": "## 4. ❌ 我上轮 4 条建议均未落地（附本轮复查结果）",
+          "line": 108,
+          "mapping": "MAPPING.md#r2-09"
+        },
+        {
+          "key": "R2-10",
+          "heading": "## 5. 🟡 我的反馈报告已连续两版未归档",
+          "line": 123,
+          "mapping": "MAPPING.md#r2-10"
+        },
+        {
+          "key": "R2-11",
+          "heading": "## 6. ✅ 本版值得肯定（读码确认）",
+          "line": 134,
+          "mapping": "MAPPING.md#r2-11"
+        },
+        {
+          "key": "R2-12",
+          "heading": "## 7. 升级执行与静态验证",
+          "line": 147,
+          "mapping": "MAPPING.md#r2-12"
+        },
+        {
+          "key": "R2-13",
+          "heading": "### 未验证（按实机冻结约束）",
+          "line": 161,
+          "mapping": "MAPPING.md#r2-13"
+        },
+        {
+          "key": "R2-14",
+          "heading": "## 8. 需要作者回复的问题",
+          "line": 168,
+          "mapping": "MAPPING.md#r2-14"
+        }
+      ]
+    },    {
+      "report_id": "R3",
+      "filename": "2026-10-26_CREO10_v0.6.0_support_status未覆盖adopt_file且版本成熟度仍矛盾.md",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.6.0\\2026-10-26_CREO10_v0.6.0_support_status未覆盖adopt_file且版本成熟度仍矛盾.md",
+      "archive": "docs/validation/feedback-0.6.0-2026-10-27/2026-10-26_CREO10_v0.6.0_support_status未覆盖adopt_file且版本成熟度仍矛盾.md",
+      "bytes": 10231,
+      "sha256": "f2f5f57dbc266f1f0024a6349c80ad01a54c825e51e309f3b4b7eb9c5a7145fb",
+      "reported_version": "0.6.0",
+      "report_date": "2026-10-26",
+      "evidence_level": "external_mcp_live_report",
+      "reported_environment": "Creo Parametric 10.0.0.0 (release_numeric 42); MCP_CREO_MechDog 0.6.0, 92 tools; 26 resident models, active window PART1_STAR_FRAME",
+      "toolkit_connected": true,
+      "scope": [
+        "FEAT-048 creo_adopt_file inspect/apply external live verification",
+        "FEAT-006 unhealthy feature diagnostics",
+        "FEAT-012 / BUG-045 rotation_matrix and FEAT-008 component_changes",
+        "release_status versus is_prerelease contradiction",
+        "support_status missing creo_adopt_file",
+        "constraint snapshot replay contract still missing",
+        "sidecar write failure not surfaced in results"
+      ],
+      "not_verified": [
+        "Batch assembly through execute_plan (P1-2) was not tested",
+        "Inch assembly unit verification was blocked by 26 resident models and not retested",
+        "No original MCP transcript, job.json or sidecar artifact is bundled with this Markdown"
+      ],
+      "sections": [
+        {
+          "key": "R3-00",
+          "heading": "# MCP_CREO_MechDog v0.6.0 验收报告",
+          "line": 1,
+          "mapping": "MAPPING.md#r3-00"
+        },
+        {
+          "key": "R3-01",
+          "heading": "## 1. 验收结论（TL;DR）",
+          "line": 10,
+          "mapping": "MAPPING.md#r3-01"
+        },
+        {
+          "key": "R3-02",
+          "heading": "## 2. 测试环境",
+          "line": 27,
+          "mapping": "MAPPING.md#r3-02"
+        },
+        {
+          "key": "R3-03",
+          "heading": "## 3. 交付项实测（Creo 10）",
+          "line": 37,
+          "mapping": "MAPPING.md#r3-03"
+        },
+        {
+          "key": "R3-04",
+          "heading": "### 3.1 FEAT-048 `creo_adopt_file`：按路径 + 批量收养 ✅",
+          "line": 39,
+          "mapping": "MAPPING.md#r3-04"
+        },
+        {
+          "key": "R3-05",
+          "heading": "### 3.2 FEAT-006 逐特征健康诊断 ✅",
+          "line": 58,
+          "mapping": "MAPPING.md#r3-05"
+        },
+        {
+          "key": "R3-06",
+          "heading": "### 3.3 FEAT-012 / FEAT-008：矩阵入参 + 变更摘要 + 符号名 ✅",
+          "line": 72,
+          "mapping": "MAPPING.md#r3-06"
+        },
+        {
+          "key": "R3-07",
+          "heading": "## 4. 发现的问题",
+          "line": 82,
+          "mapping": "MAPPING.md#r3-07"
+        },
+        {
+          "key": "R3-08",
+          "heading": "### 4.1 【P2，连续第三轮】`release_status` 与 `is_prerelease` 自相矛盾",
+          "line": 84,
+          "mapping": "MAPPING.md#r3-08"
+        },
+        {
+          "key": "R3-09",
+          "heading": "### 4.2 【P2，与上轮同类】`support_status` 未覆盖 `creo_adopt_file`",
+          "line": 93,
+          "mapping": "MAPPING.md#r3-09"
+        },
+        {
+          "key": "R3-10",
+          "heading": "### 4.3 【P2，上轮 P1-3 残余】约束快照仍无回放契约",
+          "line": 100,
+          "mapping": "MAPPING.md#r3-10"
+        },
+        {
+          "key": "R3-11",
+          "heading": "### 4.4 【观察】内部 sidecar 写失败未在结果中体现",
+          "line": 107,
+          "mapping": "MAPPING.md#r3-11"
+        },
+        {
+          "key": "R3-12",
+          "heading": "## 5. 上轮（0.5.0/0.5.2）问题与建议跟踪",
+          "line": 119,
+          "mapping": "MAPPING.md#r3-12"
+        },
+        {
+          "key": "R3-13",
+          "heading": "## 6. 复测方法",
+          "line": 134,
+          "mapping": "MAPPING.md#r3-13"
+        },
+        {
+          "key": "R3-14",
+          "heading": "## 7. 亮点",
+          "line": 144,
+          "mapping": "MAPPING.md#r3-14"
+        }
+      ]
+    },    {
+      "report_id": "R4",
+      "filename": "20261026_CREO_v0.6.0_三项既有阻断未修_非主轴面拉伸方向仍错误.md",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.6.0\\20261026_CREO_v0.6.0_三项既有阻断未修_非主轴面拉伸方向仍错误.md",
+      "archive": "docs/validation/feedback-0.6.0-2026-10-27/20261026_CREO_v0.6.0_三项既有阻断未修_非主轴面拉伸方向仍错误.md",
+      "bytes": 12077,
+      "sha256": "f0a582aa244d9caa59ab31ce118268f4abe813939c299a19cf38ec3b3ce27836",
+      "reported_version": "0.6.0",
+      "report_date": "2026-10-26",
+      "evidence_level": "external_mcp_live_report",
+      "reported_environment": "Creo Parametric 10.0.0.0 (release_numeric 42), ready_to_build true; MCP_CREO_MechDog 0.6.0, up_to_date, non-prerelease",
+      "toolkit_connected": true,
+      "scope": [
+        "tilted datum plane extrude direction still following global Z",
+        "multi-contour sections limited to two contours",
+        "pure-Z u_axis still rejected as Zero direction vector",
+        "missing feature delete, unreliable preview, no batch entry point, no extrude draft parameter",
+        "existing model volumes unchanged when reopened"
+      ],
+      "not_verified": [
+        "Targeted retest only; no full regression",
+        "The 10-contour case was not retested because the 5-contour case already failed",
+        "sketchgen.py, sketch_entities.json, gear10.json and dogbone_yz.json were not supplied, so the original inputs cannot be replayed"
+      ],
+      "sections": [
+        {
+          "key": "R4-00",
+          "heading": "# MCP_CREO_MechDog v0.6.0 验收报告 —— 三项既有阻断均未修复（非主轴面拉伸方向仍取全局 Z）",
+          "line": 1,
+          "mapping": "MAPPING.md#r4-00"
+        },
+        {
+          "key": "R4-01",
+          "heading": "## 1. 一句话结论",
+          "line": 15,
+          "mapping": "MAPPING.md#r4-01"
+        },
+        {
+          "key": "R4-02",
+          "heading": "## 2. 【未修·最严重】非主轴基准面上的草图，拉伸方向仍是全局 Z",
+          "line": 32,
+          "mapping": "MAPPING.md#r4-02"
+        },
+        {
+          "key": "R4-03",
+          "heading": "### 2.1 三组对照实验（关键：第 3 组排除了\"草图是旧版本建的\"这一混淆）",
+          "line": 34,
+          "mapping": "MAPPING.md#r4-03"
+        },
+        {
+          "key": "R4-04",
+          "heading": "### 2.2 面级证据",
+          "line": 49,
+          "mapping": "MAPPING.md#r4-04"
+        },
+        {
+          "key": "R4-05",
+          "heading": "### 2.3 影响",
+          "line": 61,
+          "mapping": "MAPPING.md#r4-05"
+        },
+        {
+          "key": "R4-06",
+          "heading": "### 2.4 建议（优先级最高）",
+          "line": 67,
+          "mapping": "MAPPING.md#r4-06"
+        },
+        {
+          "key": "R4-07",
+          "heading": "### 2.5 最小复现（可直接抄）",
+          "line": 73,
+          "mapping": "MAPPING.md#r4-07"
+        },
+        {
+          "key": "R4-08",
+          "heading": "## 3. 【未修】多轮廓截面仍只支持到 2 个",
+          "line": 91,
+          "mapping": "MAPPING.md#r4-08"
+        },
+        {
+          "key": "R4-09",
+          "heading": "### 3.1 报错仍然误导",
+          "line": 107,
+          "mapping": "MAPPING.md#r4-09"
+        },
+        {
+          "key": "R4-10",
+          "heading": "### 3.2 回归用例",
+          "line": 113,
+          "mapping": "MAPPING.md#r4-10"
+        },
+        {
+          "key": "R4-11",
+          "heading": "## 4. 【未修】`u_axis` 为纯轴向仍报 `Zero direction vector`",
+          "line": 119,
+          "mapping": "MAPPING.md#r4-11"
+        },
+        {
+          "key": "R4-12",
+          "heading": "## 5. v0.6.0 的改进（正面记录）",
+          "line": 137,
+          "mapping": "MAPPING.md#r4-12"
+        },
+        {
+          "key": "R4-13",
+          "heading": "## 6. 现有模型状态（未回归）",
+          "line": 149,
+          "mapping": "MAPPING.md#r4-13"
+        },
+        {
+          "key": "R4-14",
+          "heading": "## 7. 其它仍存在（沿用上次结论，本轮未变）",
+          "line": 165,
+          "mapping": "MAPPING.md#r4-14"
+        },
+        {
+          "key": "R4-15",
+          "heading": "## 8. 建议优先级",
+          "line": 177,
+          "mapping": "MAPPING.md#r4-15"
+        },
+        {
+          "key": "R4-16",
+          "heading": "## 9. 复现素材",
+          "line": 187,
+          "mapping": "MAPPING.md#r4-16"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "reports": 4,
+    "sections": 61,
+    "toolkit_connected_reports": ["R3", "R4"],
+    "static_reports": ["R1", "R2"]
+  }
+}
