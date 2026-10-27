@@ -125,6 +125,7 @@ _SOURCE_NAMES = (
     "native/constraint_names.h",
     "native/constraint_compare.h",
     "native/adoption_source.h",
+    "native/inspection_sidecar.h",
     "native/inspection_units.h",
     "native/axis_geometry.h",
     "native/assembly_units.h",

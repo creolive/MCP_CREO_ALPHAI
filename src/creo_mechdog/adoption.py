@@ -141,12 +141,7 @@ def _split_result(result: dict, directory: Path) -> dict:
     every consumer downstream — evidence tokens, requests, registries and the
     job manifest — only ever carries a summary plus a reference.
     """
-    live = result.get("live")
-    if isinstance(live, dict):
-        inspection_refs.split(live, directory, "live")
-    if isinstance(result.get("inspection"), dict) and result["inspection"]:
-        inspection_refs.split(result, directory, "verified")
-    return result
+    return inspection_refs.split_result(result, directory)
 
 
 def _native(directory: Path, manifest: dict) -> dict:
@@ -176,6 +171,9 @@ def _native(directory: Path, manifest: dict) -> dict:
     if result:
         _split_result(result, directory)
         manifest["result"] = result
+        warnings = inspection_refs.warnings_of(result)
+        if warnings:
+            manifest["inspection_warnings"] = warnings
     if (
         not result
         or result.get("delivery_complete") is not True
@@ -434,7 +432,14 @@ def _new_model(model_id: str, model_name: str | None = None) -> dict:
     }
 
 
-def _evidence(model: dict, live: dict, file: dict, *, snapshot: bool = False) -> dict:
+def _evidence(
+    model: dict,
+    live: dict,
+    file: dict,
+    *,
+    snapshot: bool = False,
+    warnings: list[dict] | None = None,
+) -> dict:
     token = uuid.uuid4().hex
     record = {
         "live": live,
@@ -444,10 +449,12 @@ def _evidence(model: dict, live: dict, file: dict, *, snapshot: bool = False) ->
         "token": token,
         "snapshot": snapshot,
     }
+    if warnings:
+        record["inspection_warnings"] = [dict(entry) for entry in warnings]
     bridge.write_json(
         _directory(model["model_id"]) / f"evidence-{token}.json", record, durable=True
     )
-    return {
+    evidence = {
         "model_id": model["model_id"],
         "status": model["status"],
         "available": True,
@@ -465,6 +472,9 @@ def _evidence(model: dict, live: dict, file: dict, *, snapshot: bool = False) ->
             else "apply copies the inspected current session state; the source is untouched"
         ),
     }
+    if warnings:
+        evidence["inspection_warnings"] = [dict(entry) for entry in warnings]
+    return evidence
 
 
 def inspect(model_id: str | None = None) -> dict:
@@ -491,10 +501,14 @@ def inspect(model_id: str | None = None) -> dict:
             (probe / "output").mkdir(parents=True)
             bridge.write_json(probe / "request.json", _native_request(model, {"action": "inspect"}))
             try:
-                live = _native(probe, manifest)["live"]
-                # Defense in depth: split even when the executor boundary was
-                # substituted or predates reference splitting (BUG-076).
-                inspection_refs.split(live, probe, "live")
+                result = _native(probe, manifest)
+                # Defense in depth: split again even when the executor boundary
+                # was substituted or predates reference splitting (BUG-076).
+                # The shared closeout is idempotent and records its own
+                # diagnostics instead of aborting the preflight (DEV-048).
+                _split_result(result, probe)
+                live = result["live"]
+                warnings = inspection_refs.warnings_of(result)
                 manifest["status"] = "succeeded"
             except RuntimeError as error:
                 manifest["status"] = "failed"
@@ -546,7 +560,9 @@ def inspect(model_id: str | None = None) -> dict:
                         "reason_code": reason_code,
                         "available_modes": [] if reason else ["prepare"],
                         "conflict": conflict,
-                        "current_model": _summary_only({"live": live}),
+                        "current_model": _summary_only(
+                            {"live": live, "inspection_warnings": warnings}
+                        ),
                         "refusal_details": _refusal_details(live),
                         "file": file,
                         "source_kind": "file" if origin else "session_only",
@@ -564,7 +580,7 @@ def inspect(model_id: str | None = None) -> dict:
                         "inspected_at": bridge.now(),
                     },
                 )
-                evidence = _evidence(model, live, file)
+                evidence = _evidence(model, live, file, warnings=warnings)
                 # Publish the registry last: source/hash/token failures cannot leave
                 # a visible model even if cleanup of staging files is unavailable.
                 model_registry.write_model(path, model)
@@ -862,6 +878,9 @@ def _summary_only(record: dict) -> dict:
     inline = live.pop("inspection", None)
     if inline is not None:
         live.setdefault("inspection_summary", inspection_summary(inline))
+    warnings = record.get("inspection_warnings")
+    if isinstance(warnings, list) and warnings:
+        live["inspection_warnings"] = [dict(entry) for entry in warnings if isinstance(entry, dict)]
     # A split record already carries inspection_summary plus the small
     # controlled inspection_ref; both stay visible to the caller.
     return live

@@ -10,6 +10,7 @@
 #include "constraint_names.h"
 #include "constraint_compare.h"
 #include "preview.h"
+#include "inspection_sidecar.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -2764,41 +2765,6 @@ static bool recovery_dependency_free() {
     return dependency_free(board);
 }
 
-// Controlled inspection references (BUG-076): full payloads stay next to the
-// job as sidecar files; control results carry only {file, sha256, bytes} and
-// the Python closeout adds a small summary. Legacy inline payloads inside
-// requests keep working through choice_inspection.
-static J write_inspection_ref(const J &value, const char *stem) {
-    const std::string data = value.dump(2);
-    std::filesystem::path directory(folder);
-    std::filesystem::path temp = directory / ("inspection-" + std::string(stem) + "-" +
-                                              std::to_string(GetCurrentProcessId()) + "-" +
-                                              std::to_string(GetTickCount()) + ".tmp");
-    {
-        std::ofstream output(temp, std::ios::binary | std::ios::trunc);
-        output << data;
-        output.flush();
-        if (!output.good())
-            throw std::runtime_error("Cannot write the inspection sidecar file");
-    }
-    // Content-addressed name: identical payloads reuse one file, a different
-    // payload never overwrites a reference an earlier record still points to.
-    const std::string digest = mechdog_callback::sha256(temp);
-    std::filesystem::path file =
-        directory / ("inspection-" + std::string(stem) + "-" + digest.substr(0, 16) + ".json");
-    std::error_code rename_error;
-    std::filesystem::rename(temp, file, rename_error);
-    if (rename_error) {
-        if (std::filesystem::exists(file))
-            std::filesystem::remove(temp); // Same content is already stored.
-        else {
-            std::filesystem::remove(temp);
-            throw std::runtime_error("Cannot publish the inspection sidecar file");
-        }
-    }
-    return {{"file", utf8(file.wstring())}, {"sha256", digest}, {"bytes", (long long)data.size()}};
-}
-
 static J read_inspection_ref(const J &ref) {
     if (!ref.is_object() || !ref.contains("file") || !ref.contains("sha256"))
         throw std::runtime_error("Inspection reference is malformed");
@@ -2823,28 +2789,19 @@ static J choice_inspection(const J &holder, const char *key) {
         return holder.at(key);
     throw std::runtime_error(std::string("Request is missing ") + key);
 }
-
+// Controlled inspection references (BUG-076/DEV-048): full payloads stay next
+// to the job as content-addressed sidecar files; control results carry only
+// {file, sha256, bytes} and the Python closeout adds a small summary. The
+// write/publish policy lives in inspection_sidecar.h so it can be compiled and
+// exercised offline. Legacy inline payloads inside requests keep working
+// through choice_inspection.
 static void split_report_inspections(const J &request, J &report) {
-    // Keep full inspection payloads out of adoption/reconciliation control
-    // results: move them into controlled sidecars and leave references
-    // (BUG-076). Ordinary modeling plans keep their inline inspection: the
-    // registry/query snapshot contract for created models is unchanged. Any
-    // sidecar failure keeps the inline payload; the Python closeout splits
-    // it again.
-    if (!request.contains("adoption") && !request.contains("reconciliation"))
-        return;
+    // Ordinary modeling plans keep their inline inspection: the
+    // registry/query snapshot contract for created models is unchanged. A
+    // sidecar failure keeps the inline payload and records the fixed stage and
+    // reason on the report; the Python closeout tries the same split again.
     try {
-        if (report.contains("live") && report["live"].contains("inspection") &&
-            report["live"]["inspection"].is_object() && !report["live"]["inspection"].empty()) {
-            report["live"]["inspection_ref"] =
-                write_inspection_ref(report["live"]["inspection"], "live");
-            report["live"].erase("inspection");
-        }
-        if (report.contains("inspection") && report["inspection"].is_object() &&
-            !report["inspection"].empty()) {
-            report["inspection_ref"] = write_inspection_ref(report["inspection"], "verified");
-            report.erase("inspection");
-        }
+        mechdog_sidecar::split_report(request, report, std::filesystem::path(folder));
     } catch (const std::exception &error) {
         log("INSPECTION_SPLIT_FAILED=%s\n", error.what());
     }

@@ -1294,6 +1294,7 @@ def compact_job(manifest: dict) -> dict:
         "available",
         "model_evidence_error",
         "component_changes",
+        "inspection_warnings",
     )
     summary = {key: manifest[key] for key in keys if key in manifest}
     summary["detail"] = "compact"
@@ -1338,6 +1339,7 @@ def compact_job(manifest: dict) -> dict:
             "session_fingerprint",
             "feature_tombstones",
             "suppressed_features",
+            "inspection_warnings",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary

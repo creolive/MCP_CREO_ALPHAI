@@ -155,6 +155,47 @@ class Split(unittest.TestCase):
         registry = bridge.read_json(general.MODELS / evidence["model_id"] / "model.json")
         self.assertNotIn("inspection", registry)
 
+    def test_make_ref_never_reuses_a_same_named_file_with_other_bytes(self):
+        # DEV-048: a same-size but different-content file is another writer's
+        # file. It must be kept, and the payload published under a new name.
+        directory = self.root / "sidecars" / "conflict"
+        digest = inspection_refs.content_digest(INSPECTION)
+        decoy = directory / f"inspection-live-{digest[:16]}.json"
+        directory.mkdir(parents=True)
+        data = json.dumps(INSPECTION, ensure_ascii=False, indent=2)
+        foreign = data.replace('"volume_mm3": 10', '"volume_mm3": 99')
+        self.assertEqual(len(foreign.encode()), len(data.encode()))
+        decoy.write_text(foreign, encoding="utf-8")
+        ref = inspection_refs.make_ref(INSPECTION, directory, "live")
+        self.assertEqual(decoy.read_text(encoding="utf-8"), foreign)
+        self.assertNotEqual(Path(ref["file"]), decoy)
+        self.assertEqual(inspection_refs.load_ref(ref), INSPECTION)
+
+    def test_split_result_records_a_failed_python_fallback(self):
+        directory = self.root / "jobs" / "fallback"
+        result = {
+            "success": True,
+            "live": {"inspection": INSPECTION},
+            "inspection_warnings": [
+                {
+                    "stage": "live",
+                    "reason_code": "native_sidecar_write_failed",
+                    "fallback_status": "not_attempted",
+                    "message": "Cannot write the inspection sidecar file",
+                }
+            ],
+        }
+        with patch.object(
+            inspection_refs,
+            "make_ref",
+            side_effect=inspection_refs.SidecarWriteFailed("disk is full"),
+        ):
+            self.assertIs(adoption._split_result(result, directory), result)
+        self.assertIn("inspection", result["live"])
+        warning = result["inspection_warnings"][0]
+        self.assertEqual(warning["stage"], "live")
+        self.assertEqual(warning["fallback_status"], "failed")
+
     def test_apply_request_uses_reference_and_legacy_inline_still_works(self):
         # New records send only the reference in the request.
         holder = {

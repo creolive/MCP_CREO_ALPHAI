@@ -331,6 +331,7 @@ def _deployment(deadline: float) -> str:
         "src/creo_mechdog/adoption.py",
         "src/creo_mechdog/file_adoption.py",
         "native/adoption_source.h",
+        "native/inspection_sidecar.h",
         "native/generic.cpp",
         "native/result_delivery.h",
         "native/recovery_deadline.h",
@@ -462,6 +463,9 @@ def _snapshot(model_id: str) -> dict:
                             "aliases": result.get("aliases", {}),
                             "aliases_ref": result.get("aliases_ref"),
                         }
+                        warnings = inspection_refs.warnings_of(result)
+                        if warnings:
+                            candidate["inspection_warnings"] = warnings
                     except (OSError, ValueError) as error:
                         candidate = {"error": str(error)}
     baseline = None
@@ -571,7 +575,11 @@ def _native(directory: Path, manifest: dict) -> dict:
         )
     result = _read(directory / "native_result.json")
     if result:
+        inspection_refs.split_result(result, directory)
         manifest["result"] = result
+        warnings = inspection_refs.warnings_of(result)
+        if warnings:
+            manifest["inspection_warnings"] = warnings
     if (
         not result
         or result.get("delivery_complete") is not True
@@ -601,7 +609,11 @@ def _live(model: dict) -> dict:
         try:
             result = _native(directory, manifest)
             manifest.update(status="succeeded", result=result)
-            return result["live"]
+            live = dict(result["live"])
+            warnings = inspection_refs.warnings_of(result)
+            if warnings:
+                live["inspection_warnings"] = warnings
+            return live
         except Exception as error:
             manifest.update(status="failed", message=str(error))
             return {"confirmed": False, "reason": str(error)}

@@ -166,6 +166,9 @@ def inspect(paths: list[str]) -> dict:
                 adoption._split_result(result, job_dir)
                 live = result["live"]
                 item["live"] = live
+                warnings = inspection_refs.warnings_of(result)
+                if warnings:
+                    item["inspection_warnings"] = warnings
                 _check_file(item)
                 if (
                     result.get("source_unchanged") is not True
@@ -422,6 +425,9 @@ def run(job_id: str, manifest: dict) -> None:
                     terminal = adoption.run_item_locked(child["job_id"], child, journal)
                     _publish(child["job_id"], terminal)
                     item.update(status="succeeded", revision=1, result=terminal["result"])
+                    warnings = inspection_refs.warnings_of(terminal.get("result") or {})
+                    if warnings:
+                        item["inspection_warnings"] = warnings
                 except adoption.AdoptionRefused as error:
                     _refuse(item, error.reason, str(error))
                     if child:
@@ -493,6 +499,9 @@ def resume_committed(job_id: str) -> dict | None:
                     terminal = adoption.finish_item_commit(record)
                     _publish(item["item_job_id"], terminal)
                     item.update(status="succeeded", revision=1, result=terminal["result"])
+                    warnings = inspection_refs.warnings_of(terminal.get("result") or {})
+                    if warnings:
+                        item["inspection_warnings"] = warnings
                     changed = True
             if not changed:
                 return None
