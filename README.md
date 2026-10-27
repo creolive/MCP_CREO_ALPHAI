@@ -1,12 +1,12 @@
-# MCP_CREO_MechDog 0.6.1
+# MCP_CREO_MechDog 0.7.0
 
 开发维护从 [开发入口](docs/DEVELOPMENT.md) 和 [统一功能台账](docs/BACKLOG.md) 开始。每项工作先定义验收；语言与单元检查、Creo 实机验收分别记录。项目采用渐进布局整理，当前支持环境见 [兼容矩阵](docs/COMPATIBILITY.md)。
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前注册 **94 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.6.1**（BUG-082 草图编辑修复，PATCH，公开工具仍为 92 个）。主平面上受支持实体的显式 `autodim` 就地编辑复用坐标尺寸方案，响应 solver 记录 requested/used；新增完整回滚证据及种子回归驱动适配。修复批本机 Creo 12.4 编辑专项 16/16 通过；九种子矩阵部分完成后 Toolkit 通道断开，剩余场景、WorkBuddy 及外部 Creo 9 未验收。功能与边界见[版本说明](docs/RELEASE_NOTES_0.6.1.md)，发布检查见[发布记录](docs/validation/RELEASE-0.6.1.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.6.0](docs/RELEASE_NOTES_0.6.0.md)。
+当前服务／源码版本为 **0.7.0**（0.5.2 三份反馈完整交付，MINOR，公开工具 92→94：新增 `creo_plan_assembly_rebuild` 约束回放规划与 `creo_reclaim_generations` 显式世代回收）。本批统一每输入一条带 `execution_status`/`effect_status` 的操作结果、平面引用显式 id 与筛选互斥、任意有效草图面坐标标注、原生轴几何与真实单位/重心元数据（毫米+英寸实机矩阵，unknown 维持替身覆盖）、多环截面诊断、作业/操作级预览投影、`feature_state` 特征删除/抑制/恢复（显式目标、不自动级联）、会话健康三值证据与官方批量/拔模示例；实机矩阵另修复收养拒绝在拆分形态下把已知单位报 unknown 的缺陷。本机 Creo 12.4 实机矩阵（T05 毫米+英寸、T06—T09、T12）与 966 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。功能与边界见[版本说明](docs/RELEASE_NOTES_0.7.0.md)，发布检查见[发布记录](docs/validation/RELEASE-0.7.0.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.6.1](docs/RELEASE_NOTES_0.6.1.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
