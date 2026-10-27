@@ -2,7 +2,7 @@
   "schema_version": 1,
   "work_item": "DEV-049",
   "task": "T00",
-  "archived_at": "2026-10-27T00:00:00+08:00",
+  "archived_at": "2026-10-27",
   "timezone": "Asia/Shanghai",
   "archive_policy": "The two original Markdown files were copied byte-for-byte from the download directory without decoding, re-encoding, newline conversion or formatting. Source bytes and SHA256 were verified against the copies after archiving. Reports are external evidence, not tests executed by T00. Mapping corrections (tilted-cut volume expectation, disconnect incident environment) are recorded in MAPPING.md only; the originals are not modified.",
   "comparison_baseline": {
