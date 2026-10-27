@@ -6,6 +6,8 @@
 
 ## 当前安排
 
+- [0.6.1 两份反馈后续 PATCH 计划](development/0.6.1-FEEDBACK-PLAN-2026-10-27.md)已按用户指派由 [DEV-049](work-items/DEV-049.md) 汇总，目标为下一未占用 PATCH（暂定 0.7.2，执行前重新核对占用）；[T00—T08 派发表](development/0.6.1-FEEDBACK-TASKS-2026-10-27.md)列出依赖、步骤、共享接口与验收。两份[原件](validation/feedback-0.6.1-2026-10-27/manifest.json)已逐字节归档，[逐章映射](validation/feedback-0.6.1-2026-10-27/MAPPING.md)覆盖 32 个章节与 5 条回复请求。T00 文档基线已完成（[T00 记录](development/DEV049-T00-ACCEPTANCE.md)）；T01—T08 未实施，须用户逐项指派。本批新登记 [BUG-085](work-items/BUG-085.md)（断连调查）、[BUG-086](work-items/BUG-086.md)（安装误报）、[DEV-050](work-items/DEV-050.md)（开发检查超时）。不新增工具（保持 94）、不改版本；主干 `d2e37b0` 与已发布 `v0.7.1`（`ffa0a43`）的差异记入 DEV-049 的 T08 交付差异清单，不宣称 `d2e37b0` 属于 0.7.1 附件。
+
 - [0.6.0 四份反馈后续 PATCH 计划](development/0.6.0-FEEDBACK-PLAN-2026-10-27.md)已按用户选择保存并由 [DEV-048](work-items/DEV-048.md) 汇总，目标为下一未发布 PATCH（暂定 0.7.1，执行前重新核对占用）；[T00—T05 派发表](development/0.6.0-FEEDBACK-TASKS-2026-10-27.md)列出依赖、步骤、共享接口与验收。四份[原件](validation/feedback-0.6.0-2026-10-27/manifest.json)已逐字节归档，[逐章映射](validation/feedback-0.6.0-2026-10-27/MAPPING.md)覆盖 61 个章节与 11 条回复请求。T00 文档基线、T01 sidecar 完整性/同名校验/回退诊断、T02 拒绝后引用生命周期、T03 工作卡与发布检查回填已完成（T01/T02 为离线验证，T03 为文档与人工清单）；T04 Right 面 ±Z、T05 集成与交付未实施，须用户逐项指派。本批不新增工具（保持 94）、不重做 0.7.0 已交付能力；仅开发者离线与本机 Creo 12.4 按范围验收，不要求 WorkBuddy，旧现场与 BUG-001 会话限制保持。分类与唯一 ID 统计已按实际行回填，见下节。
 
 - [0.5.2 三份反馈完整交付计划](development/0.5.2-FEEDBACK-PLAN-2026-10-26.md)目标 0.7.0，由 [DEV-047](work-items/DEV-047.md) 汇总；[T00—T13 派发表](development/0.5.2-FEEDBACK-TASKS-2026-10-26.md)的依赖、接口与验收已按计划执行。T00—T13 已完成并随 0.7.0 交付（main `2a78358`，四附件见 [Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.7.0)）；本批仅开发者离线与本机 Creo 12.4 实机验收，WorkBuddy 经用户 2026-10-26 决定未执行，外部 Creo 9/10 未复测，旧现场与 BUG-001 会话限制保持。DEV-047 已移入[完成档案](BACKLOG_COMPLETED.md)；[BUG-084](work-items/BUG-084.md) 的 Right 面纯 Z U 轴等原生影响仍待 T04/后续实机取证。
@@ -24,15 +26,16 @@
 
 | 状态 | 数量 | 下一步 |
 | --- | --- | --- |
-| 开发中 | 4 | DEV-048、DEV-046、DEV-002、DEV-030；继续已登记的分期工作 |
-| 待复现 | 20 | 补齐输入与环境，复现并定位（含 BUG-084 静态引用缺口，原生影响待验证） |
+| 开发中 | 5 | DEV-049、DEV-048、DEV-046、DEV-002、DEV-030；继续已登记的分期工作 |
+| 待复现 | 22 | 补齐输入与环境，复现并定位（含 BUG-085 断连事故、BUG-086 安装误报、BUG-084 静态引用缺口） |
 | 待核实 | 12 | 明确输入、规则或预期后再定性（含 BUG-045 已测范围待外部环境） |
+| 待开发 | 1 | DEV-050；修改范围明确，按卡实施（DEV-049 T02） |
 | 验收中 | 30 | 按卡补齐剩余验证，不重复计入旧成功（27 项行状态为验收中 + BUG-081；另加 FEAT-048、BUG-080） |
 | 待规划 | 44 | 确定范围、兼容规则与验收方法（含 FEAT-008、FEAT-010、FEAT-012 的未覆盖子项） |
 | 观察中 | 2 | 出现新证据后再转回调查 |
 | 已交付/已修复/已验收（未收口，状态保留） | 8 | 归类口径：已交付2、已修复（0.5.1 交付）1、已修复（验收中）3、已验收（本机）1、验收完成（0.5.2）1；均有另期保留范围，按各卡待收口下一步收口后再移档，不改原状态凑数 |
 
-共 120 项：118 项未完成工作、2 项历史观察；每个固定 ID 只出现一行，120 行对应 120 个唯一 ID，无重复。DEV-047 已随 0.7.0 完成并移入[完成档案](BACKLOG_COMPLETED.md)，本表由 121 行减为 120 行；DEV-048 计入“开发中”。分类按行状态显式口径统计，明细见 [T03 验收记录](development/DEV048-T03-ACCEPTANCE.md)。
+共 124 项：122 项未完成工作、2 项历史观察；每个固定 ID 只出现一行，124 行对应 124 个唯一 ID，无重复。2026-10-27 DEV-049 T00 新登记 4 项（DEV-049、BUG-085、BUG-086、DEV-050），本表由 120 行增为 124 行，分类重算由 T07 收口复核。DEV-047 已随 0.7.0 完成并移入[完成档案](BACKLOG_COMPLETED.md)，本表由 121 行减为 120 行；DEV-048 计入“开发中”。分类按行状态显式口径统计，明细见 [T03 验收记录](development/DEV048-T03-ACCEPTANCE.md)。
 
 - 收到失败报告不等于根因已确认；部分实现/通过只缩小剩余范围，不批量关闭。状态变化同时同步工作卡，完成项及时移入档案。
 - 新工作先登记固定 ID、目标、范围、环境与验收要求；执行过程写入工作卡或证据，使用[模板](templates/WORK_ITEM.md)。
@@ -44,6 +47,7 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
+| [DEV-049](work-items/DEV-049.md) | P1 | 开发中（T00 已完成；T01—T08 未指派） | 0.7.2（暂定） | 0.6.1 两份反馈：原件逐字节归档（[manifest](validation/feedback-0.6.1-2026-10-27/manifest.json)、[32 章节映射](validation/feedback-0.6.1-2026-10-27/MAPPING.md)）与共享接口约定已随 T00 提交，见 [T00 记录](development/DEV049-T00-ACCEPTANCE.md)。T01 断连核对、T02 dev_check 超时、T03 安装误报、T04 原斜槽回放、T05 多环/预览查缺、T06 种子 15+2、T07 文档收口、T08 集成发布均未实施，须用户逐项指派。主干 `d2e37b0` 与 `v0.7.1`（`ffa0a43`）差异记入 T08 交付差异清单；不新增工具（保持 94）、不改版本。 |
 | [DEV-048](work-items/DEV-048.md) | P1 | 已交付（0.7.1，T00—T05 完成） | 0.7.1（已发布） | 0.6.0 四份反馈：原件归档、61 章节映射、共享接口约定与 BUG-076 本批子项已随 T00 提交；T01 sidecar 完整性/同名校验/回退诊断与 T02 拒绝后引用生命周期已完成离线验证；T03 已按 0.7.0／0.5.1／0.5.3／0.6.1 实际交付回填工作卡、主台账、完成档案与发布检查，见 [T03 验收记录](development/DEV048-T03-ACCEPTANCE.md)。T04 Right 面 ±Z 已取得实机证据，T05 已按 PATCH 发布 0.7.1（main `ffa0a43`，标签 `v0.7.1`）。不新增工具；0.7.0 标签/Release 未改动。 |
 | [DEV-046](work-items/DEV-046.md) | P1 | 第二批实机通过，WorkBuddy 取消未执行；第二批已随 0.6.0 交付 | 0.6.0 | 第一批 BUG-080/FEAT-006 已随 0.5.2 交付。第二批 Task 4 FEAT-012/BUG-045 矩阵创建/更新管线已实现并完成开发者实机验收（38 父作业含故意失败成功回滚、11 姿态基向量/已知点、rev 递进、保存重载、约束符号名、体积 330 独立断言；补充 4 次真实改变位姿 rev 36→40）；第二阶段（2026-10-25）FEAT-008 官方管线示例/说明、组件变更摘要、list_components 约束符号名与 FEAT-048 锁顺序小修复已实现；FEAT-048 两批真实夹具实机（2+1 成功、3+2 拒绝、0 unknown、rev 1、窗口/源字节不变、same-key 回放、依赖探针分支）与最终管线 b86 实机（10 父作业全成功，快照刷新新唯一 label，7200→7800、12384→12984、装配 rev 3→4）通过；独立全量 dev_check 748 项 0 失败 0 错误（b86 干净树）。用户 2026-10-26 决定取消本批 WorkBuddy 测试（未执行，不记通过）并授权合入 main+Release；第二批已随 0.6.0 交付。FEAT-048/FEAT-008 其余范围及第三批 FEAT-049/050、DEV-027 回收、FEAT-012 显式源件更新/嵌套继续开放。 |
 | [BUG-077](work-items/BUG-077.md) | P0 | 验收中 | 0.4.7 | 530项单测及[0.4.7黑盒](validation/WORKBUDDY-0.4.7-2026-10-21.md)正常主线、分页、拒绝保护和并发busy通过；[小型真实非空迁移、同键回放及后续编辑/保存重载已通过](validation/WORKBUDDY-0.4.7-NONEMPTY-2026-10-21.md)；[>16 MiB超限迁移→收养→编辑实机链路通过](validation/BUG077-OVERSIZE-MIGRATION-2026-10-21.md)；[恢复链路四动作矩阵+restore_baseline/abandon_new通过](validation/BUG077-RECOVERY-2026-10-22.md)；[图纸消费点+两处拆分遗漏修复随版交付](validation/BUG077-DRAWING-2026-10-22.md)。accept_saved/accept_live两动作[健康会话各3/3通过](validation/BUG078-ROOT-CAUSE-2026-10-22.md)，事故会话关联及旧现场仍保留、待操作者选择收尾；原环境复测继续开放。485条真实旧登记未迁移，不清保护。0.4.7已随版交付（d23866a/v0.4.7/Release 420203117）。 |
@@ -61,6 +65,8 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
+| [BUG-085](work-items/BUG-085.md) | P1 | 待复现 | 未排期 | 0.6.1 验收（**作者本机 Creo 12.4.0.0**，FEAT-030 九种子矩阵途中）中 `matrix_four_smooth` 创建成功后 worker exit 20 / IPC 不可读、coordinator 两次重试超时；four_smooth 编辑闭环及其后 13 正例 + 2 负例未完成验收（[0.6.1 记录](validation/RELEASE-0.6.1.md)），非外部 Creo 10 新复现。与 BUG-056 同码 `-4`/exit 20 只证明映射相同；同根与否归 T01 离线核对（时间线、缺证、异同判据），不自动重开 BUG-056、不清保护、不主动探测。 |
+| [BUG-086](work-items/BUG-086.md) | P1 | 待复现 | 0.7.2（暂定） | Windows PowerShell 5.1 下 `setup.ps1` 的 pip 步骤 stderr `[notice]` 在 `$ErrorActionPreference='Stop'`/重定向组合下被当失败（pip 实际 exit 0），报 `INSTALL_INCOMPLETE`（[0.7.1 记录](validation/RELEASE-0.7.1.md)）。T03 先用隔离夹具复现三态（exit 0 notice / 非零 / 启动失败），再按真实退出码最小修复，不吞 stderr、不全局降偏好。 |
 | [BUG-084](work-items/BUG-084.md) | P1 | 待复现 | 0.7.0 | 静态确认 main 2af3853 的 plane/datum_plane 解析忽略显式 id，按默认 Z 或 normal/axis/offset 筛选；Python 同分支亦未校验 id。先统一 ID/几何筛选/特征标签契约和实际帧回显，再复现 Right 面纯 Z U 轴、倾斜拉伸及两平面交线轴，关联 BUG-063/064/065；尚无当前实机证据，不直接采信“拉伸固定 Z”或认定所有问题同根。执行见 T03/T05。 |
 | [BUG-080](work-items/BUG-080.md) | P1 | 实机+A/B通过，WorkBuddy第三轮待复验 | 0.5.2 | [装配变换呈 x/25.4 指纹、文档声明 mm](validation/feedback-0.5.0-2026-10-22/manifest.json)（外部 Creo 10 / 0.5.0）：inspect 显式输出装配单位、变换统一毫米坐标映射并保留原始矩阵与单位信息；混合单位验证完整坐标映射，无法确认标未知并传播不完整标志；关联 FEAT-045。2026-10-23 实现独立复审通过（无必修，4 项 Minor 已登记见卡；单位查询+毫米完整映射+原始矩阵+完整性传播+特征状态失败置 incomplete/身份查询码保留/局部非有限矩阵修正；离线原生 case 1–27 与 walk 状态共享化夹具（assembly_walk.h/test_assembly_walk.cpp）已实跑通过、生产复编 exit 0（947f40e，886eb0d 尖端复现夹具/单测/复编；SDK 查询替换/注入 visitor 非真实 ProSolidFeatVisit）；947f40e 全量 557 项单测与统一 dev_check 通过（success=true）），实机混合单位验收 2026-10-24 通过（英寸装配+毫米组件：length_unit in/25.4、组件 mm/父 in、归一平移 25.4/50.8/76.2 与 raw 1/2/3、complete、会话不变，[记录](validation/BUG080-FEAT006-LIVE-2026-10-24.md)），WorkBuddy 黑盒待执行。 |
 | [BUG-081](work-items/BUG-081.md) | P1 | 验收中（诊断已交付） | 0.5.3（诊断）；剩余未排期 | [0.5.0 外部报告 §五](validation/feedback-0.5.0-0.5.1-2026-10-23/manifest.json)（外部 Creo 9/0.5.0）：终态作业的仍存活 owner 使 `creo_migrate_registry` 两次拒绝且负载无停止证据（alive=None 不区分 Windows 错误），inspect 不预标注阻塞条目；本地同参直调通过发生在 owner 死亡后，不据此定性误判。**2026-10-25 阶段三已实现诊断**：inspect 预标注 `owner_block` + 顶层 `blocked_entries`，apply 在锁内重验并返回有界 `owner_block`（recorded/observed、Windows 错误、reason_code、next_steps），15 项单测与 612 例全量、dev_check 通过；停止判定语义与 BUG-074 时间证据适用面**未改**。剩余：实机 MCP 拒绝时序未复现（无同型残留 worker 现场，不新增故障注入），需外部 Creo 9 或用受控现场确认后才决定是否改停止判定。见[阶段三收口](validation/PHASE3-CLOSEOUT-2026-10-25.md)。**2026-10-27 回填**：诊断随 [0.5.3](validation/RELEASE-0.5.3.md)（`60c1895`，[Release 423245388](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.5.3)）交付；停止判定未改，实机拒绝时序与外部 Creo 9 仍开放。 |
@@ -191,6 +197,7 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
+| [DEV-050](work-items/DEV-050.md) | P2 | 待开发 | 0.7.2（暂定） | `tools/dev_check.py` 单元阶段写死 300 秒，完整套件实测 347 秒被判 `unit_tests=timed_out`（1017 项实际通过，[0.7.1 记录](validation/RELEASE-0.7.1.md)）。T02 新增 `--unit-timeout-seconds`（正整数，默认 900，0/负数/非整数参数阶段拒绝），报告记录 `unit_test_timeout_seconds` 并保留 passed/failed/timed_out 三态；不改风格工具预算、不重建基线。 |
 | BUG-020 | P2 | 待规划 | 未排期 | STEP 导出会留下 *_out.log.N。需要说明哪些文件是交付产物、哪些是诊断附件，只清理本作业生成的副产物。检查 STEP 仍有效、用户文件未受影响。文件清理由开发者检查，MCP 黑盒只验证返回的文件说明。 |
 | [DEV-031](work-items/DEV-031.md) | P2 | 待规划 | 未排期 | 先澄清履带TXT的相位、闭合、近似与容差，再分步安排63站/90凸台、性能和恢复；报告−1.46%偏差仍未满足±1%，本条不直接建模。 |
 | DEV-003 | P2 | 待规划 | 未排期 | 整理 C++ 的执行上下文、模块接口和资源由谁创建、释放，再用受影响的 SDK 构建并运行原生测试。 |

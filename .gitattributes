@@ -57,3 +57,6 @@ docs/validation/feedback-0.5.2-2026-10-26/2026*.md -text
 
 # DEV-048 T00: preserve the four v0.6.0 feedback Markdown originals byte for byte.
 docs/validation/feedback-0.6.0-2026-10-27/2026*.md -text
+
+# DEV-049 T00: preserve the two v0.6.1 feedback Markdown originals byte for byte.
+docs/validation/feedback-0.6.1-2026-10-27/2026*.md -text
