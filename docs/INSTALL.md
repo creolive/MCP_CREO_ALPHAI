@@ -1,6 +1,6 @@
 # 源码安装与接入
 
-当前源码版本0.3.5：切除材料守卫与恢复参数契约见[版本说明](RELEASE_NOTES_0.3.5.md)。BUG-056通道掉线仍待核实，发布不意味着完整兼容或稳定性已验收。
+当前服务／源码版本为 0.7.1（DEV-048 反馈修复），以 [version.py](../version.py) 为准；功能与边界见[版本说明](RELEASE_NOTES_0.7.1.md)，发布与安装证据见[发布验收记录](validation/RELEASE-0.7.1.md)。安装或升级后请按下文「升级与部署核对」确认所装版本、实际路径、启动身份和工具清单，不要只凭版本号判断。0.6.1 验收中出现的通道断连（[BUG-085](work-items/BUG-085.md)）根因未定，发布不意味着完整兼容或稳定性已验收。
 
 ## 需要的环境
 
@@ -102,7 +102,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -CreoRoot 'C
 
 启动客户端中的 MCP 服务，后台自动复用已有会话或启动配置的 Creo。处理启动时出现的登录、许可及其他模态对话框，然后让 AI：
 
-1. 调用 `creo_capabilities`，确认当前运行版本和工具数（0.3.0 为 82 个工具，0.2.6 为 81 个）；查看 `families`、`seed_library` 和 `unavailable_operations`。直接混合及已有零件追加已开放，受范围限制；见 [版本说明](RELEASE_NOTES_0.3.0.md)。
+1. 调用 `creo_capabilities`，确认运行版本与所装 Release 标签一致、工具数与清单符合该版本（0.7.1 为 94 个工具）；核对 `runtime.python_executable`、`runtime.server_entry`、`runtime.code_root` 的实际路径与 `runtime.source_changed_since_startup`，再查看 `families`、`seed_library` 和 `unavailable_operations`。直接混合及已有零件追加已开放，受范围限制；见 [版本说明](RELEASE_NOTES_0.7.1.md)。
 2. 调用 `creo_check_environment`，确认 SDK、模板和编译器路径正确。
 3. 调用 `creo_startup_status` 等待 `state == "ready"`，再调用 `creo_session_status` 确认 `connected == true`。等待时建模请求明确拒绝，未创建任务。
 4. 提交一个新零件建模计划；只提交一次，使用 `creo_get_job` 查询任务进度。
@@ -155,6 +155,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -CreoRoot 'C
 
 许可诊断仅返回状态，不返回许可值、服务器名或文件位置。环境变量 `PTC_D_LICENSE_FILE` 未设置，或其中所有本地路径都不存在时，子进程会尝试使用 `parametric.psf` 的有效路径或服务器配置；不改系统环境变量。有效文件、目录、`端口@服务器` 及仍含有效项的列表保持原配置。文件存在或服务器字符串可解析仍不证明能取得 Toolkit 许可，需要实际建模验证。
 
+## 升级与部署核对
+
+升级保持本机配置与运行数据：停止新提交，等待正在运行的建模任务结束（已受理作业只轮询，不重新提交），保留 `config.json`、`models/`、`jobs/`、`open_file/`、`session_erase/` 与 `session_activity.json`，用目标 Release 的公开源码更新代码与文档，重跑 `setup.ps1`，再重启客户端中的 MCP 服务。不要手工删除 `native/constants.inc`，构建会按本机 SDK 重新生成。
+
+重启后核对以下四项，任一不符按未完成部署处理：
+
+1. **版本**：`creo_capabilities` 的 `version` 等于所装 Release 标签去掉 `v` 前缀（例如标签 `v0.7.1` → `0.7.1`），并与该源码 `version.py` 一致。版本号本身不足以证明部署正确。
+2. **路径**：`runtime.python_executable`、`runtime.server_entry`、`runtime.code_root` 指向本次解压目录及其 `.venv`，不是其他副本；移动目录后必须重跑安装。
+3. **启动身份**：`runtime.source_changed_since_startup=false`，`runtime.source_fingerprints_at_startup` 已生成；为 `true` 时磁盘源码已变化，重启服务再验收。客户端配置改动不会替换已运行的服务进程。
+4. **工具清单**：`creo_capabilities` 的工具数与 `unavailable_operations` 与该版本说明一致（0.7.1 为 94 个工具），而不是沿用上一版本的可见清单。
+
+随后按「安装步骤」第 4 条用 `creo_startup_status` 等到 `ready`、`creo_session_status` 确认 `connected=true`，并完成一次保存重载验证。
+
 ## 从 0.2.0 升级到 0.21
 
 停止 MCP 客户端中的服务并等待正在运行的建模任务结束。保留项目内 `config.json`、`models/`、`jobs/`，用 0.21 的公开源码更新代码及文档，重新运行安装脚本，再重启客户端服务。模型类型未记录的旧模型按零件处理；原有底板接口仍保留。
@@ -164,7 +177,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -CreoRoot 'C
 
 ## 升级到 0.3.0
 
-升级流程同上，保留本机配置、模型和任务目录，等待原生任务完成后更新代码并重跑 `setup.ps1`。不必手动删除 `native/constants.inc`；构建会自动更新。新接口及限制见 [版本说明](RELEASE_NOTES_0.3.0.md)。更新源码后重启客户端中的 MCP 服务，调用 `creo_capabilities` 确认 `version == "0.3.0"`。只打开一个 Creo 会话；高级配置 `creo_session_id` 可固定 Toolkit 连接目标，重启会话后需重新取得有效 ID，程序拒绝连接回退。重跑安装保留已有 ID，不会自动猜测新的连接目标。
+升级流程同上，保留本机配置、模型和任务目录，等待原生任务完成后更新代码并重跑 `setup.ps1`。不必手动删除 `native/constants.inc`；构建会自动更新。新接口及限制见 [版本说明](RELEASE_NOTES_0.3.0.md)。更新源码后重启客户端中的 MCP 服务，调用 `creo_capabilities` 核对版本与该 Release 一致；本节保留 0.3.0 当时的历史说明，当前核对项见上文「升级与部署核对」，不再要求 `version == "0.3.0"`。只打开一个 Creo 会话；高级配置 `creo_session_id` 可固定 Toolkit 连接目标，重启会话后需重新取得有效 ID，程序拒绝连接回退。重跑安装保留已有 ID，不会自动猜测新的连接目标。
 
 包含本次建模增量的源码内附 MIT 种子库，安装器验证并注册，`creo_new_loft_part` 按数量/模式自动选择，不要求手填路径和特征 ID。库内有九个原生 PRT：2/3/4/6 截面的直线和平滑，以及 5 截面平滑；详细步骤见 [SEED_LIBRARY.md](SEED_LIBRARY.md)。新电脑需要重新安装并验证，不直接复制旧 `.venv`、二进制、配置或会话 ID；同机换客户端可以共用安装目录，见 [MIGRATION.md](MIGRATION.md)。
 

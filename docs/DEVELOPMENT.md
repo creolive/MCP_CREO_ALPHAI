@@ -4,6 +4,8 @@
 
 服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.1（DEV-048 反馈修复，PATCH，公开工具 94 不变：收养侧车完整性与回退、拒绝后引用生命周期、工作卡与发布检查回填、Right 面 ±Z 实机证据）。版本说明见 [RELEASE_NOTES_0.7.1.md](RELEASE_NOTES_0.7.1.md)，检查见 [RELEASE-0.7.1.md](validation/RELEASE-0.7.1.md)。前一版为 [0.7.0](RELEASE_NOTES_0.7.0.md)。
 
+当前开发批次为 [DEV-049](work-items/DEV-049.md)（0.6.1 两份反馈后续 PATCH，暂定 0.7.2）：T00—T06 已完成（T04/T05/T06 仅离线阶段），T07 为当前文档收口，T08 集成与发布未指派；它不属于已发布 0.7.1。
+
 本机联调只使用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。先按[根级规范](../AGENTS.md#本机开发联调补充2026-10-17用户要求)核对卡死调查与会话可操作条件，满足门槛后再安排 Toolkit 连接或故障注入；不得擅自结束 Creo 或清除 unknown 保护。文档分类和条目关闭不解除这些限制。
 
 ## 每次开发的顺序
@@ -52,7 +54,27 @@ python -m venv .venv
 .\.venv\Scripts\python.exe tools\dev_check.py --write-baseline --reason 'DEV-xxx: 已审查的具体原因'
 ```
 
+单元阶段使用独立子进程预算，默认 **900 秒**，可用 `--unit-timeout-seconds` 覆盖；0、负数或非整数在参数解析阶段即以退出码 2 拒绝，`--skip-unit` 只跳过单元阶段、不取消预算校验。报告记录 `unit_test_timeout_seconds`，继续区分 `passed`/`failed`/`timed_out`，`timed_out` 永远不会被报告为 success。不要用拆开的 `tools/test_unit.py` 结论代替统一入口（[DEV-050](work-items/DEV-050.md)、[T02 记录](development/DEV049-T02-ACCEPTANCE.md)）。
+
+```powershell
+.\.venv\Scripts\python.exe tools\dev_check.py --unit-timeout-seconds 1200 --work-item DEV-050
+```
+
+安装脚本的外部 Python 调用统一走 `setup.ps1` 的 `Invoke-PipStep`：函数内局部把 `$ErrorActionPreference` 设为 `Continue` 并在 `finally` 恢复，调用前清空 `$LASTEXITCODE`，之后立即读取真实退出码。判定只看退出码——0 继续，启动失败/无退出码/非零按原语义失败并保留原始错误与码；stdout/stderr 不吞、不按 `[notice]` 文本猜测结果，也不全局降低错误偏好。新增安装步骤的外部进程调用应沿用该封装；回归见 `tests/unit/test_setup_native_stderr.py`（[BUG-086](work-items/BUG-086.md)、[T03 记录](development/DEV049-T03-ACCEPTANCE.md)）。
+
 语言细则见 [编码规范](development/CODING_STANDARD.md)，迁移路线见 [架构计划](development/ARCHITECTURE.md)。
+
+## DEV-049 批的离线与实机驱动
+
+DEV-049 新增/收紧的三个驱动都**默认离线**：不给实机开关时不创建 MCP 客户端、不连接 Toolkit，只校验输入并写报告。实机必须同时给出 `--live` 与 `--confirm-session-usable`，且仍须人工核对 BUG-001 会话条件；单一开关或历史 `ready` 都不能替代核对。阶段记录见 [T04](development/DEV049-T04-ACCEPTANCE.md)、[T05](development/DEV049-T05-ACCEPTANCE.md)、[T06](development/DEV049-T06-ACCEPTANCE.md)。
+
+| 驱动 | 用途 | 参数与门槛 | 离线结论不等于 |
+| --- | --- | --- | --- |
+| `tools/test_dev049_tilted_cut.py` | R20／54°／4×6 原斜槽六例（autodim/coordinates × positive/negative/symmetric），独立解析+数值积分 oracle | 默认离线；`--output` 指定新报告（默认 `build/dev049_t04/<run_id>/report.json`，启动时拒绝覆盖已存在报告）；单向 238.390260127791、双向 476.780520255582 mm³，绝对误差 ≤0.01，并核对实际帧与切口分布 | 六例实机通过；当前六例实机未执行 |
+| `tools/test_dev049_profile_replay.py` | 多环输入查缺后的替代回放（2 圆对照、5/10 四弧环 cut），面积×厚度 oracle | 默认离线、双开关同上；报告声明 `original_case_replay=not_possible_missing_attachments`、`replacement_verification=true` | 原 `gear10.json` 案例回放；原输入缺失，替代用例实机未执行 |
+| `tools/test_installation_loft.py` | 种子矩阵 15 正例 + 2 负例 | 保留 `--seed-library`；默认离线；实机需 `--live --confirm-session-usable`；新增可重复 `--case NAME`（未知或重复名称在连接前以退出码 2 拒绝）与 `--output PATH`（默认 `build/dev049_t06/<run_id>/report.json`，拒绝覆盖）；逐阶段持久化，不做自动重放/resume | 15+2 实机通过；不同 `source_fingerprint` 的报告不得合并，0.6.1 的 five_smooth 成功不移植 |
+
+全部驱动的报告都写入唯一运行目录并带 provenance（提交、分支、dirty、源码指纹）；异常与失败报告同样保留，不覆盖历史文件。
 
 ## 验收级别
 
