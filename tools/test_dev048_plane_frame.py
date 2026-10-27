@@ -25,6 +25,7 @@ import platform
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,10 @@ RECT_MAX = [10, 20]
 DEPTH = 4
 VOLUME = (RECT_MAX[0] - RECT_MIN[0]) * (RECT_MAX[1] - RECT_MIN[1]) * DEPTH
 PLANE_TOL = 1e-6
+
+# Creo keeps every part of a session alive, so a repeated run must not reuse part
+# names: creo_new_part refuses a name that already exists in the session.
+RUN_TAG = uuid.uuid4().hex[:6]
 
 # Offline fixture only. The live path derives the ID from model inspection.
 RIGHT_FIXTURE = [
@@ -109,6 +114,27 @@ def plan_for(plane_id: int, origin: list, u_axis: list) -> list[dict]:
     return [sketch_plan(plane_id, origin, u_axis), extrude_plan()]
 
 
+# Entry errors that have nothing to do with the requested direction. They mean the
+# case never reached the boundary under test, so they must never be scored as the
+# expected refusal (DEV-048 T04: a reused model answered "Feature labels already
+# exist" and was briefly mistaken for a direction refusal).
+UNRELATED_ENTRY_MARKERS = (
+    "Feature labels already exist",
+    "expected_revision",
+    "busy",
+)
+
+
+DIRECTION_MARKERS = ("u_axis", "parallel", "direction")
+
+
+def expected_entry_refusal(text: str) -> bool:
+    """Whether an entry error is the direction refusal this case is looking for."""
+    if any(marker in text for marker in UNRELATED_ENTRY_MARKERS):
+        return False
+    return any(marker in text for marker in DIRECTION_MARKERS)
+
+
 def box_measurements(frame: dict) -> dict:
     """Map the rectangle corners through the reported frame; no native values used."""
     o, u, v, n = (frame[key] for key in ("origin", "u_axis", "v_axis", "normal"))
@@ -151,6 +177,14 @@ def check_measurements(snapshot: dict, expected: dict) -> None:
     near(bodies[0]["bbox"], expected["bbox"])
 
 
+def same_measure(new, old) -> None:
+    """Compare a measurement that a geometry-free part simply does not have."""
+    if new is None or old is None:
+        assert new is None and old is None, (old, new)
+        return
+    near(new, old)
+
+
 def check_unchanged(before: dict, after: dict) -> None:
     assert after["revision"] == before["revision"], (before["revision"], after["revision"])
     assert after.get("aliases") == before.get("aliases"), (
@@ -158,8 +192,8 @@ def check_unchanged(before: dict, after: dict) -> None:
         after.get("aliases"),
     )
     old, new = before["inspection"], after["inspection"]
-    near(new["volume_mm3"], old["volume_mm3"])
-    near(new["center_of_gravity"], old["center_of_gravity"])
+    same_measure(new.get("volume_mm3"), old.get("volume_mm3"))
+    same_measure(new.get("center_of_gravity"), old.get("center_of_gravity"))
     old_bodies = [body for body in old["bodies"] if body.get("has_geometry")]
     new_bodies = [body for body in new["bodies"] if body.get("has_geometry")]
     assert len(new_bodies) == len(old_bodies), (old_bodies, new_bodies)
@@ -307,7 +341,7 @@ class PlaneFrameAcceptance:
         return model_id, snapshot
 
     async def valid_case(self, key: str, u_axis: list, index: int) -> None:
-        model_id, before = await self.fresh_part(f"dev048t04_{key[:2]}{index}")
+        model_id, before = await self.fresh_part(f"dev048t04_{key[:2]}{index}_{RUN_TAG}")
         plane = select_right_plane(before["inspection"]["datum_planes"])
         plan = plan_for(plane["id"], plane["origin"], u_axis)
         submitted = await self.call(
@@ -359,10 +393,11 @@ class PlaneFrameAcceptance:
         self.last_valid = {"model_id": model_id, "plane": plane, "snapshot": saved}
 
     async def parallel_case(self) -> None:
-        assert self.last_valid is not None, "The parallel-U case reuses the last valid part"
-        model_id = self.last_valid["model_id"]
-        plane = self.last_valid["plane"]
-        before = self.last_valid["snapshot"]
+        # A dedicated fresh part: reusing a part that already carries "profile" and
+        # "solid" made creo_execute_plan answer "Feature labels already exist", which
+        # never reached the boundary this case is meant to test.
+        model_id, before = await self.fresh_part(f"dev048t04_par_{RUN_TAG}")
+        plane = select_right_plane(before["inspection"]["datum_planes"])
         plan = plan_for(plane["id"], plane["origin"], U_PARALLEL)
         result = await self._invoke(
             "creo_execute_plan",
@@ -377,7 +412,7 @@ class PlaneFrameAcceptance:
             structured = result.structured_content or {}
             assert structured.get("status") != "busy", structured
             text = str(result.content)
-            if not any(token in text for token in ("u_axis", "parallel")):
+            if not expected_entry_refusal(text):
                 raise RuntimeError(f"Entry refused for an unrelated reason: {text}")
             rejection = "entry_refusal"
         else:

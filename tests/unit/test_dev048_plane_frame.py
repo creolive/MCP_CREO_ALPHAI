@@ -30,6 +30,7 @@ def snapshot(volume=800.0, bbox=None, center=None, revision=3):
         "aliases": {"profile": {"feature_id": 7}},
         "inspection": {
             "length_unit": {"name": "mm", "scale_to_mm": 1.0},
+            "datum_planes": [PLANE],
             "volume_query_code": 0,
             "volume_mm3": volume,
             "center_of_gravity": center or [2.0, -10.0, 5.0],
@@ -191,6 +192,7 @@ class RefusalTests(unittest.IsolatedAsyncioTestCase):
             "snapshot": before,
         }
         runner.snapshot = AsyncMock(return_value=copy.deepcopy(before))
+        runner.fresh_part = AsyncMock(return_value=("a" * 32, copy.deepcopy(before)))
         return runner
 
     async def test_entry_refusal_creates_no_job_and_changes_nothing(self):
@@ -284,7 +286,7 @@ class RefusalTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(message=terminal["message"]), self.assertRaises(AssertionError):
                 await runner.parallel_case()
 
-    async def test_parallel_case_reuses_the_last_valid_part(self):
+    async def test_parallel_case_uses_a_fresh_part(self):
         runner = self.runner(snapshot())
         runner._invoke = AsyncMock(
             return_value=Mock(
@@ -295,6 +297,7 @@ class RefusalTests(unittest.IsolatedAsyncioTestCase):
         )
         await runner.parallel_case()
         applied = runner._invoke.await_args.args[1]
+        runner.fresh_part.assert_awaited_once()
         self.assertEqual(applied["model_id"], "a" * 32)
         self.assertEqual(applied["expected_revision"], 3)
         self.assertEqual(applied["operations"][0]["plane"]["reference"]["id"], PLANE["id"])
@@ -324,6 +327,57 @@ class OfflineEntryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(text, "")
         live.assert_awaited_once()
+
+
+class UnchangedStateTests(unittest.TestCase):
+    """A geometry-free part reports no volume; that must not crash or pass falsely."""
+
+    @staticmethod
+    def empty(revision=1):
+        return {
+            "revision": revision,
+            "aliases": {},
+            "inspection": {
+                "length_unit": {"name": "mm", "scale_to_mm": 1.0},
+                "volume_query_code": 0,
+                "volume_mm3": None,
+                "center_of_gravity": None,
+                "bodies": [],
+            },
+        }
+
+    def test_geometry_free_part_counts_as_unchanged(self):
+        driver.check_unchanged(self.empty(), self.empty())
+
+    def test_geometry_appearing_or_disappearing_is_a_change(self):
+        with self.assertRaises(AssertionError):
+            driver.check_unchanged(self.empty(), snapshot())
+        with self.assertRaises(AssertionError):
+            driver.check_unchanged(snapshot(), self.empty())
+
+
+class EntryRefusalTests(unittest.TestCase):
+    """A refusal only counts as the expected one when it is about direction."""
+
+    def test_label_collision_is_not_a_direction_refusal(self):
+        text = (
+            "Error executing tool creo_execute_plan: "
+            "Feature labels already exist: ['profile', 'solid']"
+        )
+        self.assertFalse(driver.expected_entry_refusal(text))
+
+    def test_direction_errors_are_recognised(self):
+        for text in (
+            "u_axis is parallel to the support plane normal",
+            "Zero direction vector",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(driver.expected_entry_refusal(text))
+
+    def test_unrelated_errors_are_not_mistaken_for_direction(self):
+        for text in ("model not found", "expected_revision 3 != 4", "server busy"):
+            with self.subTest(text=text):
+                self.assertFalse(driver.expected_entry_refusal(text))
 
 
 if __name__ == "__main__":
