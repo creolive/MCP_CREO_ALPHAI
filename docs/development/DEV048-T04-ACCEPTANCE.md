@@ -1,8 +1,8 @@
-# DEV-048 T04 验收记录：Right 面 ±Z 定向驱动（离线准备）
+# DEV-048 T04 验收记录：Right 面 ±Z 定向驱动（实机三例通过）
 
 日期：2026-10-27（Asia/Shanghai）。任务：[DEV-048](../work-items/DEV-048.md) T04。分支 `codex/dev048-t04-plane-evidence`，基于 T03 验收提交 `df08fd1`。
 
-**结论：T04 未验收。** 本轮只交付离线驱动、离线用例与阶段记录。没有连接 Creo、没有调用 Toolkit、没有提交任何建模作业，也没有取得任何实机帧、体积、AABB、重心或回滚结果。`--live` 路径在本轮一次都没有执行；离线输出中的 `800 mm³` 是按输入尺寸推算的期望值，不是实测值。
+**结论：T04 实机三例通过（2026-10-27）。** 第 1—10 节记录的是离线准备阶段当时的事实：那一轮没有连接 Creo，`800 mm³` 只是按输入推算的期望值。此后在用户明确授权的会话中执行了实机矩阵，Right 面 `u_axis=[0,0,1]` 与 `[0,0,-1]` 两例均通过，平行法向拒绝一例取得原生回滚证据，结果见 §11。离线阶段的结论保持不变，不追溯改写。
 
 ## 1. 依赖与基线
 
@@ -14,7 +14,7 @@
 | T03 验收提交（本分支起点） | `df08fd14ba43cade3a3c3c7e76794b1cf6c328b2` |
 | main / `v0.7.0^{}` | 均为 `2a7835808e1ea2981df411c7e2a4e94d1fd4d92d` |
 | `version.py` | 0.7.0（本轮未改） |
-| 本机环境 | Windows 11 x64、Python 3.12.14；Creo 12.4.0.0 会话**未核验**，本轮未使用 |
+| 本机环境 | Windows 11 x64、Python 3.12.14；Creo 12.4.0.0（离线阶段未核验、未使用；实机阶段见 §11） |
 
 工作区非干净，均为保留的本机运行产物：`session_activity.json` 有修改，另有未跟踪的 `.codebuddy/`、`.workbuddy/`、`.zcode/`、`examples/wb_unsaved_03.prt.1`、`session_erase/`。以上未暂存、未提交、未删除。
 
@@ -157,7 +157,7 @@ PS> .\.venv\Scripts\python.exe -m ruff format --check tools\test_dev048_plane_fr
 
 单测 `OfflineEntryTests` 对三种标志组合断言"不触发实机入口"，对双标志断言只调用一次实机入口。
 
-## 7. 缺失的实机证据
+## 7. 缺失的实机证据（已由 §11 补齐）
 
 本轮未产生、也未声称以下任何一项：
 
@@ -191,13 +191,13 @@ git switch codex/dev048-t04-plane-evidence   # 若已合入 T05，改用当时�
 - 驱动会新建两个受管毫米测试零件（写入本机 `models/`，不入库），不擦除会话模型；若出现 busy／unknown／失联，立即停止，不重试、不修复旧模型。
 - 若任一断言失败，如实记录复现与影响；T04 仍为未验收，几何实现不在本任务内修改。
 
-## 9. 未测与保留
+## 9. 未测与保留（离线阶段结论；实机部分见 §11）
 
 - 本轮全部结论只来自离线输入校验、几何推算与断言自检，不构成任何 Creo、Toolkit 或原生几何证据。
 - 外部 Creo 10 的原始现象（R3 §3 `datum_plane id=2` 纯 Z 失败、§5 倾斜面去料）未在本机复现，也不因驱动就绪而转为通过。
 - 未重跑 DEV-047 完整矩阵，未重建原 Creo 10 工程、gear10 附件或 Part1/Part2；不宣称逐字回放。
 - 未改 `src/`、`native/` 业务实现，未改 `version.py`，未合入 main、未推标签、未发布；T05 未启动。
-- T04 状态维持"未验收"，待上述实机命令取得真实证据后再由用户确认。
+- 离线阶段维持"未验收"；实机执行结果见 §11，由该节给出最终结论。
 
 ## 10. 受测源码与文件指纹
 
@@ -211,3 +211,56 @@ git switch codex/dev048-t04-plane-evidence   # 若已合入 T05，改用当时�
 驱动与用例的提交为 `519950cd6e66f84db17793715fc1311f4f5d60c3`（父提交 `df08fd1`）；本记录随其后的小提交补录该提交号。
 
 实机执行时驱动会把提交、分支、dirty 与全部源码文件哈希写入报告的 `provenance`，届时以报告中的 `source_fingerprint` 为准。
+
+## 11. 实机执行结果（2026-10-27，Creo 12.4.0.0）
+
+### 11.1 执行条件
+
+| 项目 | 实际值 |
+| --- | --- |
+| 授权 | 用户在对话中明确选择"连接 Toolkit 跑 T04 驱动"，并确认会话可操作 |
+| 会话 | `xtop` pid 27388，`Responding=True`；Creo Parametric 12.4.0.0 |
+| 启动配置 | 本机 `config.json` 增设 `auto_start_creo=false`（该文件在 `.gitignore` 中，未入库、未提交） |
+| 通道 | `toolkit-owner.lock` 无持有者；执行期间未并发其它客户端 |
+| 驱动分支 | `codex/dev048-t04-plane-evidence`，受测提交 `8be9cbc`（驱动修复已提交并格式化），执行时工作区 dirty（仅本记录与工作卡尚未提交） |
+| 报告指纹 | `provenance.source_fingerprint = 126361ff4dd7bc52cbb18e166a9310c6f946e0ee680c32675ed8c049bc5af805`（对 `8be9cbc` 的已格式化源码计算） |
+| 证据文件 | `build/dev048_t04_plane_frame.json`（本机生成目录，不入库） |
+
+执行命令：
+
+```powershell
+.\.venv\Scripts\python.exe tools\test_dev048_plane_frame.py --live --confirm-session-usable
+```
+
+结果：`plane_frame_matrix = passed`，`native_acceptance = partial`。`partial` 是因为本任务只覆盖 Right 面 ±Z 与平行法向拒绝三项，不代表重跑 DEV-047 的完整历史矩阵。
+
+### 11.2 三例证据
+
+Right 面几何 ID 由巡检选出（"过原点且法向平行 X"的唯一平面），实际取到 `id=2`；这个 2 是本次会话的真实值，不是驱动里写死的常量。
+
+| 用例 | 输入 | 实际帧 | 体积 / AABB / 重心 | 保存重载 | revision | 结论 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `u_positive_z` | `u_axis=[0,0,1]` | `u=[0,0,1]`、`v=[0,-1,0]`、`n=[1,0,0]`，`v = n × u` | `799.9999999999998` mm³；`[[0,-20,0],[4,0,10]]`；`[2,-10,5]` | `true` | `2` | passed |
+| `u_negative_z` | `u_axis=[0,0,-1]` | `u=[0,0,-1]`、`v=[0,1,0]`、`n=[1,0,0]`，`v = n × u` | `799.9999999999998` mm³；`[[0,0,-10],[4,20,0]]`；`[2,10,-5]` | `true` | `2` | passed |
+| `parallel_u_axis_refusal` | `u_axis=[1,0,0]`（平行于面法向） | 空零件，无几何 | — | — | `1 → 1` | refusal_verified（原生回滚，别名不变） |
+
+两例有效方向的补充事实：`solver.final_units=mm`、`coordinate_scaling=false`、`max_deviation_mm≈7.5e-48`（坐标建草与原生查询一致）；模型分别为 `79166d508a274366a83d466bc38e256f`、`b1b0309ffd9d46b68cb2534a2c8ea36b`，作业 `4bb87812c0d54a45abb5e5cc5eecb743`、`2903e5fc910245df8b62222afde894ec`。
+
+平行法向一例：入口**没有**拒绝（返回 job），由原生边界拒绝，`rollback_succeeded=true`，`revision` 保持 1，`aliases` 不变；作业 `9c748e25180c4cd3b555d8e332af0e55`，模型 `840a50498d7143389e40d80d8133f60a`。模型是新建的空零件，因此体积为 `null`——"无几何"不等于"体积 0"，报告如实记录为 `null`，不以 0 代替。
+
+### 11.3 为取得该结果修复的三处驱动缺陷
+
+三次失败都出在驱动，不在 Creo 或几何实现。原始报文保留：
+
+1. `creo_execute_plan: Feature labels already exist: ['profile', 'solid']` —— 平行法向用例复用了前一个已建模的零件，计划在入口因标签冲突被拒，根本没走到方向边界。改为每次新建专用空零件，并新增 `expected_entry_refusal()`：标签冲突、`expected_revision`、`busy` 一律不算预期拒绝，只有方向类报文才算。
+2. `New model name already exists in the Creo session` —— 重复运行时零件名固定，Creo 会话中已有同名零件。改为每次运行带 `RUN_TAG` 唯一后缀。
+3. `TypeError: must be real number, not NoneType` —— 空零件 `volume_mm3` 为 `None`，`check_unchanged` 直接做数值比较。新增 `same_measure()`：两侧同为 `None` 视为未变，一侧有几何一侧没有则判为"状态被改"。
+
+对应离线回归（`tests/unit/test_dev048_plane_frame.py`）：`EntryRefusalTests` 3 项、`UnchangedStateTests` 2 项，`test_parallel_case_uses_a_fresh_part` 覆盖"不得复用已建模零件"。
+
+### 11.4 本节未覆盖的范围
+
+- 未重跑 DEV-047 的完整实机矩阵；`native_acceptance=partial` 即为该事实的声明。
+- 未验证倾斜面、多轮廓、纯 Z `u_axis` 的历史现象（R4 报告项），本任务只做 Right 面 ±Z 的定向补证。
+- 未做故障注入、未动 BUG-078 三个旧现场、未结束或重启 Creo。
+- 未改 `src/`、`native/` 业务实现与 `version.py`；未合入 main、未推标签、未发布。
