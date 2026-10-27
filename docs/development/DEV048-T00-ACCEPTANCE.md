@@ -64,7 +64,7 @@ git status --porcelain
 ## 提交
 
 - 基线提交：`2a7835808e1ea2981df411c7e2a4e94d1fd4d92d`（main / `v0.7.0^{}`），`version.py` 0.7.0，未改动。
-- 本任务提交：`<T00-SHA>`，分支 `codex/dev048-feedback060`。该提交包含本记录、DEV-048 卡、四份原件与 manifest/MAPPING、两份计划文档、`.gitattributes`、台账登记行与 BUG-076 子项；SHA 于提交后回填。
+- 本任务提交：`d28d5f4`，分支 `codex/dev048-feedback060`。该提交包含本记录、DEV-048 卡、四份原件与 manifest/MAPPING、两份计划文档、`.gitattributes`、台账登记行与 BUG-076 子项；SHA 于提交后回填。
 - 未合入 main、未创建标签、未发布、未改版本号、未启动其他任务。
 
 ## 未测与交回
