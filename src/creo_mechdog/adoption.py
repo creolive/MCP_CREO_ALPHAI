@@ -581,8 +581,10 @@ def inspect(model_id: str | None = None) -> dict:
                 # preflight job stays as evidence.
                 structured = _native_refusal(str(error))
                 if structured is not None:
+                    # Cleanup state is execution evidence: it stays on the
+                    # persisted preflight job, never on the public result.
                     manifest["staging_cleanup"] = _cleanup_staging(path)
-                    return {**structured, "staging_cleanup": manifest["staging_cleanup"]}
+                    return structured
                 raise
             except AdoptionMetadataBudgetExceeded as error:
                 manifest["status"] = "failed"
@@ -639,7 +641,6 @@ def inspect(model_id: str | None = None) -> dict:
                             {"live": live, "inspection_warnings": warnings}
                         ),
                         "refusal_details": _refusal_details(live),
-                        "staging_cleanup": manifest["staging_cleanup"],
                         "file": file,
                         "source_kind": "file" if origin else "session_only",
                         "model_id": None,

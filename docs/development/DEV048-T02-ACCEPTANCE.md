@@ -51,13 +51,20 @@
 - `src/creo_mechdog/adoption.py`
   - 新增 `_cleanup_staging`：返回 `{"state": "removed" | "failed", "staging": <绝对路径>, "error": ...}`；清理失败不再让拒绝结果丢失，也不声称文件已消失。
   - 新增 `_prune_removed_refs`：仅当 `inspection_refs.verify_ref`（大小 + 完整 SHA256 + 受控路径）失败时才移除引用，并用共用 `add_warning` 记 `inspection_ref_removed_after_refusal` + `fallback_status=not_attempted`；仍能校验的引用原样保留。
-  - `inspect` 的两处拒绝分支（原生稳定前缀拒绝、拒绝判定）改为：记录清理真实状态 → 修剪已失效引用 → 重新写 `job.json` → 返回带 `staging_cleanup` 的同义结果。没有删除任何 `jobs/` 证据或用户模型；摘要由共用收尾提供，拒绝响应与 job 投影保留 units/volume。
+  - `inspect` 的两处拒绝分支（原生稳定前缀拒绝、拒绝判定）改为：记录清理真实状态 → 修剪已失效引用 → 重新写 `job.json` → 返回与持久化同义的拒绝结果。没有删除任何 `jobs/` 证据或用户模型；摘要由共用收尾提供，拒绝响应与 job 投影保留 units/volume。
+  - `staging_cleanup` 只写在预检 job 的 manifest / `job.json` 里（`creo_get_job` 可见），**不进入公开 MCP 拒绝响应**：派发表第二节只允许 `inspection_warnings` 那套固定原因码，公开契约不新增字段。
 - `src/creo_mechdog/file_adoption.py`
   - `_verify_reference`：在 `_reserve` 之前校验 item 的 `inspection_ref`（或旧内联资料）；不可读时按 `inspection_reference_unavailable` 已知拒绝处理，不产生半登记、不推进 revision，后项继续。
   - `_public_item` 重复投影时只修剪已不存在的引用（拒绝件记 `inspection_ref_removed_after_refusal`，其余记 `inspection_ref_invalid`）；`refusal_details` 直接使用收尾写入的摘要。
 - `src/creo_mechdog/reconciliation.py`
   - `_snapshot` 的候选件在发布前校验 `inspection_ref`：不可读时移除该引用并记 `inspection_ref_invalid` / `not_attempted`，候选身份与动作可用性不变，不再让恢复 inspect 直接报错。
 - `inspection_refs` 的公开函数签名、原因码集合与去重/上限规则均未改：本任务只在 `_close_stage` 的 verified 分支恢复旧摘要行为；`inspection_warnings` 仍按 `(stage, reason_code)` 去重、上限 4 条、消息 ≤256 UTF-8 字节。
+
+### `_ensure_inspection_summary` 的去留与依据
+
+- 判定：**删除**。`split_result` 覆盖了所有结果写侧——普通收养 `adoption._native`、窗口预检 `adoption.inspect`、逐项提交 `adoption.run_item_locked`、路径收养 `file_adoption.inspect`、恢复 `reconciliation._native`；这些路径产出的 live/verified 现在都由 `_close_stage` 写入摘要。
+- 读侧没有需要另算摘要的写回路径：`adoption._summary_only` 投影的 live 已带摘要；`reconciliation._snapshot` 的候选件与 `inspect` 的公开投影走 `inspection_refs.summary_of`（引用可读则读取，旧内联则直接从内联算）。
+- 因此包里只保留一套摘要规则（`_close_stage`/`summary_of`），不再留第二套同规则实现。若将来出现绕过 `split_result` 直接写 live 的新路径，应在该写侧接入共用收尾，而不是再引入投影期补算。
 
 ### T01 共用层修复：`_close_stage` 恢复摘要（集成负责人确认）
 
@@ -79,12 +86,12 @@
 
 | 命令 | 结果 |
 | --- | --- |
-| 5 个专项 unittest 模块 | `Ran 122 tests in 75.852s`，`OK`，退出码 0（基线同 5 模块 114 项；本任务新增 8 项：3 项窗口拒绝生命周期、1 项 MCP 直接响应投影、3 项路径/批量、1 项恢复候选引用） |
-| T01 专项（共用层修复后） | `Ran 40 tests in 5.283s`，`OK`（`test_inspection_warnings` 含新增 2 项收尾摘要用例） |
-| `tools/test_inspection_sidecar.py` | `success=true`，`exit_code=0`，输出 `INSPECTION_SIDECAR_OK cases=7; no Toolkit call, plain file I/O and SHA256 only` |
-| `tools/dev_check.py --skip-unit --work-item DEV-048` | `success=true`，`checked_source_sha256=f33f51b01b89f5d4362e95c8a209e828f7419d1c262a25de58f1f400ef3ce80e`，`cpp_files_checked=33`，`python_files_checked=213`，`lint_findings=30`、`unformatted_files=16`（均为既有基线项，无新增回归）；`dirty=true` 仅来自 `session_activity.json` 与既有未跟踪运行数据 |
+| T01 专项：`test_inspection_warnings` `test_adoption_split` `test_adoption_budget` | `Ran 40 tests in 5.275s`，`OK`，退出码 0（含本任务新增 2 项收尾摘要用例） |
+| `tools/test_inspection_sidecar.py` | `success=true`，`build_exit_code=0`，`exit_code=0`，输出 `INSPECTION_SIDECAR_OK cases=7; no Toolkit call, plain file I/O and SHA256 only` |
+| T02 四模块：`test_adoption` `test_file_adoption` `test_reconciliation` `test_reconciliation_mcp` | `Ran 113 tests in 75.570s`，`OK`，退出码 0（含本任务新增 8 项：窗口拒绝生命周期 3、MCP 直接响应投影 1、路径/批量 3、恢复候选引用 1） |
+| `tools/dev_check.py --skip-unit --work-item DEV-048` | `success=true`，`checked_source_sha256=ee58f48490af6321181cfdc84fb2acdf7ef9040e22f2f76adf422f510fafa743`，`cpp_files_checked=33`，`python_files_checked=213`，`lint_findings=30`、`unformatted_files=16`（均为既有基线项，无新增回归）；`dirty=true` 仅来自 `session_activity.json` 与既有未跟踪运行数据 |
 
-额外执行（不属于派发表规定命令，用于确认无相邻回归）：`.\.venv\Scripts\python.exe tools\test_unit.py` → `Ran 995 tests in 309.424s`、`OK`、`build/unit_test_report.json` 记录 `success=true`。过程说明：一次较早的全量运行出现过 3 项源码身份用例失败，原因是该次运行期间 `src/creo_mechdog/adoption.py` 正被继续修改（`_LOADED_FINGERPRINTS` 与磁盘内容不一致）；源码定稿后重跑通过，未放宽任何断言。
+额外执行（不属于派发表规定命令，用于确认无相邻回归）：`.\.venv\Scripts\python.exe tools\test_unit.py` → `Ran 995 tests in 314.368s`、`OK`、`build/unit_test_report.json` 记录 `success=true`。该次运行前所有源码与测试改动已落盘、运行期间未再修改，因此源码身份用例不再受干扰；更早一次全量运行曾因运行期继续改源码出现 3 项身份失败，已在源码定稿后重跑通过，未放宽任何断言。
 
 ## 必测场景逐条结论
 
@@ -92,7 +99,7 @@
 | --- | --- | --- |
 | 窗口收养拒绝的引用归属 | `test_window_refusal_drops_the_reference_its_staging_removed`、`test_window_refusal_never_publishes_a_removed_reference`（MCP stdio） | 通过：ref 指向 `models/<model_id>/output/`，清理后四处（直接响应/job.json/compact/full）都不再公布该引用 |
 | 只移除确已不存在的引用 | `test_window_refusal_keeps_a_reference_that_still_verifies` | 通过：sidecar 位于存活 job 目录时拒绝后仍保留引用并通过校验，未为“看起来干净”而删除证据 |
-| 清理成功/失败如实记录 | `test_window_refusal_drops_...`、`test_window_refusal_records_a_failed_cleanup_truthfully` | 通过：`staging_cleanup.state=removed` 时目录确已消失；注入 `rmtree` 失败时为 `failed` + 原始错误、目录仍在、引用仍校验、不声称文件消失 |
+| 清理成功/失败如实记录 | `test_window_refusal_drops_...`、`test_window_refusal_records_a_failed_cleanup_truthfully` | 通过：持久化里的 `staging_cleanup.state=removed` 时目录确已消失；注入 `rmtree` 失败时为 `failed` + 原始错误、目录仍在、引用仍校验、不声称文件消失；公开响应不含该字段 |
 | 拒绝保留单位等摘要 | `test_window_refusal_keeps_a_reference_that_still_verifies`（英寸件、引用存活）、`test_path_refusal_keeps_verifiable_evidence_and_known_units` | 通过：`inspection_summary.units` 与 `refusal_details.actual_units=inch/_known=true`、查询码 0 均保留，`inspection_ref` 未被降级 |
 | 路径收养拒绝证据仍可校验 | `test_path_refusal_keeps_verifiable_evidence_and_known_units` | 通过：`verify_ref`（大小 + 完整 SHA256 + 受控路径）通过，证据 job 的 job/request/native_result 保留 |
 | 重复投影 / job 重新读取 | 窗口用例内连续 `creo_get_job` full/compact 两次 | 通过：两次投影一致，警告不重复（按 `(stage, reason_code)` 去重） |
@@ -115,10 +122,10 @@
 | 文件 | SHA256 |
 | --- | --- |
 | `src/creo_mechdog/inspection_refs.py` | `cca0efbd5854dd2a873cc65fb64311c33abc21431d48196ec7204a7c85ac8e86` |
-| `src/creo_mechdog/adoption.py` | `bb4eca7bd143b73ed42d1cc2ebe9a7a3c23e8f4b29aab8a40e2e03f84d698b77` |
+| `src/creo_mechdog/adoption.py` | `523f6882c7a9fefe9b7e6c31dde0bf241f471921b771cca90169415b2d600e42` |
 | `src/creo_mechdog/file_adoption.py` | `ac9dc5389546348a34bcd9c41977eec21ca98d811c2632c29e6fb4f697f5242a` |
 | `src/creo_mechdog/reconciliation.py` | `62a5754be756a7d7fd0b42b090a2ea1efb91b0cb04cf7b097859d003f25bf650` |
-| `tests/unit/test_adoption.py` | `e7740a85f5d9e58619075676080969ca525c06edd990db790fa8898f5e9c55b0` |
+| `tests/unit/test_adoption.py` | `186f262d4e1e3a59e79ab28e6d9e5fdd901575085e05b99c8c8cf0ad4d8744c6` |
 | `tests/unit/test_adoption_split.py` | `ca8b451763bc7156aea33efcbb8e1326151027c0e1c253aed5b9151fd8923f2a` |
 | `tests/unit/test_file_adoption.py` | `80d704b9cda7f643e011df1c2236cecb25c5e195126143cd8f9aa1b5224d7c36` |
 | `tests/unit/test_reconciliation.py` | `1c9d216e32d42d9605b3095d5ecd4acc172e22eb4d96e76549e25c2c7d0eacca` |

@@ -464,7 +464,9 @@ class AdoptionMcpContract(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn("inspection_ref", current)
                 self.assertEqual(current["inspection_summary"]["units"], "in")
                 self.assertEqual(evidence["refusal_details"]["actual_units"], "in")
-                self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
+                # Cleanup state is execution evidence on the persisted job, not
+                # a public field of the refusal response.
+                self.assertNotIn("staging_cleanup", evidence)
                 self.assertEqual(
                     current["inspection_warnings"][0]["reason_code"],
                     "inspection_ref_removed_after_refusal",
@@ -481,6 +483,10 @@ class AdoptionMcpContract(unittest.IsolatedAsyncioTestCase):
                 full = await self.call(
                     client, "creo_get_job", {"job_id": jobs[0], "detail": "full"}
                 )
+                # The cleanup fact lives on the persisted manifest (full), not
+                # in the compact polling projection or the refusal response.
+                self.assertNotIn("staging_cleanup", compact)
+                self.assertEqual(full["staging_cleanup"]["state"], "removed")
                 for manifest in (compact, full):
                     self.assertNotIn("inspection_ref", manifest["result"]["live"])
                     self.assertEqual(
@@ -718,8 +724,7 @@ class AdoptionBusinessRules(unittest.TestCase):
         self.assertEqual(current["inspection_summary"]["units"], "inch")
         self.assertEqual(evidence["refusal_details"]["actual_units"], "inch")
         self.assertTrue(evidence["refusal_details"]["actual_units_known"])
-        self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
-        self.assertFalse(Path(evidence["staging_cleanup"]["staging"]).exists())
+        self.assertNotIn("staging_cleanup", evidence)
         warnings = current["inspection_warnings"]
         self.assertEqual(len(warnings), 1, warnings)
         self.assertEqual(warnings[0]["stage"], "live")
@@ -738,6 +743,7 @@ class AdoptionBusinessRules(unittest.TestCase):
                 manifest["inspection_warnings"], warnings, manifest["inspection_warnings"]
             )
         self.assertEqual(full["staging_cleanup"]["state"], "removed")
+        self.assertFalse(Path(full["staging_cleanup"]["staging"]).exists())
         # Re-reading the job repeats the same projection without duplicating
         # the bounded diagnostic.
         again = bridge.get_job(jobs[0], "full")
@@ -762,7 +768,9 @@ class AdoptionBusinessRules(unittest.TestCase):
         self.assertTrue(
             Path(ref["file"]).resolve().is_relative_to((self.directory / "jobs").resolve())
         )
-        self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
+        self.assertNotIn("staging_cleanup", evidence)
+        persisted = bridge.read_json(bridge.job_path(self.only_job()[0]) / "job.json")
+        self.assertEqual(persisted["staging_cleanup"]["state"], "removed")
         self.assertEqual(current["inspection_summary"]["units"], "inch")
         self.assertEqual(current["inspection_summary"]["units_query_code"], 0)
         self.assertNotIn("inspection_warnings", current)
@@ -776,7 +784,9 @@ class AdoptionBusinessRules(unittest.TestCase):
             patch.object(shutil, "rmtree", side_effect=OSError("staging is locked")),
         ):
             evidence = adoption.inspect()
-        cleanup = evidence["staging_cleanup"]
+        self.assertNotIn("staging_cleanup", evidence)
+        persisted = bridge.read_json(bridge.job_path(self.only_job()[0]) / "job.json")
+        cleanup = persisted["staging_cleanup"]
         self.assertEqual(cleanup["state"], "failed")
         self.assertIn("staging is locked", cleanup["error"])
         self.assertTrue(Path(cleanup["staging"]).is_dir())
