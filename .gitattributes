@@ -51,3 +51,6 @@ docs/DEV-026_0_3_2_三份反馈补录与_Creo_9_SDK_文档口径.md -text
 
 # BUG-077: preserve the nonempty migration black-box report byte for byte.
 docs/validation/workbuddy-0.4.7-nonempty-2026-10-21/report.md -text
+
+# DEV-047 T00: preserve the three v0.5.2 Markdown originals byte for byte.
+docs/validation/feedback-0.5.2-2026-10-26/2026*.md -text

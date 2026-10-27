@@ -67,3 +67,12 @@ walk 状态/判定/节点写入逻辑提取至共享 `native/assembly_walk.h`（
 - 实现摘要：`server.py` 的 `support_status.assembly_checks` 改为 `supported_limited` 并指向 `creo_inspect_session_assembly`，明确只读（树序组件、逐约束快照、毫米规范化 + 原始 4×4、未知单位为 null）与四类受限场景按节点报告；无写路径、装配收养与 reconcile 仍拒绝。`capabilities.py` 家族登记与工具描述已准确，未改。
 - 本次证据：离线全量 612 项单测通过（含 `test_support_status.py` 3 项）、`tools/test_unit.py` exit 0、`tools/dev_check.py` exit 0（success=true）、`bridge.py build` exit 0；本卡为状态字段修正，未重复实机装配检查。
 - 未测范围：嵌套子装配/重复实例/抑制/缺件四场景实机触发、WorkBuddy 黑盒仍开放；整体装配收养、矩阵放置与重建编辑仍属后续路线，不因本次文案对齐而宣称支持。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-09)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §4.1外部Creo10补8组件/变换/约束快照可用而support_status仍planned的证据。基线已将assembly_checks改supported_limited并写限制，不重复登记未交付；R1 §5 P1-3请求的是FEAT-049约束回放，不是本卡只读巡检缺失。R2静态单位确认不能充当本工具实机。T01补余下摘要一致性，原受限四场景与父卡其他范围保留。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。

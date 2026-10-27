@@ -76,7 +76,7 @@ class CallbackAdmission(unittest.TestCase):
 
     def test_both_public_tools_are_registered_and_startup_probe_stays_offline(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
-        self.assertEqual(len(tools), 92)
+        self.assertEqual(len(tools), 94)
         self.assertIn("creo_reconcile_model", tools)
         self.assertTrue(tools["creo_callback_status"].annotations.read_only_hint)
         with (

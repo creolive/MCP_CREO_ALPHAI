@@ -308,3 +308,32 @@ dev_check 748 项一并通过；证据与文件 SHA256 见
 装配只读检查另登记 FEAT-045；本卡 2026-10-19 的统一 code/reason 契约评估与本轮稳定原因代码衔接，不重复登记。
 
 三项当日实现并随[验证记录](../validation/FEAT-044-live-2026-10-20.md)实测：支持状态表与分页一并经 stdio 直连确认（compact 含 support_status）；native 八处接管拒绝错误文本加稳定原因前缀；空窗口 NO_CURRENT_MODEL 见 FEAT-006。2026-10-20 晚按 WorkBuddy 黑盒第 16 项反馈（refusal_details 未在错误表面出现）补齐：inspect 对 native 稳定前缀拒绝返回结构化 `{available:false, reason_code, refusal_details}`（native 先于 live 摘要拒绝时单位/依赖/健康如实标 unknown，不留 staging 登记），实机装配窗口验证通过、新增 2 项单元；同轮 `version.py` 定版 0.4.2（用户 2026-10-20 指定 PATCH、弃用 0.5.0 编号）、缺件错误码/幂等键/session_model_id 提示同步（见验证记录第六节）。整卡仍待规划中首批三项（底板/对称深度/平面构造）未动，不据此关闭。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-08)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求及§6复测；R2 §2.3—§2.5/§7单位规范与迁移；R3 §6.2标签、§6.4批量、§6.5拔模及§7正例。T01补摘要/版本/标签/单位契约；assembly_checks已在基线修为supported_limited，不重开。T12复用既有execute_plan、0.6.0多组件管线、matrix和draft：既有零件批量追加、一次revision/回滚、真实面上的11°内拔模及圆台解析验收，不新增apply_plan或extrude.draft_angle。底板holes等父卡其他范围保持。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
+
+## 2026-10-26 T01 实现前登记：能力、版本、标签和单位契约
+
+用户继续指派 [T01](../development/0.5.2-FEEDBACK-TASKS-2026-10-26.md)，依赖 T00 `90421c6` 已快进纳入集成分支，任务分支 `codex/dev047-t01-contracts`。范围依照 DEV-047 已确认基线，不新增工具或版本、不推进其他任务。
+
+- 新增包内 `capability_summary.py`，以 capabilities.families 的启用状态、工具名和模式生成支持摘要；server 的原入口保留薄适配。补 prepare、按路径/批量 inspect/apply、会话擦除、登记健康/迁移，纠正文件收养已验收范围的陈旧描述。
+- release_status 从 version.py 的 VERSION 语义版本元数据派生为 stable/pre-release/unknown；complete_creo_coverage 继续独立，远端 update.is_prerelease 和缓存状态不改变本地成熟度。
+- schema.Label 保留现有 pattern 和接受集合，只改模式不匹配的错误信息，包含完整规则及小写示例，Pydantic 字段路径和错误类型保留，不自动改名。
+- README 补 normalized/raw、单位和混合坐标映射迁移、unchanged 适用操作；DEVELOPMENT/CODING_STANDARD/RELEASING 加单位验收与支持摘要发布核对要求。
+- 离线回归覆盖摘要与公开注册/分页一致、禁用状态、正式/候选及未知/陈旧更新缓存隔离、标签合法/非法/字段路径与无提交；执行统一 dev_check 和全量单元。只使用本机 Windows/Python，提交前记录实际指纹与 dirty；不启动服务 lifespan、不连接 Toolkit、不构建原生、不修改历史 validation。
+
+### T01 离线实现与验收
+
+按上述范围已补 `support_status` 的 prepare、文件路径收养、会话擦除和登记维护摘要；条目从 `capabilities.families()` 取得启用状态、工具与动作，公开工具仍为 92 个。`release_status` 由本地 `VERSION` 的语义版本后缀决定，远端更新缓存与完整覆盖声明保持独立。`Label` 原正则和可接受输入保持，模式不匹配时给字段路径、28 字符上限、字符集和 `i001_part1` 示例；类型错误仍保留原类别。README 与开发、编码、发布规范补单位和矩阵迁移口径。本次不实现 T02 的结果字段改造。
+
+[T01 验收记录](../development/DEV047-T01-ACCEPTANCE-2026-10-26.md)：Windows / Python 3.12.14，`tools/dev_check.py` 通过（769 个单元测试）；最后补充的两项边界断言后 T01 定向 10/10、最终风格与源码指纹复核通过。未连接 Toolkit、未构建或执行原生建模、未实机验证非毫米行为；整张 FEAT-008 保持开放，T12 与 T13 继续本批后续验收。
+
+### T12 离线实现与验收
+
+按 T12 任务书新增批处理官方示例 `examples/dev047_t12_batch_append.json`（一次计划 6 特征、expected_revision、单次 revision、整作业回滚与 200 操作上限）与离线校验/门控实机驱动 `tools/test_t12_examples.py`；README 固定单位矩阵验收模板（毫米/英寸/混合/未知四场景分别取证、未知为 null）。示例输入全部经真实 `validate_operations` 校验、无模型/面 ID 硬编码。专项 6 项、全量 964 项、语言检查与 dev_check 通过，见 [T12 验收记录](../development/DEV047-T12-ACCEPTANCE-2026-10-26.md)。实机批处理与单位矩阵证据归 T13；整卡保持开放。

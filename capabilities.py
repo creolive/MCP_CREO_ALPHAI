@@ -36,6 +36,7 @@ REGISTERED_OPERATIONS = (
     "component_placement",
     "component_constraints",
     "remove_component",
+    "feature_state",
     "set_dimensions",
     "set_sketch_dimensions",
     "set_parameters",
@@ -129,7 +130,7 @@ def families() -> dict:
             "scope": "Healthy independent millimeter parts/sheetmetal; ordered independent commits; no display/window switching",
             "limits": "Duplicate origins refused; modified/ambiguous residents refused; existing_resident disk/content equality before inspection unknown; unknown stops remainder and preserves protection",
             "evidence_seconds": 600,
-            "native_acceptance": "Pending Creo 12.4 / WorkBuddy validation",
+            "native_acceptance": "Creo 12.4 developer validation in 0.6.0; WorkBuddy was canceled and was not run",
         },
         "session_models": {
             "enabled": True,
@@ -154,6 +155,44 @@ def families() -> dict:
             "limits": (
                 "no writes: no loading, activation, regeneration, save, adoption "
                 "or managed revision; assembly editing/adoption not included"
+            ),
+        },
+        "assembly_replay": {
+            "enabled": True,
+            "tool": "creo_plan_assembly_rebuild",
+            "snapshot_schema_version": 3,
+            "supported_constraints": [
+                "mate",
+                "align",
+                "mate_offset",
+                "align_offset",
+                "insert",
+                "csys",
+            ],
+            "scope": (
+                "Read-only planning of a single-level assembly rebuild from a frozen "
+                "creo_inspect_session_assembly snapshot: explicit occurrence and "
+                "source-reference mappings produce ordered assemble_component then "
+                "component_constraints operations for creo_execute_plan"
+            ),
+            "placement_semantics": (
+                "fixed and default placements are replayed as their real placement "
+                "operations; a constrained component is inserted fixed and then its "
+                "constraints are set; a component without recorded constraints is "
+                "frozen at its observed pose and labelled packaged/unconstrained"
+            ),
+            "binding": (
+                "each assemble_component carries the source model, revision and file "
+                "sha256; creo_execute_plan and the native executor re-check the binding "
+                "before the source is used. The 600-second snapshot window is planning "
+                "evidence, not a long-lived write authorization"
+            ),
+            "limits": (
+                "snapshot schema 3, complete single-level assemblies and managed "
+                "part/sheetmetal sources only; unknown constraint types, missing, "
+                "ambiguous or nested references, older/expired snapshots, changed "
+                "sources and plans over the 200-operation limit are refused; no split "
+                "transactions, no FEAT-050 comparison, no new constraint types"
             ),
         },
         "disk_open": {
@@ -194,6 +233,33 @@ def families() -> dict:
                 "incomplete session enumeration refuses; managed models stay with "
                 "creo_reconcile_model; no global/recursive erase, no manifest "
                 "widening, mid-manifest failures stop and report without resubmitting"
+            ),
+        },
+        "generation_reclaim": {
+            "enabled": True,
+            "tool": "creo_reclaim_generations",
+            "actions": ["inspect", "apply"],
+            "evidence_seconds": 600,
+            "scope": (
+                "Explicit, evidence-bound reclamation of this project's own loader "
+                "and payload generation directories; no Toolkit connection, no DLL "
+                "load and no automatic cleanup on startup, upgrade or status queries"
+            ),
+            "supported": (
+                "generation directories explicitly listed by "
+                "creo_callback_status.generation_inventory that are provably "
+                "unreferenced in every dimension: no current/registered/runtime "
+                "reference, definitive local records, consistent deployment record "
+                "and flat project-owned content"
+            ),
+            "limits": (
+                "current, registered, runtime-referenced, rollback-retained and "
+                "unprovable (missing/corrupt/conflicting records) generations are "
+                "kept; paths outside build/blend_loader and build/blend_callback, "
+                "links/reparse points, expired evidence, changed content or "
+                "references, and occupied files are refused; apply uses the shared "
+                "channel lock, is idempotent per key and reports per-item "
+                "reclaimed/kept/failed/unknown because deletion is not rolled back"
             ),
         },
         "registry_maintenance": {
@@ -264,15 +330,45 @@ def families() -> dict:
         "sketch_dimensioning": {
             "enabled": True,
             "modes": ["auto", "autodim", "coordinates"],
-            "scope": "auto selects native coordinate dimensions on principal planes for supported undimensioned profiles with at least 10 expanded entities or coordinate/radius magnitude above 1000 mm; coordinates can be requested explicitly",
+            "scope": "auto selects native coordinate dimensions on any valid sketch plane for supported undimensioned profiles with at least 10 expanded entities or coordinate/radius magnitude above 1000 mm; coordinates can be requested explicitly",
             "native_test": "19-line large-coordinate profile, R40000 12-gon, large capsule on XY and rotated/translated XZ, large YZ circle and explicit-coordinate rectangle; native sketch/solid IDs, named dimension edits, STL boundaries and save/erase/reload verified",
-            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on XY/XZ/YZ, without user dimensions/constraints; actual geometry checked to 1e-5 mm when creating/replacing; spline/ellipse and arbitrary planes use autodim; no normalization or rigid solving; not proof of every constraint or extreme shape",
+            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on any valid sketch plane (principal string or dictionary plane), without user dimensions/constraints; input u/v components are named after their dominant native section axis; actual geometry checked to 1e-5 mm when creating/replacing; centerlines are verified as infinite lines (direction and offset) and skewed centerlines carry no endpoint dimensions; spline/ellipse use autodim; no normalization or rigid solving; solid extrude/revolve admission checks multi-loop input for open, branched, self-intersecting, intersecting, tangent, zero-area and near-tolerance contours and rejects only confirmed cases; sketch results report analytic contour/entity counts plus the solved native section counts; the native solver remains authoritative; not proof of every constraint or extreme shape",
         },
         "sketch_geometry_edit": {
             "enabled": True,
             "scope": "in-place geometry replacement; entity names/types/counts and sketch feature ID retained; dimensions rebuilt using auto/autodim/coordinates",
             "native_test": "large 19-line and capsule replacements preserve downstream extrusion IDs, geometry, saved reload; failed dimension assertions roll back and live refresh confirms restoration",
             "limits": "replaces prior dimensions/constraints and clears airfoil metadata; query new named dimension IDs after replacement; spline/ellipse retain the original autodim path; coordinate mode cannot be mixed with user constraints",
+        },
+        "feature_lifecycle": {
+            "enabled": True,
+            "tool": "creo_execute_plan",
+            "op": "feature_state",
+            "actions": ["delete", "suppress", "resume"],
+            "scope": (
+                "managed part/sheetmetal ordinary sketches, datums, protrusion/revolve and "
+                "their cuts, group and pattern headers; explicit label/ID targets with real "
+                "before/after status per target"
+            ),
+            "dependency_rule": (
+                "every affected descendant must be listed explicitly; a missing dependency "
+                "returns the dependency list and refuses the plan (native re-checks before "
+                "executing; no automatic cascade)"
+            ),
+            "identity": (
+                "deleted labels become tombstones and are never rebound; suppression keeps "
+                "the feature identity; resume applies only to suppressed targets"
+            ),
+            "suppression_registry": (
+                "intentional suppression is recorded per model/job and participates in health, "
+                "saved-reload and rollback comparison; unrecorded suppression stays unhealthy"
+            ),
+            "limits": (
+                "assembly components use remove_component; system-required objects (default "
+                "coordinate system and template datums) and individually targeted group/pattern "
+                "members are refused; unrecorded or inconsistent suppression is refused; "
+                "native acceptance pending"
+            ),
         },
         "placement": {
             "enabled": True,

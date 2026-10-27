@@ -139,6 +139,52 @@ class ModelQueryTests(unittest.TestCase):
         self.assertEqual(page["aliases"], source["aliases"])
         self.assertTrue(page["complete"])
 
+    def test_split_small_full_snapshot_resolves_sidecar_sections(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        import bridge
+        from creo_mechdog import inspection_refs
+
+        source = model()
+        with tempfile.TemporaryDirectory(prefix="t05_split_full_") as tmp:
+            root = Path(tmp)
+            with patch.object(bridge, "ROOT", root):
+                split = dict(source)
+                inspection = split.pop("inspection")
+                split["inspection_ref"] = inspection_refs.make_ref(
+                    inspection, root / "details", "inspection", prefix="detail"
+                )
+                split["inspection_summary"] = inspection_summary(inspection)
+                aliases = split.pop("aliases")
+                split["aliases_ref"] = inspection_refs.make_ref(
+                    aliases, root / "details", "aliases", prefix="detail"
+                )
+                page = inspect_page(split, "full")
+        # A small split snapshot still takes the whole shape, but that shape
+        # must resolve the sidecar payloads instead of exposing bare *_ref
+        # stubs that drop aliases/inspection from full-detail reads.
+        self.assertNotIn("data", page)
+        self.assertEqual(page["aliases"], source["aliases"])
+        self.assertEqual(page["inspection"], source["inspection"])
+
+    def test_whole_full_shape_carries_feature_state_section(self):
+        # The whole fast path must serve the same bounded feature_state section
+        # (T08 tombstones/suppressions) as the paged full shape, whichever of
+        # the two full shapes a small model happens to take.
+        source = model()
+        source["feature_tombstones"] = {"deleted_pad": {"feature_id": 7, "deleted_at": "x"}}
+        source["suppressed_features"] = {"pad": {"feature_id": 9, "suppressed_at": "y"}}
+        whole = inspect_page(source, "full")
+        self.assertNotIn("data", whole)
+        self.assertEqual(whole["feature_state"]["tombstones"], source["feature_tombstones"])
+        self.assertEqual(whole["feature_state"]["suppressed"], source["suppressed_features"])
+        self.assertEqual(whole["feature_state"]["tombstone_count"], 1)
+        self.assertEqual(whole["feature_state"]["suppressed_count"], 1)
+        paged = inspect_page(source, "full", section="features", limit=1)
+        self.assertEqual(paged["feature_state"], whole["feature_state"])
+
     def test_list_paging_and_stale_cursor(self):
         sources = [model() for _ in range(4)]
         for i, source in enumerate(sources):

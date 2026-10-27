@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bridge
 from capabilities import require_available
-from creo_mechdog import component_changes, model_registry
+from creo_mechdog import component_changes, feature_state, model_registry, operation_results
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -288,10 +288,25 @@ def submit(
                     raise ValueError(
                         "Nested assembly copying is not yet supported; insert owned part/sheetmetal models"
                     )
+        # DEV-047 T09: a replay plan binds the source revision/file digest it was
+        # planned against. Re-read the registry and file bytes under the channel
+        # lock so a source edit or external byte change is refused before a job
+        # exists; the native executor re-checks the revision again before loading.
+        from creo_mechdog.assembly_replay import validate_source_bindings
+
+        validate_source_bindings(operations, models_root=MODELS)
         aliases = model_registry.aliases_of(model) if not new else {}
-        duplicate = set(aliases).intersection(op["label"] for op in operations if "label" in op)
+        # Deleted labels are tombstones: they can never name a new feature
+        # (FEAT-027), so they are reserved exactly like existing aliases.
+        feature_state.reject_tombstoned_labels(model if not new else None, operations)
+        reserved = set(aliases) | (feature_state.tombstone_labels(model) if not new else set())
+        duplicate = reserved.intersection(op["label"] for op in operations if "label" in op)
         if duplicate:
             raise ValueError(f"Feature labels already exist: {sorted(duplicate)}")
+        # Part feature lifecycle admission: resolve explicit targets against
+        # the saved inspection, refuse system objects/members, and require every
+        # affected dependency to be listed (native re-checks before executing).
+        feature_state.validate_plan(model if not new else None, operations)
         from creo_mechdog import airfoil
 
         operations = airfoil.prepare(operations, aliases)
@@ -474,7 +489,17 @@ def run_generic_job(job_id: str, manifest: dict):
                     )
                     model["status"] = "unknown_outcome"
                 else:
-                    result = bridge.read_json(result_file)
+                    result = operation_results.annotate_native_result(
+                        bridge.read_json(result_file),
+                        readonly=request["readonly"],
+                        inputs=request["operations"],
+                    )
+                    # Shared preview projection (T07): raw capture codes live on
+                    # the result, a failed image stays a failed image, and the
+                    # model save/revision outcome is never altered by it.
+                    from creo_mechdog import preview
+
+                    preview.apply_preview_projection(result, directory=directory)
                     result_aliases = result.get("aliases")
                     result_inspection = result.get("inspection")
                     # Job manifests keep only summaries and controlled references;
@@ -547,6 +572,10 @@ def run_generic_job(job_id: str, manifest: dict):
                             ):
                                 if key in result:
                                     model[key] = result[key]
+                            # Deleted-label tombstones and the intentional
+                            # suppression set are part of the model identity;
+                            # a failed job never rewrites them.
+                            feature_state.apply_result(model, result)
                         manifest.update(
                             status="succeeded",
                             stage="verified",

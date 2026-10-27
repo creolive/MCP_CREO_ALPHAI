@@ -1,12 +1,12 @@
-# MCP_CREO_MechDog 0.6.1
+# MCP_CREO_MechDog 0.7.0
 
 开发维护从 [开发入口](docs/DEVELOPMENT.md) 和 [统一功能台账](docs/BACKLOG.md) 开始。每项工作先定义验收；语言与单元检查、Creo 实机验收分别记录。项目采用渐进布局整理，当前支持环境见 [兼容矩阵](docs/COMPATIBILITY.md)。
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **92 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查**、受控恢复及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前注册 **94 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.6.1**（BUG-082 草图编辑修复，PATCH，公开工具仍为 92 个）。主平面上受支持实体的显式 `autodim` 就地编辑复用坐标尺寸方案，响应 solver 记录 requested/used；新增完整回滚证据及种子回归驱动适配。修复批本机 Creo 12.4 编辑专项 16/16 通过；九种子矩阵部分完成后 Toolkit 通道断开，剩余场景、WorkBuddy 及外部 Creo 9 未验收。功能与边界见[版本说明](docs/RELEASE_NOTES_0.6.1.md)，发布检查见[发布记录](docs/validation/RELEASE-0.6.1.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.6.0](docs/RELEASE_NOTES_0.6.0.md)。
+当前服务／源码版本为 **0.7.0**（0.5.2 三份反馈完整交付，MINOR，公开工具 92→94：新增 `creo_plan_assembly_rebuild` 约束回放规划与 `creo_reclaim_generations` 显式世代回收）。本批统一每输入一条带 `execution_status`/`effect_status` 的操作结果、平面引用显式 id 与筛选互斥、任意有效草图面坐标标注、原生轴几何与真实单位/重心元数据（毫米+英寸实机矩阵，unknown 维持替身覆盖）、多环截面诊断、作业/操作级预览投影、`feature_state` 特征删除/抑制/恢复（显式目标、不自动级联）、会话健康三值证据与官方批量/拔模示例；实机矩阵另修复收养拒绝在拆分形态下把已知单位报 unknown 的缺陷。本机 Creo 12.4 实机矩阵（T05 毫米+英寸、T06—T09、T12）与 966 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。功能与边界见[版本说明](docs/RELEASE_NOTES_0.7.0.md)，发布检查见[发布记录](docs/validation/RELEASE-0.7.0.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.6.1](docs/RELEASE_NOTES_0.6.1.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
@@ -21,6 +21,14 @@
 Python 包迁移前两批已完成，更新检查、输入模型及轮廓／翼型辅助实现位于 `src/creo_mechdog/`，整体迁移仍继续。现有开发环境更新源码后执行 `python -m pip install --no-deps -e .`；正常安装由 `setup.ps1` 完成。根入口和数据位置保留，见[迁移任务卡](docs/work-items/DEV-002.md)。
 
 模型引用须按具体工具的参数形状选择，见[引用格式](docs/REFERENCE_SYNTAX.md)。
+
+### 0.5.2 反馈的矩阵与结果迁移口径
+
+`creo_inspect_session_assembly` 的 `transform_to_parent` / `transform_to_root` 是**毫米归一化**的行向量 4×4 矩阵：局部毫米坐标乘矩阵得到父级／根级毫米坐标，平移在末行。`*_raw` 保留 Creo 查询所得原始矩阵及其源／目标模型单位，不可直接作为毫米放置参数。每个节点的 `units.component` / `units.parent` 和装配的 `assembly.length_unit` 提供实际单位名、毫米换算和查询码；缺失或未确认时相应值为 `null`，不能把未知当作毫米。
+
+例如组件为英寸、父装配为毫米时，先确认双方单位及查询结果，再使用完整的 `transform_to_parent` 映射毫米点。若把 raw 定义为 `p_parent_raw = p_local_raw × R_raw + t_raw`，且组件、父级每原始单位分别为 `s_local`、`s_parent` 毫米，则 `p_parent_mm = p_local_mm × (s_parent/s_local × R_raw) + s_parent × t_raw`。混合单位影响 3×3 块与平移，不能只缩放平移。回放位姿时只从**有效的** `transform_to_parent` 取左上 3×3 和末行前三项，并满足 `rotation_matrix` 的正交／行列式校验；单位未知或矩阵不能表达刚体位姿时停止，重新取得证据，不猜测坐标。详见[装配重建管线](docs/ASSEMBLY_REBUILD.md#位姿与矩阵约定)。
+
+`unchanged=true` 只说明对应操作走了**原生几何核验过的同几何快捷路径**；不能据此假定所有写操作都无效果，也不能把同值 `creo_set_dimensions` 自动视为 `unchanged`。成功作业仍按接口保存、重载并推进约定的 revision。批量结果的执行与最终提交／回滚语义以[DEV-047 共享基线](docs/work-items/DEV-047.md#interface-baseline)为准。
 
 ## 安装
 
@@ -154,6 +162,8 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 平面也可传入 `{"reference":{"kind":"surface","id":实际ID},"origin":[x,y,z],"u_axis":[x,y,z]}`，用于已有平面面或基准面。默认原点是世界原点到该平面的垂足；指定原点必须在平面内。基准面的方向和生成几何由 Toolkit 决定，应按查询结果使用。
 
+`creo_datum_axis` 的操作详情包含 `datum_axes` 与 `axes_query_code`；`creo_inspect_model(detail="full", section="datum_axes")` 分页返回已保存快照中的原生轴几何。`origin` 是原生轴线上的一个点（不保证是离原点最近点），`direction` 是原生两端点差的单位向量。坐标使用实际模型长度单位；同层 `length_unit` 提供单位名、到毫米的比例及原始查询码。查询失败/未执行或几何退化时使用 null/`geometry_known:false`，不得把输入引用猜成几何。巡检 `center_of_gravity` 同样使用原生长度单位，查询结果由 `volume_query_code` 记录；尚无实体或质量查询失败时为 null。上述接口已离线构建，当前倾斜拉伸/两平面轴/偏心阵列的本机验收仍待 [T05 实机检查](docs/development/DEV047-T05-ACCEPTANCE-2026-10-26.md)。
+
 常用引用：
 
 ```json
@@ -166,7 +176,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 {"kind":"datum_axis_feature","label":"axis"}
 ```
 
-`plane` 选择实际实体平面面，必须唯一；有多个匹配面时使用查询得到的 `surface` ID。`datum_plane` 的零偏移主平面选择模板中最早的对应基准，避免与 Creo 自动生成的内部基准混淆。非零偏移仍要求唯一。草图/拉伸等特征间用 `label` 引用；标签由小写字母、数字和下划线组成，以字母开头，最多 28 字符。
+`plane` 选择实际实体平面面，必须唯一；有多个匹配面时使用查询得到的 `surface` ID。`datum_plane` 的零偏移主平面选择模板中最早的对应基准，避免与 Creo 自动生成的内部基准混淆。非零偏移仍要求唯一。草图/拉伸等特征间用 `label` 引用；标签须匹配 `^[a-z][a-z0-9_]{0,27}$`，即以小写字母开头，其余仅用小写字母、数字或下划线，总长最多 28 字符，例如 `i001_part1`。服务不会自动改名。
 
 显式尺寸支持长度、半径、直径、点间距离/水平距离/垂直距离、线间距离、夹角、圆弧角度和椭圆半轴。约束接口包含水平、垂直、重合、点在线上、相切、垂直、等半径、平行、等长、共线；实测包括水平/垂直约束及驱动直径尺寸，其余组合由原生求解器验证。
 
@@ -245,3 +255,5 @@ Windows 登记文件读取允许共享删除，写入使用单步原子替换；
 ```
 
 摘要命令需要已经完成相应的实机测试；打包命令只选择公开源码及文档。`config.json`、`client-config.json`、虚拟环境、构建结果、任务和模型目录已在 `.gitignore` 中排除。
+
+毫米、英寸与混合装配的单位对照场景由固定矩阵驱动覆盖：`tools/test_assembly_matrix.py`（毫米／英寸组件的 normalized 与 raw 矩阵、已知点对照）和 `tools/test_assembly_units.py`（毫米／英寸／混合与单位查询失败的 null 表达）。这组矩阵是后续新增数值接口（坐标、变换、体积等）的验收模板：新接口必须在毫米、英寸、混合与未知单位四种场景下分别取得证据，未知或查询失败如实为 `null`，不得默认毫米。批处理与拔模官方示例见 `examples/dev047_t12_batch_append.json`（一次计划多特征、单次 revision 与整体回滚）和 `examples/dev047_t12_draft_boss.json`（Ø6×3 凸台 11° 内拔模，`r_top = 3 − 3·tan(11°)` 圆台体积断言）。

@@ -17,6 +17,7 @@ SECTIONS = (
     "edges",
     "bodies",
     "datum_planes",
+    "datum_axes",
     "parameters",
     "aliases",
     "components",
@@ -73,6 +74,8 @@ def inspection_summary(inspection: Any) -> dict[str, Any]:
                 "has_solid",
                 "units",
                 "units_query_code",
+                "length_unit",
+                "center_of_gravity",
                 "model_type",
                 "volume_mm3",
                 "volume_query_code",
@@ -123,6 +126,20 @@ def model_summary(model: dict[str, Any]) -> dict[str, Any]:
     source = model.get("adopted_from")
     result["adopted"] = bool(source and source.get("state") == "completed")
     result["source_kind"] = (source or {}).get("source_kind", "file" if source else "created")
+    from creo_mechdog import feature_state
+
+    tombstones = feature_state.tombstones_of(model)
+    suppressed = feature_state.suppressed_of(model)
+    # Bounded preview: counts stay complete, entries are capped so one registry
+    # can never push a compact model summary past the 32 KiB page budget.
+    limit = 20
+    result["feature_state"] = {
+        "tombstone_count": len(tombstones),
+        "suppressed_count": len(suppressed),
+        "tombstones": dict(list(tombstones.items())[:limit]),
+        "suppressed": dict(list(suppressed.items())[:limit]),
+        "entries_truncated": len(tombstones) > limit or len(suppressed) > limit,
+    }
     return result
 
 
@@ -186,7 +203,7 @@ def section_records(model: dict[str, Any], section: str) -> list[Any] | None:
             {
                 key: val
                 for key, val in f.items()
-                if key not in ("dimensions", "geometry_items", "sketch_dimensions")
+                if key not in ("dimensions", "geometry_items", "sketch_dimensions", "datum_axes")
             }
             for f in values
         ]
@@ -234,6 +251,23 @@ def inspect_page(
                 "snapshot": response["snapshot"],
             },
         }
+        # Split registry records keep inspection/aliases in sidecars (BUG-077);
+        # resolve them here so this shape carries the same sections the paged
+        # shape serves from section_records, instead of only their *_ref stubs.
+        if "inspection" not in whole and model.get("inspection_ref") is not None:
+            resolved = full_inspection_of_model(model)
+            if resolved:
+                whole["inspection"] = resolved
+        if "aliases" not in whole and model.get("aliases_ref") is not None:
+            from creo_mechdog.model_registry import aliases_of
+
+            resolved = aliases_of(model)
+            if isinstance(resolved, dict):
+                whole["aliases"] = resolved
+        # The T08 registries ride in model_summary; the whole fast path serves
+        # the same bounded feature_state section the paged shape serves, so the
+        # two full shapes cannot disagree about tombstones/suppressions.
+        whole["feature_state"] = response["feature_state"]
         if (
             serialized_size(whole) <= RESPONSE_BUDGET
             and max((len(section_records(model, name) or []) for name in SECTIONS), default=0)

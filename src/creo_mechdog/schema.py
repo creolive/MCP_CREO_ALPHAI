@@ -12,11 +12,21 @@ from pydantic import (
     ConfigDict,
     Field,
     TypeAdapter,
+    ValidationError,
+    ValidatorFunctionWrapHandler,
+    WrapValidator,
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
-from creo_mechdog.references import PatternAxis, RevolveAxis
+from creo_mechdog.profile_diagnostics import validate_solid_profile
+from creo_mechdog.references import (
+    PatternAxis,
+    RevolveAxis,
+    validate_planar_reference,
+    validate_sketch_plane_frame,
+)
 
 
 class StrictModel(BaseModel):
@@ -25,7 +35,24 @@ class StrictModel(BaseModel):
 
 Point2 = Annotated[list[float], Field(min_length=2, max_length=2)]
 Point3 = Annotated[list[float], Field(min_length=3, max_length=3)]
-Label = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,27}$")]
+_LABEL_PATTERN = r"^[a-z][a-z0-9_]{0,27}$"
+
+
+def _explain_label_pattern(value: Any, handler: ValidatorFunctionWrapHandler) -> str:
+    try:
+        return handler(value)
+    except ValidationError as exc:
+        if any(error["type"] == "string_pattern_mismatch" for error in exc.errors()):
+            raise PydanticCustomError(
+                "string_pattern_mismatch",
+                "Label must start with a lowercase letter, contain only [a-z0-9_], "
+                "and be at most 28 characters; for example i001_part1",
+                {"pattern": _LABEL_PATTERN},
+            ) from None
+        raise
+
+
+Label = Annotated[str, Field(pattern=_LABEL_PATTERN), WrapValidator(_explain_label_pattern)]
 Positive = Annotated[float, Field(gt=0, le=100000)]
 
 
@@ -229,12 +256,12 @@ class SketchOp(StrictModel):
                 raise ValueError(
                     "Coordinate dimensioning cannot be combined with supplied dimensions/constraints"
                 )
-            if not isinstance(self.plane, str) or any(
+            if any(
                 e.type not in {"line", "centerline", "rectangle", "polyline", "circle", "arc"}
                 for e in self.entities
             ):
                 raise ValueError(
-                    "Coordinate dimensioning requires a principal plane and line/polyline/rectangle/circle/arc entities"
+                    "Coordinate dimensioning supports line/centerline/rectangle/polyline/circle/arc entities"
                 )
         names = [e.name for e in self.entities]
         if len(names) != len(set(names)):
@@ -753,8 +780,31 @@ class AssemblyConstraint(StrictModel):
     assembly_reference: dict[str, Any]
     component_reference: dict[str, Any]
     offset: float = 0
-    assembly_side: Literal["yellow", "red"] = "yellow"
-    component_side: Literal["yellow", "red"] = "yellow"
+    assembly_side: Literal["yellow", "red", "none"] = "yellow"
+    component_side: Literal["yellow", "red", "none"] = "yellow"
+    # T09: explicit same-level sibling component for the assembly side. Omitted
+    # means the assembly's own geometry; identity is never inferred from an
+    # item_id found in another model. A digit-only string is the stringified ID
+    # branch of the public label-or-ID contract (BUG-073).
+    assembly_component: Any = None
+
+    @field_validator("assembly_component", mode="before")
+    @classmethod
+    def valid_assembly_component(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+            value = int(value)
+        if type(value) is int:
+            if not 0 <= value <= 2147483647:
+                raise ValueError("assembly_component IDs must be nonnegative 32-bit integers")
+            return value
+        if isinstance(value, str) and re.fullmatch(_LABEL_PATTERN, value):
+            return value
+        raise ValueError(
+            "assembly_component must be a component label starting with a lowercase letter "
+            "([a-z0-9_], at most 28 characters) or a nonnegative feature ID"
+        )
 
 
 class AssembleOp(AssemblyPose):
@@ -763,6 +813,9 @@ class AssembleOp(AssemblyPose):
     source_model_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
     placement: Literal["fixed", "default", "constraints"] = "fixed"
     constraints: list[AssemblyConstraint] = []
+    # T09 replay plans bind the source revision and digest they were planned
+    # against; admission and the native executor re-check them before use.
+    rebuild_binding: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def placement_valid(self):
@@ -787,6 +840,34 @@ class ComponentConstraintsOp(StrictModel):
 class RemoveComponentOp(StrictModel):
     op: Literal["remove_component"]
     component: str | int
+
+
+def _normalize_feature_target(value: Any) -> Any:
+    if isinstance(value, bool):
+        raise ValueError("Feature targets must be feature labels or nonnegative feature IDs")
+    # A label always starts with a lowercase letter, so a digit-only string is
+    # the stringified ID branch of the public label-or-ID contract (BUG-073).
+    if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+        value = int(value)
+    if type(value) is int and not 0 <= value <= 2147483647:
+        raise ValueError("Feature targets must be nonnegative 32-bit integers")
+    return value
+
+
+FeatureTarget = Annotated[Label | int, BeforeValidator(_normalize_feature_target)]
+
+
+class FeatureStateOp(StrictModel):
+    op: Literal["feature_state"]
+    action: Literal["delete", "suppress", "resume"]
+    targets: Annotated[list[FeatureTarget], Field(min_length=1, max_length=100)]
+
+    @model_validator(mode="after")
+    def distinct_targets(self):
+        keys = [("label", t) if isinstance(t, str) else ("id", t) for t in self.targets]
+        if len(keys) != len(set(keys)):
+            raise ValueError("feature_state targets must be distinct")
+        return self
 
 
 class GenericFeatureOp(StrictModel):
@@ -1139,6 +1220,7 @@ Operation = Annotated[
         ComponentPlacementOp,
         ComponentConstraintsOp,
         RemoveComponentOp,
+        FeatureStateOp,
         GenericFeatureOp,
         SimpleOp,
         ExportOp,
@@ -1187,11 +1269,14 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                 finite(v)
 
     finite(dumped)
+    for index, operation in enumerate(dumped):
+        if operation["op"] in ("sketch", "airfoil_sketch") and isinstance(operation["plane"], dict):
+            validate_sketch_plane_frame(operation["plane"], f"operations[{index}].plane")
 
-    def references(x):
+    def references(x, path: str):
         if isinstance(x, list):
-            for v in x:
-                references(v)
+            for index, v in enumerate(x):
+                references(v, f"{path}[{index}]")
         if isinstance(x, dict):
             if "kind" in x:
                 k = x["kind"]
@@ -1212,19 +1297,37 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                     if not isinstance(x.get("label"), str):
                         raise ValueError("Datum reference requires a label")
                 elif k in ("plane", "datum_plane"):
-                    if "normal" in x:
-                        if (
-                            not isinstance(x["normal"], list)
-                            or len(x["normal"]) != 3
-                            or sum(v * v for v in x["normal"]) < 1e-12
-                        ):
-                            raise ValueError("Plane normal requires a nonzero 3D vector")
-                    elif x.get("axis", "z") not in ("x", "y", "z"):
-                        raise ValueError("Plane axis must be x, y or z")
+                    validate_planar_reference(x, path)
                 elif k not in ("body", "part", "default_csys"):
                     raise ValueError(f"Unsupported model reference kind: {k}")
-            for v in x.values():
-                references(v)
+            for key, v in x.items():
+                references(v, f"{path}.{key}")
 
-    references([op for op in dumped if not op["op"].startswith("drawing_")])
+    references([op for op in dumped if not op["op"].startswith("drawing_")], "operations")
+    sketches = {
+        op["label"]: op
+        for op in dumped
+        if op["op"] == "sketch" and isinstance(op.get("entities"), list)
+    }
+    for index, operation in enumerate(dumped):
+        # A solid extrude/revolve consumes the sketch section as one profile;
+        # thin features may legitimately use open chains. Only same-plan sketch
+        # definitions are visible here, so references to earlier jobs stay with
+        # the native solver.
+        if (
+            operation["op"] in ("extrude", "revolve")
+            and isinstance(operation.get("sketch"), str)
+            and operation.get("mode") != "surface"
+            and operation.get("thin") is None
+        ):
+            source = sketches.get(operation["sketch"])
+            if source:
+                try:
+                    validate_solid_profile(
+                        source["entities"],
+                        source.get("dimensioning", "auto"),
+                        operation["op"],
+                    )
+                except ValueError as error:
+                    raise ValueError(f"operations[{index}]: {error}") from error
     return dumped

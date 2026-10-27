@@ -1152,11 +1152,12 @@ def run_job(job_id: str) -> None:
                             "Native result references a missing or unexpected part file"
                         )
                     result["sha256"] = hashlib.sha256(part.read_bytes()).hexdigest()
-                    result["preview_file"] = (
-                        str(directory / "output/preview.jpg")
-                        if result["preview_code"] == 0
-                        else None
-                    )
+                    # Same preview projection as the generic plan path (T07).
+                    # A capture failure is reported beside the verified save and
+                    # never changes this job's succeeded status.
+                    from creo_mechdog import preview
+
+                    preview.apply_preview_projection(result, directory=directory)
                     manifest.update(
                         status="succeeded",
                         stage="verified",
@@ -1302,6 +1303,7 @@ def compact_job(manifest: dict) -> dict:
         result_keys = (
             "success",
             "seed_load_evidence",
+            "loft_seed_feature",
             "creo_release_numeric",
             "creo_release_query_code",
             "code",
@@ -1315,6 +1317,9 @@ def compact_job(manifest: dict) -> dict:
             "rollback_message",
             "rollback_code",
             "preview_file",
+            "preview_status",
+            "preview_code",
+            "preview",
             "connected",
             "volume_mm3",
             "expected_volume_mm3",
@@ -1331,6 +1336,8 @@ def compact_job(manifest: dict) -> dict:
             "session_erase",
             "loaded",
             "session_fingerprint",
+            "feature_tombstones",
+            "suppressed_features",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary
@@ -1358,12 +1365,39 @@ def compact_job(manifest: dict) -> dict:
                 key: op[key]
                 for key in (
                     "op",
+                    "index",
                     "label",
                     "succeeded",
+                    "execution_status",
+                    "effect_status",
+                    "unchanged",
+                    "native_geometry_verified",
                     "size",
                     "file",
                     "feature_id",
+                    "preserved_feature_id",
+                    "reordered",
+                    "sheet",
+                    "parameters",
+                    "metadata",
                     "material_removed_mm3",
+                    "surface_id",
+                    "origin",
+                    "normal",
+                    "u_axis",
+                    "v_axis",
+                    "datum_axes",
+                    "axes_query_code",
+                    "length_unit",
+                    "profile",
+                    "native_section",
+                    "preview_code",
+                    "preview",
+                    "feature_state",
+                    "targets",
+                    "target_count",
+                    "requested_target_count",
+                    "targets_complete",
                     "elapsed_seconds",
                     "message",
                 )

@@ -6,8 +6,6 @@ static std::string profile_dimensioning(const J &op) {
         return requested;
     if (!op.value("dimensions", J::array()).empty() || !op.value("constraints", J::array()).empty())
         return "autodim";
-    if (op.contains("plane") && !op["plane"].is_string())
-        return "autodim";
     double extent = 0;
     int count = 0;
     for (auto e : op.at("entities")) {
@@ -105,8 +103,13 @@ static J coordinate_dimensions(ProSection section, int origin,
                     }
                 } else
                     log("COORDINATE_CENTERLINE_ON_DATUM=%s axis=%d\n", prefix.c_str(), fixed_axis);
-                continue;
-            }
+            } else
+                // Endpoint dimensions on a skewed centerline are the known-unstable
+                // BUG-050 shape: the solve slides endpoints along the infinite axis.
+                // Pin nothing here; the infinite-line verification owns the
+                // direction/offset comparison for every centerline orientation.
+                log("COORDINATE_CENTERLINE_SKEW=%s\n", prefix.c_str());
+            continue;
         }
         for (auto point : row["points"]) {
             double px = point["xy"][0].get<double>(), py = point["xy"][1].get<double>();
@@ -193,15 +196,28 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
         CK(ProSectionEntityGet(section, row["id"], &def));
         if ((int)def->type != row["type"].get<int>())
             throw std::runtime_error("Coordinate dimensioning changed an entity type");
-        // An axis-parallel construction centerline is an infinite axis: verify
-        // its offset only, the solve may slide or trim its endpoints freely.
-        int skip_axis = -1;
+        // A construction centerline is an infinite axis in any orientation: the
+        // solve may slide or trim its endpoints freely, so verify its line
+        // identity (direction and offset of both stored endpoints from the
+        // requested infinite line) instead of unstable endpoint positions.
         if (def->type == PRO_2D_CENTER_LINE && row["points"].size() == 2) {
+            auto line = (Pro2dLinedef *)def;
             double a0 = row["points"][0]["xy"][0].get<double>(),
                    a1 = row["points"][0]["xy"][1].get<double>(),
                    b0 = row["points"][1]["xy"][0].get<double>(),
                    b1 = row["points"][1]["xy"][1].get<double>();
-            skip_axis = fabs(a0 - b0) < 1e-12 ? 1 : (fabs(a1 - b1) < 1e-12 ? 0 : -1);
+            double dx = b0 - a0, dy = b1 - a1, length = hypot(dx, dy),
+                   ux = line->end2[0] - line->end1[0], uy = line->end2[1] - line->end1[1],
+                   stored = hypot(ux, uy);
+            if (length < 1e-12 || stored < 1e-12)
+                throw std::runtime_error("Coordinate verification found a degenerate centerline");
+            double turn = fabs(dx * uy - dy * ux) / (length * stored),
+                   off1 = fabs(dx * (line->end1[1] - a1) - dy * (line->end1[0] - a0)) / length,
+                   off2 = fabs(dx * (line->end2[1] - a1) - dy * (line->end2[0] - a0)) / length;
+            log("COORDINATE_CENTERLINE_IDENTITY=%s turn=%.12f offset=%.12f,%.12f\n",
+                row["name"].get<std::string>().c_str(), turn, off1, off2);
+            deviation = std::max({deviation, turn * length, off1, off2});
+            continue;
         }
         for (auto point : row["points"]) {
             double *actual = nullptr;
@@ -213,8 +229,6 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
                 actual = point["sense"].get<int>() == PRO_ENT_START ? ((Pro2dLinedef *)def)->end1
                                                                     : ((Pro2dLinedef *)def)->end2;
             for (int axis = 0; axis < 2; axis++) {
-                if (axis == skip_axis)
-                    continue;
                 double moved = fabs(actual[axis] - point["xy"][axis].get<double>());
                 deviation = std::max(deviation, moved);
                 if (moved > 1e-9)

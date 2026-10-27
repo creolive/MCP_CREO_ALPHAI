@@ -42,9 +42,14 @@ class SketchStability(unittest.TestCase):
             ],
         )
         self.assertEqual(validate_operations([sketch])[0]["dimensioning"], "coordinates")
+        # FEAT-010 T04: dictionary planes now join coordinate dimensioning; the
+        # mode, entity-type and mixing rules below stay admission failures.
+        dictionary = validate_operations(
+            [{**sketch, "plane": {"reference": {"kind": "surface", "id": 1}}}]
+        )[0]
+        self.assertEqual(dictionary["dimensioning"], "coordinates")
         for change in (
             {"dimensioning": "rigid"},
-            {"plane": {"reference": {"kind": "surface", "id": 1}}},
             {"entities": [dict(type="spline", name="s", points=[[0, 0], [10, 5], [20, 0]])]},
             {"dimensions": [dict(name="r", type="radius", refs=[{"entity": "a"}], value=5000)]},
             {"constraints": [dict(type="horizontal", refs=[{"entity": "a"}])]},

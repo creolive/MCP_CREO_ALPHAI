@@ -70,7 +70,7 @@ static void generic_reorder(const J &op) {
     if (position >= slots.front() && position <= slots.back()) {
         log("REORDER_DIAG noop ids=%d anchor=%d anchor_number=%d slots=%s\n", (int)values.size(),
             anchor, anchor_number, J(slots).dump().c_str());
-        operation_results.push_back({{"op", op["op"]}, {"reordered", false}, {"unchanged", true}});
+        stage_operation_result({{"op", op["op"]}, {"reordered", false}, {"unchanged", true}});
         return;
     }
     log("REORDER_DIAG ids=%d anchor=%d anchor_number=%d slots=%s position=%d top=%d\n",
@@ -84,7 +84,7 @@ static void generic_reorder(const J &op) {
         ProFeatureWithoptionsReorder((ProSolid)board, ids, position, PRO_REGEN_NO_FLAGS);
     ProArrayFree((ProArray *)&ids);
     check(code, "ReorderNativeFeatures");
-    operation_results.push_back({{"op", op["op"]}, {"reordered", true}});
+    stage_operation_result({{"op", op["op"]}, {"reordered", true}});
 }
 
 static void generic_group(const J &op) {

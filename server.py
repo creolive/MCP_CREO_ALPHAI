@@ -23,13 +23,21 @@ import seeds
 from capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
 from creo_mechdog import update_check
 from creo_mechdog.adoption import adopt
+from creo_mechdog.assembly_replay import plan_assembly_rebuild
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
+from creo_mechdog.capability_summary import release_status, support_status
 from creo_mechdog.file_adoption import adopt_file
+from creo_mechdog.generation_reclaim import reclaim_generations
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.reconciliation import reconcile
-from creo_mechdog.references import PatternAxis, RevolveAxis, reference_capabilities
+from creo_mechdog.references import (
+    PLANE_REFERENCE_DESCRIPTION,
+    PatternAxis,
+    RevolveAxis,
+    reference_capabilities,
+)
 from creo_mechdog.registry_ops import health as registry_health
 from creo_mechdog.registry_ops import migrate as registry_migrate
 from creo_mechdog.schema import (
@@ -46,6 +54,7 @@ from creo_mechdog.schema import (
 )
 from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
+from creo_mechdog.session_health import snapshot as session_health
 from creo_mechdog.session_models import list_session_models
 from version import VERSION
 
@@ -60,6 +69,7 @@ if SOURCE_PATHS.resource_root != _CODE_ROOT:
     )
 _SOURCE_NAMES = (
     "server.py",
+    "capabilities.py",
     "bridge.py",
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
@@ -67,6 +77,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/references.py",
     "src/creo_mechdog/update_check.py",
     "src/creo_mechdog/blend_callback.py",
+    "src/creo_mechdog/generation_reclaim.py",
     "src/creo_mechdog/build_support.py",
     "src/creo_mechdog/seed_distribution.py",
     "src/creo_mechdog/seed_compatibility.py",
@@ -77,20 +88,26 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/adoption.py",
     "src/creo_mechdog/file_adoption.py",
     "src/creo_mechdog/component_changes.py",
+    "src/creo_mechdog/operation_results.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/session_models.py",
+    "src/creo_mechdog/session_assembly.py",
+    "src/creo_mechdog/assembly_replay.py",
     "src/creo_mechdog/session_erase.py",
+    "src/creo_mechdog/session_health.py",
     "src/creo_mechdog/model_registry.py",
     "src/creo_mechdog/registry_ops.py",
     "src/creo_mechdog/open_file.py",
     "src/creo_mechdog/capability_pages.py",
+    "src/creo_mechdog/capability_summary.py",
     "src/creo_mechdog/model_queries.py",
     "src/creo_mechdog/startup_state.py",
     "src/creo_mechdog/windows_boot.py",
     "src/creo_mechdog/window_observations.py",
     "src/creo_mechdog/schema.py",
     "src/creo_mechdog/profile_checks.py",
+    "src/creo_mechdog/profile_diagnostics.py",
     "src/creo_mechdog/airfoil.py",
     "version.py",
     "generic_bridge.py",
@@ -109,6 +126,8 @@ _SOURCE_NAMES = (
     "native/constraint_compare.h",
     "native/adoption_source.h",
     "native/inspection_units.h",
+    "native/axis_geometry.h",
+    "native/assembly_units.h",
     "native/drawing.cpp",
     "native/result_delivery.h",
     "native/recovery_deadline.h",
@@ -220,9 +239,9 @@ async def creo_check_environment() -> dict[str, Any]:
 
 @mcp.tool(annotations=READ)
 async def creo_session_status() -> dict[str, Any]:
-    """Check the configured/unique Creo session through Toolkit (9 second probe budget, no rebuild). Every return branch carries server_version. Busy returns its occupying job; probe_timeout returns recovery guidance. During startup return its snapshot promptly. connected=true requires verification; ambiguous/stale session selections never fall back to a random session. Includes a read-only creo_process_snapshot (pid/name/created_at/matches) so a failed probe can distinguish a dead IPC endpoint from an exited Creo process."""
+    """Check the configured/unique Creo session through Toolkit (9 second probe budget, no rebuild). Every return branch carries server_version. Busy returns its occupying job; probe_timeout returns recovery guidance. During startup return its snapshot promptly. connected=true requires verification; ambiguous/stale session selections never fall back to a random session. Includes a read-only creo_process_snapshot (pid/name/created_at/matches) so a failed probe can distinguish a dead IPC endpoint from an exited Creo process. session_health reuses this completed probe plus already recorded job results; it never adds a connection, save or session probe."""
     result = await invoke(startup.session_status)
-    return {**result, "server_version": VERSION}
+    return {**result, "server_version": VERSION, "session_health": session_health()}
 
 
 @mcp.tool(annotations=READ)
@@ -258,11 +277,26 @@ async def creo_callback_status() -> dict[str, Any]:
     return result
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
+    )
+)
+async def creo_reclaim_generations(
+    mode: Literal["inspect", "apply"] = "inspect",
+    generation_keys: list[dict[str, Any]] | None = None,
+    evidence_token: str | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Explicitly reclaim selected build generations of this project (DEV-027). No Toolkit connection, no DLL load, no automatic cleanup. generation_keys selects loader/payload generation directories explicitly: [{root: "blend_loader"|"blend_callback", key: <hex generation directory name>}]; only names listed by creo_callback_status.generation_inventory are valid, never paths. inspect(classifies) each target with the existing inventory references and returns per-item status reclaimable|kept with reasons, directory content digest, sizes and a 600-second evidence_token bound to the targets, digests and reference evidence; it deletes nothing. apply(evidence_token, idempotency_key) takes the shared channel lock that builds and generation publication hold (busy rejects immediately), re-verifies that evidence -- an expired token, changed content or changed/new reference refuses the old evidence -- then re-checks each directory (containment in build/blend_loader or build/blend_callback, no symlink/junction/reparse point, owned content only, file occupancy, rollback retention) immediately before deleting it. Current, locally registered, runtime-referenced, rollback-retained and unprovable (missing/corrupt/conflicting records) generations are always kept; 'not current' or 'no record found' never authorizes deletion. Each item reports reclaimed/kept/failed/unknown with reasons and the delete progress; partial deletion is not rolled back. The same idempotency_key replays the recorded result instead of deleting again, and a different target set is refused."""
+    return await invoke(reclaim_generations, mode, generation_keys, evidence_token, idempotency_key)
+
+
 @mcp.tool(annotations=CREATE)
 async def creo_startup_status(retry: bool = False) -> dict[str, Any]:
-    """Read a background snapshot with verified_at, verification_age_seconds and stale. retry=true rechecks the channel within 180s preparation plus configured startup budget; overlapping retries share coordination. Unreadable startup history can be archived/rebuilt only when it predates a verified Windows reboot, both recovery locks are held and no Creo session exists; startup_recovery identifies the backup. Same-boot/unverified history requires manual reconciliation. waiting_for_channel includes busy details. Never closes Creo, clears unknown job/model reservations or replays jobs. Poll until ready; inspect recovery guidance otherwise."""
+    """Read a background snapshot with verified_at, verification_age_seconds and stale. retry=true rechecks the channel within 180s preparation plus configured startup budget; overlapping retries share coordination. Unreadable startup history can be archived/rebuilt only when it predates a verified Windows reboot, both recovery locks are held and no Creo session exists; startup_recovery identifies the backup. Same-boot/unverified history requires manual reconciliation. waiting_for_channel includes busy details. Never closes Creo, clears unknown job/model reservations or replays jobs. Poll until ready; inspect recovery guidance otherwise. session_health is a read-only evidence summary (unknown/suspected_damage/no_failure_observed) built from recorded save/connection results; it opens no connection, saves nothing and is not a health guarantee."""
     result = await invoke(startup.start, retry=True) if retry else await invoke(startup.status)
-    return {**result, "update": updates.snapshot()}
+    return {**result, "update": updates.snapshot(), "session_health": session_health()}
 
 
 @mcp.tool(annotations=NETWORK_READ)
@@ -315,7 +349,7 @@ async def creo_create_plate(
 
 @mcp.tool(annotations=READ)
 async def creo_get_job(job_id: str, detail: Literal["compact", "full"] = "full") -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes; full includes complete geometry, aliases and validation. Full remains the compatibility default. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes; full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
     return await invoke(bridge.get_job, job_id, detail)
 
 
@@ -414,6 +448,16 @@ async def creo_inspect_session_assembly(
     return await invoke(inspect_session_assembly, name, limit, cursor)
 
 
+@mcp.tool(annotations=READ)
+async def creo_plan_assembly_rebuild(
+    snapshot_id: str,
+    component_mapping: list[dict[str, Any]],
+    reference_mapping: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Plan an ordered insert-then-constrain rebuild from a frozen assembly snapshot (FEAT-049). Read-only: no component loading, adoption, save, revision, write job or Toolkit connection. snapshot_id is the snapshot_id returned by creo_inspect_session_assembly (schema_version 3, at most 600 s old, complete and single-level). component_mapping is one entry per snapshot occurrence: {occurrence: occurrence_label or occurrence_path, label: new target component label, source_model_id: managed part/sheetmetal model_id}; every occurrence must be mapped exactly once. reference_mapping maps each source constraint reference: {source: {component: sibling occurrence_label or null for the assembly root, item_type, item_id, side?}, target: execute_plan reference object, target_component?: sibling label for the assembly side, target_side?: yellow|red|none}; references are never inferred across models. The response operations insert every component first (fixed/default placement per the real snapshot semantics, or fixed before constraints) and then set mate/align/mate_offset/align_offset/insert/csys constraints; offsets are converted to millimeters; fixed/default placements stay single placement operations. Every assemble_component carries rebuild_binding (source model, revision, file sha256) that creo_execute_plan re-checks before queueing and the native executor re-checks before loading. Unknown types, missing mappings, unreplayable root references, expired/older snapshots, changed sources, nested occurrences and plans over the 200-operation limit are refused; no operation_results are produced."""
+    return await invoke(plan_assembly_rebuild, snapshot_id, component_mapping, reference_mapping)
+
+
 @mcp.tool(annotations=CREATE)
 async def creo_open_file(
     file_path: str,
@@ -462,53 +506,7 @@ async def creo_list_jobs(
 
 def _support_status() -> dict[str, Any]:
     """Explicit capability boundaries so callers need not infer them (FEAT-008)."""
-    return {
-        "disk_open": {
-            "status": "supported",
-            "tool": "creo_open_file",
-            "summary": (
-                "read-only retrieval and display of existing on-disk .prt/.asm "
-                "(explicit or highest numeric version); never saves, erases, renames "
-                "or adopts, and creates no managed model"
-            ),
-        },
-        "session_enumeration": {
-            "status": "supported",
-            "tool": "creo_list_session_models",
-            "summary": "read-only session inventory with frozen pagination; no loading or activation",
-        },
-        "adoption": {
-            "status": "supported_limited",
-            "tool": "creo_adopt_current_model",
-            "summary": (
-                "explicit managed-copy adoption of part/sheetmetal only (millimeter "
-                "units, no external dependencies, healthy features); assembly/drawing "
-                "and repeat adoption of the same file are refused"
-            ),
-        },
-        "assembly_checks": {
-            "status": "supported_limited",
-            "tool": "creo_inspect_session_assembly",
-            "tracking": "FEAT-045",
-            "summary": (
-                "read-only inspection of a resident session assembly: tree-order "
-                "components, per-constraint snapshots and unit-aware 4x4 transforms "
-                "(millimeter-normalized plus raw matrices; unknown units stay null); "
-                "nested sub-assemblies, repeated instances, suppressed and missing "
-                "components are reported per node and were not live-triggered on the "
-                "reference machine. No write path: no loading, activation, save, "
-                "adoption or managed revision; assembly adoption/reconcile stays "
-                "refused"
-            ),
-        },
-        "external_file_managed_edit": {
-            "status": "not_supported_through_open",
-            "summary": (
-                "creo_open_file never modifies external files; adopt the opened model "
-                "with creo_adopt_current_model first if managed editing is required"
-            ),
-        },
-    }
+    return support_status(families())
 
 
 def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -628,7 +626,7 @@ def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
         "complete_creo_coverage": False,
         "seed_library": seeds.list_seeds(),
         "direct_blend_callback": callback_setup_status(bridge.ROOT / "build"),
-        "release_status": "pre-release candidate; requested complete coverage has not been achieved",
+        "release_status": release_status(VERSION),
         "families": families(),
         "unavailable_operations": UNAVAILABLE_OPERATIONS,
         "evidence_directory": str(bridge.ROOT / "build"),
@@ -743,6 +741,14 @@ async def creo_execute_plan(
     Sketch/extrude/revolve and later features reference earlier feature labels.
     Existing models require expected_revision. Stops at first error; existing models
     roll back to their saved checkpoint. assertions supports require_solid and volume_mm3.
+    Each accepted input yields one result with a zero-based index, execution_status
+    (succeeded/failed/not_executed/unknown) and effect_status
+    (committed/rolled_back/no_effect/unknown); succeeded only reports execution, not
+    the final transaction outcome.
+    feature_state delete/suppress/resume changes existing part/sheetmetal features by
+    explicit label or nonnegative feature ID. Every affected dependency must be listed;
+    a missing one returns the dependency list and refuses the plan. Deleted labels are
+    tombstones and cannot be reused; resume applies only to suppressed targets.
     round/chamfer use `size` (mm); as a standalone-tool alias they also accept
     radius (round) or distance (chamfer), but providing the alias together with
     size is rejected instead of silently preferring one.
@@ -840,7 +846,7 @@ async def creo_update_sketch_geometry(
     entities: list[Entity],
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto",
 ) -> dict[str, Any]:
-    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On principal planes, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone is kept off principal planes, where a failed edit rolls back cleanly."""
+    """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On any valid sketch plane, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone stays on its native route, where a failed edit rolls back cleanly."""
     return await invoke(
         general.submit,
         [
@@ -1011,9 +1017,7 @@ async def creo_create_sketch(
     entities: list[Entity],
     plane: Annotated[
         Literal["XY", "XZ", "YZ"] | dict[str, Any],
-        Field(
-            description="XY/XZ/YZ, or {reference:{kind:'surface',id:N},origin:[x,y,z],u_axis:[x,y,z]}; frame fields optional. A dictionary plane requires the reference container."
-        ),
+        Field(description=PLANE_REFERENCE_DESCRIPTION),
     ] = "XY",
     offset: float = 0,
     dimensions: list[SketchDimension] | None = None,
@@ -1027,9 +1031,16 @@ async def creo_create_sketch(
     have names and entity references; automatic dimensioning fills remaining freedoms.
     For revolve include exactly one construction centerline, or supply an explicit external
     axis to creo_revolve: {kind:'datum_axis_feature',label:'axis_label'} or {kind:'axis',id:N}.
-    auto uses complete coordinate dimensions for large/complex supported principal-plane profiles;
-    coordinates forces that mode; autodim retains native automatic dimensions. Coordinate mode
-    supports lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
+    auto uses complete coordinate dimensions for large/complex supported profiles on
+    any valid sketch plane (principal or dictionary plane); coordinates forces that mode;
+    autodim retains native automatic dimensions. Coordinate mode supports
+    lines/polylines/rectangles/circles/arcs and cannot combine explicit dimensions/constraints.
+    Centerlines are verified as infinite lines (direction and offset); skewed centerlines
+    carry no endpoint dimensions.
+    Multiple disjoint or nested closed loops are supported in one sketch. The result
+    reports analytic input contour/entity counts and the solved native section counts;
+    solid extrude/revolve rejects only profiles proven open, branched, self-intersecting,
+    intersecting, tangent or zero-area from the supplied coordinates.
     """
     op = {
         "op": "sketch",
@@ -1215,7 +1226,10 @@ async def creo_datum_plane(
     angle: float | None = None,
     axis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Create parametric offset datum plane, or angled plane through an axis."""
+    """Create an offset/angled datum plane. reference accepts datum_plane geometry ID
+    from inspect_model(datum_planes), planar surface ID, datum_feature label, or a
+    plane axis/normal filter; ID cannot share axis/normal/offset in that reference.
+    """
     op = {"op": "datum_plane", "label": label, "reference": reference, "offset": offset}
     if angle is not None:
         op["angle"] = angle
@@ -1228,7 +1242,11 @@ async def creo_datum_plane(
 async def creo_datum_axis(
     model_id: str, expected_revision: int, label: str, references: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Create a native datum axis through two planes, a cylindrical face, a straight edge or existing axis."""
+    """Create an axis through two planes, a cylindrical face, straight edge or axis.
+
+    Plane references accept datum_plane geometry IDs from inspect_model(datum_planes),
+    planar surface IDs or datum_feature labels. Feature IDs are not geometry IDs.
+    """
     return await invoke(
         general.submit,
         [{"op": "datum_axis", "label": label, "references": references}],
@@ -1800,7 +1818,7 @@ async def creo_inspect_model(
 
     Use detail=full for geometry; large snapshots return data grouped by section,
     complete=false and next_cursor. Repeat with the same detail/section and cursor.
-    Sections: features, dimensions, surfaces, edges, bodies, datum_planes,
+    Sections: features, dimensions, surfaces, edges, bodies, datum_planes, datum_axes,
     parameters, aliases, components, feature_geometry, sketch_dimensions.
     Drawings also support sheets/views/notes/tables/models/shown_dimensions;
     metadata preserves additional inspection fields.

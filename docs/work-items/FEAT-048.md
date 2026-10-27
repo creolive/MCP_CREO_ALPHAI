@@ -171,3 +171,12 @@ md050 原生 worker 存活（checkpoint `native_pid` 身份与 `creo_worker.exe`
   unknown/并发/断连注入与其他 Creo 版本未实机；WorkBuddy 黑盒未运行
   （提示词已备 `build/workbuddy_batch2_20261026/PROMPT-UTF8.txt`）。本卡其余范围
   （不健康收养、装配整体收养等）继续按"不包含"开放。
+
+
+## 2026-10-26 v0.5.2 反馈来源与本次子项（T00）
+
+来源：[三份原件清单](../validation/feedback-0.5.2-2026-10-26/manifest.json)；[逐章映射](../validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-13)。R1/R3 为外部实机报告，R2 为无 Toolkit 连接的升级/编译/静态报告。
+
+R1 §5 P1-1“按路径/批量收养未变”是0.5.2历史状态。本卡能力已随0.6.0交付并有既有本机12.4证据，不重记缺口；T01将adopt_file和prepare/inspect→apply写入摘要，T13受影响回归。旧报告没有复测新工具，不据此声称外部Creo10已验收本卡，仍保持健康毫米无外部依赖等边界。
+
+共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。

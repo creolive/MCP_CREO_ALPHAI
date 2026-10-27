@@ -2,7 +2,7 @@
 
 本项目按可交付的 Creo MCP 工具维护，采用功能条目驱动、短分支和分批整理。日常开发从 [统一台账](BACKLOG.md) 选择条目；新增工作先登记，复杂条目复制 [模板](templates/WORK_ITEM.md)。开发准入对小修复同样适用，内容可精简为几行。
 
-服务／源码版本以 [version.py](../version.py) 为准，当前为 0.6.1（BUG-082 主平面 autodim 就地编辑修复，公开工具仍为 92 个）。版本说明见 [RELEASE_NOTES_0.6.1.md](RELEASE_NOTES_0.6.1.md)，检查与交付核对见[发布记录](validation/RELEASE-0.6.1.md)。修复批本机 Creo 12.4 编辑专项 16/16 通过；种子矩阵部分通过后 Toolkit 连接断开，剩余矩阵、WorkBuddy 与外部 Creo 9 未验收。本轮不连接 Toolkit 或处置 Creo。当前安排见[台账](BACKLOG.md)，完成事项见[档案](BACKLOG_COMPLETED.md)。
+服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.0（0.5.2 三份反馈完整交付，MINOR，公开工具 92→94：新增 `creo_plan_assembly_rebuild` 与 `creo_reclaim_generations`）。版本说明见 [RELEASE_NOTES_0.7.0.md](RELEASE_NOTES_0.7.0.md)，检查与交付核对见[发布记录](validation/RELEASE-0.7.0.md)。本机 Creo 12.4 实机矩阵（T05 毫米+英寸、T06—T09、T12）与 966 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。当前安排见[台账](BACKLOG.md)，完成事项见[档案](BACKLOG_COMPLETED.md)。
 
 本机联调只使用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。先按[根级规范](../AGENTS.md#本机开发联调补充2026-10-17用户要求)核对卡死调查与会话可操作条件，满足门槛后再安排 Toolkit 连接或故障注入；不得擅自结束 Creo 或清除 unknown 保护。文档分类和条目关闭不解除这些限制。
 
@@ -60,6 +60,7 @@ python -m venv .venv
 | --- | --- |
 | 文档、开发配置 | 文档引用与台账一致性、适用工具配置可加载；涉及检查或打包时运行其回归用例 |
 | Python 校验、调度、登记、保护逻辑 | 统一检查、对应回归；外部进程/会话行为需要额外实机验证 |
+| 长度、坐标、变换或体积接口 | 记录外部输入与实际测量的单位名、毫米换算、原始查询码及未知值；至少覆盖毫米、英寸、混合和单位未知场景。同层对象可共享单位证据，未执行的查询不能报成功 |
 | C++ 或建模行为 | 上述检查、匹配 SDK 构建、对应 `tools/test_*.py`、原生几何及尺寸断言、保存擦除重载验证；失败路径涉及回滚时验证回滚 |
 | 路径或布局迁移 | 单元检查、安装和客户端入口、后台任务、资源/数据根目录、源码包重新解压验证；涉及原生部分补实机验收 |
 | 发布 | 发布回归清单、环境与源码标识、版本一致性、附件与校验和；明确本轮未测项 |
@@ -71,6 +72,8 @@ python -m venv .venv
 ## 功能与支持声明
 
 当前开发与发布按本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 的实际改动范围验收。Creo 10 独立复测、双版本验收及正式基线不作为完成、合入或发布门槛；其他环境收到具体反馈后，登记或沿用 ID 跟进。Creo 9 与匹配 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译和建模运行时均未验收。各环境历史结果及未测范围按[兼容矩阵](COMPATIBILITY.md)记录，不将本机成功外推为其他环境通过。运行接口范围以 `capabilities.py` 为基础，能力变更同时更新工具描述、README 和有关文档。台账管理未来工作，历史版本说明保存已发布范围。
+
+`creo_capabilities.support_status` 应按当前实际启用工具与动作声明，compact/full 分页一致且各响应不超过 32 KiB。`release_status` 从本地 `version.py` 的版本后缀判断 stable、pre-release 或 unknown；`complete_creo_coverage` 独立说明范围，`update.is_prerelease` 只描述最新远端版本。新接口验收须分别验证本地版本与远端缓存未知、过期时的表述。
 
 ## WorkBuddy 测试约定
 
