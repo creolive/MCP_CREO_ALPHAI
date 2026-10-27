@@ -9,6 +9,7 @@
 | 日期 | 2026-10-28（Asia/Shanghai） |
 | 任务分支 | `codex/dev049-t07-docs`，自集成分支 `codex/dev049-feedback061` 顶端 `97120a7` 建立 |
 | 依赖提交 | `97120a7`（DEV-049: integrate T06 offline seed-matrix driver） |
+| 实现提交 | `cb95b0f`（本记录与其余 11 个文档同批提交；提交信息 `DEV-049 T07: align current docs, ledger and work cards`） |
 | 上游阶段记录 | [T00](DEV049-T00-ACCEPTANCE.md)—[T06](DEV049-T06-ACCEPTANCE.md) |
 | 版本入口 | `version.py = 0.7.1`（本任务未改） |
 | 引用版本 | `main = d2e37b0ed98aa01dec3d76f824703f0980ddb8c5`；`v0.7.1` 附注标签对象 `0c7ee341540910cebf782848dcf187a91dd63b01`，peeled → `ffa0a433736917812d1040dba7c6d7190b5f82f6` |
