@@ -130,6 +130,6 @@ ID 统计见第 4 节；`git diff --check` 无输出（exit 0），未发现行�
 ## 8. 本任务提交
 
 - 起点：`3aaf255`（T02 验收提交）。
-- 文档提交：__DOCS_COMMIT__。
-- 记录提交：__RECORD_COMMIT__（仅在本记录回填上述提交号）。
+- 文档提交：`fa284fce7424d945f0ab7e0bd15463e15ade146e`（`DEV-048 T03: backfill delivered status and release checks`）。
+- 记录提交：本文件所在提交（仅回填提交号，不改变结论）。
 - 提交范围：`docs/BACKLOG.md`、`docs/BACKLOG_COMPLETED.md`、`docs/work-items/DEV-047.md`、`docs/work-items/DEV-048.md`、`docs/work-items/BUG-079.md`、`docs/work-items/BUG-081.md`、`docs/work-items/BUG-082.md`、`docs/development/RELEASING.md`、`docs/development/DEV048-T03-ACCEPTANCE.md`。
