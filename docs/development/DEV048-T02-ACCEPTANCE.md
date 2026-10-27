@@ -113,7 +113,7 @@
 ## 提交
 
 - 依赖基准：`715890bdb783a700df4c5583b898d508042414a9`（T01 验收记录）。
-- 本任务实现提交：`b65b14d`（拒绝生命周期与批量语义）；共用层摘要修复提交：`07cc8e4`（`inspection_refs._close_stage` + 2 项收尾用例 + 文档更新）。两者均在分支 `codex/dev048-t02-ref-lifecycle`，运行数据未纳入。本记录提交：本文件所在提交。
+- 本任务实现提交：`b65b14d`（拒绝生命周期与批量语义）；共用层摘要修复：`07cc8e4`（`inspection_refs._close_stage` + 2 项收尾用例 + 文档）；公开契约收敛：`eef464d`（`staging_cleanup` 只留持久化，移出公开响应）。均在分支 `codex/dev048-t02-ref-lifecycle`，运行数据未纳入。本记录提交：本文件所在提交。
 - 改动文件：`src/creo_mechdog/inspection_refs.py`（共用层摘要恢复）、`adoption.py`、`file_adoption.py`、`reconciliation.py`、`tests/unit/test_adoption.py`、`test_inspection_warnings.py`、`test_file_adoption.py`、`test_reconciliation.py`、本记录与 `docs/work-items/DEV-048.md` 的 T02 相关区域；`tests/unit/test_adoption_split.py` 最终与 T01 版本一致（本任务曾加的需求在共用层覆盖后移除）。
 - 未合入 main、未创建标签、未发布、未改版本号、未启动 T03/T04/T05、未改动已归档原件与 `.gitattributes`、未改 `docs/BACKLOG.md` 统计区。
 
