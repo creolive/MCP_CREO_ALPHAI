@@ -201,11 +201,13 @@ git switch codex/dev048-t04-plane-evidence   # 若已合入 T05，改用当时�
 
 ## 10. 受测源码与文件指纹
 
-受测源码 = `df08fd1` + 本提交新增的两个文件（工作区 dirty，未提交前记录）：
+受测源码 = `df08fd1` + 本分支新增的两个文件（提交前工作区为 dirty，仅含这两个待提交文件与本记录）：
 
 | 文件 | SHA256 |
 | --- | --- |
 | `tools/test_dev048_plane_frame.py` | `DBFC366F7C5ECDD496D0D88E11CD6A998DE4711C4BC8C267F3F9CA5B59B5771D` |
 | `tests/unit/test_dev048_plane_frame.py` | `2782F12624BD9DCEDC7E3AC5CBE91496632B7AEE01187AD8BE2259B27E8AFBC8` |
+
+驱动与用例的提交为 `519950cd6e66f84db17793715fc1311f4f5d60c3`（父提交 `df08fd1`）；本记录随其后的小提交补录该提交号。
 
 实机执行时驱动会把提交、分支、dirty 与全部源码文件哈希写入报告的 `provenance`，届时以报告中的 `source_fingerprint` 为准。
