@@ -125,3 +125,22 @@ BUG-077 拆分后模型记录只含 `aliases_ref`/`inspection_ref`；`inspect_pa
 - 无基准轴模型上倾斜面草图仍失败（`SKETCH_REFERENCE_INCOMPLETE` 日志可判别）；自动创建辅助参照属能力扩展，未实施，待集成负责人决定登记。
 - 非毫米坐标、unknown 单位/查询失败的原生覆盖仍 pending；混合单位仅适用装配证据。
 - 斜交平面建轴、单平面法向建轴、surface+autodim 与 Right ±Z 的完整历史回归未在本轮执行（归 T03/T04 实机矩阵与 T13 集成复跑）。
+
+## 2026-10-27 补充：非毫米（inch）实机覆盖与收养拒绝单位元数据修复
+
+用户指派继续完成 T05 后，在同一 E 盘工作区、只读核验既有会话（retry connected=true/toolkit_code=0）后完成非毫米覆盖。毫米矩阵维持 `build/t05-native-05.json` 结论不变；本节只覆盖此前 pending 的非毫米与 unknown 两项。
+
+**夹具**：新增 `tools/t05_units_fixture.cpp`（wb080 式独立 Toolkit 连接）。`inch <源件> <新名> <输出目录>`：加载非受管毫米种子的工作区副本（origin 与请求路径不一致即中止）、在副本上创建两个偏移 25.4 mm 的基准面与一条过两面的基准轴、`ProUnitCreate`（1 inch=25.4 mm，参考 mm）+ `ProMdlUnitsystemCreate` + `ProMdlPrincipalunitsystemSet(PRO_UNITCONVERT_SAME_SIZE)` 转英寸、改名后 `ProMdlnameBackup` 写入输出目录并擦除会话副本；源文件从不保存。25.4 mm 偏移经 SAME_SIZE 转换后恰为 1.0 英寸，使轴的原始英寸坐标可非平凡断言。种子库 four_smooth（mm、无既有基准轴）由 `tools/test_t05_units_live.py`（双标志、config auto_start_creo=false、字节还原）驱动。
+
+**生产路径与断言（attempt-05 通过，`build/t05-units-live-05.json`，SHA256 `38b00c9b…10dd77b`；01–04 为失败尝试留档）**：
+
+- 毫米基线：种子副本 `creo_open_file`（加载+显示）→ `creo_adopt_current_model(mode=inspect)` available=true，公开摘要 units=mm、volume_mm3=7000.0、CG=[0,0,11.785714285714285]、scale_to_mm=1.0、两查询码 0；随后按清单擦除。
+- 英寸查询：`creo_open_file` 英寸件 → `creo_adopt_current_model(mode=inspect)` 拒绝 `non_millimeter_units`；refusal_details 与公开摘要带真实值：units="inch"、units_query_code=0、volume_query_code=0、`length_unit.scale_to_mm=25.4`（known）、**volume_mm3=null**（BUG-072 契约：原生 in³ 不冒充 mm³，查询码仍为成功 0）、CG=[0,0,0.4640044994375703]=毫米值/25.4。
+- 全量证据：`creo_adopt_file(mode=inspect)` 对同一英寸件逐项拒绝 `non_millimeter_units`（actual_units="inch"），其证据 job 保留完整原生 inspection：单位/换算同上，基准轴 `origin=[1.0,1.0,0.0]` 英寸、`direction=[0,0,1]`、data/line 查询码 0——25.4 mm→1.0 in 的 SAME_SIZE 换算经原始英寸坐标闭环。窗口收养拒绝会清理 staging 侧车（其 job 留悬空引用），路径收养保留证据，故全量断言走后者。
+- 会话卫生：preclean 擦除历史尝试遗留；运行后种子副本与英寸件均不在会话，清单净还原；config.json 字节还原。
+
+**发现并修复的生产缺陷**：`adoption._refusal_details` 只读内联 `live["inspection"]`；BUG-076 拆分后该键只剩 `inspection_summary`+受控引用，导致非毫米拒绝把**已知**单位（inch、查询码 0）报成 unknown，违反“未知才为 null”契约。修复为拆分形态回退读摘要，并新增 `tests/unit/test_adoption.py::test_non_millimeter_refusal_keeps_unit_metadata_after_split` 回归；attempt-03 实机先暴露、attempt-05 实机验证修复后行为。窗口收养拒绝清理 staging 导致 job 侧悬空 inspection_ref 一事按现有清理设计保留记录，未改动。
+
+**unknown 单位**：健康实机会话无法在不注入查询失败的前提下诱导（BUG-001 停止新故障注入），维持离线替身/单元覆盖（test_model_queries CG/单位未知值等），不冒充实机结论；混合单位维持 BUG-080 装配证据（2026-10-24）。
+
+复核：`python -m unittest discover -s tests -q` 966 项通过（200.037 秒，含新增回归）；`tools/dev_check.py --work-item DEV-047` success=true（lint 30 / 未格式化 16，与 T13 基线一致，报告 SHA256 `809b5a4a…27fe4d`）。受测源码为集成分支 `585a09b` + 本节工作区改动（dirty=true 已如实记录）。非毫米轴/重心/体积查询至此取得实机证据；T05 native_acceptance 更新为 `non_millimeter_passed_unknown_stub_only`。

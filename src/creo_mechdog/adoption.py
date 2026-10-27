@@ -337,7 +337,13 @@ def _unhealthy_features(live: dict) -> dict | None:
 
 def _refusal_details(live: dict) -> dict:
     """Report what is reliably known; mark unavailable details as unknown."""
-    inspection = live.get("inspection") or {}
+    inspection = live.get("inspection")
+    if not isinstance(inspection, dict) or not inspection:
+        # Split records (BUG-076) replace the inline inspection with a bounded
+        # summary plus a controlled sidecar reference. The unit metadata the
+        # summary still carries is known truth and must not degrade to unknown.
+        summary = live.get("inspection_summary")
+        inspection = summary if isinstance(summary, dict) else {}
     units = inspection.get("units")
     units_known = isinstance(units, str) and bool(units)
     details = {

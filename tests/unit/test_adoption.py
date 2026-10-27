@@ -572,6 +572,36 @@ class AdoptionBusinessRules(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed since inspect"):
             adoption.apply(evidence["model_id"], evidence["evidence_token"], None, "feat042chg1")
 
+    def test_non_millimeter_refusal_keeps_unit_metadata_after_split(self):
+        # BUG-076 split records replace the inline inspection with a bounded
+        # summary; a non-millimeter refusal must still report the real unit
+        # name and query code instead of degrading known facts to unknown.
+        def inch_split(job_directory, manifest):
+            result = synthetic_native(job_directory, manifest)
+            result["live"] = {
+                key: value for key, value in result["live"].items() if key != "inspection"
+            }
+            result["live"].update(
+                millimeter_units=False,
+                inspection_summary={
+                    "units": "inch",
+                    "units_query_code": 0,
+                    "length_unit": {"name": "inch", "scale_to_mm": 25.4},
+                    "volume_mm3": 7000.0,
+                    "volume_query_code": 0,
+                },
+            )
+            return result
+
+        with patch.object(adoption, "_native", side_effect=inch_split):
+            evidence = adoption.inspect()
+        self.assertFalse(evidence["available"])
+        self.assertEqual(evidence["reason_code"], "non_millimeter_units")
+        details = evidence["refusal_details"]
+        self.assertTrue(details["actual_units_known"])
+        self.assertEqual(details["actual_units"], "inch")
+        self.assertEqual(details["units_query_code"], 0)
+
     def test_modeling_submit_is_refused_while_adopt_pending(self):
         evidence = adoption.inspect()
         with self.assertRaisesRegex(ValueError, "not ready"):
