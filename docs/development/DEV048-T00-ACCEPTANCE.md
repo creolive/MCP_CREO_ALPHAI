@@ -54,7 +54,7 @@ git status --porcelain
 | manifest 章节标题与行号 | 61/61 与原文逐行一致，报告数 4，声明计数与实测一致 |
 | 映射锚点 | 61 个 `R*-NN` 锚点全部存在，正文 61 行，与 manifest 的 `mapping` 一一对应 |
 | 回复请求 | 11 条（R1-Q1—Q6、R2-Q1—Q5）各有结论与归属 |
-| 新增/修改文档本地链接 | 225 处本地链接解析，除本记录（当时尚未创建）外无失效；创建后复跑为 0 失效 |
+| 新增/修改文档本地链接 | 224 处本地链接解析，除本记录（当时尚未创建）外无失效；创建后复跑为 0 失效 |
 | 原件换行保护 | `git check-attr text` 对四份原件为 `unset`，对 `MAPPING.md` 为 `set`（`eol: lf`） |
 | 空白与差异 | `git diff --check` 无输出 |
 | 提交范围 | 仅 `.gitattributes`、`docs/` 下文档与归档；`session_activity.json` 及未跟踪运行文件保持未暂存 |
