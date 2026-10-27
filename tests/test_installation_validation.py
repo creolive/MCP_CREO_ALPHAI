@@ -262,6 +262,10 @@ class InstallationValidation(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("INSTALL_INCOMPLETE: failed at SDK constants and native worker", output)
         self.assertIn("rerun the same setup.ps1 command", output)
+        # Both pip stages (BUG-086) still complete on the normal path before the native build fails.
+        self.assertIn(
+            "Python dependencies, Python source package, native Blend seed library", output
+        )
         connection = bridge.read_json(self.root / "client-config.json")
         self.assertTrue(Path(connection["mcpServers"]["MCP_CREO_MechDog"]["command"]).is_file())
         retained = bridge.read_json(self.root / "config.json")

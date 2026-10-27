@@ -214,6 +214,9 @@ class InstallConfigTests(unittest.TestCase):
         result = self.powershell(f"-Python '{real_python}' -CheckOnly")
         self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
         self.assertEqual(before, (self.root / "config.json").read_bytes())
+        # -CheckOnly reports file checks only: no venv, client config or pip stage writes.
+        self.assertFalse((self.root / "client-config.json").exists())
+        self.assertFalse((self.root / ".venv").exists())
         # Stop after configuration is persisted, before any venv/dependency changes.
         fake = self.root / "python.cmd"
         fake.write_text(
