@@ -74,3 +74,9 @@
 - **实机部分证据**（Creo 12.4.0.0 会话，修复批同源码）：`--cases seeds` 两种子 smoke 通过（`seed_straight` job `cda3ba3f…`、`seed_smooth` job `49268b14…`，volume 4900π/3 断言经 summary 读取通过）。安装矩阵执行至第 2 场景：`matrix_five_smooth` 完整通过（blend id 93、revision 1→2、体积 69220.871→70471.929、创建与编辑保存重载 true、源件哈希核对通过）；`matrix_four_smooth` 创建成功（job `6c8ed77b…`，blend id 82、体积 32554.802），并实证**种子行为差异**：four 类种子的 SECTION_n_PLANE datum 尺寸（10/20/30）不镜像请求 offsets（0/20/40/60）且不驱动 Blend（平面尺寸 +5 后体积不变），驱动已改为编辑 section_1 草图的真实非零尺寸。
 - **环境受阻**：第三次矩阵重跑时 Toolkit 通道断开（worker exit 20、`connection_state=not_found_or_unreadable`，coordinator 两次显式 retry 均超时；xtop 主窗口在、隐藏"重新生成进度"框残留、无可见模态框；通道断开前最后一轮完整作业为编辑专项 16/16）。按 BUG-001 纪律未处置 Creo。按驱动清单重新核数：共 15 个正向场景（9 种子 + 6 附加），仅 matrix_five_smooth 完整通过；matrix_four_smooth 尚缺编辑闭环，其后 13 个正向场景及 2 个负例待会话恢复后补跑；作业级证据保留于 `jobs/471d5301…`、`633de212…`、`6c8ed77b…`、`14560f1b…`。
 - 种子重生成与生产版本来源不变（仍环境受阻/无绑定记录）；本节不改变 `available` 语义与 `seed_build_version=null` 口径。
+
+## 2026-10-28：DEV-049 T06 离线阶段（种子驱动证据边界收紧，实机 15+2 未执行）
+
+- 范围（仅离线，未连接 Toolkit/Creo）：按 [0.6.1 派发表 T06](../development/0.6.1-FEEDBACK-TASKS-2026-10-27.md) 收紧 `tools/test_installation_loft.py` 的执行/证据边界：默认离线、实机双门槛（`--live --confirm-session-usable`）、可重复 `--case` 与 `--output`、默认输出 `build/dev049_t06/<run_id>/report.json` 且拒绝覆盖旧报告、逐次持久化输入/job ID/分阶段终态、无自动重放与 resume、跨源码指纹报告不合并；负例 `invalid_seed_feature_id`、`interpolation_mismatch` 改为显式新建 two_straight 基础输入并仅改一个字段。
+- 离线核对：manifest 与 9 个种子 SHA256 全部一致（`compatible_server_version=0.7.1`），15 正例按派发表固定顺序与 2 负例输入全部构建并校验；专项回归 `tests.unit.test_seed_regression_contract` + `tests.unit.test_mcp_readiness` 共 31 项通过（新增 24 项），离线驱动默认路径已跑通并生成新 run_id 报告，`tools/dev_check.py --skip-unit --work-item DEV-049` success=true。
+- **本节不改变本卡验收状态**：15 正例创建+真实尺寸编辑闭环与 2 负例的实际拒绝/回滚证据均未取得，历史 0.6.1 的 five_smooth 结果不作为本次通过；实机补跑待用户指派并按 BUG-001 纪律人工确认会话后串行执行。详见 [DEV049-T06-ACCEPTANCE.md](../development/DEV049-T06-ACCEPTANCE.md)。
