@@ -85,7 +85,7 @@
 ## 提交
 
 - 依赖基准：`c0a3e55b2124c2ae08cbf577cdbd4a3bd65b52b7`（T00）。
-- 本任务提交：`<待回填>`（分支 `codex/dev048-t01-sidecar`）。提交内容见下，运行数据未纳入。
+- 本任务提交：`23ddcb7371288008f0b599cf8ee1c83c5d561c2a`（分支 `codex/dev048-t01-sidecar`）。提交内容见下，运行数据未纳入。
 - 改动文件：`src/creo_mechdog/inspection_refs.py`、`adoption.py`、`file_adoption.py`、`reconciliation.py`、`bridge.py`、`server.py`、`native/inspection_sidecar.h`（新）、`native/generic.cpp`、`tests/native/test_inspection_sidecar.cpp`（新）、`tests/unit/test_inspection_warnings.py`（新）、`tests/unit/test_adoption_split.py`、`tools/test_inspection_sidecar.py`（新）、本记录与 DEV-048 卡。
 - 未合入 main、未创建标签、未发布、未改版本号、未启动 T02 及后续任务。
 
