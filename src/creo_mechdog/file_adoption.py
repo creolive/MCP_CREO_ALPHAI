@@ -200,9 +200,6 @@ def inspect(paths: list[str]) -> dict:
                     raise RuntimeError("Native path-source/window evidence is incomplete")
                 refusal = adoption._refusal_reason(live)
                 if refusal:
-                    # Unit/volume facts must survive the refusal and stay
-                    # readable while the item's sidecar still exists.
-                    adoption._ensure_inspection_summary(live)
                     item["refusal_details"] = adoption._refusal_details(live)
                     raise adoption.AdoptionRefused(*refusal)
                 model.update(
@@ -263,7 +260,6 @@ def inspect(paths: list[str]) -> dict:
 def _public_item(item: dict) -> dict:
     if "live" in item:
         live = item["live"]
-        adoption._ensure_inspection_summary(live)
         # A reference whose evidence file is gone must not be published as
         # readable; the removal is reported on this item (DEV-048 T02). A
         # reference that still verifies is kept, so surviving probe evidence

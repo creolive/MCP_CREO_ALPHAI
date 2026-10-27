@@ -478,6 +478,11 @@ def _close_stage(report: dict, holder: dict, directory: Path, stage: str) -> Non
                 message=f"Stored inspection reference could not be verified: {error}",
             )
         else:
+            # A verified reference still gets its summary beside it, exactly as
+            # ``split`` did before the T01 closeout: no new sidecar, no new
+            # warning and no fallback change (DEV-048 T02 restores this).
+            holder.pop("inspection", None)
+            holder.setdefault("inspection_summary", summary_of(holder))
             return
     inline = holder.get("inspection")
     if not isinstance(inline, dict) or not inline:

@@ -746,17 +746,29 @@ class AdoptionBusinessRules(unittest.TestCase):
         self.assertTrue((bridge.job_path(jobs[0]) / "request.json").is_file())
 
     def test_window_refusal_keeps_a_reference_that_still_verifies(self):
+        inch = {**INSPECTION, "units": "inch", "volume_mm3": None}
         with patch.object(
-            adoption, "_native", side_effect=self.window_native(units_mm=False, location="job")
+            adoption,
+            "_native",
+            side_effect=self.window_native(units_mm=False, location="job", inspection=inch),
         ):
             evidence = adoption.inspect()
         current = evidence["current_model"]
+        # The sidecar lives in the surviving job directory: the refusal keeps it
+        # and never downgrades a reference that still passes size + SHA256.
         ref = current["inspection_ref"]
         inspection_refs.verify_ref(ref)
         self.assertTrue(Path(ref["file"]).is_file())
+        self.assertTrue(
+            Path(ref["file"]).resolve().is_relative_to((self.directory / "jobs").resolve())
+        )
         self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
-        self.assertEqual(current["inspection_summary"]["units"], "mm")
+        self.assertEqual(current["inspection_summary"]["units"], "inch")
+        self.assertEqual(current["inspection_summary"]["units_query_code"], 0)
         self.assertNotIn("inspection_warnings", current)
+        self.assertEqual(evidence["refusal_details"]["actual_units"], "inch")
+        self.assertTrue(evidence["refusal_details"]["actual_units_known"])
+        self.assertEqual(evidence["refusal_details"]["units_query_code"], 0)
 
     def test_window_refusal_records_a_failed_cleanup_truthfully(self):
         with (

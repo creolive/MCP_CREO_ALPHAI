@@ -196,20 +196,6 @@ class Split(unittest.TestCase):
         self.assertEqual(warning["stage"], "live")
         self.assertEqual(warning["fallback_status"], "failed")
 
-    def test_summary_only_keeps_the_summary_of_a_verified_reference(self):
-        directory = self.root / "sidecars" / "summary"
-        ref = inspection_refs.make_ref(INSPECTION, directory, "live")
-        holder = {"live": {"inspection_ref": ref}}
-        summary = adoption._summary_only(holder)
-        self.assertNotIn("inspection", summary)
-        self.assertEqual(summary["inspection_ref"], ref)
-        self.assertEqual(summary["inspection_summary"]["units"], "mm")
-        self.assertEqual(summary["inspection_summary"]["volume_mm3"], 10)
-        # An unreadable reference is left to the refusal lifecycle: the
-        # projection never invents a summary or raises on the caller.
-        Path(ref["file"]).unlink()
-        self.assertNotIn("inspection_summary", adoption._summary_only(holder))
-
     def test_apply_request_uses_reference_and_legacy_inline_still_works(self):
         # New records send only the reference in the request.
         holder = {

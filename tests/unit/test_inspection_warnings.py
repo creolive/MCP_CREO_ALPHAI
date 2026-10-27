@@ -236,6 +236,35 @@ class SplitCloseout(Fixture):
         self.assertEqual(warnings[0]["fallback_status"], "verified")
         self.assertIn("Python fallback was verified", warnings[0]["message"])
 
+    def test_a_verified_native_reference_gains_its_summary(self):
+        # A native result publishes only a reference; the closeout restores the
+        # summary that ``split`` used to add, without a new sidecar or warning.
+        directory = self.root / "jobs" / "native_ref"
+        ref = inspection_refs.make_ref(INSPECTION, directory, "live")
+        result = {"success": True, "live": {"origin": "fixture", "inspection_ref": ref}}
+        inspection_refs.split_result(result, directory)
+        self.assertEqual(result["live"]["inspection_ref"], ref)
+        self.assertNotIn("inspection", result["live"])
+        summary = result["live"]["inspection_summary"]
+        self.assertEqual(summary["units"], "mm")
+        self.assertEqual(summary["units_query_code"], 0)
+        self.assertEqual(summary["volume_mm3"], 10)
+        self.assertNotIn("inspection_warnings", result)
+        self.assertEqual(self.sidecars(directory), [Path(ref["file"]).name])
+
+    def test_an_unreadable_reference_is_not_given_a_summary(self):
+        directory = self.root / "jobs" / "missing_ref"
+        ref = inspection_refs.make_ref(INSPECTION, directory, "live")
+        Path(ref["file"]).unlink()
+        result = {"success": True, "live": {"origin": "fixture", "inspection_ref": ref}}
+        inspection_refs.split_result(result, directory)
+        self.assertNotIn("inspection_ref", result["live"])
+        self.assertNotIn("inspection_summary", result["live"])
+        warning = inspection_refs.warnings_of(result)[0]
+        self.assertEqual(warning["stage"], "live")
+        self.assertEqual(warning["reason_code"], "inspection_ref_invalid")
+        self.assertEqual(warning["fallback_status"], "not_attempted")
+
     def test_double_failure_keeps_the_inline_payload_and_reports_failed(self):
         directory = self.root / "jobs" / "double"
         result = {

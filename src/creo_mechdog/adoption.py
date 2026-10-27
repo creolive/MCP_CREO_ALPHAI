@@ -160,24 +160,6 @@ _REF_REMOVED_MESSAGES = {
 }
 
 
-def _ensure_inspection_summary(holder: dict) -> None:
-    """Keep the units/volume facts a holder already knows (BUG-076/DEV-047).
-
-    A native result carries a verified reference but not a summary. Computing
-    it while the sidecar is still readable keeps the unit metadata of a refusal
-    and the public projection intact; an unreadable reference is left to the
-    caller's reference-lifecycle handling instead of raising here.
-    """
-    if not isinstance(holder, dict) or holder.get("inspection_summary"):
-        return
-    if not (holder.get("inspection_ref") or holder.get("inspection")):
-        return
-    try:
-        holder["inspection_summary"] = inspection_refs.summary_of(holder)
-    except inspection_refs.InspectionRefInvalid:
-        return
-
-
 def _cleanup_staging(directory: Path) -> dict:
     """Remove this call's own staging and report what actually remains."""
     try:
@@ -635,10 +617,9 @@ def inspect(model_id: str | None = None) -> dict:
                 else:
                     reason, reason_code = None, None
                 if reason or not origin:
-                    # Record the refusal's known facts while the staging
-                    # sidecar is still readable: the cleanup below may remove
-                    # the file the native reference points at (DEV-048 T02).
-                    _ensure_inspection_summary(live)
+                    # The closeout already recorded the verified summary; the
+                    # cleanup below may remove the file its reference pointed at
+                    # (DEV-048 T02).
                     manifest["staging_cleanup"] = _cleanup_staging(path)
                     for stage, holder in (("live", live), ("verified", result)):
                         _prune_removed_refs(holder, stage, result)
@@ -973,9 +954,6 @@ def _summary_only(record: dict) -> dict:
     inline = live.pop("inspection", None)
     if inline is not None:
         live.setdefault("inspection_summary", inspection_summary(inline))
-    # A native reference keeps its summary beside the reference so the caller
-    # still sees units/volume without loading the payload (DEV-048 T02).
-    _ensure_inspection_summary(live)
     warnings = record.get("inspection_warnings")
     if isinstance(warnings, list) and warnings:
         live["inspection_warnings"] = [dict(entry) for entry in warnings if isinstance(entry, dict)]
