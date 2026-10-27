@@ -73,7 +73,7 @@ T01 的 `inspection_refs._close_stage` 在“原生已给出可验证 `inspectio
 | 命令 | 结果 |
 | --- | --- |
 | 5 个专项 unittest 模块 | `Ran 123 tests in 77.703s`，`OK`，退出码 0（基线同 5 模块 114 项；本任务新增 9 项：3 项窗口拒绝生命周期、1 项 MCP 直接响应投影、3 项路径/批量、1 项恢复候选引用、1 项摘要投影） |
-| `tools/dev_check.py --skip-unit --work-item DEV-048` | `success=true`，`checked_source_sha256=b50c2883fe85bdb405673f6321aa7c9e10ce70bfd21f5c2209230125c86eb551`，`cpp_files_checked=33`，`python_files_checked=213`，`lint_findings=30`、`unformatted_files=16`（均为既有基线项，无新增回归） |
+| `tools/dev_check.py --skip-unit --work-item DEV-048` | `success=true`，`checked_source_sha256=b50c2883fe85bdb405673f6321aa7c9e10ce70bfd21f5c2209230125c86eb551`，`cpp_files_checked=33`，`python_files_checked=213`，`lint_findings=30`、`unformatted_files=16`（均为既有基线项，无新增回归）。提交后在 `484f10e` 树上复跑同一命令仍为 `success=true` 且 `checked_source_sha256` 相同；`dirty=true` 仅来自 `session_activity.json` 与既有未跟踪运行数据 |
 
 额外执行（不属于派发表规定命令，用于确认无相邻回归）：`.\.venv\Scripts\python.exe tools\test_unit.py` → `Ran 994 tests in 309.263s`、`OK`、`build/unit_test_report.json` 记录 `success=true`。首次全量运行曾出现 3 项源码身份用例失败，原因是该次运行期间 `src/creo_mechdog/adoption.py` 被本任务继续修改（`_native_refusal` 的清理状态回填），`_LOADED_FINGERPRINTS` 与磁盘内容不一致；最后一次源码改动完成后重跑全量通过，未放宽任何断言。
 
