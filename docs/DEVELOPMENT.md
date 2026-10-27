@@ -2,7 +2,7 @@
 
 本项目按可交付的 Creo MCP 工具维护，采用功能条目驱动、短分支和分批整理。日常开发从 [统一台账](BACKLOG.md) 选择条目；新增工作先登记，复杂条目复制 [模板](templates/WORK_ITEM.md)。开发准入对小修复同样适用，内容可精简为几行。
 
-服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.0（0.5.2 三份反馈完整交付，MINOR，公开工具 92→94：新增 `creo_plan_assembly_rebuild` 与 `creo_reclaim_generations`）。版本说明见 [RELEASE_NOTES_0.7.0.md](RELEASE_NOTES_0.7.0.md)，检查与交付核对见[发布记录](validation/RELEASE-0.7.0.md)。本机 Creo 12.4 实机矩阵（T05 毫米+英寸、T06—T09、T12）与 966 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。当前安排见[台账](BACKLOG.md)，完成事项见[档案](BACKLOG_COMPLETED.md)。
+服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.1（DEV-048 反馈修复，PATCH，公开工具 94 不变：收养侧车完整性与回退、拒绝后引用生命周期、工作卡与发布检查回填、Right 面 ±Z 实机证据）。版本说明见 [RELEASE_NOTES_0.7.1.md](RELEASE_NOTES_0.7.1.md)，检查见 [RELEASE-0.7.1.md](validation/RELEASE-0.7.1.md)。前一版为 [0.7.0](RELEASE_NOTES_0.7.0.md)。
 
 本机联调只使用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。先按[根级规范](../AGENTS.md#本机开发联调补充2026-10-17用户要求)核对卡死调查与会话可操作条件，满足门槛后再安排 Toolkit 连接或故障注入；不得擅自结束 Creo 或清除 unknown 保护。文档分类和条目关闭不解除这些限制。
 

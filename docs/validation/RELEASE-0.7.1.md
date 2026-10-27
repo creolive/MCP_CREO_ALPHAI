@@ -67,7 +67,7 @@ Right 面几何 ID 由巡检选出（过原点且法向平行 X 的唯一平面�
 
 | ID | 技术状态 | 交付版本 | 剩余范围 | 卡首页 | 主台账 | 版本说明 | 开发入口 | 实际 Release |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DEV-048 | 本批代码与实机证据完成 | 0.7.1 | T05 交付本身；外部 Creo 9/10、WorkBuddy、完整历史矩阵未做 | [DEV-048](../work-items/DEV-048.md) | [BACKLOG](../BACKLOG.md) | [0.7.1 说明](../RELEASE_NOTES_0.7.1.md) | [DEVELOPMENT](../DEVELOPMENT.md) | 待发布（本节为候选态核对） |
+| DEV-048 | 已交付（本批代码与实机证据完成） | 0.7.1 | 外部 Creo 9/10、WorkBuddy、完整历史矩阵未做 | [DEV-048](../work-items/DEV-048.md) | [BACKLOG](../BACKLOG.md) | [0.7.1 说明](../RELEASE_NOTES_0.7.1.md) | [DEVELOPMENT](../DEVELOPMENT.md) | [v0.7.1](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.7.1)（已发布） |
 
 ## 未测与限制
 
@@ -76,3 +76,24 @@ Right 面几何 ID 由巡检选出（过原点且法向平行 X 的唯一平面�
 - T04 只覆盖 Right 面 ±Z，未重跑 DEV-047 完整历史矩阵。
 - 未做真实 worker 超时/断连注入、真实文件锁下的清理失败注入、未知单位实机诱导。
 - `dev_check` 全量模式因 300 秒上限未跑通，已改用等价的全量命令并如实记录。
+## 发布后核对（2026-10-27）
+
+| 项目 | 值 |
+| --- | --- |
+| 合入 main 的提交 | `ffa0a433736917812d1040dba7c6d7190b5f82f6`（`2a78358..ffa0a43`，fast-forward） |
+| 版本标签 | `v0.7.1`（附注标签对象 `0c7ee34`，peeled → `ffa0a43`） |
+| GitHub Release | [v0.7.1](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.7.1)，id `425556084`，`draft=false`、`prerelease=false` |
+| 远端附件 | 4 个，已逐个下载复核 |
+
+远端下载复核结果（本地重算 SHA256 与 API `digest`、body 记载三方一致）：
+
+| 附件 | 远端字节 | 本地 SHA256 | 一致 |
+| --- | --- | --- | --- |
+| `MCP_CREO_MechDog-0.7.1-source.zip` | 5365479 | `b2237884fcba39011fdcf445ba601036c2caba55b9cccbaff295987769b55542` | 是 |
+| `MCP_CREO_MechDog-0.7.1-source.zip.sha256` | 101 | `08a27c5ae5a30642993a478b77b82b5a1210d95e2698817463700404df730372` | 是 |
+| `MCP_CREO_MechDog-0.7.1-seed-library.zip` | 493394 | `53b3d39176a1107d6a5da57257a9566500a084b7a5a3cf415fec75f657e46994` | 是 |
+| `MCP_CREO_MechDog-0.7.1-seed-library.zip.sha256` | 107 | `cdab6ba51a7b8902274a8d8b8da0e82532f4ce8dc7ac68287138c134bf506162` | 是 |
+
+发布后状态回填：主台账首段与 DEV-048 行、`docs/DEVELOPMENT.md` 当前入口、DEV-048 工作卡、README 标题与版本段均已改为 0.7.1 已交付；0.7.0 的标签、Release 与附件未改动。
+
+源码包与 `ffa0a43` 的一致性：包由该提交的工作树生成（941 文件，已排除不属于本批的未跟踪文档），逐项核对见上表。
