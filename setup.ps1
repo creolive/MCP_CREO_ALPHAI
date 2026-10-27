@@ -10,6 +10,42 @@ if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem) {
     throw 'Windows x64 is required.'
 }
 
+# pip writes progress and [notice] lines to stderr. PowerShell 5.1 turns redirected
+# native stderr into ErrorRecords, and the script-wide 'Stop' preference then aborts
+# a pip run that actually exited 0 (BUG-086). Tolerate those records only inside this
+# helper, leave the text visible, and judge the real exit code.
+function Invoke-PipStep {
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [Parameter(Mandatory)][string]$FailureMessage
+    )
+    $previousPreference = $ErrorActionPreference
+    $launchFailure = $null
+    $exitCode = $null
+    # Drop the previous native exit code so a launch failure cannot inherit it.
+    $global:LASTEXITCODE = $null
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $Executable @Arguments
+        # Save the real code immediately, before any other statement can replace it.
+        $exitCode = $global:LASTEXITCODE
+    } catch {
+        $launchFailure = $_
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($null -ne $launchFailure) {
+        throw ("{0} Could not start {1}: {2}" -f $FailureMessage, $Executable, $launchFailure.Exception.Message)
+    }
+    if ($null -eq $exitCode) {
+        throw ("{0} {1} reported no exit code." -f $FailureMessage, $Executable)
+    }
+    if ($exitCode -ne 0) {
+        throw ("{0} {1} exited with code {2}." -f $FailureMessage, $Executable, $exitCode)
+    }
+}
+
 $settingsPath = Join-Path $PSScriptRoot 'config.json'
 $settingsSource = if (Test-Path -LiteralPath $settingsPath) { $settingsPath } else { Join-Path $PSScriptRoot 'config.example.json' }
 $settings = Get-Content -LiteralPath $settingsSource -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -131,12 +167,10 @@ try {
     $connection | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'client-config.json') -Encoding UTF8
     $completed += $stage
     $stage = 'Python dependencies'
-    & $projectPython -m pip install -r (Join-Path $PSScriptRoot 'requirements.lock.txt')
-    if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed. Check internet/PyPI access and requirements.lock.txt.' }
+    Invoke-PipStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '-r', (Join-Path $PSScriptRoot 'requirements.lock.txt')) -FailureMessage 'Dependency installation failed. Check internet/PyPI access and requirements.lock.txt.'
     $completed += $stage
     $stage = 'Python source package'
-    & $projectPython -m pip install --no-deps --editable $PSScriptRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Source package installation failed. Restore pyproject.toml and src, then rerun setup.ps1.' }
+    Invoke-PipStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '--no-deps', '--editable', $PSScriptRoot) -FailureMessage 'Source package installation failed. Restore pyproject.toml and src, then rerun setup.ps1.'
     & $projectPython -c 'import creo_mechdog.paths'
     if ($LASTEXITCODE -ne 0) { throw 'Source package import failed. Reinstall the package for this source directory.' }
     $completed += $stage
