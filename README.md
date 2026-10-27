@@ -82,7 +82,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 基准与重复 | `creo_datum_plane`、`creo_datum_axis`、`creo_dimension_pattern`：偏移/角度基准面、基准轴、一方向尺寸阵列 |
 | 镜像、扫掠、拔模 | `creo_mirror`：整体/几何镜像；`creo_sweep`：恒定截面及命名截面尺寸；`creo_draft`：恒角、不分割拔模 |
 | 钣金 | `creo_new_sheetmetal`、`creo_sheetmetal_wall`、`creo_sheetmetal_flange`、`creo_sheetmetal_unbend`、`creo_sheetmetal_bend_back`、`creo_sheetmetal_flat_pattern`：首壁、弯曲法兰、展开、折弯回去和平展；保留原生特征树 |
-| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本快照、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；含组件操作的作业附 `component_changes` 有界变更摘要（committed/rolled_back/unknown_outcome），`list_components` 约束保留数字 `type` 并附 `type_name` 符号；单作业插入多个组件与官方重建管线见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)；矩阵放置与收养实机验收待完成，见 [FEAT-012](docs/work-items/FEAT-012.md) |
+| 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本快照、定位（Euler 或互斥的嵌套 3×3 `rotation_matrix`）、约束、删除和查询；含组件操作的作业附 `component_changes` 有界变更摘要（committed/rolled_back/unknown_outcome），`list_components` 约束保留数字 `type` 并附 `type_name` 符号；单作业插入多个组件与官方重建管线见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)；矩阵放置子项已在本机 Creo 12.4 实机通过（0.6.0 交付，38 父作业含故意失败回滚），显式源件更新与嵌套装配仍开放，见 [FEAT-012](docs/work-items/FEAT-012.md) |
 | 新增曲面与实体 | `creo_surface_fill`、`creo_thicken`、`creo_solidify`、`creo_boolean_bodies`、`creo_rib` |
 | 新增基准 | `creo_datum_csys`、`creo_datum_points` |
 | 原生工程图 | `creo_new_drawing`；图纸、一般/投影视图、尺寸显示、注释、表格及编辑/删除；原生 DRW 与 PDF 输出 |
@@ -99,6 +99,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 磁盘模型打开 | `creo_open_file`：只读检索并显示磁盘既有 `.prt`/`.asm`（显式 `.N` 版本或目录内最高数字版本）；同名同类型会话模型与非空会话装配拒绝，冲突提示含装配依赖加载来源；缺件装配报残留对象、缺件清单标记未知；不保存、不擦除、不接管，成功返回 `model_id=null`，并附有界 `loaded_session_models` 摘要（区分会话模型数与组件实例数） |
 | 注册表维护 | `creo_registry_health`：只读报告每个模型登记的字节数、16 MiB 读取预算占比、详情（别名/检查资料）形态与状态（正常/接近预算/超限/损坏/旧内联格式），单条异常不终止整份报告，不连接 Toolkit。`creo_migrate_registry`：`inspect` 列出仍内联详情的条目（含超限项）及其作业证据链；`apply(idempotency_key)` 先备份原始字节为 `*.pre-split-bak`，把详情写入内容寻址 sidecar 后原子发布控制记录，并把每个动作追加到 `models/registry-migration.jsonl`。重复执行幂等、中断可续作；不提高预算、不删除文件，原始原生结果保持原样 ；apply 持有共用非阻塞通道锁并核验 owner，targets 仅接受合法 model_id。health、迁移 inspect/apply/幂等回放均受完整 32 KiB 响应预算约束，使用 limit/cursor 逐页读取；登记变化后 inspect/health 游标需重采 |
 | 会话模型擦除 | `creo_erase_session_models`：显式擦除选定的会话模型清单。`inspect(targets)` 返回每项目标身份、阻断原因、装配先于组件的擦除顺序、预期剩余对象和 600 秒令牌；`apply(evidence_token, idempotency_key)` 只执行令牌中的清单并返回 `job_id`。仅限有盘、未修改、非受管、无清单外引用与依赖环的对象；逐项复核后经两次独立查询确认消失；中途失败停止并明确报告已完成/未确认清单。不保存模型、不删除磁盘文件 |
+| 世代回收 | `creo_reclaim_generations`：显式回收本项目自有的 loader/payload 世代目录。`inspect` 只列 `creo_callback_status.generation_inventory` 中可证明未被引用的世代并签发 600 秒证据令牌，`apply` 只删除令牌清单内目标且幂等键回放不重复删除；当前、已注册、运行中、回退保留与记录缺失/损坏/冲突的世代一律保留，不连接 Toolkit、不加载 DLL、不在启动或升级时自动清理 |
 | 快捷底板 | `creo_create_plate`：兼容此前矩形底板、角圆角、独立通孔接口 |
 
 特征保存为 Creo 可编辑的草图、拉伸、旋转、孔、圆角等，保留尺寸及依赖。多段线和矩形会展开为原生直线，不能将 `polyline` 名字当作单个尺寸引用；例如 `box_0` 是矩形第一条边。
@@ -162,7 +163,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 平面也可传入 `{"reference":{"kind":"surface","id":实际ID},"origin":[x,y,z],"u_axis":[x,y,z]}`，用于已有平面面或基准面。默认原点是世界原点到该平面的垂足；指定原点必须在平面内。基准面的方向和生成几何由 Toolkit 决定，应按查询结果使用。
 
-`creo_datum_axis` 的操作详情包含 `datum_axes` 与 `axes_query_code`；`creo_inspect_model(detail="full", section="datum_axes")` 分页返回已保存快照中的原生轴几何。`origin` 是原生轴线上的一个点（不保证是离原点最近点），`direction` 是原生两端点差的单位向量。坐标使用实际模型长度单位；同层 `length_unit` 提供单位名、到毫米的比例及原始查询码。查询失败/未执行或几何退化时使用 null/`geometry_known:false`，不得把输入引用猜成几何。巡检 `center_of_gravity` 同样使用原生长度单位，查询结果由 `volume_query_code` 记录；尚无实体或质量查询失败时为 null。上述接口已离线构建，当前倾斜拉伸/两平面轴/偏心阵列的本机验收仍待 [T05 实机检查](docs/development/DEV047-T05-ACCEPTANCE-2026-10-26.md)。
+`creo_datum_axis` 的操作详情包含 `datum_axes` 与 `axes_query_code`；`creo_inspect_model(detail="full", section="datum_axes")` 分页返回已保存快照中的原生轴几何。`origin` 是原生轴线上的一个点（不保证是离原点最近点），`direction` 是原生两端点差的单位向量。坐标使用实际模型长度单位；同层 `length_unit` 提供单位名、到毫米的比例及原始查询码。查询失败/未执行或几何退化时使用 null/`geometry_known:false`，不得把输入引用猜成几何。巡检 `center_of_gravity` 同样使用原生长度单位，查询结果由 `volume_query_code` 记录；尚无实体或质量查询失败时为 null。上述接口已随 0.7.0 交付。倾斜面与主平面的正/反/对称盲深拉伸（800 mm³、完整 AABB 与重心）及贯穿去料（48/48/96），以及偏心 `(4,-3)` 两平面交线轴、基体柱面轴的正余弦阵列，已在本机 Creo 12.4 实机通过 18/18 并逐个保存重载（[T05 Live03](docs/development/DEV047-T05-ACCEPTANCE-2026-10-26.md)）。仍未覆盖：外部 Creo 9/10、非毫米与单位未知场景，以及无基准轴模型上的倾斜面草图（日志 `SKETCH_REFERENCE_INCOMPLETE`）。
 
 常用引用：
 
@@ -215,7 +216,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 目前高层工具覆盖上述常见实体特征，仍有明确范围：
 
 - 持续修改支持本服务创建、登记的零件、钣金模型和装配；用户已在 Creo 打开的未登记模型可通过 `creo_adopt_current_model` 显式接管为受管副本（原件与原会话对象不动，首批独立 part/钣金、mm 单位、无外部依赖；身份按 origin 路径 + 文件哈希 + live 快照证明，不信任显示名）。
-- Development branch: `creo_adopt_file` accepts 1-20 ordered source paths with inspect/apply, independent per-item commits and no display/window activation. Existing unmodified exact-origin residents are copied as explicitly inspected session state; their pre-inspection disk/content equality is unknown. Duplicate sources are refused with reuse guidance; unknown outcomes stop remaining items and retain protection. See [path-adoption contract and pending native acceptance](docs/FILE_ADOPTION.md).
+- Development branch: `creo_adopt_file` accepts 1-20 ordered source paths with inspect/apply, independent per-item commits and no display/window activation. Existing unmodified exact-origin residents are copied as explicitly inspected session state; their pre-inspection disk/content equality is unknown. Duplicate sources are refused with reuse guidance; unknown outcomes stop remaining items and retain protection. See the [path-adoption contract and its live evidence range](docs/FILE_ADOPTION.md).
 - 各类尺寸/约束的复杂组合、极端几何及外部人工修改的自动接管仍需后续扩展。
 - 孔为直孔，尚未封装螺纹、沉头、沉孔标准孔；倒角为等距，阵列支持一方向尺寸阵列和原生轴阵列。
 - 普通混合支持平行 XY 截面的种子复用及直接创建/追加。随包九个种子覆盖 2/3/4/6 截面的直线和平滑，以及 5 截面平滑；其他数量需显式兼容种子或直接创建并本机验证。直接混合仅支持受管草图、Z 严格递增和默认实体增材。不支持自动增减种子截面、转换连接模式、非平行截面或端点相切/曲率控制。数量上限不代表每种数量都已实测。新零件整体可用原生定位特征移动或旋转。
