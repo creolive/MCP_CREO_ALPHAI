@@ -144,6 +144,88 @@ def _split_result(result: dict, directory: Path) -> dict:
     return inspection_refs.split_result(result, directory)
 
 
+# DEV-048 T02: a refused inspection may have written its full payload into the
+# staging directory this call removes. Only a reference whose file is really
+# gone is dropped; a surviving reference keeps being published, because the
+# refusal itself never authorizes deleting job evidence.
+_REF_REMOVED_MESSAGES = {
+    "inspection_ref_removed_after_refusal": (
+        "Refusal cleanup removed this staging inspection sidecar; the reference "
+        "was dropped and no fallback was attempted"
+    ),
+    "inspection_ref_invalid": (
+        "The stored inspection reference no longer resolves; it was dropped and "
+        "no fallback was attempted"
+    ),
+}
+
+
+def _ensure_inspection_summary(holder: dict) -> None:
+    """Keep the units/volume facts a holder already knows (BUG-076/DEV-047).
+
+    A native result carries a verified reference but not a summary. Computing
+    it while the sidecar is still readable keeps the unit metadata of a refusal
+    and the public projection intact; an unreadable reference is left to the
+    caller's reference-lifecycle handling instead of raising here.
+    """
+    if not isinstance(holder, dict) or holder.get("inspection_summary"):
+        return
+    if not (holder.get("inspection_ref") or holder.get("inspection")):
+        return
+    try:
+        holder["inspection_summary"] = inspection_refs.summary_of(holder)
+    except inspection_refs.InspectionRefInvalid:
+        return
+
+
+def _cleanup_staging(directory: Path) -> dict:
+    """Remove this call's own staging and report what actually remains."""
+    try:
+        shutil.rmtree(directory)
+    except FileNotFoundError:
+        return {"state": "removed", "staging": str(directory)}
+    except OSError as error:
+        return {
+            "state": "failed",
+            "staging": str(directory),
+            "error": f"{type(error).__name__}: {error}",
+        }
+    return {"state": "removed", "staging": str(directory)}
+
+
+def _prune_removed_refs(
+    holder: dict,
+    stage: str,
+    report: dict,
+    *,
+    reason_code: str = "inspection_ref_removed_after_refusal",
+) -> bool:
+    """Drop a reference whose file no longer resolves on this call.
+
+    Verification is the shared size + SHA256 + controlled-path check; a
+    reference that still verifies is kept untouched so surviving staging or job
+    evidence is never deleted to make a response look tidy.
+    """
+    if not isinstance(holder, dict) or "inspection_ref" not in holder:
+        return False
+    try:
+        inspection_refs.verify_ref(holder["inspection_ref"])
+    except inspection_refs.InspectionRefInvalid as error:
+        holder.pop("inspection_ref", None)
+        detail = _REF_REMOVED_MESSAGES.get(
+            reason_code, _REF_REMOVED_MESSAGES["inspection_ref_invalid"]
+        )
+        inspection_refs.add_warning(
+            report,
+            stage=stage,
+            reason_code=reason_code,
+            fallback_status="not_attempted",
+            message=f"{detail}: {error}",
+        )
+        return True
+    return False
+
+
 def _native(directory: Path, manifest: dict) -> dict:
     manifest["worker_started"] = False
     exe = bridge.build_native()
@@ -517,8 +599,8 @@ def inspect(model_id: str | None = None) -> dict:
                 # preflight job stays as evidence.
                 structured = _native_refusal(str(error))
                 if structured is not None:
-                    shutil.rmtree(path, ignore_errors=True)
-                    return structured
+                    manifest["staging_cleanup"] = _cleanup_staging(path)
+                    return {**structured, "staging_cleanup": manifest["staging_cleanup"]}
                 raise
             except AdoptionMetadataBudgetExceeded as error:
                 manifest["status"] = "failed"
@@ -553,7 +635,19 @@ def inspect(model_id: str | None = None) -> dict:
                 else:
                     reason, reason_code = None, None
                 if reason or not origin:
-                    shutil.rmtree(path)
+                    # Record the refusal's known facts while the staging
+                    # sidecar is still readable: the cleanup below may remove
+                    # the file the native reference points at (DEV-048 T02).
+                    _ensure_inspection_summary(live)
+                    manifest["staging_cleanup"] = _cleanup_staging(path)
+                    for stage, holder in (("live", live), ("verified", result)):
+                        _prune_removed_refs(holder, stage, result)
+                    warnings = inspection_refs.warnings_of(result)
+                    if warnings:
+                        manifest["inspection_warnings"] = warnings
+                    # The persisted probe must carry the same meaning as the
+                    # direct response: no reference to a file cleanup removed.
+                    bridge.write_json(probe / "job.json", manifest, durable=True)
                     return {
                         "available": False,
                         "reason": reason or "snapshot_required: use mode=prepare",
@@ -564,6 +658,7 @@ def inspect(model_id: str | None = None) -> dict:
                             {"live": live, "inspection_warnings": warnings}
                         ),
                         "refusal_details": _refusal_details(live),
+                        "staging_cleanup": manifest["staging_cleanup"],
                         "file": file,
                         "source_kind": "file" if origin else "session_only",
                         "model_id": None,
@@ -878,6 +973,9 @@ def _summary_only(record: dict) -> dict:
     inline = live.pop("inspection", None)
     if inline is not None:
         live.setdefault("inspection_summary", inspection_summary(inline))
+    # A native reference keeps its summary beside the reference so the caller
+    # still sees units/volume without loading the payload (DEV-048 T02).
+    _ensure_inspection_summary(live)
     warnings = record.get("inspection_warnings")
     if isinstance(warnings, list) and warnings:
         live["inspection_warnings"] = [dict(entry) for entry in warnings if isinstance(entry, dict)]

@@ -101,6 +101,29 @@ def _conflict(item: dict) -> None:
         raise adoption.AdoptionRefused(conflict["reason"], conflict["message"])
 
 
+def _verify_reference(item: dict) -> None:
+    """A payload reference must resolve before this item reserves a model.
+
+    The check runs before the durable reservation so a genuinely unreadable
+    inspection reference is a known refusal that leaves no half registration
+    and no revision behind (DEV-048 T02).
+    """
+    live = item.get("live")
+    try:
+        if not isinstance(live, dict):
+            raise inspection_refs.InspectionRefInvalid(
+                "This item carries no inspection reference; inspect again"
+            )
+        if live.get("inspection_ref") is not None:
+            inspection_refs.verify_ref(live["inspection_ref"])
+        elif not isinstance(live.get("inspection"), dict) or not live["inspection"]:
+            raise inspection_refs.InspectionRefInvalid(
+                "This item carries no inspection reference; inspect again"
+            )
+    except inspection_refs.InspectionRefInvalid as error:
+        raise adoption.AdoptionRefused("inspection_reference_unavailable", str(error)) from error
+
+
 def _choice(item: dict, action: str) -> dict:
     choice = {
         "action": action,
@@ -177,6 +200,9 @@ def inspect(paths: list[str]) -> dict:
                     raise RuntimeError("Native path-source/window evidence is incomplete")
                 refusal = adoption._refusal_reason(live)
                 if refusal:
+                    # Unit/volume facts must survive the refusal and stay
+                    # readable while the item's sidecar still exists.
+                    adoption._ensure_inspection_summary(live)
                     item["refusal_details"] = adoption._refusal_details(live)
                     raise adoption.AdoptionRefused(*refusal)
                 model.update(
@@ -235,6 +261,23 @@ def inspect(paths: list[str]) -> dict:
 
 
 def _public_item(item: dict) -> dict:
+    if "live" in item:
+        live = item["live"]
+        adoption._ensure_inspection_summary(live)
+        # A reference whose evidence file is gone must not be published as
+        # readable; the removal is reported on this item (DEV-048 T02). A
+        # reference that still verifies is kept, so surviving probe evidence
+        # is never deleted to make the projection look tidy.
+        adoption._prune_removed_refs(
+            live,
+            "live",
+            item,
+            reason_code=(
+                "inspection_ref_removed_after_refusal"
+                if item.get("status") == "refused"
+                else "inspection_ref_invalid"
+            ),
+        )
     return {
         key: value for key, value in item.items() if key not in ("model", "journal", "live")
     } | ({"source": adoption._summary_only({"live": item["live"]})} if "live" in item else {})
@@ -418,6 +461,7 @@ def run(job_id: str, manifest: dict) -> None:
                 try:
                     _check_file(item)
                     _conflict(item)
+                    _verify_reference(item)
                     child, journal = _reserve(manifest, item)
                     # Persist pointer before dispatch so polling can finish a
                     # durable item commit after a parent crash.

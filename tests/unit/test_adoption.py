@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import adoption
+from creo_mechdog import adoption, inspection_refs
 from creo_mechdog import reconciliation as rec
 
 INSPECTION = {
@@ -102,6 +103,15 @@ def synthetic_native(job_directory: Path, manifest: dict) -> dict:
                 volume_mm3=unit_state["volume_mm3"],
                 inspection={**INSPECTION, **unit_state},
             )
+        marker = bridge.ROOT / "window_sidecar.json"
+        if marker.exists() and bridge.read_json(marker).get("location") == "staging":
+            # Mimic the real worker: adoption writes its sidecar into the
+            # model output directory, so a refusal that removes that staging
+            # leaves the native reference dangling (DEV-048 T02).
+            payload = result["live"].pop("inspection", None)
+            result["live"]["inspection_ref"] = inspection_refs.make_ref(
+                payload, Path(request["model"]["output_directory"]), "live"
+            )
         if choice["action"] == "prepare":
             model = request["model"]
             part = Path(model["output_directory"]) / f"{model['model_name']}.prt.1"
@@ -138,6 +148,9 @@ def synthetic_native(job_directory: Path, manifest: dict) -> dict:
             adopted=True,
             message="synthetic adoption fixture; no Toolkit call",
         )
+    # The real boundary persists the result on the job manifest as well; the
+    # refusal lifecycle is verified through that persisted projection.
+    manifest["result"] = result
     bridge.write_json(job_directory / "native_result.json", result)
     return result
 
@@ -435,6 +448,52 @@ class AdoptionMcpContract(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(replay["job_id"], job_id)
 
+    async def test_window_refusal_never_publishes_a_removed_reference(self):
+        self.reset_registry()
+        units = self.directory / "inspection_units.json"
+        marker = self.directory / "window_sidecar.json"
+        before = {path.name for path in (self.directory / "jobs").iterdir()}
+        try:
+            _write(units, {"units": "in", "units_query_code": 0, "volume_mm3": None})
+            _write(marker, {"location": "staging"})
+            async with self.client() as client:
+                evidence = await self.call(client, "creo_adopt_current_model", {})
+                self.assertFalse(evidence["available"])
+                self.assertEqual(evidence["reason_code"], "non_millimeter_units")
+                current = evidence["current_model"]
+                self.assertNotIn("inspection_ref", current)
+                self.assertEqual(current["inspection_summary"]["units"], "in")
+                self.assertEqual(evidence["refusal_details"]["actual_units"], "in")
+                self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
+                self.assertEqual(
+                    current["inspection_warnings"][0]["reason_code"],
+                    "inspection_ref_removed_after_refusal",
+                )
+                jobs = [
+                    path.name
+                    for path in (self.directory / "jobs").iterdir()
+                    if path.name not in before
+                ]
+                self.assertEqual(len(jobs), 1, jobs)
+                compact = await self.call(
+                    client, "creo_get_job", {"job_id": jobs[0], "detail": "compact"}
+                )
+                full = await self.call(
+                    client, "creo_get_job", {"job_id": jobs[0], "detail": "full"}
+                )
+                for manifest in (compact, full):
+                    self.assertNotIn("inspection_ref", manifest["result"]["live"])
+                    self.assertEqual(
+                        manifest["result"]["live"]["inspection_summary"]["units"], "in"
+                    )
+                    self.assertEqual(
+                        manifest["inspection_warnings"][0]["reason_code"],
+                        "inspection_ref_removed_after_refusal",
+                    )
+        finally:
+            marker.unlink(missing_ok=True)
+            units.unlink(missing_ok=True)
+
     async def test_apply_rejects_missing_and_invalid_inputs(self):
         self.reset_registry()
         async with self.client() as client:
@@ -601,6 +660,120 @@ class AdoptionBusinessRules(unittest.TestCase):
         self.assertTrue(details["actual_units_known"])
         self.assertEqual(details["actual_units"], "inch")
         self.assertEqual(details["units_query_code"], 0)
+
+    def window_native(self, *, units_mm: bool, location: str = "staging", inspection=None):
+        """Fixture worker that writes its live sidecar where the real one does.
+
+        The real executor points ``folder`` at the model output directory, so a
+        window refusal that removes that staging leaves the native reference
+        dangling. ``location="job"`` mirrors the Python fallback, whose sidecar
+        lives in the preflight job and survives the refusal.
+        """
+
+        def native(job_directory, manifest):
+            request = bridge.read_json(job_directory / "request.json")
+            directory = (
+                Path(request["model"]["output_directory"])
+                if location == "staging"
+                else job_directory
+            )
+            ref = inspection_refs.make_ref(inspection or INSPECTION, directory, "live")
+            result = {
+                "connected": True,
+                "delivery_complete": True,
+                "disconnect_code": 0,
+                "success": True,
+                "live": {
+                    "origin": str(self.directory / "user_parts" / "001.prt"),
+                    "model_type": "part",
+                    "healthy": True,
+                    "millimeter_units": units_mm,
+                    "dependency_free": True,
+                    "session_fingerprint": "dev048-t02-session",
+                    "volume_mm3": 10,
+                    "inspection_ref": ref,
+                },
+            }
+            bridge.write_json(job_directory / "native_result.json", result)
+            manifest["result"] = result
+            return result
+
+        return native
+
+    def only_job(self) -> list:
+        return [path.parent.name for path in sorted((self.directory / "jobs").glob("*/job.json"))]
+
+    def test_window_refusal_drops_the_reference_its_staging_removed(self):
+        inch = {**INSPECTION, "units": "inch", "volume_mm3": None}
+        with patch.object(
+            adoption, "_native", side_effect=self.window_native(units_mm=False, inspection=inch)
+        ):
+            evidence = adoption.inspect()
+        self.assertFalse(evidence["available"])
+        self.assertEqual(evidence["reason_code"], "non_millimeter_units")
+        # The staging sidecar the native result pointed at is gone; the
+        # reference is not published as readable and the known units stay.
+        current = evidence["current_model"]
+        self.assertNotIn("inspection_ref", current)
+        self.assertEqual(current["inspection_summary"]["units"], "inch")
+        self.assertEqual(evidence["refusal_details"]["actual_units"], "inch")
+        self.assertTrue(evidence["refusal_details"]["actual_units_known"])
+        self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
+        self.assertFalse(Path(evidence["staging_cleanup"]["staging"]).exists())
+        warnings = current["inspection_warnings"]
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertEqual(warnings[0]["stage"], "live")
+        self.assertEqual(warnings[0]["reason_code"], "inspection_ref_removed_after_refusal")
+        self.assertEqual(warnings[0]["fallback_status"], "not_attempted")
+        # job.json, compact and full carry the same meaning as the response.
+        jobs = self.only_job()
+        self.assertEqual(len(jobs), 1)
+        full = bridge.get_job(jobs[0], "full")
+        compact = bridge.get_job(jobs[0], "compact")
+        for manifest in (full, compact):
+            live = manifest["result"]["live"]
+            self.assertNotIn("inspection_ref", live)
+            self.assertEqual(live["inspection_summary"]["units"], "inch")
+            self.assertEqual(
+                manifest["inspection_warnings"], warnings, manifest["inspection_warnings"]
+            )
+        self.assertEqual(full["staging_cleanup"]["state"], "removed")
+        # Re-reading the job repeats the same projection without duplicating
+        # the bounded diagnostic.
+        again = bridge.get_job(jobs[0], "full")
+        self.assertEqual(again["result"], full["result"])
+        self.assertEqual(len(again["inspection_warnings"]), 1)
+        self.assertTrue((bridge.job_path(jobs[0]) / "request.json").is_file())
+
+    def test_window_refusal_keeps_a_reference_that_still_verifies(self):
+        with patch.object(
+            adoption, "_native", side_effect=self.window_native(units_mm=False, location="job")
+        ):
+            evidence = adoption.inspect()
+        current = evidence["current_model"]
+        ref = current["inspection_ref"]
+        inspection_refs.verify_ref(ref)
+        self.assertTrue(Path(ref["file"]).is_file())
+        self.assertEqual(evidence["staging_cleanup"]["state"], "removed")
+        self.assertEqual(current["inspection_summary"]["units"], "mm")
+        self.assertNotIn("inspection_warnings", current)
+
+    def test_window_refusal_records_a_failed_cleanup_truthfully(self):
+        with (
+            patch.object(adoption, "_native", side_effect=self.window_native(units_mm=False)),
+            patch.object(shutil, "rmtree", side_effect=OSError("staging is locked")),
+        ):
+            evidence = adoption.inspect()
+        cleanup = evidence["staging_cleanup"]
+        self.assertEqual(cleanup["state"], "failed")
+        self.assertIn("staging is locked", cleanup["error"])
+        self.assertTrue(Path(cleanup["staging"]).is_dir())
+        # Nothing was removed, so the reference still verifies and is kept; the
+        # response never claims the file disappeared.
+        ref = evidence["current_model"]["inspection_ref"]
+        inspection_refs.verify_ref(ref)
+        self.assertTrue(Path(ref["file"]).is_file())
+        self.assertNotIn("inspection_warnings", evidence["current_model"])
 
     def test_modeling_submit_is_refused_while_adopt_pending(self):
         evidence = adoption.inspect()

@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import bridge
 import generic_bridge as general
+from creo_mechdog import inspection_refs
 from creo_mechdog import reconciliation as rec
 
 
@@ -620,6 +621,35 @@ print(json.dumps(bridge.get_job(sys.argv[2])))
         created, _ = self.prepare("accept_saved")
         self.part = candidate
         self.assertEqual(self.execute(created)["revision"], 2)
+
+    def test_unreadable_candidate_reference_is_dropped_not_published(self):
+        checkpoint = bridge.job_path(self.original) / "native_checkpoint.json"
+        candidate = self.part.with_name("owned_part.prt.3")
+        candidate.write_bytes(b"saved but not delivered")
+        ref = inspection_refs.make_ref(self.state, bridge.job_path(self.original), "verified")
+        Path(ref["file"]).unlink()
+        bridge.write_json(
+            checkpoint,
+            {
+                "part_file": str(candidate),
+                "success": True,
+                "saved_file_reloaded_and_verified": True,
+                "inspection_ref": ref,
+                "aliases": {},
+            },
+        )
+        # A removed sidecar must not break the recovery tool or be republished
+        # as readable; the candidate identity and a bounded diagnostic remain.
+        state = rec.inspect(self.mid)
+        published = state["candidate"]
+        self.assertEqual(published["identity"]["path"], str(candidate.resolve()))
+        self.assertTrue(published["inspection_warnings"][0]["stage"] == "verified")
+        self.assertEqual(
+            published["inspection_warnings"][0]["reason_code"], "inspection_ref_invalid"
+        )
+        self.assertEqual(published["inspection_warnings"][0]["fallback_status"], "not_attempted")
+        self.assertNotIn("inspection_ref", published)
+        self.assertTrue(state["actions"]["accept_saved"]["available"])
 
     def test_external_file_and_changed_baseline_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "outside"):

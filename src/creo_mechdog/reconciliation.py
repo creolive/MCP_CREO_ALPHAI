@@ -466,6 +466,24 @@ def _snapshot(model_id: str) -> dict:
                         warnings = inspection_refs.warnings_of(result)
                         if warnings:
                             candidate["inspection_warnings"] = warnings
+                        # A recorded reference whose sidecar was removed is not
+                        # published as readable; the candidate keeps its identity
+                        # and reports why the payload is unavailable (DEV-048 T02).
+                        if candidate.get("inspection_ref") is not None:
+                            try:
+                                inspection_refs.verify_ref(candidate["inspection_ref"])
+                            except inspection_refs.InspectionRefInvalid as error:
+                                candidate.pop("inspection_ref", None)
+                                inspection_refs.add_warning(
+                                    candidate,
+                                    stage="verified",
+                                    reason_code="inspection_ref_invalid",
+                                    fallback_status="not_attempted",
+                                    message=(
+                                        "Recorded inspection reference is no longer "
+                                        f"readable: {error}"
+                                    ),
+                                )
                     except (OSError, ValueError) as error:
                         candidate = {"error": str(error)}
     baseline = None

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import bridge
 import generic_bridge as general
-from creo_mechdog import adoption, model_registry
+from creo_mechdog import adoption, inspection_refs, model_registry
 from creo_mechdog import file_adoption as batch
 from tests.unit.test_adoption import INSPECTION
 
@@ -87,6 +87,11 @@ class PathAdoption(unittest.TestCase):
                 "inspection": INSPECTION,
             },
         }
+        if behavior == "inch":
+            result["live"].update(
+                millimeter_units=False,
+                inspection={**INSPECTION, "units": "inch", "volume_mm3": None},
+            )
         if behavior in ("unhealthy", "units", "dependencies"):
             result["live"][
                 {
@@ -166,6 +171,76 @@ class PathAdoption(unittest.TestCase):
         self.assertEqual(model["revision"], 1)
         self.assertIsNone(model["pending_job"])
         self.assertEqual(model["parent_job_id"], result["job_id"])
+
+    def test_path_refusal_keeps_verifiable_evidence_and_known_units(self):
+        self.behavior[(self.sources[0], "inspect")] = "inch"
+        evidence = self.inspected([self.sources[0]])
+        item = evidence["items"][0]
+        self.assertEqual(item["status"], "refused")
+        self.assertEqual(item["reason"], "non_millimeter_units")
+        self.assertEqual(item["refusal_details"]["actual_units"], "inch")
+        self.assertTrue(item["refusal_details"]["actual_units_known"])
+        ref = item["source"]["inspection_ref"]
+        inspection_refs.verify_ref(ref)
+        self.assertTrue(Path(ref["file"]).resolve().is_relative_to(self.root))
+        self.assertEqual(item["source"]["inspection_summary"]["units"], "inch")
+        self.assertNotIn("inspection_warnings", item["source"])
+        job_directory = bridge.job_path(item["evidence_job_id"])
+        probe = bridge.read_json(job_directory / "job.json")
+        self.assertEqual(probe["status"], "failed")
+        self.assertEqual(probe["reason"], "non_millimeter_units")
+        self.assertTrue((job_directory / "request.json").is_file())
+        # The refusal keeps its full evidence: the recorded reference resolves.
+        inspection_refs.verify_ref(probe["result"]["live"]["inspection_ref"])
+        again = bridge.get_job(evidence["job_id"], "full")
+        self.assertEqual(again["items"][0]["source"]["inspection_ref"], ref)
+
+    def test_inspect_healthy_refused_healthy_continues_with_live_references(self):
+        self.behavior[(self.sources[1], "inspect")] = "units"
+        result = self.inspected()
+        self.assertEqual(
+            [i["status"] for i in result["items"]], ["eligible", "refused", "eligible"]
+        )
+        self.assertIn("evidence_token", result)
+        self.assertEqual(len(self.calls), 3)
+        for index in (0, 1, 2):
+            source = result["items"][index]["source"]
+            ref = source["inspection_ref"]
+            inspection_refs.verify_ref(ref)
+            self.assertTrue(Path(ref["file"]).resolve().is_relative_to(self.root))
+            self.assertEqual(source["inspection_summary"]["units"], "mm")
+        self.assertEqual(result["items"][1]["reason"], "non_millimeter_units")
+        self.assertEqual(result["items"][1]["refusal_details"]["actual_units"], "mm")
+
+    def test_unreadable_item_reference_refuses_without_reservation_or_revision(self):
+        evidence = self.inspected()
+        manifest = self.submitted(evidence=evidence)
+        Path(evidence["items"][1]["source"]["inspection_ref"]["file"]).unlink()
+        result = self.run_parent(manifest)
+        self.assertEqual(
+            [i["status"] for i in result["items"]], ["succeeded", "refused", "succeeded"]
+        )
+        refused = result["items"][1]
+        self.assertEqual(refused["reason"], "inspection_reference_unavailable")
+        # A local reference error never publishes a model reservation and never
+        # advances a revision; the following item still commits normally.
+        self.assertFalse(general.model_path(refused["model_id"]).exists())
+        with self.assertRaises(ValueError):
+            general.model_info(refused["model_id"])
+        self.assertEqual(general.model_info(result["items"][0]["model_id"])["revision"], 1)
+        self.assertEqual(general.model_info(result["items"][2]["model_id"])["revision"], 1)
+        self.assertEqual(len([c for c in self.calls if c["action"] == "apply"]), 2)
+        self.assertNotIn("inspection_ref", refused["source"])
+        self.assertEqual(
+            refused["inspection_warnings"][0]["reason_code"],
+            "inspection_ref_removed_after_refusal",
+        )
+        # Replaying the same key re-reads the terminal job without dispatching
+        # native work and keeps the same reference meaning.
+        replay = self.submitted(evidence=evidence)
+        self.assertEqual(replay["job_id"], result["job_id"])
+        self.assertNotIn("inspection_ref", replay["items"][1]["source"])
+        self.assertEqual(len([c for c in self.calls if c["action"] == "apply"]), 2)
 
     def test_readonly_path_requests_bind_session_file_stamp_inspection(self):
         evidence = self.inspected([self.sources[0]])
