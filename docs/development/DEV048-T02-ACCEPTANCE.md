@@ -96,7 +96,7 @@ T01 的 `inspection_refs._close_stage` 在“原生已给出可验证 `inspectio
 ## 提交
 
 - 依赖基准：`715890bdb783a700df4c5583b898d508042414a9`（T01 验收记录）。
-- 本任务实现提交：见记录提交（本文件所在提交之后另有一次“记录验收提交”）。
+- 本任务实现提交：`b65b14d`（分支 `codex/dev048-t02-ref-lifecycle`，改动文件与指纹见上；运行数据未纳入）。本记录提交：本文件所在提交。
 - 改动文件：`src/creo_mechdog/adoption.py`、`file_adoption.py`、`reconciliation.py`、`tests/unit/test_adoption.py`、`test_adoption_split.py`、`test_file_adoption.py`、`test_reconciliation.py`、本记录与 `docs/work-items/DEV-048.md` 的 T02 相关区域。
 - 未合入 main、未创建标签、未发布、未改版本号、未启动 T03/T04/T05、未改动已归档原件与 `.gitattributes`、未改 `docs/BACKLOG.md` 统计区。
 
