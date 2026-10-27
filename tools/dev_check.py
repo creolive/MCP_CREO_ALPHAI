@@ -18,6 +18,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path("docs/development/style-baseline.json")
 CONFIG_FILES = ("pyproject.toml", ".clang-format", "requirements-dev.txt")
+DEFAULT_UNIT_TIMEOUT_SECONDS = 900
+
+
+def positive_seconds(text: str) -> int:
+    """Parse a positive integer second budget, rejecting everything else."""
+    try:
+        seconds = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"must be a positive integer number of seconds: {text!r}"
+        ) from None
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds: {seconds}")
+    return seconds
 
 
 def read_source(path: Path) -> str:
@@ -172,6 +186,12 @@ def main(argv: list[str] | None = None) -> int:
         "--skip-unit", action="store_true", help="Check styles only; never native proof"
     )
     parser.add_argument(
+        "--unit-timeout-seconds",
+        type=positive_seconds,
+        default=DEFAULT_UNIT_TIMEOUT_SECONDS,
+        help="Positive unit-test budget in seconds (default: %(default)s)",
+    )
+    parser.add_argument(
         "--write-baseline", action="store_true", help="Explicit reviewed debt snapshot"
     )
     parser.add_argument("--reason", help="Work-item ID and rationale for a baseline change")
@@ -189,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
         "source": git_state(ROOT),
         "native_validation": "not_run",
         "unit_tests": "not_run",
+        "unit_test_timeout_seconds": args.unit_timeout_seconds,
         "success": False,
     }
     try:
@@ -230,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
             report["unit_tests"] = "running"
             try:
                 result = subprocess.run(
-                    [sys.executable, str(ROOT / "tools/test_unit.py")], cwd=ROOT, timeout=300
+                    [sys.executable, str(ROOT / "tools/test_unit.py")],
+                    cwd=ROOT,
+                    timeout=args.unit_timeout_seconds,
                 )
             except subprocess.TimeoutExpired:
                 report["unit_tests"] = "timed_out"
