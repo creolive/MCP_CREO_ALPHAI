@@ -39,16 +39,22 @@ if failing.get(mode) == step:
 print("Successfully installed fixture-package-1.0")
 """
 
+# Flat batch structure on purpose: inside nested parenthesized blocks this
+# environment drops the 'exit /b' code and the stub would fake a clean exit.
 FAKE_PYTHON = r"""@echo off
-if "%~1"=="-c" (
-    echo {"version":[3,12,0],"bits":64}
-    exit /b 0
-)
-if "%~1"=="-m" if "%~2"=="venv" (
-    if /I "%DEV049_FAKE_VENV%"=="break" del /q "%~3\Scripts\python.exe" >nul 2>nul
-    exit /b 0
-)
-exit /b 1
+if not "%~1"=="-c" goto venv
+if /I "%DEV049_FAKE_PROBE_MODE%"=="notice" echo fixture probe notice 1>&2
+if /I "%DEV049_FAKE_PROBE_MODE%"=="fail" echo fixture probe failure 1>&2
+if /I "%DEV049_FAKE_PROBE_MODE%"=="fail" exit /b 7
+echo {"version":[3,12,0],"bits":64}
+exit /b 0
+:venv
+if not "%~2"=="venv" exit /b 1
+if /I "%DEV049_FAKE_VENV_MODE%"=="notice" echo fixture venv notice 1>&2
+if /I "%DEV049_FAKE_VENV_MODE%"=="fail" echo fixture venv failure 1>&2
+if /I "%DEV049_FAKE_VENV_MODE%"=="fail" exit /b 5
+if /I "%DEV049_FAKE_VENV%"=="break" del /q "%~3\Scripts\python.exe" >nul 2>nul
+exit /b 0
 """
 
 SDK_FILES = [
@@ -151,7 +157,9 @@ class SetupNativeStderrTests(unittest.TestCase):
         (root / "python.cmd").write_text(FAKE_PYTHON, encoding="utf-8")
         return root
 
-    def run_setup(self, root, form, *, mode="notice", break_venv=False):
+    def run_setup(
+        self, root, form, *, mode="notice", break_venv=False, probe_mode="", venv_mode=""
+    ):
         error_file = root / "native-stderr.txt"
         if error_file.exists():
             error_file.unlink()
@@ -173,6 +181,8 @@ class SetupNativeStderrTests(unittest.TestCase):
             LIB="",
             DEV049_FAKE_PIP_MODE=mode,
             DEV049_FAKE_VENV="break" if break_venv else "",
+            DEV049_FAKE_PROBE_MODE=probe_mode,
+            DEV049_FAKE_VENV_MODE=venv_mode,
             PYTHONPATH=os.pathsep.join([str(root / "fake_site"), str(root / "src")]),
         )
         result = subprocess.run(
@@ -230,17 +240,61 @@ class SetupNativeStderrTests(unittest.TestCase):
                 self.assertIn("Could not start", output)
                 self.assertNotIn("exited with code", output)
 
-    def test_setup_scopes_the_tolerated_preference_to_the_pip_helper(self):
+    def test_probe_stderr_notice_does_not_fail_prerequisites(self):
+        for form in FORMS:
+            with self.subTest(form=form):
+                root = self.fixture()
+                result, output = self.run_setup(root, form, probe_mode="notice")
+                self.assertIn("Prerequisites found", output, output)
+                self.assertNotIn("Cannot run Python", output, output)
+                self.assertIn("fixture probe notice", output, "probe stderr must stay visible")
+
+    def test_probe_failure_reports_the_real_exit_code(self):
+        for form in FORMS:
+            with self.subTest(form=form):
+                root = self.fixture()
+                result, output = self.run_setup(root, form, probe_mode="fail")
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn("Cannot run Python", output)
+                self.assertIn("exited with code 7", output)
+                self.assertIn("fixture probe failure", output, "probe stderr must stay visible")
+                self.assertNotIn("INSTALL_INCOMPLETE", output)
+
+    def test_venv_stderr_notice_completes_the_stage(self):
+        for form in FORMS:
+            with self.subTest(form=form):
+                root = self.fixture()
+                result, output = self.run_setup(root, form, venv_mode="notice")
+                self.assertIn("Python virtual environment", completed_stages(output), output)
+                self.assertNotIn("failed at Python virtual environment", output)
+                self.assertIn("fixture venv notice", output, "venv stderr must stay visible")
+
+    def test_venv_failure_reports_install_incomplete_with_the_exit_code(self):
+        for form in FORMS:
+            with self.subTest(form=form):
+                root = self.fixture()
+                result, output = self.run_setup(root, form, venv_mode="fail")
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn("INSTALL_INCOMPLETE: failed at Python virtual environment", output)
+                self.assertIn("exited with code 5", output)
+                self.assertIn("fixture venv failure", output, "venv stderr must stay visible")
+                self.assertNotIn("Python virtual environment", completed_stages(output))
+
+    def test_setup_scopes_the_tolerated_preference_to_the_external_helper(self):
         source = (ROOT / "setup.ps1").read_text(encoding="utf-8")
         self.assertEqual(source.count("$ErrorActionPreference = 'Stop'"), 1)
         self.assertEqual(source.count("$ErrorActionPreference = 'Continue'"), 1)
         self.assertEqual(source.count("$ErrorActionPreference = $previousPreference"), 1)
-        helper = source.index("function Invoke-PipStep")
+        self.assertNotIn("Invoke-PipStep", source)
+        helper = source.index("function Invoke-ExternalStep")
         continue_at = source.index("$ErrorActionPreference = 'Continue'")
         restore_at = source.index("$ErrorActionPreference = $previousPreference")
         self.assertLess(helper, continue_at)
         self.assertLess(continue_at, restore_at)
         self.assertLess(restore_at, source.index("$stage = 'local configuration'"))
+        # Every external call goes through the helper; only the helper launches processes.
+        self.assertEqual(source.count("Invoke-ExternalStep -Executable"), 8)
+        self.assertEqual(source.count("& $Executable @Arguments"), 2)
 
 
 if __name__ == "__main__":

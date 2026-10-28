@@ -10,24 +10,29 @@ if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem) {
     throw 'Windows x64 is required.'
 }
 
-# pip writes progress and [notice] lines to stderr. PowerShell 5.1 turns redirected
-# native stderr into ErrorRecords, and the script-wide 'Stop' preference then aborts
-# a pip run that actually exited 0 (BUG-086). Tolerate those records only inside this
-# helper, leave the text visible, and judge the real exit code.
-function Invoke-PipStep {
+# Native commands write progress and notices to stderr (pip [notice], compiler and
+# Python warnings). PowerShell 5.1 turns redirected native stderr into ErrorRecords,
+# and the script-wide 'Stop' preference then aborts a run that actually exited 0
+# (BUG-086). Tolerate those records only inside this helper, leave the text visible,
+# and judge the real exit code. Every external call (pip installs, toolchain/python
+# probes, seeds and the native build) goes through this helper.
+function Invoke-ExternalStep {
     param(
         [Parameter(Mandatory)][string]$Executable,
         [Parameter(Mandatory)][string[]]$Arguments,
-        [Parameter(Mandatory)][string]$FailureMessage
+        [Parameter(Mandatory)][string]$FailureMessage,
+        [switch]$CaptureOutput
     )
     $previousPreference = $ErrorActionPreference
     $launchFailure = $null
     $exitCode = $null
+    $output = $null
     # Drop the previous native exit code so a launch failure cannot inherit it.
     $global:LASTEXITCODE = $null
     try {
         $ErrorActionPreference = 'Continue'
-        & $Executable @Arguments
+        if ($CaptureOutput) { $output = & $Executable @Arguments }
+        else { & $Executable @Arguments }
         # Save the real code immediately, before any other statement can replace it.
         $exitCode = $global:LASTEXITCODE
     } catch {
@@ -44,6 +49,7 @@ function Invoke-PipStep {
     if ($exitCode -ne 0) {
         throw ("{0} {1} exited with code {2}." -f $FailureMessage, $Executable, $exitCode)
     }
+    if ($CaptureOutput) { return $output }
 }
 
 $settingsPath = Join-Path $PSScriptRoot 'config.json'
@@ -79,8 +85,8 @@ if ($null -eq $VcVars64Env -and -not $VcVars64 -and $settings.vcvars64 -and (Tes
 if ($null -eq $VcVars64Env -and -not $VcVars64) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
-        $vsInstallation = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($LASTEXITCODE -eq 0 -and $vsInstallation) {
+        $vsInstallation = Invoke-ExternalStep -Executable $vswhere -Arguments @('-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath') -FailureMessage 'MSVC x64 tools not found. Install Visual Studio C++ Build Tools, or pass -VcVars64 or -VcVars64Env.' -CaptureOutput
+        if ($vsInstallation) {
             $VcVars64 = Join-Path ($vsInstallation | Select-Object -First 1) 'VC\Auxiliary\Build\vcvars64.bat'
         }
     }
@@ -130,8 +136,7 @@ if ($Python -match '(?i)(^|[\\/])WindowsApps([\\/]|$)') {
     throw 'WindowsApps Python is a Microsoft Store placeholder. Install Python 3.12+ x64 and pass -Python with the real python.exe path.'
 }
 if ($Python -match '[\x00\r\n"%]') { throw 'Python path cannot contain quotes, percent signs or newlines.' }
-$pythonInfoText = & $Python @pythonPrefix -c 'import json,struct,sys; print(json.dumps(dict(version=list(sys.version_info[:3]),bits=struct.calcsize(chr(80))*8)))'
-if ($LASTEXITCODE -ne 0) { throw 'Cannot run Python. Pass -Python with a working Python 3.12+ x64 executable.' }
+$pythonInfoText = Invoke-ExternalStep -Executable $Python -Arguments (@($pythonPrefix) + @('-c', 'import json,struct,sys; print(json.dumps(dict(version=list(sys.version_info[:3]),bits=struct.calcsize(chr(80))*8)))')) -FailureMessage 'Cannot run Python. Pass -Python with a working Python 3.12+ x64 executable.' -CaptureOutput
 $pythonInfo = $pythonInfoText | ConvertFrom-Json
 if ($pythonInfo.bits -ne 64 -or $pythonInfo.version[0] -ne 3 -or $pythonInfo.version[1] -lt 12) {
     throw 'Python 3.12+ x64 is required. Pass -Python with a compatible executable.'
@@ -159,28 +164,24 @@ try {
     $localSettings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
     $completed += $stage
     $stage = 'Python virtual environment'
-    & $Python @pythonPrefix -m venv (Join-Path $PSScriptRoot '.venv')
-    if ($LASTEXITCODE -ne 0) { throw 'Python venv creation failed.' }
+    Invoke-ExternalStep -Executable $Python -Arguments (@($pythonPrefix) + @('-m', 'venv', (Join-Path $PSScriptRoot '.venv'))) -FailureMessage 'Python venv creation failed.'
     $completed += $stage
     $stage = 'client configuration'
     $connection = @{ mcpServers = @{ 'MCP_CREO_MechDog' = @{ command = $projectPython; args = @((Join-Path $PSScriptRoot 'server.py')) } } }
     $connection | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'client-config.json') -Encoding UTF8
     $completed += $stage
     $stage = 'Python dependencies'
-    Invoke-PipStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '-r', (Join-Path $PSScriptRoot 'requirements.lock.txt')) -FailureMessage 'Dependency installation failed. Check internet/PyPI access and requirements.lock.txt.'
+    Invoke-ExternalStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '-r', (Join-Path $PSScriptRoot 'requirements.lock.txt')) -FailureMessage 'Dependency installation failed. Check internet/PyPI access and requirements.lock.txt.'
     $completed += $stage
     $stage = 'Python source package'
-    Invoke-PipStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '--no-deps', '--editable', $PSScriptRoot) -FailureMessage 'Source package installation failed. Restore pyproject.toml and src, then rerun setup.ps1.'
-    & $projectPython -c 'import creo_mechdog.paths'
-    if ($LASTEXITCODE -ne 0) { throw 'Source package import failed. Reinstall the package for this source directory.' }
+    Invoke-ExternalStep -Executable $projectPython -Arguments @('-m', 'pip', 'install', '--no-deps', '--editable', $PSScriptRoot) -FailureMessage 'Source package installation failed. Restore pyproject.toml and src, then rerun setup.ps1.'
+    Invoke-ExternalStep -Executable $projectPython -Arguments @('-c', 'import creo_mechdog.paths') -FailureMessage 'Source package import failed. Reinstall the package for this source directory.'
     $completed += $stage
     $stage = 'native Blend seed library'
-    & $projectPython (Join-Path $PSScriptRoot 'seeds.py') --install
-    if ($LASTEXITCODE -ne 0) { throw 'Seed library verification failed. Restore the packaged seed_library, or register the original published library.' }
+    Invoke-ExternalStep -Executable $projectPython -Arguments @((Join-Path $PSScriptRoot 'seeds.py'), '--install') -FailureMessage 'Seed library verification failed. Restore the packaged seed_library, or register the original published library.'
     $completed += $stage
     $stage = 'SDK constants and native worker'
-    & $projectPython (Join-Path $PSScriptRoot 'bridge.py') build
-    if ($LASTEXITCODE -ne 0) { throw 'Toolkit worker build failed; inspect build\generate_constants.log and build\build.log.' }
+    Invoke-ExternalStep -Executable $projectPython -Arguments @((Join-Path $PSScriptRoot 'bridge.py'), 'build') -FailureMessage 'Toolkit worker build failed; inspect build\generate_constants.log and build\build.log.'
     $completed += $stage
 } catch {
     Write-Output ("INSTALL_INCOMPLETE: failed at {0}. Completed: {1}." -f $stage, ($completed -join ', '))
