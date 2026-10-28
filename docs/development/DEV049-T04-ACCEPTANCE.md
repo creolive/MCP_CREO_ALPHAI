@@ -175,3 +175,37 @@ coordinates 三例的原生日志（例：job `398e461f…/native.log`）显示�
 **结论与最小修复范围**：0/6 通过；体积、实际帧、切口分布、revision、保存重载均未到达。0.6.1 反馈的「非主面拉伸阻断」在 0.7.1 上对**原构型路径仍然存在**。对照控制组：0.7.0 通过 18/18 的通用倾斜面矩阵（`tools/test_t05_native.py:386`）使用 `datum_feature` 按标签引用 + `u_axis=[0,0,1]`；本任务按原报告构型使用 `datum_plane` 按巡检 ID + 平面内 `u_axis=[0.809017,-0.587785,0]`——两者走不同原生分支，后者 `ProSectionSolve` 获得错误放置（原生 trace 中实体线坐标为 u∈[0,4]，而提交矩形为 u∈[-4,0]，变换偏差候选）。**最小修复范围：按 `datum_plane` ID 引用且带自定义面内 u_axis 时的草图截面变换**。按派发表规则，本任务不改生产/native；修复待用户另行指派。
 
 **边界**：未改生产/原生实现；未自动重连、未重启/结束 Creo、未清保护；失败后由用户决定继续补跑；运行数据未动。BUG-064/084 保持开放（见当日阶段记录）。
+
+## 十、2026-10-28 BUG-087 修复验证：六例全部通过
+
+**会话核对**：第九节失败后由用户于 2026-10-28 当场确认 Creo 会话仍可操作，并明确允许新开一次 MCP 连接补跑；本轮未自动重连、未重启或结束 Creo、未清任何保护。轮 A 的中断原因是驱动进程被工具环境杀死（非 Creo 故障），用户确认会话可用后才继续。
+
+**修复（[BUG-087](../work-items/BUG-087.md)）**：补第二条截面定位参照时，候选基准面除与支撑面非平行外，还必须与 orient 参照面法向不平行，否则记 `SKETCH_ANCHOR_SKIPPED` 并继续，最终回落基准轴参照并记 `SKETCH_ANCHOR_AXIS`（`native/generic.cpp:1233-1287`）。截面矩阵未改。第九节 trace 中的 `u∈[0,4]` 属截面表达坐标，不是放置错误，本批不修。
+
+**受测身份**（两轮一致）：commit `426d6b180e551a409ea1e96a9bdb3f7933cfe56a`、分支 `codex/bug087-sketch-frame`、`dirty=true`、`native/generic.cpp` SHA256 `a3665a9150c94da02762110f56e899c9c13d4abf960271e32379fbac1fdfbceb`、服务版本 0.7.1、本机 Creo 12.4.0.0。
+
+| 轮 | run_id | 报告 | 报告 SHA256 |
+| --- | --- | --- | --- |
+| A：autodim×3 | `20261028T102858_b2d5e5c9` | `build/dev049_t04/20261028T102858_b2d5e5c9/report.json` | `5293df5224bfaab417f8322ee17731faa8a1f47dc1a2d0509d904dd5e973deb0` |
+| B：coordinates×3 | `20261028T104324_57f20a2d` | `build/dev049_t04/20261028T104324_57f20a2d/report.json` | `0549fa7a44afddfe9e24f94f49e2ea2ecbb2183a41de4b09a00bb630d2a8e65f` |
+
+轮 A 驱动被工具环境杀死（非 Creo 故障），报告未写终态 `native_acceptance`，三例结果已逐例落盘；轮 B `native_acceptance=all_passed`。
+
+| 案例 | job | 模型 | 去料 mm³ | 期望 | rev | 参考线 | 重载 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| autodim_positive | `531d86e741844b5a9fa12079aaf2d4c8` | `dev049t04_ad_pos_9f7b1c2c` | 238.3902600354577 | 238.390260127791 | 3 | 2 | true |
+| autodim_negative | `ee4fbfc02f734808b7e569a9167daf8d` | `dev049t04_ad_neg_9f7b1c2c` | 238.39026006478252 | 238.390260127791 | 3 | 2 | true |
+| autodim_symmetric | `e44d31371e894df4abce53ba47598e1f` | `dev049t04_ad_sym_9f7b1c2c` | 476.78052009902603 | 476.780520255582 | 3 | 2 | true |
+| coordinates_positive | `69cf8cac012543f1bcfe59791faa7be3` | `dev049t04_co_pos_11f854dc` | 238.3902600354577 | 238.390260127791 | 3 | 2 | true |
+| coordinates_negative | `c9d0a15172c6439e9a5d693c97b5046a` | `dev049t04_co_neg_11f854dc` | 238.39026006478252 | 238.390260127791 | 3 | 2 | true |
+| coordinates_symmetric | `fd105a986897481da1c6779b391130fe` | `dev049t04_co_sym_11f854dc` | 476.78052009902603 | 476.780520255582 | 3 | 2 | true |
+
+六例 `passed=true`；实际帧 `u=(0.809016994,-0.587785252,0)`、`v=(0,0,-1)=n×u`、`n=(0.587785252,0.809016994,0)`；矩形 `min=[-4,-3]`、`max=[0,3]`；最大绝对误差 1.57e-7 mm³（容差 0.01）。全程无 busy／断连／`-4`／unknown／`building_worker` 悬挂。
+
+**原生日志**（六例 `native.log` 一致）：`SKETCH_ANCHOR_SKIPPED=42 parallel_to_orientation=1.000000000`、`SKETCH_ANCHOR_SKIPPED=49 parallel_to_orientation=1.000000000`、`PROJECT_REFERENCE_AXIS=72 code=0 entity=1`、`SKETCH_ANCHOR_AXIS=72`；coordinates 三例 `SKETCH_SOLVE=0 mode=coordinates`，autodim 三例 `SKETCH_SOLVE=-1` 后 `AutodimensionSketch=0`／`RegenerateSolvedSketch=0`／`CompleteFeature=0` 完成特征。第九节中 42 被选中并 break 的路径不再出现。
+
+**Right 面回归**：`tools/test_dev048_plane_frame.py --live --confirm-session-usable --output build/dev048_t04_plane_frame_bug087.json`（新路径，保留 0.7.1 原报告），报告 SHA256 `12e7532a2ba7385d217d797f7864940d1cb548813bc85baa06fbc58d355e7f7f`。`u_positive_z`／`u_negative_z` 均 799.9999999999998 mm³、八点 AABB 与重心符合、`revision=2`、保存重载 true、U/V=N×U；`parallel_u_axis_refusal` 仍为 `native_refusal`、`revision` 1→1、`aliases_unchanged=true`。与 0.7.1 同驱动记录（commit `8be9bcb`）逐项一致，轴对齐分支无退化；`native.log` 出现 `SKETCH_ANCHOR_PLANE=6`。
+
+**离线验证**：`unittest tests.unit.test_dev049_tilted_cut tests.unit.test_t05_geometry` **57 项 OK**（新增 3 项 `SectionFrameTests`）；`tools/dev_check.py --skip-unit --work-item BUG-087` `success=true`，样式基线与既有一致，未重建。
+
+**未测范围**：Creo 10／9 未独立复测；外部 Creo 10 原报文未复现；未做并发（BUG-009 边界）；未合 main、未推标签、未发布，`version.py` 未动（0.7.2 归 T08）；工具清单保持 94。运行数据与 `docs/validation/` 原件未动。
