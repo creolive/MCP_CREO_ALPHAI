@@ -125,6 +125,59 @@ class FrameTests(unittest.TestCase):
             driver.select_tilted_plane([planes[1], dict(planes[1])])
 
 
+# BUG-087: the section matrix Creo reported in the 2026-10-28 live trace
+# (job c6d14112c6974d8b8dd55ccc6a399b52). The orientation reference is +Z up, so
+# the section X/Y are -u/-v of the requested frame; the placement is unchanged.
+SECTION_MATRIX = (
+    (-0.809016994, 0.587785252, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.587785252, 0.809016994, 0.0),
+)
+
+
+def section_xy(world):
+    """Project a world point into the Creo section frame (rows are X, Y, Z)."""
+    return [sum(world[i] * row[i] for i in range(3)) for row in SECTION_MATRIX[:2]]
+
+
+def world_point(u, v):
+    return [u * du + v * dv for du, dv in zip(driver.u_axis_normalized(), driver.v_axis())]
+
+
+class SectionFrameTests(unittest.TestCase):
+    """BUG-087: a mirrored section frame is a representation, not a placement error."""
+
+    def test_creo_section_frame_is_the_negated_sketch_frame(self):
+        row_x, row_y, row_z = SECTION_MATRIX
+        expect = [
+            [-value for value in driver.u_axis_normalized()],
+            [-value for value in driver.v_axis()],
+            list(driver.tilted_normal()),
+        ]
+        for got, want in zip((row_x, row_y, row_z), expect):
+            for actual, expected in zip(got, want):
+                self.assertAlmostEqual(actual, expected, places=6)
+
+    def test_section_coordinates_keep_the_requested_world_placement(self):
+        for u in driver.RECT_U:
+            for v in driver.RECT_V:
+                x, y = section_xy(world_point(u, v))
+                self.assertAlmostEqual(x, -u, places=6)
+                self.assertAlmostEqual(y, -v, places=6)
+
+    def test_a_plane_parallel_to_the_orientation_reference_shares_its_line(self):
+        support = driver.tilted_normal()
+        orientation = [0.0, 0.0, 1.0]  # datum plane 6, the orientation reference
+        duplicate = [0.0, 0.0, 1.0]  # datum plane 42, also Z = 0
+        perpendicular = [0.0, 1.0, 0.0]  # datum plane 4
+        line = driver.cross(support, orientation)
+        same = driver.unit(driver.cross(support, duplicate))
+        other = driver.unit(driver.cross(support, perpendicular))
+        self.assertAlmostEqual(driver.dot(driver.unit(line), same), 1.0, places=9)
+        self.assertAlmostEqual(driver.dot(other, other), 1.0, places=12)
+        self.assertLess(abs(driver.dot(driver.unit(line), other)), 1e-9)
+
+
 class InputPlanTests(unittest.TestCase):
     def test_six_cases_cover_both_strategies_and_all_three_directions(self):
         cases = driver.build_cases("abc123")

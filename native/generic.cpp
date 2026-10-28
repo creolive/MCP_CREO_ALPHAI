@@ -1230,28 +1230,39 @@ static J sketch(const J &op) {
     std::vector<int> coordinate_anchors = {projected};
     planes.clear();
     CK(ProSolidFeatVisit((ProSolid)board, datum_cb, nullptr, nullptr));
+    // BUG-087: the orientation reference already projects its own datum plane.
+    // A second datum plane that shares that normal projects onto the same
+    // section line, so it cannot anchor the sketch: DEV-049 T04 hit duplicated
+    // Z=0 planes (ids 6/42/49), the section kept a single usable reference and
+    // ProSectionSolve returned -1 without any section error.
+    V orient_normal = frame.n;
+    for (auto &p : planes)
+        if (p.id == frame.orientation)
+            orient_normal = {p.n[0], p.n[1], p.n[2]};
     for (auto p : planes) {
         V n = {p.n[0], p.n[1], p.n[2]};
-        if (p.id != frame.orientation && fabs(dot(n, frame.n)) < 0.95) {
-            ProSelection s = selection(p.id, PRO_SURFACE);
-            ProError e = ProSectionEntityFromProjection(section, s, &projected);
-            ProSelectionFree(&s);
-            log("PROJECT_REFERENCE=%d code=%d entity=%d\n", p.id, e, projected);
-            if (!e) {
-                coordinate_anchors.push_back(projected);
-                break;
-            }
+        if (p.id == frame.orientation || fabs(dot(n, frame.n)) >= 0.95)
+            continue;
+        double to_orientation = fabs(dot(normalized(n), normalized(orient_normal)));
+        if (to_orientation >= 1 - 1e-6) {
+            log("SKETCH_ANCHOR_SKIPPED=%d parallel_to_orientation=%.9f\n", p.id, to_orientation);
+            continue;
+        }
+        ProSelection s = selection(p.id, PRO_SURFACE);
+        ProError e = ProSectionEntityFromProjection(section, s, &projected);
+        ProSelectionFree(&s);
+        log("PROJECT_REFERENCE=%d code=%d entity=%d\n", p.id, e, projected);
+        if (!e) {
+            coordinate_anchors.push_back(projected);
+            log("SKETCH_ANCHOR_PLANE=%d\n", p.id);
+            break;
         }
     }
     if (coordinate_anchors.size() == 1) {
-        // No orthogonal datum plane existed, so the section carries only the
+        // No usable datum plane existed, so the section carries only the
         // orientation reference and ProSectionSolve fails. Fall back to a
         // datum axis parallel to the support plane; its projection is a line
         // reference. An oblique axis would project to a point and is skipped.
-        V orient_normal = frame.n;
-        for (auto &p : planes)
-            if (p.id == frame.orientation)
-                orient_normal = {p.n[0], p.n[1], p.n[2]};
         V orient_line = cross(frame.n, orient_normal);
         double length = sqrt(dot(orient_line, orient_line));
         axis_refs.clear();
@@ -1267,6 +1278,7 @@ static J sketch(const J &op) {
             log("PROJECT_REFERENCE_AXIS=%d code=%d entity=%d\n", a.id, e, projected);
             if (!e) {
                 coordinate_anchors.push_back(projected);
+                log("SKETCH_ANCHOR_AXIS=%d\n", a.id);
                 break;
             }
         }
