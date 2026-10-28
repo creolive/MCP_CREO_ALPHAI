@@ -2,9 +2,9 @@
 
 本项目按可交付的 Creo MCP 工具维护，采用功能条目驱动、短分支和分批整理。日常开发从 [统一台账](BACKLOG.md) 选择条目；新增工作先登记，复杂条目复制 [模板](templates/WORK_ITEM.md)。开发准入对小修复同样适用，内容可精简为几行。
 
-服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.1（DEV-048 反馈修复，PATCH，公开工具 94 不变：收养侧车完整性与回退、拒绝后引用生命周期、工作卡与发布检查回填、Right 面 ±Z 实机证据）。版本说明见 [RELEASE_NOTES_0.7.1.md](RELEASE_NOTES_0.7.1.md)，检查见 [RELEASE-0.7.1.md](validation/RELEASE-0.7.1.md)。前一版为 [0.7.0](RELEASE_NOTES_0.7.0.md)。
+服务／源码版本以 [version.py](../version.py) 为准，当前为 0.7.2（DEV-049 反馈后续 PATCH，公开工具 94 不变：断连调查归档（根因未定）、dev_check 超时修复、安装误报修复（含 T08 批内补充）、草图第二参照修复与原斜槽六例实机、种子 15+2 实机）。版本说明见 [RELEASE_NOTES_0.7.2.md](RELEASE_NOTES_0.7.2.md)，检查见 [RELEASE-0.7.2.md](validation/RELEASE-0.7.2.md)。前一版为 [0.7.1](RELEASE_NOTES_0.7.1.md)。
 
-当前开发批次为 [DEV-049](work-items/DEV-049.md)（0.6.1 两份反馈后续 PATCH，暂定 0.7.2）：T00—T06 已完成（T04/T05/T06 仅离线阶段），T07 为当前文档收口，T08 集成与发布未指派；它不属于已发布 0.7.1。
+当前开发批次为 [DEV-049](work-items/DEV-049.md)（0.6.1 两份反馈后续 PATCH，0.7.2）：T00—T08 已完成并随 0.7.2 交付（T04 六例实机 6/6、T06 15+2 实机通过；T05 差项实机未跑），已移入[完成档案](BACKLOG_COMPLETED.md)；下一开发批次未指派。
 
 本机联调只使用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。先按[根级规范](../AGENTS.md#本机开发联调补充2026-10-17用户要求)核对卡死调查与会话可操作条件，满足门槛后再安排 Toolkit 连接或故障注入；不得擅自结束 Creo 或清除 unknown 保护。文档分类和条目关闭不解除这些限制。
 

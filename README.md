@@ -1,4 +1,4 @@
-# MCP_CREO_MechDog 0.7.1
+# MCP_CREO_MechDog 0.7.2
 
 开发维护从 [开发入口](docs/DEVELOPMENT.md) 和 [统一功能台账](docs/BACKLOG.md) 开始。每项工作先定义验收；语言与单元检查、Creo 实机验收分别记录。项目采用渐进布局整理，当前支持环境见 [兼容矩阵](docs/COMPATIBILITY.md)。
 
@@ -6,7 +6,7 @@
 
 当前注册 **94 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前服务／源码版本为 **0.7.1**（DEV-048 反馈修复，PATCH，公开工具 94 个不变）：收养侧车改为「自有普通文件 + 大小 + 完整 SHA256」核验与原子发布，写入/发布失败在 live、verified 两阶段各自独立回退并给出有界 `inspection_warnings`；拒绝后只移除确已不存在的引用并保留已知单位摘要，批量与恢复投影同义；Right 面 `u_axis=±Z` 的 800 mm³ 矩形拉伸在 Creo 12.4 实机通过（实际帧、`V=N×U`、AABB/重心、保存重载与 revision），平行法向拒绝取得原生回滚证据。本机 1017 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。功能与边界见[版本说明](docs/RELEASE_NOTES_0.7.1.md)，发布检查见[发布记录](docs/validation/RELEASE-0.7.1.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.7.0](docs/RELEASE_NOTES_0.7.0.md)。
+当前服务／源码版本为 **0.7.2**（DEV-049 反馈后续 PATCH，公开工具 94 个不变）：0.6.1 两份反馈原件逐字节归档与逐章映射；`dev_check` 单元超时修复为 `--unit-timeout-seconds`（默认 900 秒）；`setup.ps1` 全部 8 处外部调用改按真实退出码判定，PowerShell 5.1 stderr 重定向下不再误报安装失败；`datum_plane` 草图第二参照选择修复（BUG-087），原斜槽六例 Creo 12.4 实机 6/6、Right 面 ±Z 回归无退化；种子矩阵 15+2 实机全过（FEAT-030 转已验收未收口）。本机 1128 项单元测试通过；WorkBuddy 按用户决定未执行，外部 Creo 9/10 未复测。功能与边界见[版本说明](docs/RELEASE_NOTES_0.7.2.md)，发布检查见[发布记录](docs/validation/RELEASE-0.7.2.md)。剩余范围见[统一台账](docs/BACKLOG.md)；前一版为 [0.7.1](docs/RELEASE_NOTES_0.7.1.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
