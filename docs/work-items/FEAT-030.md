@@ -1,6 +1,6 @@
 # FEAT-030：区分种子文件有效性与原生加载兼容性
 
-日期：2026-10-16。类型：能力。优先级：P2。状态：验收中（2026-10-20 元数据及实际加载记录首批）。目标版本：未排期。
+日期：2026-10-16。类型：能力。优先级：P2。状态：已验收（未收口）（2026-10-28 T06 实机 15+2 于单一受测源码全部通过；未测范围见文末）。目标版本：未排期。
 
 2026-10-20 按用户确认的 0.3.7 剩余计划实施：生产版本无来源则 null；普通查询明确只验证文件/哈希，附按种子 SHA256、实际原生 release_numeric 和 session_fingerprint 绑定的历史加载记录。真实创建链路记录加载 API 状态，不新增隐式连接或主动探针。记录保存为本机 build 诊断数据；写诊断失败不得改变已完成建模终态，必须在返回中明示。新增字段、未测环境与实机证据分别核对。
 
@@ -80,3 +80,10 @@
 - 范围（仅离线，未连接 Toolkit/Creo）：按 [0.6.1 派发表 T06](../development/0.6.1-FEEDBACK-TASKS-2026-10-27.md) 收紧 `tools/test_installation_loft.py` 的执行/证据边界：默认离线、实机双门槛（`--live --confirm-session-usable`）、可重复 `--case` 与 `--output`、默认输出 `build/dev049_t06/<run_id>/report.json` 且拒绝覆盖旧报告、逐次持久化输入/job ID/分阶段终态、无自动重放与 resume、跨源码指纹报告不合并；负例 `invalid_seed_feature_id`、`interpolation_mismatch` 改为显式新建 two_straight 基础输入并仅改一个字段。
 - 离线核对：manifest 与 9 个种子 SHA256 全部一致（`compatible_server_version=0.7.1`），15 正例按派发表固定顺序与 2 负例输入全部构建并校验；专项回归 `tests.unit.test_seed_regression_contract` + `tests.unit.test_mcp_readiness` 共 31 项通过（新增 24 项），离线驱动默认路径已跑通并生成新 run_id 报告，`tools/dev_check.py --skip-unit --work-item DEV-049` success=true。
 - **本节不改变本卡验收状态**：15 正例创建+真实尺寸编辑闭环与 2 负例的实际拒绝/回滚证据均未取得，历史 0.6.1 的 five_smooth 结果不作为本次通过；实机补跑待用户指派并按 BUG-001 纪律人工确认会话后串行执行。详见 [DEV049-T06-ACCEPTANCE.md](../development/DEV049-T06-ACCEPTANCE.md)。
+
+## 2026-10-28：DEV-049 T06 实机补验——15+2 全部通过（验收状态更新）
+
+- 用户人工确认会话可操作后（2026-10-28 上午，2026-10-27 21:21 新会话），`tools/test_installation_loft.py --seed-library .\seed_library --live --confirm-session-usable` 串行完成全部 17 例，exit 0。run_id `20261028T094752_93168e17`，报告 SHA256 `8275d37842fa3c489a51604a5cf02aff9fe63479b12b95245feabc924dcef018`，provenance commit `5c03b10`（集成分支）、source_fingerprint `c2007bb1…`。
+- **15 正例在同一受测源码身份上一次取得**：创建/编辑双作业保存重载、编辑体积变化 >0.01 mm³、源种子 SHA256 不变、revision 递进五项硬校验各 15/15（示例 five_smooth 69220.871→77170.616 mm³，创建 job `df9c1bff…`、编辑 job `cae2d341…`）。**2 负例** `invalid_seed_feature_id`、`interpolation_mismatch` 均在 `native_execution` 阶段按预期拒绝，原始错误保留，未伪称保存成功。
+- 2026-10-26 阻断清单就此收口：four_smooth 编辑闭环及其后 13 正例、2 负例全部补齐；未挪用 0.6.1 历史 five_smooth 证据。派发表 T06 的实机闭环条件（15+2 于同一受测源码）已满足。
+- **状态：本卡矩阵范围转为已验收（未收口）**；未测范围不变（生产版本无生成记录、Creo 9/10 实际加载、种子重生成），`available` 与 `seed_build_version=null` 口径不变。详见 [DEV049-T06-ACCEPTANCE.md 第六节](../development/DEV049-T06-ACCEPTANCE.md)。

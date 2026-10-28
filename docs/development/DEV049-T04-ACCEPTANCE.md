@@ -151,3 +151,27 @@ autodim / coordinates）→ `cut + through_all + <direction>`。
 - **BUG-064**：仅登记「T04 离线准备完成」阶段记录；实机范围保持开放。
 - **BUG-084**：仅登记「T04 离线准备完成」阶段记录；实机范围保持开放。
 - **BUG-049 / BUG-066**：未在本阶段复现，保持原状态。
+
+## 九、2026-10-28 实机阶段：六例全部失败于草图求解，缺陷定位（复现记录）
+
+**会话核对（本次人工）**：2026-10-28 上午用户亲眼确认 GUI 可操作、无初始化告警、无残留模态框后才执行 `--live --confirm-session-usable`；未以 ready/`session_health`/历史授权替代。会话为 2026-10-27 21:21（本地）启动的新会话（事故会话已于 2026-10-26 13:48 退出）。附带观测：`nmsd.exe`（PID 20872，2026-10-26 20:26 启动）跨会话存留，已记录供 [BUG-085](../work-items/BUG-085.md) 参考，未处置。
+
+**第 1 轮**（run_id `20261028T090725_e4f7ece5`，报告 SHA256 `0e76e17899663576750aead31517f5b7a4acb4606e1aa0a2b4438f89b767657e`）：案例 `autodim_positive`（job `c6d14112c6974d8b8dd55ccc6a399b52`，模型 `dev049t04_ad_pos_6655a995`）。基体 R20×5 圆柱正常（体积 6283.185307 mm³），54° 面由巡检取得（datum id=74，法向 0.588/0.809/0）；草图阶段 `SKETCH_SOLVE=-1`（mode=autodim）→ `AutodimensionSketch=-1` → `BUILD_FAILED=-1`，作业终态 `failed`（stage=`execute_sketch`，toolkit_code=-1）；`rollback_succeeded=true`、断开码 0、会话保持健康。驱动随后在自身断言处中止且未把该案例写入报告（cases 为空）——驱动证据持久化缺口，本轮失败证据保留于作业目录 `jobs/c6d14112…/`（含 native.log、inspection-verified、request）。
+
+**驱动最小修复（随本次实机提交）**：斜槽作业终态 `failed` 时记录为 `passed=false`（含 message/failed_stage/failed_toolkit_call/toolkit_code/rollback 字段）并继续下一例；会话级异常（busy、失联、unknown、超时、未知终态）仍立即中止；新增可重复 `--case` 筛选，未知用例名在连接前拒绝。`tests.unit.test_dev049_tilted_cut` 扩至 **38 项全部通过**。
+
+**第 2 轮**（run_id `20261028T094203_f120a54e`，报告 SHA256 `e41deae8ed4f79337cca53073dd8f2e579d8985f4c227068d633f1013f8448c1`，commit `5c03b10`、dirty=true）：经 `--case` 补跑其余五例，**全部同样失败**于 `execute_sketch`／`AutodimensionSketch=-1`：
+
+| 案例 | job | 模型 | 终态 |
+| --- | --- | --- | --- |
+| autodim_negative | `edd302ca6bfc4b61890fd3104581c6c9` | `dev049t04_ad_neg_9382f3c5` | failed（同上） |
+| autodim_symmetric | `ae349be8ade244aeb54fac79be26ba59` | `dev049t04_ad_sym_9382f3c5` | failed（同上） |
+| coordinates_positive | `398e461f0cba4eaa9b19726e4e6387b3` | `dev049t04_co_pos_9382f3c5` | failed（见下） |
+| coordinates_negative | `915bf14493574d54b3280710d2fc7877` | `dev049t04_co_neg_9382f3c5` | failed（见下） |
+| coordinates_symmetric | `5acbdffc0ad344b392c892c546447b7b` | `dev049t04_co_sym_9382f3c5` | failed（见下） |
+
+coordinates 三例的原生日志（例：job `398e461f…/native.log`）显示模式确为 coordinates（epsilon 1e-9）：`SKETCH_SOLVE=-1 mode=coordinates` → `SKETCH_SOLVE_WITHOUT_INFERENCE=-1` → `AutodimensionSketch=-1`，三阶段 **SECTION_ERRORS 均为 0**。六例 `rollback_succeeded` 全部为 true，无 busy/断连/-4/unknown，通道正常释放。
+
+**结论与最小修复范围**：0/6 通过；体积、实际帧、切口分布、revision、保存重载均未到达。0.6.1 反馈的「非主面拉伸阻断」在 0.7.1 上对**原构型路径仍然存在**。对照控制组：0.7.0 通过 18/18 的通用倾斜面矩阵（`tools/test_t05_native.py:386`）使用 `datum_feature` 按标签引用 + `u_axis=[0,0,1]`；本任务按原报告构型使用 `datum_plane` 按巡检 ID + 平面内 `u_axis=[0.809017,-0.587785,0]`——两者走不同原生分支，后者 `ProSectionSolve` 获得错误放置（原生 trace 中实体线坐标为 u∈[0,4]，而提交矩形为 u∈[-4,0]，变换偏差候选）。**最小修复范围：按 `datum_plane` ID 引用且带自定义面内 u_axis 时的草图截面变换**。按派发表规则，本任务不改生产/native；修复待用户另行指派。
+
+**边界**：未改生产/原生实现；未自动重连、未重启/结束 Creo、未清保护；失败后由用户决定继续补跑；运行数据未动。BUG-064/084 保持开放（见当日阶段记录）。

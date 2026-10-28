@@ -118,3 +118,17 @@
 - 未自动重放旧作业、未实现 resume；未做跨报告合并。
 - 未改生产/原生实现、未改 `version.py`、未合 main、未发布、未动 `session_activity.json` 与 `session_erase/`；T07/T08 未实施。
 - 外部 Creo 9/10 环境、种子库重生成、9 种子在其他会话的原生加载继续未测（沿用 FEAT-030/BUG-034 既有口径）。
+
+## 六、2026-10-28 实机阶段：15+2 全部通过（单源码单会话闭环）
+
+**会话核对（本次人工）**：与 T04 同日上午同一会话（2026-10-27 21:21 本地启动），用户亲眼确认 GUI 可操作、无初始化告警后执行；未以 ready/`session_health` 替代。T04 六例失败但回滚干净、通道正常释放后串行开始本任务。
+
+**命令与结果**：`.\.venv\Scripts\python.exe tools\test_installation_loft.py --seed-library .\seed_library --live --confirm-session-usable` → exit 0，`native_acceptance=recorded`。run_id `20261028T094752_93168e17`，报告 SHA256 `8275d37842fa3c489a51604a5cf02aff9fe63479b12b95245feabc924dcef018`；provenance：commit `5c03b106…`（集成分支 `codex/dev049-feedback061`）、dirty=true、source_fingerprint `c2007bb1…`。dirty 项为当日 T04 驱动编辑（`tools/test_dev049_tilted_cut.py` 及其单测），不在本驱动与生产路径上，如实记录。
+
+**15 正例（15/15 全过，同一源码身份一次取得）**：`create_saved_reloaded_verified`、`edit_saved_reloaded_verified`、`volume_changed_by_edit`（>0.01 mm³）、`seed_sha256_verified`（源种子哈希不变）、`edit_revision > create_revision` 五项硬校验各 **15/15**。示例 `matrix_five_smooth`：创建 job `df9c1bffc2724ed1af6f2a9e2feef610`、编辑 job `cae2d341adf240ea87f3ebcf6faaca63`，体积 69220.871→77170.616 mm³（真实草图尺寸编辑生效）。0.6.1 历史的 five_smooth/four_smooth 证据未被挪用。
+
+**2 负例（按预期拒绝，原始错误保留）**：`invalid_seed_feature_id`（two_straight 基础输入 + `feature_id=2147483647`）在 `native_execution` 阶段被拒，原始错误 `Toolkit call ProFeatureInit((ProSolid)board, binding.at("feature_id"), …)`；`interpolation_mismatch`（相反插值）在 `native_execution` 阶段被拒，原始错误 `Seed Blend interpolation does not match requested interpolation`。两例均未伪称保存成功。
+
+**FEAT-030 状态**：派发表 T06 的实机闭环条件（15 正例 + 2 负例在同一受测源码身份上取得有效证据）已满足，[FEAT-030](../work-items/FEAT-030.md) 按当日阶段记录更新为已验收（未收口）；未测范围（Creo 9/10、种子重生成、UGC 版本来源）保持不变。
+
+**边界**：逐次受理即持久化、无自动重放/resume、未跨报告合并；未改生产/原生、未改 `version.py`、未合 main、未发布；会话无 busy/断连/unknown。
