@@ -585,7 +585,35 @@ class TiltedCutAcceptance:
                 "operations": plan,
             },
         )
-        terminal = await self.wait_job(submitted["job_id"], "succeeded")
+        terminal = await self.wait_job(submitted["job_id"])
+        if terminal["status"] == "failed":
+            result = terminal.get("result", {})
+            self.report["cases"].append(
+                {
+                    "case": case["case"],
+                    "dimensioning": case["dimensioning"],
+                    "direction": case["direction"],
+                    "model_name": case["model_name"],
+                    "model_id": model_id,
+                    "u_axis_input": list(U_AXIS_INPUT),
+                    "plane_id_from_inspection": plane["id"],
+                    "plane_normal": plane["normal"],
+                    "setup_job_id": setup["job_id"],
+                    "job_id": submitted["job_id"],
+                    "status": "failed",
+                    "message": terminal.get("message"),
+                    "failed_stage": result.get("failed_stage"),
+                    "failed_toolkit_call": result.get("failed_toolkit_call"),
+                    "toolkit_code": result.get("toolkit_code"),
+                    "rollback_succeeded": result.get("rollback_succeeded"),
+                    "saved_file_reloaded_and_verified": result.get(
+                        "saved_file_reloaded_and_verified", False
+                    ),
+                    "passed": False,
+                }
+            )
+            self.save()
+            return
         assert terminal["result"]["saved_file_reloaded_and_verified"] is True, terminal
 
         saved = await self.snapshot(model_id)
@@ -634,7 +662,7 @@ class TiltedCutAcceptance:
                 return float(operation["material_removed_mm3"])
         raise AssertionError(f"No material_removed_mm3 for slot_cut in {terminal}")
 
-    async def run_all(self) -> None:
+    async def run_all(self, selected: list[str] | None = None) -> None:
         from tools.mcp_readiness import wait_for_startup
 
         self.report["capabilities"] = await self.call("creo_capabilities", {})
@@ -643,10 +671,17 @@ class TiltedCutAcceptance:
         await wait_for_startup(self.client, self.report, self.output)
         status = await self.call("creo_session_status", {})
         assert status["connected"] is True, status
+        cases = build_cases(model_tag(self.run_id))
+        if selected is not None:
+            cases = [case for case in cases if case["case"] in set(selected)]
         try:
-            for case in build_cases(model_tag(self.run_id)):
+            for case in cases:
                 await self.run_case(case)
-            self.report.update(live_run=True, native_acceptance="recorded")
+            failed = [entry for entry in self.report["cases"] if not entry.get("passed")]
+            self.report.update(
+                live_run=True,
+                native_acceptance="all_passed" if not failed else "failures_recorded",
+            )
         except Exception as error:
             self.report.update(error=f"{type(error).__name__}: {error}")
             raise
@@ -654,7 +689,7 @@ class TiltedCutAcceptance:
             self.save()
 
 
-async def live(output: Path, run_id: str) -> None:
+async def live(output: Path, run_id: str, selected: list[str] | None = None) -> None:
     from tools.test_t05_native import require_manual_start
 
     require_manual_start(ROOT / "config.json")
@@ -667,7 +702,7 @@ async def live(output: Path, run_id: str) -> None:
     ) as client:
         runner = TiltedCutAcceptance(client, output, run_id)
         runner.save()
-        await runner.run_all()
+        await runner.run_all(selected)
 
 
 # --- offline stage --------------------------------------------------------
@@ -766,6 +801,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-session-usable", action="store_true")
+    parser.add_argument(
+        "--case",
+        action="append",
+        default=None,
+        help="run only the named case(s); repeatable; unknown names are refused "
+        "before any connection",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
 
@@ -775,6 +817,15 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         print(f"REFUSED BEFORE CONNECTION: {error}")
         return 2
+
+    selected = None
+    if args.case:
+        known = {case["case"] for case in build_cases(model_tag(run_id))}
+        unknown = [name for name in args.case if name not in known]
+        if unknown:
+            print(f"REFUSED BEFORE CONNECTION: unknown case names {unknown}")
+            return 2
+        selected = list(dict.fromkeys(args.case))
 
     if not (args.live and args.confirm_session_usable):
         if args.live or args.confirm_session_usable:
@@ -792,7 +843,7 @@ def main(argv: list[str] | None = None) -> int:
         print("LIVE NOT RUN: no native geometry result was produced or claimed.")
         return 0
 
-    asyncio.run(live(output, run_id))
+    asyncio.run(live(output, run_id, selected))
     return 0
 
 

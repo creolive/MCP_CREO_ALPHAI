@@ -316,6 +316,83 @@ class NoResubmissionTests(unittest.IsolatedAsyncioTestCase):
         for call in runner.call.await_args_list:
             self.assertEqual(call.args[0], "creo_get_job")
 
+    async def test_failed_slot_job_is_recorded_and_does_not_abort_the_run(self):
+        import json
+
+        runner = self.runner()
+        staged = {
+            "revision": 2,
+            "inspection": {
+                "datum_planes": [
+                    {"id": 911, "normal": driver.tilted_normal(), "origin": [0.0, 0.0, 0.0]}
+                ]
+            },
+        }
+        runner.fresh_part = AsyncMock(return_value=("m1", {"revision": 1}))
+        runner.snapshot = AsyncMock(return_value=staged)
+        runner.submit_once = AsyncMock(side_effect=[{"job_id": "setup_j"}, {"job_id": "slot_j"}])
+        runner.wait_job = AsyncMock(
+            side_effect=[
+                {"status": "succeeded"},
+                {
+                    "status": "failed",
+                    "message": "Toolkit call AutodimensionSketch failed with code -1",
+                    "result": {
+                        "failed_stage": "execute_sketch",
+                        "failed_toolkit_call": "AutodimensionSketch",
+                        "toolkit_code": -1,
+                        "rollback_succeeded": True,
+                        "saved_file_reloaded_and_verified": False,
+                    },
+                },
+            ]
+        )
+        case = driver.build_cases("tag1")[0]
+        await runner.run_case(case)  # a terminal failed job must not raise
+
+        self.assertEqual(len(runner.report["cases"]), 1)
+        entry = runner.report["cases"][0]
+        self.assertFalse(entry["passed"])
+        self.assertEqual(entry["status"], "failed")
+        self.assertEqual(entry["job_id"], "slot_j")
+        self.assertEqual(entry["failed_toolkit_call"], "AutodimensionSketch")
+        self.assertTrue(entry["rollback_succeeded"])
+        saved = json.loads(Path(runner.output).read_text(encoding="utf-8"))
+        self.assertEqual(saved["cases"][0]["job_id"], "slot_j")
+
+
+class CaseSelectionTests(unittest.TestCase):
+    def test_unknown_case_name_is_refused_before_any_connection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "report.json"
+            buffer = io.StringIO()
+            with (
+                redirect_stdout(buffer),
+                patch.object(
+                    driver.asyncio,
+                    "run",
+                    side_effect=AssertionError("must not start the live stage"),
+                ),
+            ):
+                code = driver.main(
+                    [
+                        "--live",
+                        "--confirm-session-usable",
+                        "--case",
+                        "bogus_case",
+                        "--output",
+                        str(target),
+                    ]
+                )
+        self.assertEqual(code, 2)
+        self.assertIn("unknown case names", buffer.getvalue())
+
+    def test_known_case_names_are_accepted_and_deduplicated(self):
+        known = {case["case"] for case in driver.build_cases("tag2")}
+        self.assertEqual(len(known), 6)
+        self.assertIn("autodim_positive", known)
+        self.assertIn("coordinates_symmetric", known)
+
 
 class ReportTests(unittest.TestCase):
     def test_offline_report_states_that_live_was_not_run(self):
