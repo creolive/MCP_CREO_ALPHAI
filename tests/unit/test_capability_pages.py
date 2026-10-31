@@ -133,7 +133,10 @@ class CapabilityPageRules(unittest.TestCase):
         cursor = None
         while True:
             page = pages.capabilities_response(
-                lambda: dict(payload), detail="full", section="overview", limit=2,
+                lambda: dict(payload),
+                detail="full",
+                section="overview",
+                limit=2,
                 cursor=cursor,
             )
             overview.update({entry["key"]: entry["value"] for entry in page["entries"]})

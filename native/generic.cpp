@@ -2986,10 +2986,10 @@ static void execute_operation_body(const J &op) {
                 "datum_plane operations instead");
         if (op.contains("angle")) {
             const J axis_ref = op.value("axis", J());
-            std::string axis_kind = axis_ref.is_object() && axis_ref.contains("kind") &&
-                                            axis_ref["kind"].is_string()
-                                        ? axis_ref["kind"].get<std::string>()
-                                        : std::string();
+            std::string axis_kind =
+                axis_ref.is_object() && axis_ref.contains("kind") && axis_ref["kind"].is_string()
+                    ? axis_ref["kind"].get<std::string>()
+                    : std::string();
             if (axis_kind != "axis" && axis_kind != "datum_axis_feature")
                 throw std::runtime_error(
                     "An angled datum_plane requires axis {kind:'axis',id:N} or "

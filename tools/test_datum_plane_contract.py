@@ -401,9 +401,7 @@ class LiveRunner:
         assert label in aliases, {"labels": sorted(aliases)}
         feature_id = aliases[label]["feature_id"]
         planes = [
-            p
-            for p in snapshot["inspection"]["datum_planes"]
-            if p.get("feature_id") == feature_id
+            p for p in snapshot["inspection"]["datum_planes"] if p.get("feature_id") == feature_id
         ]
         if not planes:
             # datum_planes entries carry no feature_id in some inspections;
@@ -420,11 +418,17 @@ class LiveRunner:
         axes = [a for a in snapshot["inspection"]["datum_axes"] if a["feature_id"] == feature_id]
         assert len(axes) == 1, axes
         axis = axes[0]
-        assert axis["geometry_known"] and axis["data_query_code"] == axis["line_query_code"] == 0, axis
+        assert axis["geometry_known"] and axis["data_query_code"] == axis["line_query_code"] == 0, (
+            axis
+        )
         return axis
 
     def check_plane(
-        self, snapshot: dict, label: str, normal_oracle: list, on_axis: dict | None,
+        self,
+        snapshot: dict,
+        label: str,
+        normal_oracle: list,
+        on_axis: dict | None,
         constant: float | None,
     ) -> dict:
         plane = self.measured_plane(snapshot, label)

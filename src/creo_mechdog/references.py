@@ -142,11 +142,7 @@ def validate_datum_plane_reference_kind(value: Any, path: str) -> None:
     kindless reference used to reach the native executor and surface as a JSON
     missing-key error.
     """
-    if (
-        not isinstance(value, dict)
-        or not isinstance(value.get("kind"), str)
-        or not value["kind"]
-    ):
+    if not isinstance(value, dict) or not isinstance(value.get("kind"), str) or not value["kind"]:
         raise ValueError(f"{path}: " + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION)
 
 

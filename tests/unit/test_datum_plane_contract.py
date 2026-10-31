@@ -6,7 +6,6 @@ error from the executor, and a plane-shaped axis selection could resolve to a
 face instead of the intended rotation axis.
 """
 
-import asyncio
 import copy
 import unittest
 
@@ -67,9 +66,7 @@ class AngleOffsetContractTests(unittest.TestCase):
         self.assertEqual(
             angle_only["axis"], {"kind": "datum_axis_feature", "label": "rotation_axis"}
         )
-        tilted_zero = validate_operations(
-            [plane_op(angle=0, axis={"kind": "axis", "id": 83})]
-        )[0]
+        tilted_zero = validate_operations([plane_op(angle=0, axis={"kind": "axis", "id": 83})])[0]
         self.assertEqual(tilted_zero["angle"], 0)
 
     def test_reported_t05_tilt_setup_still_validates(self):

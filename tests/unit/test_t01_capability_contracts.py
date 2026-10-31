@@ -124,9 +124,7 @@ class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_capabilities_express_depth_and_direction_separately(self):
         payload = server._capabilities_payload([])
         self.assertEqual(payload["extrude_depth_types"], ["blind", "through_all"])
-        self.assertEqual(
-            payload["extrude_directions"], ["positive", "negative", "symmetric"]
-        )
+        self.assertEqual(payload["extrude_directions"], ["positive", "negative", "symmetric"])
         self.assertEqual(payload["extrude_through_all_modes"], ["cut"])
         self.assertNotIn("extrude_depths", payload)
         # through_all_cut/symmetric must not masquerade as depth enum values
@@ -141,9 +139,7 @@ class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):
         model_props = ExtrudeOp.model_json_schema()["properties"]
         for field in ("mode", "direction", "depth_type"):
             with self.subTest(field=field):
-                self.assertEqual(
-                    _enum_consts(tool_props[field]), _enum_consts(model_props[field])
-                )
+                self.assertEqual(_enum_consts(tool_props[field]), _enum_consts(model_props[field]))
 
     async def test_standalone_tool_payload_is_a_valid_plan_operation(self):
         from creo_mechdog.schema import validate_operations
