@@ -91,6 +91,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/operation_results.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
+    "src/creo_mechdog/stdio_lifecycle.py",
     "src/creo_mechdog/session_models.py",
     "src/creo_mechdog/session_assembly.py",
     "src/creo_mechdog/assembly_replay.py",
@@ -2411,4 +2412,10 @@ for _unavailable in UNAVAILABLE_OPERATIONS:
     mcp.remove_tool("creo_" + _unavailable)
 
 if __name__ == "__main__":
+    from creo_mechdog.stdio_lifecycle import StdioExitGuard
+
+    # BUG-092: watch the wire stdin and bound self-exit after client EOF, so a
+    # stuck stdio write can never leave this process holding the pipes. Install
+    # before mcp.run() claims fd 0.
+    StdioExitGuard().install()
     mcp.run(transport="stdio")
