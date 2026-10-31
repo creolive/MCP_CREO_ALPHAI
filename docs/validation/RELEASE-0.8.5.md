@@ -31,4 +31,17 @@
 
 ## 候选状态与逐 ID 核对
 
-候选待发布；主干提交、附注标签、正式 Release 与四附件均须经远端核验后才算交付。DEV-051 整体仍验收中；BUG-046 的钣金 add 边界已定案；BUG-047 的方向子项已验；FEAT-014 四壁和 relief 仍开放；FEAT-031/T13 失败仍开放。状态入口为 [工作卡](../work-items/DEV-051.md)、[主台账](../BACKLOG.md)、[版本说明](../RELEASE_NOTES_0.8.5.md)和[开发入口](../DEVELOPMENT.md)。
+发布前候选状态：待核对主干提交、附注标签、正式 Release 与四附件；DEV-051 整体仍验收中，BUG-046 的钣金 add 边界已定案，BUG-047 的方向子项已验，FEAT-014 四壁和 relief 仍开放，FEAT-031/T13 失败仍开放。状态入口为 [工作卡](../work-items/DEV-051.md)、[主台账](../BACKLOG.md)、[版本说明](../RELEASE_NOTES_0.8.5.md)和[开发入口](../DEVELOPMENT.md)。实际发布结果见下节。
+
+## 发布后远端核验（本机交付副本；不追加 main 提交）
+
+2026-10-29 从 REST API 核对：远端 `main=4ffdd5d9907afe719c174c234df765664dc04f7f`；附注标签 `v0.8.5` 对象为 `74917557028a028ed69e78589cc0e5e39a0ab4a9`，剥离后指向同一提交。正式 Release（`draft=false`、`prerelease=false`）：https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.8.5 。四附件均逐件从远端下载，字节数、SHA256 与 Release body 一致；两个 `.sha256` 文件内容也与相应 ZIP 一致。
+
+| 附件 | 远端字节数 | 下载后 SHA256 | 核验 |
+| --- | ---: | --- | --- |
+| `MCP_CREO_MechDog-0.8.5-source.zip` | 6 030 339 | `4d8a0b6beeec7ce02c0120bf96a60e0399efc84e9ec9b52f6e90be49b987a45d` | 通过 |
+| `MCP_CREO_MechDog-0.8.5-source.zip.sha256` | 101 | `7956d475fab16bd9caf932338dd425294bdc318ef9fb2dc33df6256b277cfc4b` | 通过 |
+| `MCP_CREO_MechDog-0.8.5-seed-library.zip` | 493 394 | `4178f8aaa0509653915a8238374696358739c140c3a6d7a442dc0491daec53a8` | 通过 |
+| `MCP_CREO_MechDog-0.8.5-seed-library.zip.sha256` | 107 | `db59ac215ae4766cbd0bedafae7fde4da5c7cb9747a717ddfc5bfcd0fa1cdce7` | 通过 |
+
+发布后逐 ID 核对：DEV-051 仍验收中、0.8.5 已交付本轮子项；BUG-046 支持边界已明确；BUG-047 折边方向子项已验；FEAT-014 四壁和 relief 继续开放；FEAT-031/T13 继续不通过。卡首页、主台账、版本说明、开发入口与实际 Release 的当前版本入口一致。此段是发布后本地核验记录，**未进入已发布源码包，也未在 main 增加提交**；正式附件的哈希以 Release body 为准。
