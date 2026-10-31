@@ -10,6 +10,10 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import bridge
+from creo_mechdog.release_integrity import (
+    trusted_seed_archive_digest,
+    validate_seed_archive,
+)
 from creo_mechdog.seed_compatibility import (
     AVAILABLE_SCOPE,
     COMPATIBILITY_EVIDENCE,
@@ -21,6 +25,11 @@ REGISTRY_NAME = "seed_registry.json"
 NO_NATIVE_PROBE = (
     "not_performed; listing and validation never connect to Creo and never trial-load a seed"
 )
+
+
+def expected_archive_sha256() -> str:
+    """The trusted SHA256 of the seed archive published with this release."""
+    return trusted_seed_archive_digest(bridge.ROOT)
 
 
 def manifest() -> dict:
@@ -159,10 +168,9 @@ def install_seed_library(directory: str | None = None, archive_file: str | None 
         source = Path(archive_file).expanduser()
         if not source.is_absolute() or not source.is_file():
             raise ValueError("archive_file must be an existing absolute local ZIP path")
-        # Accept only the published library, not arbitrary executable ZIP contents.
-        expected_digest = "99e3b9ec92593fbd5c34b91504134fd015a5e2142ab36f7e7ab4226d50b819c3"
-        if hashlib.sha256(source.read_bytes()).hexdigest() != expected_digest:
-            raise ValueError("Archive SHA256 differs from the published MIT seed library")
+        # Accept only the published library: digest, version and native seed bytes
+        # are checked against the release record before anything is written.
+        validate_seed_archive(bridge.ROOT, source)
         if destination.exists():
             raise ValueError(
                 "seed_library already exists; register/validate it instead of overwriting"

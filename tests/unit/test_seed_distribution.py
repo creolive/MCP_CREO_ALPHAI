@@ -1,6 +1,4 @@
-import contextlib
 import hashlib
-import io
 import json
 import tempfile
 import unittest
@@ -44,6 +42,7 @@ class SeedDistributionTests(unittest.TestCase):
             (library / "README.md", "# Fixture\nSeed description\n"),
             (library / "seed_manifest.json", json.dumps(manifest, indent=2) + "\n"),
             (root / "docs/seed_manifest.json", json.dumps(manifest, indent=2) + "\n"),
+            (root / "version.py", f'VERSION = "{VERSION}"\n'),
         ):
             path.write_bytes(text.replace("\n", newline).encode())
         (library / "seeds/example.prt.1").write_bytes(self.native)
@@ -54,14 +53,7 @@ class SeedDistributionTests(unittest.TestCase):
         for name, newline in (("lf", "\n"), ("crlf", "\r\n")):
             root, library, _ = self.fixture(name, newline)
             output = self.temp / (name + ".zip")
-            files = sorted(path for path in library.rglob("*") if path.is_file())
-            with (
-                patch.object(package_seeds, "ROOT", root),
-                patch.object(package_seeds, "source_files", return_value=files),
-                patch("sys.argv", ["package_seeds.py", "--output", str(output)]),
-                contextlib.redirect_stdout(io.StringIO()),
-            ):
-                package_seeds.main()
+            package_seeds.build_seed_archive(root, output)
             archives.append(output.read_bytes())
             with zipfile.ZipFile(output) as archive:
                 prefix = f"MCP_CREO_MechDog-{VERSION}-seed-library/"
@@ -81,3 +73,89 @@ class SeedDistributionTests(unittest.TestCase):
             (library / "LICENSE").write_bytes(b"Changed license terms\r\n")
             with self.assertRaisesRegex(ValueError, "MIT license"):
                 seeds._validate_library(library)
+
+    def test_directory_install_stays_compatible(self):
+        root, library, manifest = self.fixture("directory", "\n")
+        with (
+            patch.object(bridge, "ROOT", root),
+            patch.object(seeds, "manifest", return_value=manifest),
+        ):
+            result = seeds.install_seed_library(directory=str(library))
+        self.assertTrue(result["installed"])
+        self.assertEqual(result["available_count"], 1)
+
+    def test_zip_member_native_bytes_are_verified_against_the_manifest(self):
+        root, library, manifest = self.fixture("native", "\n")
+        archive = root / "library.zip"
+        prefix = f"MCP_CREO_MechDog-{VERSION}-seed-library/"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for name, data in (
+                (f"{prefix}seed_manifest.json", b"{}"),
+                (f"{prefix}seeds/example.prt.1", self.native),
+            ):
+                output.writestr(name, data)
+        (root / "docs/seed_package.json").write_text(
+            json.dumps(
+                {
+                    "compatible_server_version": VERSION,
+                    "seed_archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(bridge, "ROOT", root),
+            patch.object(seeds, "manifest", return_value=manifest),
+        ):
+            with self.assertRaisesRegex(ValueError, "manifest differs"):
+                seeds.install_seed_library(archive_file=str(archive))
+
+    def test_zip_member_native_bytes_are_rejected_when_they_do_not_match(self):
+        root, library, manifest = self.fixture("native-mismatch", "\n")
+        archive = root / "library.zip"
+        prefix = f"MCP_CREO_MechDog-{VERSION}-seed-library/"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            output.writestr(f"{prefix}seed_manifest.json", json.dumps(manifest).encode())
+            output.writestr(f"{prefix}seeds/example.prt.1", self.native + b"\x00")
+        (root / "docs/seed_package.json").write_text(
+            json.dumps(
+                {
+                    "compatible_server_version": VERSION,
+                    "seed_archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(bridge, "ROOT", root),
+            patch.object(seeds, "manifest", return_value=manifest),
+        ):
+            with self.assertRaisesRegex(ValueError, "published SHA256"):
+                seeds.install_seed_library(archive_file=str(archive))
+
+    def test_zip_member_paths_cannot_escape_the_install_root(self):
+        root, library, manifest = self.fixture("escape", "\n")
+        archive = root / "library.zip"
+        prefix = f"MCP_CREO_MechDog-{VERSION}-seed-library/"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+            output.writestr(f"{prefix}seed_manifest.json", json.dumps(manifest).encode())
+            output.writestr(f"{prefix}../escape.prt.1", self.native)
+        (root / "docs/seed_package.json").write_text(
+            json.dumps(
+                {
+                    "compatible_server_version": VERSION,
+                    "seed_archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(bridge, "ROOT", root),
+            patch.object(seeds, "manifest", return_value=manifest),
+        ):
+            with self.assertRaisesRegex(ValueError, "Unsafe seed archive path"):
+                seeds.install_seed_library(archive_file=str(archive))
+        self.assertFalse((root / "escape.prt.1").exists())

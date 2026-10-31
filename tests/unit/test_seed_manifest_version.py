@@ -5,6 +5,11 @@ import json
 import unittest
 from pathlib import Path
 
+from creo_mechdog.release_integrity import (
+    read_version,
+    readme_versions,
+    trusted_seed_package,
+)
 from version import VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,20 +25,59 @@ class SeedManifestVersionTests(unittest.TestCase):
     def test_packager_checks_manifest_version(self):
         source = (ROOT / "tools/package_seeds.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        checks = [node.test for node in ast.walk(tree) if isinstance(node, ast.Assert)]
+        comparisons = [node for node in ast.walk(tree) if isinstance(node, ast.Compare)]
         self.assertTrue(
             any(
-                isinstance(check, ast.Compare)
-                and isinstance(check.left, ast.Subscript)
-                and isinstance(check.left.value, ast.Name)
-                and check.left.value.id == "manifest"
-                and isinstance(check.left.slice, ast.Constant)
-                and check.left.slice.value == "compatible_server_version"
-                and len(check.comparators) == 1
-                and isinstance(check.comparators[0], ast.Name)
-                and check.comparators[0].id == "VERSION"
-                and len(check.ops) == 1
-                and isinstance(check.ops[0], ast.Eq)
-                for check in checks
-            )
+                isinstance(compare.left, ast.Subscript)
+                and isinstance(compare.left.value, ast.Name)
+                and compare.left.value.id == "manifest"
+                and isinstance(compare.left.slice, ast.Constant)
+                and compare.left.slice.value == "compatible_server_version"
+                for compare in comparisons
+            ),
+            "the packager must compare the manifest version with the source version",
         )
+
+    def test_trusted_seed_package_record_matches_the_server_version(self):
+        record = trusted_seed_package(ROOT)
+        self.assertEqual(record["compatible_server_version"], VERSION)
+        self.assertRegex(record["seed_archive_sha256"], r"^[a-f0-9]{64}$")
+
+    def test_readme_title_and_current_section_match_the_server_version(self):
+        readme = readme_versions(ROOT)
+        self.assertEqual(readme["title"], VERSION)
+        self.assertEqual(readme["current"], VERSION)
+
+    def test_version_module_is_the_single_version_source(self):
+        self.assertEqual(read_version(ROOT), VERSION)
+
+    def test_source_package_requires_the_explicit_seed_archive(self):
+        source = (ROOT / "tools/package.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        options = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_argument"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == "--seed-archive"
+        ]
+        self.assertEqual(len(options), 1)
+        keywords = {keyword.arg: keyword.value for keyword in options[0].keywords}
+        self.assertIn("required", keywords)
+        self.assertIs(keywords["required"].value, True)
+
+    def test_source_package_refuses_a_mismatched_seed_archive_before_writing(self):
+        source = (ROOT / "tools/package.py").read_text(encoding="utf-8")
+        self.assertIn("validate_release_inputs", source)
+        self.assertIn("Source package refused", source)
+        self.assertLess(
+            source.index("validate_release_inputs(ROOT"),
+            source.index("zipfile.ZipFile(archive"),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

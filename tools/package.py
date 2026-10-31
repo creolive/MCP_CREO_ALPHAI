@@ -2,7 +2,6 @@
 
 import argparse
 import hashlib
-import re
 import shutil
 import sys
 import zipfile
@@ -10,6 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
+from creo_mechdog.release_integrity import seed_library_files, validate_release_inputs
 from version import VERSION
 
 NAME = "MCP_CREO_MechDog"
@@ -73,16 +74,7 @@ def source_files():
         for p in (ROOT / ".github").rglob("*")
         if p.is_file() and p.suffix in {".md", ".yml", ".yaml"}
     )
-    files.extend(
-        p
-        for p in (ROOT / "seed_library").rglob("*")
-        if p.is_file()
-        and (
-            p.suffix in {".md", ".json", ".py"}
-            or p.name == "LICENSE"
-            or re.fullmatch(r"[A-Za-z0-9_]{1,31}\.prt\.\d+", p.name)
-        )
-    )
+    files.extend(seed_library_files(ROOT))
     for path in files:
         if not path.is_file() or path.is_symlink():
             raise ValueError(f"Missing source file or unexpected symlink: {path}")
@@ -92,12 +84,24 @@ def source_files():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--seed-archive",
+        type=Path,
+        required=True,
+        help="Seed library ZIP published with this release; its digest must match the "
+        "trusted seed package record",
+    )
+    parser.add_argument(
         "--stage", type=Path, help="Also copy public files into a new empty upload directory"
     )
     parser.add_argument(
         "--output", type=Path, help="New ZIP path; refuses to overwrite an existing archive"
     )
     args = parser.parse_args()
+    try:
+        summary = validate_release_inputs(ROOT, args.seed_archive.resolve())
+    except ValueError as error:
+        print(f"Source package refused: {error}", file=sys.stderr)
+        raise SystemExit(2) from None
     files = source_files()
     if args.stage:
         stage = args.stage.resolve()
@@ -121,6 +125,10 @@ def main():
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_suffix(".zip.sha256").write_text(f"{checksum}  {archive.name}\n", encoding="ascii")
     print(f"Public source: {archive}; {len(files)} files; SHA256 {checksum}")
+    print(
+        f"Seed archive: {summary['seed_archive']}; "
+        f"{summary['seed_count']} seeds; SHA256 {summary['seed_archive_sha256']}"
+    )
     if args.stage:
         print(f"GitHub upload directory: {args.stage.resolve()}")
 

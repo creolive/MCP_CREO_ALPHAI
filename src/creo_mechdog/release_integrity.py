@@ -1,0 +1,295 @@
+"""Seed archive and release-input integrity checks (BUG-089, DEV-053 P04).
+
+The trusted seed digest comes from an explicit release record
+(``docs/seed_package.json``) that lives beside the sources and outside the seed
+archive, so a rebuilt or tampered archive can never declare its own expected
+digest. Every check raises ``ValueError`` before any archive, seed library or
+release file is written.
+"""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import json
+import re
+import zipfile
+from pathlib import Path, PurePosixPath
+
+from creo_mechdog.seed_distribution import seed_file_bytes
+
+TRUSTED_RECORD = "docs/seed_package.json"
+SEED_LIBRARY = "seed_library"
+SEED_MANIFEST = "seed_manifest.json"
+DOCUMENTATION_MANIFEST = "docs/seed_manifest.json"
+
+SEED_FILE_PATTERN = r"[A-Za-z0-9_]{1,31}\.prt\.\d+"
+SEED_TEXT_SUFFIXES = {".md", ".json", ".py"}
+_DIGEST_PATTERN = re.compile(r"[a-f0-9]{64}")
+_README_TITLE_PATTERN = re.compile(r"^#\s+MCP_CREO_MechDog\s+(\S+)", re.MULTILINE)
+_README_CURRENT_PATTERN = re.compile(r"当前正式版\s*\*\*([^*]+)\*\*")
+
+
+def _read_json_bytes(data: bytes, origin: str) -> dict:
+    try:
+        value = json.loads(data.decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise ValueError(f"{origin} is not readable JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"{origin} is not a JSON object")
+    return value
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise ValueError(f"Cannot read {path}: {error}") from error
+    return _read_json_bytes(data, str(path))
+
+
+def seed_library_files(root: Path) -> list[Path]:
+    """Seed library members that belong to the distributed seed archive.
+
+    This is the single source of truth for the seed allowlist: the seed packager
+    and the release gate must agree on exactly the same member set.
+    """
+    library = Path(root) / SEED_LIBRARY
+    if not library.is_dir():
+        return []
+    files = sorted(
+        path
+        for path in library.rglob("*")
+        if path.is_file()
+        and (
+            path.suffix in SEED_TEXT_SUFFIXES
+            or path.name == "LICENSE"
+            or re.fullmatch(SEED_FILE_PATTERN, path.name)
+        )
+    )
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"Seed library file is an unexpected symlink: {path}")
+    return files
+
+
+def trusted_seed_package(root: Path) -> dict:
+    """The explicit release record naming the trusted seed archive digest."""
+    path = Path(root) / TRUSTED_RECORD
+    if not path.is_file():
+        raise ValueError(
+            f"Trusted seed package record is missing: {path}; build the seed archive and "
+            "backfill its SHA256 into this record before packaging source"
+        )
+    record = _read_json(path)
+    version = record.get("compatible_server_version")
+    digest = record.get("seed_archive_sha256")
+    if not isinstance(version, str) or not version.strip():
+        raise ValueError(f"{TRUSTED_RECORD} has no compatible_server_version")
+    if not isinstance(digest, str) or not _DIGEST_PATTERN.fullmatch(digest):
+        raise ValueError(f"{TRUSTED_RECORD} has no valid seed_archive_sha256")
+    return {
+        "compatible_server_version": version.strip(),
+        "seed_archive_sha256": digest,
+        "seed_archive_name": record.get("seed_archive_name"),
+        "record": str(path),
+    }
+
+
+def trusted_seed_archive_digest(root: Path) -> str:
+    """The trusted SHA256 of the seed archive published with this release."""
+    return str(trusted_seed_package(root)["seed_archive_sha256"])
+
+
+def read_version(root: Path) -> str:
+    """The version declared by the source tree at ``root``."""
+    path = Path(root) / "version.py"
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise ValueError(f"Cannot read {path}: {error}") from error
+    except SyntaxError as error:
+        raise ValueError(f"{path} is not readable Python: {error}") from error
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [target for target in node.targets if isinstance(target, ast.Name)]
+        if not any(target.id == "VERSION" for target in targets):
+            continue
+        try:
+            value = ast.literal_eval(node.value)
+        except ValueError as error:
+            raise ValueError(f"{path} does not declare a literal VERSION") from error
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raise ValueError(f"{path} does not declare VERSION")
+
+
+def readme_versions(root: Path) -> dict:
+    """The version numbers the public README claims for this release."""
+    path = Path(root) / "README.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"Cannot read {path}: {error}") from error
+    title = _README_TITLE_PATTERN.search(text)
+    current = _README_CURRENT_PATTERN.search(text)
+    return {
+        "title": title.group(1) if title else None,
+        "current": current.group(1) if current else None,
+    }
+
+
+def seed_archive_prefix(version: str) -> str:
+    """The single top-level directory every seed archive member lives under."""
+    return f"MCP_CREO_MechDog-{version}-seed-library/"
+
+
+def archive_members(archive: zipfile.ZipFile) -> dict[str, bytes]:
+    """Read every archive member, rejecting unsafe or duplicated member paths."""
+    members: dict[str, bytes] = {}
+    for info in archive.infolist():
+        if info.is_dir():
+            continue
+        parts = PurePosixPath(info.filename)
+        if (
+            parts.is_absolute()
+            or ".." in parts.parts
+            or "\\" in info.filename
+            or len(parts.parts) < 2
+        ):
+            raise ValueError(f"Unsafe seed archive path: {info.filename}")
+        if info.filename in members:
+            raise ValueError(f"Duplicate seed archive member: {info.filename}")
+        members[info.filename] = archive.read(info)
+    return members
+
+
+def validate_seed_archive(root: Path, seed_archive: Path) -> dict[str, object]:
+    """Check one seed archive against the trusted record and this source tree.
+
+    Rejects a modified archive, an unsafe or unexpected member path, a manifest
+    that differs from the repository, a foreign version and native seed bytes
+    that do not match the published SHA256 values.
+    """
+    root = Path(root)
+    archive_path = Path(seed_archive)
+    if not archive_path.is_file():
+        raise ValueError(f"Seed archive does not exist: {archive_path}")
+    trusted = trusted_seed_package(root)
+    version = read_version(root)
+    if version != trusted["compatible_server_version"]:
+        raise ValueError(
+            f"version.py declares {version} but the trusted seed package record declares "
+            f"{trusted['compatible_server_version']}"
+        )
+    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if digest != trusted["seed_archive_sha256"]:
+        raise ValueError(
+            "Seed archive SHA256 differs from the trusted seed package record: "
+            f"archive {digest}, trusted {trusted['seed_archive_sha256']}"
+        )
+    prefix = seed_archive_prefix(version)
+    try:
+        archive = zipfile.ZipFile(archive_path)
+    except zipfile.BadZipFile as error:
+        raise ValueError(f"Seed archive is not a readable ZIP: {error}") from error
+    with archive:
+        if archive.testzip() is not None:
+            raise ValueError("Seed archive CRC check failed")
+        members = archive_members(archive)
+    outside = sorted(name for name in members if not name.startswith(prefix))
+    if outside:
+        raise ValueError(f"Seed archive contains a file outside {prefix}: {outside[0]}")
+    manifest_name = prefix + SEED_MANIFEST
+    if manifest_name not in members:
+        raise ValueError(f"Seed archive does not contain {manifest_name}")
+    manifest = _read_json_bytes(members[manifest_name], manifest_name)
+    repository_manifest = _read_json(root / DOCUMENTATION_MANIFEST)
+    if manifest != repository_manifest:
+        raise ValueError("Seed archive manifest differs from the repository seed manifest")
+    if manifest.get("compatible_server_version") != version:
+        raise ValueError(
+            f"Seed archive manifest version {manifest.get('compatible_server_version')} "
+            f"differs from version.py {version}"
+        )
+    for entry in manifest.get("seeds", []):
+        name = prefix + str(entry.get("relative_path", ""))
+        if name not in members:
+            raise ValueError(f"Seed archive is missing {entry.get('relative_path')}")
+        actual = hashlib.sha256(members[name]).hexdigest()
+        if actual != entry.get("sha256"):
+            raise ValueError(
+                f"Seed archive bytes for {entry.get('name')} differ from the published SHA256"
+            )
+    library = root / SEED_LIBRARY
+    if library.is_dir():
+        library_manifest = _read_json(library / SEED_MANIFEST)
+        if library_manifest != repository_manifest:
+            raise ValueError(
+                "Repository seed manifests differ: docs/seed_manifest.json and "
+                "seed_library/seed_manifest.json"
+            )
+    return {
+        "seed_archive": str(archive_path),
+        "seed_archive_sha256": digest,
+        "compatible_server_version": version,
+        "seed_count": len(manifest.get("seeds", [])),
+        "trusted_record": trusted["record"],
+    }
+
+
+def validate_release_inputs(root: Path, seed_archive: Path) -> dict[str, object]:
+    """Check the release inputs before the public source package is written.
+
+    The source version, both seed manifests, the README version sections and the
+    seed archive must all describe one and the same release.
+    """
+    root = Path(root)
+    version = read_version(root)
+    readme = readme_versions(root)
+    if readme["title"] != version:
+        raise ValueError(
+            f"README title version {readme['title']} differs from version.py {version}"
+        )
+    if readme["current"] != version:
+        raise ValueError(
+            f"README current release section {readme['current']} differs from version.py {version}"
+        )
+    documentation = _read_json(root / DOCUMENTATION_MANIFEST)
+    library_root = root / SEED_LIBRARY
+    if library_root.is_dir():
+        library_manifest = _read_json(library_root / SEED_MANIFEST)
+        if library_manifest != documentation:
+            raise ValueError(
+                "Repository seed manifests differ: docs/seed_manifest.json and "
+                "seed_library/seed_manifest.json"
+            )
+    summary = validate_seed_archive(root, seed_archive)
+    if library_root.is_dir():
+        prefix = seed_archive_prefix(version)
+        with zipfile.ZipFile(summary["seed_archive"]) as archive:
+            members = archive_members(archive)
+        expected = {
+            prefix + path.relative_to(library_root).as_posix() for path in seed_library_files(root)
+        }
+        if set(members) != expected:
+            missing = sorted(expected - set(members))
+            extra = sorted(set(members) - expected)
+            raise ValueError(
+                "Seed archive members differ from the repository seed library: "
+                f"missing {missing or 'none'}, unexpected {extra or 'none'}"
+            )
+        for path in seed_library_files(root):
+            relative = path.relative_to(library_root).as_posix()
+            if members[prefix + relative] != seed_file_bytes(path):
+                raise ValueError(
+                    f"Seed archive bytes for {relative} differ from the repository seed library"
+                )
+    return {
+        **summary,
+        "version": version,
+        "readme_title_version": readme["title"],
+        "readme_current_version": readme["current"],
+        "manifest_seed_count": summary["seed_count"],
+    }
