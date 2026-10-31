@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-053",
+  "task": "P00",
+  "archived_at": "2026-10-31",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Five Markdown originals copied byte for byte; no decoding, re-encoding or formatting.",
+  "source_baseline": {
+    "version": "0.10.0",
+    "commit": "65c9159",
+    "branch": "codex/dev053-post0100",
+    "dirty": true
+  },
+  "reports": [
+    {
+      "id": "F1",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.9.0\\2026-10-31CREO10.0.0.0-0.9.0-Creo10编译阻断跨六版与种子包被自家安装器拒绝.md",
+      "filename": "2026-10-31CREO10.0.0.0-0.9.0-Creo10编译阻断跨六版与种子包被自家安装器拒绝.md",
+      "bytes": 10034,
+      "sha256": "a3ad1269b85e1dc03bdb8960132f76469a1bca2b28e1762dfdb9e4636e210be1"
+    },
+    {
+      "id": "F2",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.9.0\\20261031_CREO_v0.9.0_闭合计数已一致但拉伸仍拒绝_细节特征仍无体积回报.md",
+      "filename": "20261031_CREO_v0.9.0_闭合计数已一致但拉伸仍拒绝_细节特征仍无体积回报.md",
+      "bytes": 8547,
+      "sha256": "6548acb4ca1a9e511c8186b17a10d484f2851efa88282e2bc5a83ff4ec1e1184"
+    },
+    {
+      "id": "F3",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.9.0\\20261031_CREO_v0.9.0_倾斜基准面四类参数缺陷_草图原点误判无诊断.md",
+      "filename": "20261031_CREO_v0.9.0_倾斜基准面四类参数缺陷_草图原点误判无诊断.md",
+      "bytes": 6330,
+      "sha256": "1fa5a1dae389011e9649b239fefe3d008394fdddd71b17536b1498e32e94b160"
+    },
+    {
+      "id": "F4",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.9.0\\2026-10-31_CREO_0.9.0_depth新语义下旧写法产出不可挂折边的钣金体.md",
+      "filename": "2026-10-31_CREO_0.9.0_depth新语义下旧写法产出不可挂折边的钣金体.md",
+      "bytes": 6856,
+      "sha256": "095353a589b0f2d1bc72f8e639e67b340b20d96e524edd47f1260872818f9ffb"
+    },
+    {
+      "id": "F5",
+      "source": "C:\\Users\\Administrator\\Downloads\\0.9.0\\2026-10-31_CREO_0.9.0_depth方向未文档化导致折边不可挂_仅完成底板.md",
+      "filename": "2026-10-31_CREO_0.9.0_depth方向未文档化导致折边不可挂_仅完成底板.md",
+      "bytes": 7807,
+      "sha256": "f50b3c87407d8ea909be58b5fb2f1d58b35239d8d166f541a3c7a84299211b97"
+    }
+  ]
+}
