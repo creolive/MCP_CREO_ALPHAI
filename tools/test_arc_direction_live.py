@@ -189,12 +189,36 @@ def native_arc_echo(terminal: dict | None, name: str = "arc_a") -> dict | None:
     return found[0] if len(found) == 1 else None
 
 
+def numeric_volume_mm3(value: Any) -> float | None:
+    """A finite measured volume, or None; booleans and null are never numbers.
+
+    ``True``/``False`` are int subclasses, so a plain isinstance check would
+    read them as 1.0/0.0 mm3 and a NaN would slip past every tolerance
+    comparison; evidence that is not a finite number is missing evidence.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
 def measured_volume_mm3(payload: dict | None) -> float | None:
-    """Volume from an inspection payload (job result block or inspect reply)."""
+    """Volume from an inspection payload (job result block or inspect reply).
+
+    The real evidence sits in exactly one layer: ``inspection`` (inspect
+    replies and legacy inline job results) or ``inspection_summary`` (job
+    results after the BUG-077 split, where the full payload moved behind
+    ``inspection_ref``). A layer that is present but lacks ``volume_mm3`` is
+    missing evidence: the other layers are never mined for a stale value
+    (BUG-093: the N07 refresh carried 1428.0972451017303 inside
+    ``inspection_summary`` while the driver read only ``inspection``/top level
+    and judged ``volume_missing``).
+    """
     source = payload or {}
-    inner = source.get("inspection") if isinstance(source.get("inspection"), dict) else source
-    volume = inner.get("volume_mm3")
-    return float(volume) if isinstance(volume, (int, float)) else None
+    for key in ("inspection", "inspection_summary"):
+        if key in source and isinstance(source[key], dict):
+            return numeric_volume_mm3(source[key].get("volume_mm3"))
+    return numeric_volume_mm3(source.get("volume_mm3"))
 
 
 def echo_failures(echo: dict | None, direction: int, sweep_deg: float) -> list[str]:
@@ -371,6 +395,9 @@ def judge_illegal_edit(
     after_volume: float | None,
     revision_before: int | None,
     revision_after: int | None,
+    *,
+    model_id: str | None = None,
+    refresh_terminal: dict | None = None,
 ) -> dict:
     """An illegal edit must be rejected and leave the model untouched.
 
@@ -378,7 +405,10 @@ def judge_illegal_edit(
     ``error_text``, ``terminal``). ``passed`` requires the rejection, an
     unchanged live volume and an unchanged model revision; a native-failure
     terminal additionally carries its rollback evidence in the row. Missing
-    revision evidence is a failure, never a silent pass.
+    revision evidence is a failure, never a silent pass. When the caller
+    supplies the evidence refresh job, a terminal for a different model_id is
+    also a failure: same-source volume comparison only means something when
+    the refresh measured the model the edit targeted.
     """
     terminal = outcome.get("terminal") or {}
     rejected = bool(outcome.get("rejected"))
@@ -395,6 +425,11 @@ def judge_illegal_edit(
         failures.append("revision_evidence_missing")
     elif revision_after != revision_before:
         failures.append("revision_changed_after_illegal_edit")
+    refreshed_model_id = (
+        refresh_terminal.get("model_id") if isinstance(refresh_terminal, dict) else None
+    )
+    if model_id is not None and refresh_terminal is not None and refreshed_model_id != model_id:
+        failures.append("wrong_model_refreshed")
     result = result_block(terminal)
     rollback = (
         {
@@ -424,6 +459,8 @@ def judge_illegal_edit(
         "error_text": outcome.get("error_text"),
         "terminal_status": terminal.get("status"),
         "rollback": rollback,
+        "expected_model_id": model_id,
+        "refreshed_model_id": refreshed_model_id,
         "baseline_volume_mm3": before_volume,
         "measured_volume_mm3": after_volume,
         "revision_before": revision_before,
@@ -712,6 +749,8 @@ async def live(output: Path) -> None:
                 measured_volume_mm3(result_block(refreshed)),
                 current_revision,
                 refreshed.get("revision"),
+                model_id=model_id,
+                refresh_terminal=refreshed,
             )
             report["illegal_edits"].append(row)
             flush()

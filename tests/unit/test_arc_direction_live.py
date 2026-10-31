@@ -363,6 +363,218 @@ class IllegalEditTests(unittest.TestCase):
         self.assertIs(row["rollback"]["rollback_succeeded"], True)
 
 
+class RefreshVolumeEvidenceTests(unittest.TestCase):
+    """BUG-093: rejected-edit volume evidence must come from the real refresh shape.
+
+    After the BUG-077 result split, a refresh job's terminal carries the live
+    volume only inside ``result.inspection_summary`` — the full payload moved
+    behind ``inspection_ref`` into a sidecar. The 2026-10-31 N07 run read
+    neither layer and judged ``volume_missing`` on a refresh that did carry the
+    baseline volume (jobs/cddccfd…: 1428.0972451017303). These tests pin the
+    real payload shapes: the driver reads the layer production actually uses,
+    treats a present-but-fieldless layer as missing evidence (never backfilled
+    from another layer or the baseline), never coerces booleans or null into a
+    number, and requires the refreshed model identity and an unchanged
+    revision.
+    """
+
+    BASELINE = 1428.0972451017303
+
+    @staticmethod
+    def rejected_outcome() -> dict:
+        return {
+            "rejected": True,
+            "error_text": "validation error: Arc dir must be the strict integer +1 or -1",
+            "terminal": None,
+            "job_id": None,
+        }
+
+    @staticmethod
+    def refresh_job(
+        volume: float | None,
+        *,
+        model_id: str = "model-1",
+        revision: int | None = 3,
+        summary_has_volume: bool = True,
+    ) -> dict:
+        """A refresh terminal shaped like the real split ``creo_get_job`` reply."""
+        summary: dict = {
+            "healthy": True,
+            "has_solid": True,
+            "units": "mm",
+            "model_type": "part",
+            "volume_query_code": 0,
+            "inspection_source": "live_query",
+            "inspection_available": True,
+            "counts": {"features": 8, "surfaces": 4, "edges": 6, "bodies": 1},
+        }
+        if summary_has_volume:
+            summary["volume_mm3"] = volume
+        return {
+            "job_id": "job-refresh",
+            "model_id": model_id,
+            "status": "succeeded",
+            "readonly": True,
+            "revision": revision,
+            "result": {
+                "success": True,
+                "operations": [],
+                "saved_file_reloaded_and_verified": True,
+                "inspection_ref": {
+                    "file": "jobs/job-refresh/inspection-verified-x.json",
+                    "sha256": "0" * 64,
+                    "bytes": 17541,
+                },
+                "inspection_summary": summary,
+            },
+        }
+
+    def test_split_refresh_result_block_carries_the_live_volume(self):
+        # The exact N07 evidence shape: the driver once read neither the
+        # sidecar reference nor the summary and judged volume_missing here.
+        refreshed = self.refresh_job(self.BASELINE)
+        self.assertEqual(driver.measured_volume_mm3(driver.result_block(refreshed)), self.BASELINE)
+
+    def test_direct_and_nested_payload_layers_are_read(self):
+        self.assertEqual(driver.measured_volume_mm3({"inspection": {"volume_mm3": 5.0}}), 5.0)
+        self.assertEqual(
+            driver.measured_volume_mm3({"inspection_summary": {"volume_mm3": 6.0}}), 6.0
+        )
+        self.assertEqual(driver.measured_volume_mm3({"volume_mm3": 7.0}), 7.0)
+
+    def test_missing_volume_is_never_backfilled_from_another_layer(self):
+        # The chosen evidence layer lacks the field, so the volume is missing
+        # even when a stale value sits on another layer of the same payload.
+        self.assertIsNone(
+            driver.measured_volume_mm3({"inspection": {}, "volume_mm3": self.BASELINE})
+        )
+        self.assertIsNone(
+            driver.measured_volume_mm3({"inspection_summary": {}, "volume_mm3": self.BASELINE})
+        )
+        # When both layers exist the first-priority evidence layer wins.
+        self.assertEqual(
+            driver.measured_volume_mm3(
+                {"inspection": {"volume_mm3": 5.0}, "inspection_summary": {}}
+            ),
+            5.0,
+        )
+        self.assertIsNone(driver.measured_volume_mm3({"inspection_summary": {}}))
+        self.assertIsNone(driver.measured_volume_mm3({}))
+        self.assertIsNone(driver.measured_volume_mm3(None))
+
+    def test_boolean_null_and_nonnumeric_volume_stay_missing(self):
+        for label, payload in (
+            ("true", {"inspection": {"volume_mm3": True}}),
+            ("false", {"inspection": {"volume_mm3": False}}),
+            ("null", {"inspection": {"volume_mm3": None}}),
+            ("summary_true", {"inspection_summary": {"volume_mm3": True}}),
+            ("summary_null", {"inspection_summary": {"volume_mm3": None}}),
+            ("top_true", {"volume_mm3": True}),
+            ("string", {"inspection_summary": {"volume_mm3": "1428.09"}}),
+        ):
+            with self.subTest(volume=label):
+                self.assertIsNone(driver.measured_volume_mm3(payload))
+        # A coerced boolean would read as 1.0 mm3 and could slip past a
+        # tolerance comparison; the judge must report the evidence missing.
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE,
+            self.rejected_outcome(),
+            self.BASELINE,
+            driver.measured_volume_mm3({"inspection_summary": {"volume_mm3": True}}),
+            3,
+            3,
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("volume_missing", row["failures"])
+
+    def test_missing_after_volume_fails_and_never_uses_the_baseline(self):
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE, self.rejected_outcome(), self.BASELINE, None, 3, 3
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("volume_missing", row["failures"])
+        self.assertNotIn("model_changed_after_illegal_edit", row["failures"])
+        self.assertIsNone(row["measured_volume_mm3"])
+
+    def test_missing_baseline_volume_is_reported(self):
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE, self.rejected_outcome(), None, self.BASELINE, 3, 3
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("baseline_volume_missing", row["failures"])
+
+    def test_wrong_refreshed_model_fails(self):
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE,
+            self.rejected_outcome(),
+            self.BASELINE,
+            self.BASELINE,
+            3,
+            3,
+            model_id="model-1",
+            refresh_terminal=self.refresh_job(self.BASELINE, model_id="model-other"),
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("wrong_model_refreshed", row["failures"])
+        self.assertEqual(row["refreshed_model_id"], "model-other")
+
+    def test_refresh_identity_not_supplied_is_recorded_not_judged(self):
+        # Callers without refresh identity evidence (legacy judge callers) keep
+        # the historical behavior: the missing evidence is recorded, not judged.
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE, self.rejected_outcome(), self.BASELINE, self.BASELINE, 3, 3
+        )
+        self.assertTrue(row["passed"])
+        self.assertIsNone(row["refreshed_model_id"])
+
+    def test_changed_revision_after_rejection_fails(self):
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE,
+            self.rejected_outcome(),
+            self.BASELINE,
+            self.BASELINE,
+            3,
+            4,
+            model_id="model-1",
+            refresh_terminal=self.refresh_job(self.BASELINE, revision=4),
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("revision_changed_after_illegal_edit", row["failures"])
+
+    def test_missing_revision_evidence_on_real_shape_fails(self):
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE,
+            self.rejected_outcome(),
+            self.BASELINE,
+            self.BASELINE,
+            3,
+            None,
+            model_id="model-1",
+            refresh_terminal=self.refresh_job(self.BASELINE, revision=None),
+        )
+        self.assertFalse(row["passed"])
+        self.assertIn("revision_evidence_missing", row["failures"])
+
+    def test_n07_shape_with_unchanged_model_passes(self):
+        # End-to-end on the exact N07 evidence shape: schema rejection with no
+        # job, the split refresh terminal carrying the baseline volume inside
+        # inspection_summary, and identity plus revision unchanged.
+        refreshed = self.refresh_job(self.BASELINE)
+        row = driver.judge_illegal_edit(
+            ILLEGAL_CASE,
+            self.rejected_outcome(),
+            self.BASELINE,
+            driver.measured_volume_mm3(driver.result_block(refreshed)),
+            3,
+            3,
+            model_id="model-1",
+            refresh_terminal=refreshed,
+        )
+        self.assertEqual(row["failures"], [])
+        self.assertTrue(row["passed"])
+        self.assertEqual(row["measured_volume_mm3"], self.BASELINE)
+
+
 class SaveReloadTests(unittest.TestCase):
     def test_save_reload_passes_with_result_block_flag(self):
         volume = 142.69908169872414
