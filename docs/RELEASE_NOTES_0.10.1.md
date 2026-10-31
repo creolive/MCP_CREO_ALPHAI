@@ -48,7 +48,7 @@ BUG-091 根因未定（四次通道死亡现场缺运行期 worker 指纹等关�
 
 源码包及种子包 SHA256（文件名与完整哈希，与 Release body 一致）：
 
-- `MCP_CREO_MechDog-0.10.1-source.zip`：`<发布时回填>`
+- `MCP_CREO_MechDog-0.10.1-source.zip`：`eb0caf3d4dcb76d05d0ba7a77e93d5fd978893fbae637dc81148397cd37dc55f`
 - `MCP_CREO_MechDog-0.10.1-seed-library.zip`：`c35e7602fb85124ab9627e92e5ba2dfa47575bcb407b07f73b9e9a87efc4c6b8`（确定性构建两次同哈希）
 
-GitHub Release 链接与发布状态：`<发布后回填>`
+GitHub Release 链接与发布状态：[v0.10.1 已正式发布](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.10.1)（非草稿、非预发布；四附件远端哈希逐件核对通过，详见[发布验证记录](validation/RELEASE-0.10.1.md)）。
