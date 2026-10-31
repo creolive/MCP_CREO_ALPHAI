@@ -700,6 +700,9 @@ static J inspection(bool require_healthy = true) {
     return result;
 }
 static ProSelection resolve(const J &r) {
+    // BUG-094 backstop: fail with a clear message instead of a JSON missing-key error.
+    if (!r.is_object() || !r.contains("kind") || !r["kind"].is_string())
+        throw std::runtime_error("Reference requires a {kind:...} selection object");
     if (r.at("kind") == "default_csys") {
         J state = inspection(false);
         for (auto f : state["features"])
@@ -2975,6 +2978,24 @@ static void execute_operation_body(const J &op) {
         modify_component(op);
     else if (kind == "datum_plane") {
         double angle = op.value("angle", 0.0);
+        // BUG-094 backstops; the Python PlaneOp contract rejects these first.
+        if (op.contains("angle") && fabs(op.value("offset", 0.0)) > 1e-9)
+            throw std::runtime_error(
+                "datum_plane cannot combine an explicit angle with a nonzero offset; the "
+                "angled constraint silently drops the offset. Submit two explicit "
+                "datum_plane operations instead");
+        if (op.contains("angle")) {
+            const J axis_ref = op.value("axis", J());
+            std::string axis_kind = axis_ref.is_object() && axis_ref.contains("kind") &&
+                                            axis_ref["kind"].is_string()
+                                        ? axis_ref["kind"].get<std::string>()
+                                        : std::string();
+            if (axis_kind != "axis" && axis_kind != "datum_axis_feature")
+                throw std::runtime_error(
+                    "An angled datum_plane requires axis {kind:'axis',id:N} or "
+                    "{kind:'datum_axis_feature',label:'...'}; rejected: " +
+                    (axis_kind.empty() ? std::string("(missing kind)") : axis_kind));
+        }
         J axis = op.value("axis", J());
         auto f = offset_plane(op["reference"], op.value("offset", 0.0), wide(op["label"]),
                               op.contains("angle") ? &angle : nullptr,

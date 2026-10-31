@@ -1278,8 +1278,14 @@ async def creo_datum_plane(
     plane axis/normal filter; ID cannot share axis/normal/offset in that reference.
     A filter such as {"kind":"plane","axis":"z"} or {"kind":"plane","normal":[0,0,1],
     "offset":10} matches an existing planar face of the current model with that normal
-    and offset; it does not create a new plane from the normal. Missing kind and
-    unknown labels are rejected before a job is dispatched.
+    and offset; it does not create a new plane from the normal. angle (including 0)
+    selects the explicit angle mode and requires axis; combining angle with a nonzero
+    offset is rejected before a job is dispatched instead of silently dropping the
+    offset - create the angled plane first, then a second datum_plane offset from it.
+    axis accepts {kind:'axis',id:N} from model inspection or
+    {kind:'datum_axis_feature',label:'axis_label'} created earlier in the same model;
+    a plane reference or datum_feature plane label is not a rotation axis. Missing
+    kind and unknown labels are rejected before a job is dispatched.
     """
     op = {"op": "datum_plane", "label": label, "reference": reference, "offset": offset}
     if angle is not None:

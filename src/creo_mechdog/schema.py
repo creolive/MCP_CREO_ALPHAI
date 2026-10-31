@@ -24,6 +24,8 @@ from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
     RevolveAxis,
+    validate_datum_plane_axis,
+    validate_datum_plane_reference_kind,
     validate_planar_reference,
     validate_sketch_plane_frame,
 )
@@ -604,6 +606,23 @@ class PlaneOp(StrictModel):
     offset: float = 0
     angle: float | None = Field(default=None, ge=-360, le=360)
     axis: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def datum_plane_contract(self):
+        # BUG-094: a kindless reference reached the native executor as a JSON
+        # missing-key error, and an angled plane silently dropped a nonzero offset.
+        validate_datum_plane_reference_kind(self.reference, "reference")
+        if self.angle is not None:
+            if self.offset != 0:
+                raise ValueError(
+                    "datum_plane cannot combine angle with a nonzero offset: the angled "
+                    "constraint silently drops the offset. Submit two explicit datum_plane "
+                    "operations - first the angled plane (angle with axis, offset 0), then "
+                    "an offset plane measured from it"
+                )
+            # angle=0 is still the explicit angle mode, so the axis stays required.
+            validate_datum_plane_axis(self.axis, "axis")
+        return self
 
 
 class AxisOp(StrictModel):

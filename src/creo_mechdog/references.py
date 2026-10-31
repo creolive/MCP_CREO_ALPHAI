@@ -125,6 +125,60 @@ def validate_planar_reference(value: dict[str, Any], path: str) -> None:
         raise ValueError(f"{path}.axis must be x, y or z")
 
 
+DATUM_PLANE_REFERENCE_KIND_DESCRIPTION = (
+    "A datum_plane reference requires an explicit {kind:...} plane selection: "
+    "{kind:'datum_plane',id:N}, an axis/normal filter such as "
+    "{kind:'datum_plane',axis:'z'}, {kind:'plane',id:N}, {kind:'surface',id:N} or "
+    "{kind:'datum_feature',label:'plane_label'}. A dictionary without a string kind "
+    "is rejected before a job is dispatched instead of failing inside the executor "
+    "as a missing JSON key."
+)
+
+
+def validate_datum_plane_reference_kind(value: Any, path: str) -> None:
+    """Reject a kindless datum_plane reference before dispatch (BUG-094).
+
+    The generic reference walk only inspects dictionaries that carry a kind, so a
+    kindless reference used to reach the native executor and surface as a JSON
+    missing-key error.
+    """
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get("kind"), str)
+        or not value["kind"]
+    ):
+        raise ValueError(f"{path}: " + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION)
+
+
+DATUM_PLANE_AXIS_DESCRIPTION = (
+    "A datum_plane angle axis requires {kind:'axis',id:N} from model inspection or "
+    "{kind:'datum_axis_feature',label:'axis_label'} created earlier in the same "
+    "model. A plane reference such as {kind:'datum_plane',axis:'z'} and a "
+    "datum_feature plane label are not rotation axes; the axis_pattern-only "
+    "datum_feature alias does not apply here."
+)
+
+
+def validate_datum_plane_axis(value: Any, path: str) -> None:
+    """Reject plane-like or malformed datum_plane angle axes before dispatch (BUG-094).
+
+    The native executor resolves datum_feature to a plane surface, so accepting it
+    here would silently angle the plane about a face instead of the intended axis.
+    """
+    error = f"{path}: " + DATUM_PLANE_AXIS_DESCRIPTION
+    if not isinstance(value, dict):
+        raise ValueError(error)
+    kind = value.get("kind")
+    if kind == "axis":
+        if type(value.get("id")) is not int or value["id"] < 0:
+            raise ValueError(error)
+    elif kind == "datum_axis_feature":
+        if not isinstance(value.get("label"), str) or not value["label"]:
+            raise ValueError(error)
+    else:
+        raise ValueError(error)
+
+
 def validate_sketch_plane_frame(value: dict[str, Any], path: str) -> None:
     """Check the dictionary wrapper and numeric frame before native resolution."""
     reference = value.get("reference")
