@@ -400,14 +400,17 @@ class LiveRunner:
         aliases = snapshot.get("aliases") or {}
         assert label in aliases, {"labels": sorted(aliases)}
         feature_id = aliases[label]["feature_id"]
-        planes = [
-            p for p in snapshot["inspection"]["datum_planes"] if p.get("feature_id") == feature_id
-        ]
-        if not planes:
-            # datum_planes entries carry no feature_id in some inspections;
-            # fall back to the alias geometry id.
-            geometry_id = aliases[label].get("geometry_id", aliases[label].get("id"))
-            planes = [p for p in snapshot["inspection"]["datum_planes"] if p["id"] == geometry_id]
+        # datum_planes entries carry the geometry id only; map feature -> geometry
+        # through the inspection feature list the same way native reports it.
+        feature = next(
+            (f for f in snapshot["inspection"]["features"] if f.get("id") == feature_id), None
+        )
+        assert feature is not None, {
+            "feature_id": feature_id,
+            "features": [f.get("id") for f in snapshot["inspection"]["features"]],
+        }
+        geometry_ids = {item["id"] for item in feature.get("geometry_items") or []}
+        planes = [p for p in snapshot["inspection"]["datum_planes"] if p.get("id") in geometry_ids]
         assert len(planes) == 1, planes
         return planes[0]
 
