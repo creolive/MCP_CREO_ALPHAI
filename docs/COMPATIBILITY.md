@@ -168,4 +168,4 @@ FEAT-042无盘prepare/apply、FEAT-043会话枚举及BUG-071预检收尾已实�
 
 无任何可靠读数时：首壁（`sheetmetal_wall`）**明确失败**并保留原始错误语义，未校验板厚不得静默通过；仅 `flange_relief_record` 的信息性字段（`part_thickness_mm`/`width_at_least_thickness`）可降级为 `null`。0.9.0 的首壁板厚硬校验（SMT_THICKNESS 驱动 + 同步后回读比对）不退化；本机 Creo 12.4（两宏均命中）走原 `ProSmtPartThicknessValueGet` 读值路径，行为与 0.9.0 一致。
 
-**Creo 10 编译状态**：0.8.x 在 Creo 10 SDK 上**无法编译**（缺 `ProSmtPartThicknessValueGet` 声明，见上）；N01 离线兼容实现已入开发分支，但**本机无 Creo 10 SDK，Creo 10 定向编译与实机建模均未验收**（见 [BUG-090](work-items/BUG-090.md) 的外部复验输入与实机命令）。本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 下 `bridge.py build` 通过（2026-10-30，1505 项单元、dev_check 通过），不外推为 Creo 10 已通过。Creo 9 状态不变：编译探测已支持，本机无 SDK，实机编译与运行时未验收。
+**Creo 10 编译状态**：0.8.x 在 Creo 10 SDK 上**无法编译**（缺 `ProSmtPartThicknessValueGet` 声明，见上）；N01 离线兼容实现已入开发分支，但**本机无 Creo 10 SDK，Creo 10 定向编译与实机建模均未验收**（见 [BUG-090](work-items/BUG-090.md) 的外部复验输入与实机命令）。本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 下 `bridge.py build` 通过（2026-10-30，1505 项单元、dev_check 通过），不外推为 Creo 10 已通过。2026-10-31（DEV-053/P12）：外部 Creo 10 构建日志及源码身份仍未到位，维持「离线实现已交付；Creo 10 实机编译未验」，两者到位前不做定向编译、不安装假定环境。Creo 9 状态不变：编译探测已支持，本机无 SDK，实机编译与运行时未验收。
