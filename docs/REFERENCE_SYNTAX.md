@@ -31,6 +31,27 @@
 
 前三个 ID 只是格式示例，调用前须从**目标模型本次巡检**选取。显式 `plane`/`datum_plane` ID 与同一引用对象的 `axis`、`normal`、`offset` 互斥，连默认 `axis:"z"` 或 `offset:0` 同现也拒绝；不带 ID 时保留几何筛选模式。`creo_create_sketch.plane` 的字典把上述一个裸引用放在 `reference` 内，可另给 `origin`、`u_axis` 帧字段。支撑面缺失、非平面或不唯一时明确失败，不能回退默认 XY。结果 `operations[]` 的 `surface_id`、`origin`、`normal`、`u_axis`、`v_axis` 来自原生解析；`u_axis` 必须非零且在真实支撑面内有非零投影。无新 Toolkit 连接的离线验证不能替代这些几何数值的实机核验。
 
+## 平面 axis/normal 筛选器（匹配已有面，P05）
+
+不带 ID 的平面引用是**已有面筛选器**，合法形状例如：
+
+```json
+{"kind": "plane", "axis": "z"}
+{"kind": "plane", "normal": [0, 0, 1], "offset": 10}
+```
+
+语义是在**当前模型中**按法向（`axis` 是 `x/y/z` 的简写，`normal` 是任意非零 3D 向量）和偏置匹配一张已有的平面支撑面；候选不唯一或不存在时明确失败。它**不是**"按法向创建新基准面"的输入，服务也没有按法向建面的入口；需要新基准面时用 `creo_datum_plane`（其 `reference` 内部的筛选 offset 与操作自身的 offset 是分开的两个值）。缺 `kind` 的引用、未知标签在入口即拒绝，不透出 JSON 缺键异常。字典 offset 旧摘要（0.9.0 反馈 F4 S6）指的就是该筛选器的 `offset` 字段：它是匹配条件，不是新建偏移距离。
+
+## 钣金展开固定面（fixed_surface，P05）
+
+`sheetmetal_unbend`/`sheetmetal_flat_pattern`/`sheetmetal_bend_back` 的 `fixed_surface` 是一个**裸面引用**（与其他引用同一解析语义），如：
+
+```json
+{"kind": "surface", "id": 11}
+```
+
+它指定展开/折回过程中保持固定的几何；`references` 省略时作用于全部折弯。选中的几何能否真正固定由原生执行器判定，Python 侧不预判。
+
 ## 任意平面 coordinates 标注（FEAT-010 / T04）
 
 `dimensioning="coordinates"` 与 auto 路由的坐标标注不再限于主平面字符串：字典平面（任意有效支撑面）同样创建完整坐标尺寸，编辑路径（`creo_update_sketch_geometry`）不再因非主平面法向拒绝或强制退回 autodim。坐标尺寸在**原生 section 局部坐标**中创建并回读核验；草图 U 轴与 section 轴成任意角度时，输入 u/v 分量按主导 section 轴命名（日志 `COORDINATE_AXES`），不再报 "requires principal section axes"。
@@ -67,6 +88,7 @@
 | surface_fill.sketch | 草图特征标签或特征 ID（字符串或整数），无需 `{kind:...}` 对象 |
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |
 | sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`；参数内部不再加 edge/reference 包装 |
+| sheetmetal_unbend/flat_pattern/bend_back.fixed_surface | 裸面引用，如 `{"kind":"surface","id":N}`，取自当前巡检；`references` 省略时作用全部折弯，能否固定由原生执行判定 |
 | sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放、斜接与边撕裂不支持。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |
 | sheetmetal_flange.end_trim_mm | 可选正数（`>0`，上限 100000，布尔拒绝），模型单位；省略时元素树与旧行为逐字一致。**Creo 把它读作「距链端各内缩 setback」还是「自截面起算的壁长」尚未实机确认**，属诊断参数：先在自由壁上用实测体积分类再依赖修剪几何（开发分支未发布） |
 | feature_state.action / targets | `action` ∈ `delete`/`suppress`/`resume`；`targets` 是特征标签或非负特征 ID 的数组，同一批目标必须互不相同。仅用于零件/钣金模型；装配组件走 `creo_remove_component` |

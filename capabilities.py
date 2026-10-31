@@ -466,7 +466,7 @@ def families() -> dict:
             "enabled": True,
             "scope": "first flat wall, attached flange, unbend, bend-back and flat pattern",
             "native_test": "40 x 30 x 1 wall, 90 degree flange with R2/R3 bend, followed by unfolding and refolding",
-            "limits": "first wall uses thin extrusion then native conversion; bend relief is a parameter on creo_sheetmetal_flange with native echo verification (offline verified, live unverified, default none); a flange whose attach-edge ends abut existing bends fails to regenerate (live verified 2026-10-30: a free full edge attaches, an edge shortened at even one end by a previous bend fails and rolls back), so four walls are not supported until corner relief exists; forms, hems and jogs are not high-level tools",
+            "limits": "sheetmetal modeling starts from creo_new_sheetmetal; wait for its terminal state before wall/flange operations, because execute_plan without model_id creates a plain part by default and never converts an existing solid part into sheetmetal implicitly; first wall uses thin extrusion then native conversion; bend relief is a parameter on creo_sheetmetal_flange with native echo verification (offline verified, live unverified, default none); a flange whose attach-edge ends abut existing bends fails to regenerate (live verified 2026-10-30: a free full edge attaches, an edge shortened at even one end by a previous bend fails and rolls back), so four walls are not supported until corner relief exists; forms, hems and jogs are not high-level tools",
         },
         "assembly": {
             "enabled": True,

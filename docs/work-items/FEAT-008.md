@@ -386,3 +386,15 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 - **真多线仍未验**：外部手工多中心线夹具本轮仍未提供，`section_centerline_count>1` 时 `id` 保持 null 的语义仍属未测。
 
 本卡「revolve 实际选轴回显」子项的三条实机用例本轮全部按预期通过；其余范围（首批底板 holes、对称深度与编辑、平面引用构造、工具描述与 README 收口）不变，整卡保持开放。
+
+### 2026-10-31 DEV-053 P05：工具说明、枚举和异步 revision 对齐（离线）
+
+范围见 [总计划 P05 任务卡](../superpowers/plans/2026-10-31-post0100-master-plan.md)，分支 `codex/dev053-post0100`。实机 MCP 场景（受理→终态→inspect 三 revision 实测）待 P01 准入后由编排排期；本轮为离线文档、schema 与既有作业记录核对。
+
+- **枚举统一**：`server.py` capabilities 概览原 `extrude_depths=["blind","through_all_cut","symmetric"]` 与 `depth_type` 契约不一致（反馈 F3 问题6），改为三个分开的键：`extrude_depth_types=["blind","through_all"]`（through_all 仅 cut，由 `ExtrudeOp.through_cut` 校验）、`extrude_directions=["positive","negative","symmetric"]`、`extrude_through_all_modes=["cut"]`；不再把 through_all_cut/symmetric 填成深度枚举。
+- **说明补例**：`creo_datum_plane`/`creo_create_sketch` 补 normal 筛选器示例并明确"匹配当前模型已有平面支撑面、不按法向创建新面"（F3 问题2）；`creo_round`/`creo_chamfer` 参数说明补面配对完整例子（两张已有面共享待倒圆边）；`creo_revolve`/`creo_create_sketch` 保留并锁定 `datum_axis_feature` 标签与几何 axis ID 两类例子；`creo_execute_plan` 明确无 `model_id` 时按 `model_type` 新建（默认 part）、钣金须先 `creo_new_sheetmetal` 并等终态、不隐式转换已有实体（F5 §3.2）；`creo_sheetmetal_unbend`/`flat_pattern`/`bend_back` 补 `fixed_surface` 裸面引用示例；`creo_new_sheetmetal` 与 capabilities `sheetmetal` 家族补同一前置说明。未新增任何未经证明的输入支持；独立实体增料未描述成钣金 new_body 已支持。
+- **revision 离线核对（F5 §3.3）**：`build/p05_revision_audit.py` 扫描本机 4035 份 `jobs/`/`models/` 记录——1386 个新建作业中 1286 个成功终态 revision 均 ≥1、100 个失败作业 revision 保持 0（失败不推进）；每个模型登记 revision 与其全部终态作业的最大 revision 一致（2649 个后续修改作业纳入链）；唯一例外是 2026-10-21 一个 `unknown_outcome` 保护现场（BUG-091 纪律范围，非终态错误，不作缺陷登记）。受理响应 revision=0 由 `generic_bridge.py` 新建模型记录（revision 0）证实。结论："受理 revision 0 / 随即 current=1"是未等终态的误读，**疑似缺陷调查子项关闭**，不改生产代码、不登记新 BUG；使用说明已补入 README 第 4 步。
+- **测试**：扩充 `tests/unit/test_t01_capability_contracts.py`（新增 6 项：capabilities 三键分开表达、工具 schema 与 `ExtrudeOp` 模型枚举逐字段对照、独立工具载荷经 `validate_operations` 校验通过、省略默认值/非法枚举拒绝、 renewed 契约的描述断言）与 `tests/unit/test_capability_pages.py`（新枚举键 compact/full 分页往返一致），避免只搜源码字符串证明正确。
+- **文档**：README 补 revision 异步使用说明、钣金前置与 fixed_surface、装配 Euler 逐轴约定、`native_bundle` 状态链接（[FEAT-031](FEAT-031.md)）、round/chamfer 面配对示例；[REFERENCE_SYNTAX](../REFERENCE_SYNTAX.md) 新增"平面 axis/normal 筛选器（匹配已有面）"与"钣金展开固定面"两节，并链接字典 offset 旧摘要（F4 S6）到当前真实契约；欧拉角按 [ASSEMBLY_REBUILD](../ASSEMBLY_REBUILD.md) 约定链接。
+- **验证**：`python -m unittest tests.unit.test_t01_capability_contracts tests.unit.test_capability_pages` 18/18 通过（本机 Windows / Python 3.12，未连接 Toolkit、未构建原生）。未测：实机 MCP 受理→终态→inspect 三 revision 场景、`creo_capabilities` 实机分页；统一 dev_check 归 P14。
+- 本次保留他人 dirty（`seeds.py`、`docs/validation/RELEASE-0.8.5.md`、`session_activity.json` 等）不纳入提交；未触碰 P04 窗口的打包/种子文件与 native/、preview、打包系列。

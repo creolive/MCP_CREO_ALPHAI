@@ -119,6 +119,30 @@ class CapabilityPageRules(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self._response(detail="full", section="tools", limit=limit)
 
+    def test_extrude_enum_keys_flow_through_compact_and_full(self):
+        """P05/FEAT-008: renamed extrude enum keys survive compact/full pagination."""
+        payload = {
+            **PAYLOAD,
+            "extrude_depth_types": ["blind", "through_all"],
+            "extrude_directions": ["positive", "negative", "symmetric"],
+            "extrude_through_all_modes": ["cut"],
+        }
+        compact = pages.capabilities_response(lambda: dict(payload))
+        self.assertEqual(compact["extrude_depth_types"], ["blind", "through_all"])
+        overview = {}
+        cursor = None
+        while True:
+            page = pages.capabilities_response(
+                lambda: dict(payload), detail="full", section="overview", limit=2,
+                cursor=cursor,
+            )
+            overview.update({entry["key"]: entry["value"] for entry in page["entries"]})
+            cursor = page.get("next_cursor")
+            if cursor is None:
+                break
+        for key in ("extrude_depth_types", "extrude_directions", "extrude_through_all_modes"):
+            self.assertEqual(compact[key], overview[key], key)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -611,7 +611,9 @@ def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
         "operations": [op for op in REGISTERED_OPERATIONS if op not in UNAVAILABLE_OPERATIONS],
         "registered_operations": list(REGISTERED_OPERATIONS),
         "extrude_modes": ["add", "cut", "surface"],
-        "extrude_depths": ["blind", "through_all_cut", "symmetric"],
+        "extrude_depth_types": ["blind", "through_all"],
+        "extrude_directions": ["positive", "negative", "symmetric"],
+        "extrude_through_all_modes": ["cut"],
         "revolve_modes": ["add", "cut", "surface"],
         "thin_features": True,
         "frames": {
@@ -738,7 +740,13 @@ async def creo_execute_plan(
     assertions: dict[str, Any] | None = None,
     model_type: Literal["part", "sheetmetal", "assembly", "drawing"] = "part",
 ) -> dict[str, Any]:
-    """Execute an ordered general feature plan. Omit model_id to create a new part.
+    """Execute an ordered general feature plan. Omit model_id to create a new model of
+    model_type ("part" by default).
+
+    Sheetmetal work must first create the model with creo_new_sheetmetal and wait for its
+    terminal job state, then submit wall/flange operations with model_id and
+    expected_revision; execute_plan never converts an existing solid part into sheetmetal
+    implicitly.
 
     Sketch/extrude/revolve and later features reference earlier feature labels.
     Existing models require expected_revision. Stops at first error; existing models
@@ -1031,6 +1039,9 @@ async def creo_create_sketch(
     Coordinates are in the chosen plane's (u,v) frame. Arc angles are degrees CCW.
     Rectangle/polyline expand to named lines e.g. box_0, box_1. Explicit dimensions
     have names and entity references; automatic dimensioning fills remaining freedoms.
+    For a dictionary plane, a filter such as {"reference":{"kind":"plane","normal":[0,0,1],
+    "offset":10}} matches an existing planar face of the current model with that normal
+    and offset; it does not create a new plane from the normal.
     For revolve include exactly one construction centerline, or supply an explicit external
     axis to creo_revolve: {kind:'datum_axis_feature',label:'axis_label'} or {kind:'axis',id:N}.
     auto uses complete coordinate dimensions for large/complex supported profiles on
@@ -1071,6 +1082,10 @@ async def creo_extrude(
     thin: float | None = None,
 ) -> dict[str, Any]:
     """Create native extrusion from a sketch label/ID. Supports protrusion, pocket, through cut, symmetric, surface and thin modes.
+    depth_type is "blind" (depth in mm, any mode) or "through_all" (cut mode only; depth is ignored);
+    direction is "positive", "negative" or "symmetric". These enums are the same as the plan
+    operation {"op":"extrude",...}: this tool submits exactly that operation, so the standalone
+    tool and the execute_plan entry accept the same values.
     A cut that removes no material (disjoint sketch, wrong direction or already-removed region) fails and rolls back;
     a successful cut reports material_removed_mm3 in its operation details."""
     op = {
@@ -1177,7 +1192,13 @@ async def creo_round(
     references: Annotated[
         list[dict[str, Any]],
         Field(
-            description="Set list: [{edge:{kind:'edge',id:N}}] or [{surfaces:[{kind:'surface',id:A},{kind:'surface',id:B}]}]. Bare edge objects are not sets."
+            description=(
+                "Set list: [{'edge':{'kind':'edge','id':N}}] or a face pair "
+                "[{'surfaces':[{'kind':'surface','id':A},{'kind':'surface','id':B}]}] "
+                "where A/B are two existing faces of the current model that share the "
+                "edge to round (example: [{'surfaces':[{'kind':'surface','id':11},"
+                "{'kind':'surface','id':13}]}]). Bare edge objects are not sets."
+            )
         ),
     ],
 ) -> dict[str, Any]:
@@ -1211,7 +1232,13 @@ async def creo_chamfer(
     references: Annotated[
         list[dict[str, Any]],
         Field(
-            description="Set list: [{edge:{kind:'edge',id:N}}] or [{surfaces:[{kind:'surface',id:A},{kind:'surface',id:B}]}]. Bare edge objects are not sets."
+            description=(
+                "Set list: [{'edge':{'kind':'edge','id':N}}] or a face pair "
+                "[{'surfaces':[{'kind':'surface','id':A},{'kind':'surface','id':B}]}] "
+                "where A/B are two existing faces of the current model that share the "
+                "edge to chamfer (example: [{'surfaces':[{'kind':'surface','id':11},"
+                "{'kind':'surface','id':13}]}]). Bare edge objects are not sets."
+            )
         ),
     ],
 ) -> dict[str, Any]:
@@ -1249,6 +1276,10 @@ async def creo_datum_plane(
     """Create an offset/angled datum plane. reference accepts datum_plane geometry ID
     from inspect_model(datum_planes), planar surface ID, datum_feature label, or a
     plane axis/normal filter; ID cannot share axis/normal/offset in that reference.
+    A filter such as {"kind":"plane","axis":"z"} or {"kind":"plane","normal":[0,0,1],
+    "offset":10} matches an existing planar face of the current model with that normal
+    and offset; it does not create a new plane from the normal. Missing kind and
+    unknown labels are rejected before a job is dispatched.
     """
     op = {"op": "datum_plane", "label": label, "reference": reference, "offset": offset}
     if angle is not None:
@@ -1492,7 +1523,11 @@ async def creo_draft(
 
 @mcp.tool(annotations=CREATE)
 async def creo_new_sheetmetal(model_name: str | None = None) -> dict[str, Any]:
-    """Prepare a metric part for sheetmetal. The first wall creates its native sheetmetal body by conversion."""
+    """Prepare a metric part for sheetmetal. The first wall creates its native sheetmetal body by conversion.
+
+    Wait for this job's terminal state before submitting wall/flange operations.
+    creo_execute_plan without model_id creates a plain part by default and never converts
+    an existing solid part into sheetmetal implicitly."""
     return await invoke(general.submit, [], None, model_name, model_type="sheetmetal")
 
 
@@ -1608,7 +1643,12 @@ async def creo_sheetmetal_unbend(
     fixed_surface: dict[str, Any],
     references: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Unbend a native sheetmetal part about a fixed surface. Omit references to unbend all bends."""
+    """Unbend a native sheetmetal part about a fixed surface. Omit references to unbend all bends.
+
+    fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
+    model inspection: the geometry kept fixed while the selected bends unfold. references
+    selects individual bends to unbend; omitting them targets all bends. Whether the
+    chosen geometry can actually stay fixed is decided by the native executor."""
     return await invoke(
         general.submit,
         [
@@ -1629,7 +1669,10 @@ async def creo_sheetmetal_unbend(
 async def creo_sheetmetal_flat_pattern(
     model_id: str, expected_revision: int, label: str, fixed_surface: dict[str, Any]
 ) -> dict[str, Any]:
-    """Create a native flat-pattern feature about a fixed sheetmetal surface."""
+    """Create a native flat-pattern feature about a fixed sheetmetal surface.
+
+    fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
+    model inspection; the native executor decides whether that geometry can stay fixed."""
     return await invoke(
         general.submit,
         [
@@ -1654,7 +1697,10 @@ async def creo_sheetmetal_bend_back(
     fixed_surface: dict[str, Any],
     references: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Refold previously unbent sheetmetal about a fixed surface. Omit references to bend back all bends."""
+    """Refold previously unbent sheetmetal about a fixed surface. Omit references to bend back all bends.
+
+    fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
+    model inspection; the native executor decides whether that geometry can stay fixed."""
     return await invoke(
         general.submit,
         [

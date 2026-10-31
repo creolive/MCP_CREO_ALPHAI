@@ -104,3 +104,113 @@ class LocalReleaseStatusTests(unittest.TestCase):
                     self.assertEqual(payload["release_status"], expected)
                     self.assertEqual(payload["update"], remote)
                     self.assertFalse(payload["complete_creo_coverage"])
+
+
+def _enum_consts(prop: dict) -> set:
+    """Collect literal values from a tool/op schema property (enum or anyOf-const)."""
+    values = prop.get("enum")
+    if values is not None:
+        return set(values)
+    return {item["const"] for item in prop.get("anyOf", []) if "const" in item}
+
+
+class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):
+    """P05/FEAT-008: extrude depth_type/direction enums agree across the registered
+    tool schema, the shared plan-operation model and the capabilities payload."""
+
+    async def asyncSetUp(self):
+        capability_pages.reset_snapshot()
+
+    async def test_capabilities_express_depth_and_direction_separately(self):
+        payload = server._capabilities_payload([])
+        self.assertEqual(payload["extrude_depth_types"], ["blind", "through_all"])
+        self.assertEqual(
+            payload["extrude_directions"], ["positive", "negative", "symmetric"]
+        )
+        self.assertEqual(payload["extrude_through_all_modes"], ["cut"])
+        self.assertNotIn("extrude_depths", payload)
+        # through_all_cut/symmetric must not masquerade as depth enum values
+        self.assertNotIn("through_all_cut", payload["extrude_depth_types"])
+        self.assertNotIn("symmetric", payload["extrude_depth_types"])
+
+    async def test_tool_schema_enums_match_the_shared_operation_model(self):
+        from creo_mechdog.schema import ExtrudeOp
+
+        tools = {tool.name: tool for tool in await server.mcp.list_tools()}
+        tool_props = tools["creo_extrude"].input_schema["properties"]
+        model_props = ExtrudeOp.model_json_schema()["properties"]
+        for field in ("mode", "direction", "depth_type"):
+            with self.subTest(field=field):
+                self.assertEqual(
+                    _enum_consts(tool_props[field]), _enum_consts(model_props[field])
+                )
+
+    async def test_standalone_tool_payload_is_a_valid_plan_operation(self):
+        from creo_mechdog.schema import validate_operations
+
+        # Exactly the dict the creo_extrude tool submits for a through cut.
+        op = {
+            "op": "extrude",
+            "label": "enum_probe",
+            "sketch": "sk",
+            "depth": 5,
+            "mode": "cut",
+            "direction": "negative",
+            "depth_type": "through_all",
+            "new_body": False,
+        }
+        validated = validate_operations([op])
+        self.assertEqual(validated[0]["depth_type"], "through_all")
+        self.assertEqual(validated[0]["direction"], "negative")
+
+    async def test_omitted_defaults_and_illegal_enums(self):
+        from creo_mechdog.schema import validate_operations
+
+        base = {"op": "extrude", "label": "enum_probe", "sketch": "sk"}
+        defaulted = validate_operations([dict(base)])
+        self.assertEqual(defaulted[0]["depth_type"], "blind")
+        self.assertEqual(defaulted[0]["direction"], "positive")
+        # through_all is a cut-only depth type; add mode is rejected
+        with self.assertRaises(ValueError):
+            validate_operations([{**base, "depth_type": "through_all", "mode": "add"}])
+        for illegal_depth in ("through_all_cut", "symmetric"):
+            with self.assertRaises(ValueError):
+                validate_operations([{**base, "depth_type": illegal_depth}])
+        for illegal_direction in ("blind", "through_all_cut"):
+            with self.assertRaises(ValueError):
+                validate_operations([{**base, "direction": illegal_direction}])
+
+    async def test_tool_descriptions_state_the_renewed_contracts(self):
+        tools = {tool.name: tool for tool in await server.mcp.list_tools()}
+        extrude = tools["creo_extrude"].description
+        self.assertIn('depth_type is "blind"', extrude)
+        self.assertIn('"through_all" (cut mode only', extrude)
+        plan = tools["creo_execute_plan"].description
+        self.assertIn("Omit model_id to create a new model", plan)
+        self.assertIn("creo_new_sheetmetal", plan)
+        self.assertIn("never converts", plan)
+        # plane normal filters match existing faces; they do not create planes
+        for name in ("creo_datum_plane", "creo_create_sketch"):
+            with self.subTest(tool=name):
+                self.assertIn("matches an existing planar face", tools[name].description)
+        # axis selection examples keep both supported kinds
+        revolve = tools["creo_revolve"].description
+        self.assertIn("{kind:'datum_axis_feature',", revolve)
+        self.assertIn("{kind:'axis',id:N}", revolve)
+        # round/chamfer face-pair examples name two existing faces
+        for name in ("creo_round", "creo_chamfer"):
+            with self.subTest(tool=name):
+                references = tools[name].input_schema["properties"]["references"]
+                self.assertIn("'surfaces':[{'kind':'surface','id':11}", references["description"])
+                self.assertIn("existing faces", references["description"])
+        # sheetmetal unbend family documents the bare fixed_surface reference
+        for name in (
+            "creo_sheetmetal_unbend",
+            "creo_sheetmetal_flat_pattern",
+            "creo_sheetmetal_bend_back",
+        ):
+            with self.subTest(tool=name):
+                self.assertIn('{"kind":"surface","id":N}', tools[name].description)
+        new_sheetmetal = tools["creo_new_sheetmetal"].description
+        self.assertIn("terminal state", new_sheetmetal)
+        self.assertIn("never converts", new_sheetmetal)
