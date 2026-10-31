@@ -1,4 +1,4 @@
-# MCP_CREO_MechDog 0.10.0
+# MCP_CREO_MechDog 0.10.1
 
 开发维护从 [开发入口](docs/DEVELOPMENT.md) 和 [统一功能台账](docs/BACKLOG.md) 开始。每项工作先定义验收；语言与单元检查、Creo 实机验收分别记录。项目采用渐进布局整理，当前支持环境见 [兼容矩阵](docs/COMPATIBILITY.md)。
 
@@ -6,7 +6,7 @@
 
 当前注册 **94 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
-当前正式版 **0.10.0**：`creo_round` / `creo_chamfer` / `creo_draft` 结果新增逐操作体积差（`volume_before_mm3`/`volume_after_mm3`/`material_delta_mm3`/`material_measurement`）与 `draft_geometry`/`reference_application` 回报；草图结果发布 `entity_ids`，`revolve_axis` 回显可与所画中心线对账；折边附着边端部邻接既有折弯时创建前拒绝（`failure_reason=adjacent_bend_ends`，四壁仍不支持）；盲孔 `depth` 改为钻尖（tip）口径——旧版同输入建出的 custom 盲孔更深（到肩 + 钻尖超出），升级后重放同请求结果不再相同，详见[版本说明](docs/RELEASE_NOTES_0.10.0.md)。公开工具仍为 **94 个**。本机 Creo 12.4.0.0 实机：圆角/倒角/拔模七夹具、沉孔/沉头与盲孔六例、组件身份、中心线计数、邻接拒绝边界与预览图像复核均通过；Creo 9/10 未验，WorkBuddy 未执行。升级请使用 0.10.0 种子包，并阅读[0.10.0 版本说明](docs/RELEASE_NOTES_0.10.0.md)及[发布记录](docs/validation/RELEASE-0.10.0.md)。0.8.5 及更早的折边方向、钣金 add 边界与历史证据见 [0.8.5 版本说明](docs/RELEASE_NOTES_0.8.5.md)及[发布记录](docs/validation/RELEASE-0.8.5.md)。
+当前正式版 **0.10.1**（PATCH，[DEV-053](docs/work-items/DEV-053.md) 0.9.0 反馈对账批）：基准面非法参数不再静默丢参——`angle` 携带非零 `offset`、缺 `kind`、非法 angle 轴类型均在入队前明确拒绝（原生兜底），`angle=0` 属显式角度模式；`creo_capabilities` 概览的深度/方向枚举拆分为 `extrude_depth_types`/`extrude_directions`/`extrude_through_all_modes` 三键并移除旧 `extrude_depths` 键（旧键内容与 `depth_type` 契约不符）；stdio 服务在客户端消失后有界退出（宽限 1.5 s、兜底 2 s），不杀已受理任务；种子安装与源码打包新增受信摘要双重闸门（`tools/package.py` 必填 `--seed-archive`）。本机 Creo 12.4.0.0 实机（run `post0100_20261031T234309_rel0101`）：五非法编辑反例（4 例 schema 拒绝无作业、1 例原生失败回滚，拒绝后同源体积与 revision 逐位不变）、恢复编辑、基准面 ±54°/偏移/独立工具与 plan 双入口正反例、圆角/倒角/拔模九例（含批中途失败回滚）、装配回放与 T12 官方示例回归全部通过；公开工具仍为 **94 个**。升级请使用 0.10.1 种子包，并阅读[0.10.1 版本说明](docs/RELEASE_NOTES_0.10.1.md)。上一版 **0.10.0**：`creo_round` / `creo_chamfer` / `creo_draft` 结果新增逐操作体积差（`volume_before_mm3`/`volume_after_mm3`/`material_delta_mm3`/`material_measurement`）与 `draft_geometry`/`reference_application` 回报；草图结果发布 `entity_ids`，`revolve_axis` 回显可与所画中心线对账；折边附着边端部邻接既有折弯时创建前拒绝（`failure_reason=adjacent_bend_ends`，四壁仍不支持）；盲孔 `depth` 改为钻尖（tip）口径——旧版同输入建出的 custom 盲孔更深（到肩 + 钻尖超出），升级后重放同请求结果不再相同，详见[版本说明](docs/RELEASE_NOTES_0.10.0.md)。公开工具仍为 **94 个**。本机 Creo 12.4.0.0 实机：圆角/倒角/拔模七夹具、沉孔/沉头与盲孔六例、组件身份、中心线计数、邻接拒绝边界与预览图像复核均通过；Creo 9/10 未验，WorkBuddy 未执行。升级请使用 0.10.0 种子包，并阅读[0.10.0 版本说明](docs/RELEASE_NOTES_0.10.0.md)及[发布记录](docs/validation/RELEASE-0.10.0.md)。0.8.5 及更早的折边方向、钣金 add 边界与历史证据见 [0.8.5 版本说明](docs/RELEASE_NOTES_0.8.5.md)及[发布记录](docs/validation/RELEASE-0.8.5.md)。
 
 服务后台检测已有会话、协调启动并检查建模就绪；成功建模及保存重载才证明相应操作在该环境可用。启动配置和排错见[安装说明](docs/INSTALL.md)。
 
@@ -105,6 +105,8 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 特征保存为 Creo 可编辑的草图、拉伸、旋转、孔、圆角等，保留尺寸及依赖。多段线和矩形会展开为原生直线，不能将 `polyline` 名字当作单个尺寸引用；例如 `box_0` 是矩形第一条边。
 
 0.8.0 接口增量：圆弧 `dir` 只接受严格整数，零扫角和整圆输入拒绝；弧结果回显原生几何而非按输入推算。钣金首壁不再静默改写不一致参数，而是在建模前拒绝；`relief` 省略时为 `none`。0.8.4 修复首壁准入将草图坐标系误计为几何的阻断，本机 T03 五组已通过。0.8.5 折边默认方向改为从选中面向外，并明确拒绝钣金体并入式实体 add，升级须检查 `flip` 和拒绝码。装配组件可使用业务标签定位，回转特征返回实际原生轴查询结果；未知几何明确保持未知。多操作请求、`feature_state`、独立 `draft` 及失败后 `rolled_back` 的前置重建边界以各工具实际返回为准。其余原生行为按各项实机证据与未测范围判断。
+
+**0.10.1 接口变化：**`creo_capabilities` 概览深度/方向枚举三键化（`extrude_depths` 键移除）；基准面 `angle`+非零 `offset`、缺 `kind`、非法 angle 轴类型入队前拒绝（0.9.0 前同类输入会静默丢 `offset` 后“成功”）。逐项状态见 [0.10.1 版本说明](docs/RELEASE_NOTES_0.10.1.md)与[统一台账](docs/BACKLOG.md)。
 
 **0.9.0—0.10.0 接口增量：**`creo_sheetmetal_flange` 可选 `end_trim_mm`（正数、两侧链端缩短，诊断参数，两轮实机实测 `trim_ignored`、语义未定）；`revolve_axis` 的 `section_centerline_count` 改为只计用户中心线并发布草图 `entity_ids`（0.10.0 实机验证）；`creo_list_components` 的组件身份投影补保存重载与删除重插回归锁定（0.10.0 实机验证）；`round`/`chamfer`/`draft` 结果新增体积差与 `draft_geometry`/`reference_application` 回报（0.10.0）；折边邻接折弯端 `adjacent_bend_ends` 创建前拒绝（0.10.0）。逐项状态见 [0.10.0 版本说明](docs/RELEASE_NOTES_0.10.0.md)与[统一台账](docs/BACKLOG.md)。
 
