@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-PREVIEW_STATUSES = ("written", "failed", "not_attempted")
+PREVIEW_STATUSES = ("written", "failed", "not_attempted", "skipped_no_geometry")
 PREVIEW_CODE_KEYS = (
     "display",
     "window_get",
@@ -110,8 +110,12 @@ def normalize_preview(
         return None
     folder = Path(directory) if directory is not None else None
     path = _candidate_path(native, result.get("preview_file"), folder)
-    codes = _codes(native, legacy_code)
-    verified, size, stat_error = _file_state(path)
+    reported = native.get("status") if isinstance(native, dict) else None
+    skipped = reported == "skipped_no_geometry"
+    # The legacy raster field is a placeholder on a skipped native capture.
+    # No Toolkit screenshot call or filesystem confirmation occurred.
+    codes = _codes(native, None if skipped else legacy_code)
+    verified, size, stat_error = (False, None, None) if skipped else _file_state(path)
     file_bytes = native.get("bytes") if isinstance(native, dict) else None
     if not isinstance(file_bytes, int):
         file_bytes = size
@@ -122,7 +126,6 @@ def normalize_preview(
         else None
     )
 
-    reported = native.get("status") if isinstance(native, dict) else None
     failed_step = native.get("failed_step") if isinstance(native, dict) else None
     failed_code = native.get("failed_code") if isinstance(native, dict) else None
     if reported in PREVIEW_STATUSES:

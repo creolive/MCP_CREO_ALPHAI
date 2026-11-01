@@ -168,6 +168,32 @@ class NativeSharedStep(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, shared)
 
+    def test_empty_geometry_probe_requires_a_complete_feature_scan(self):
+        shared = native_source("preview.h")
+        probe = region(
+            shared, "static ProError preview_geometry_feature", "static std::string preview_utf8"
+        )
+        for token in (
+            "ProSolidFeatVisit",
+            "ProFeatureTypeGet",
+            "ProFeatureStatusGet",
+            "PRO_FEAT_CSYS",
+            "PRO_FEAT_DATUM",
+            "PRO_FEAT_DATUM_AXIS",
+            "PRO_FEAT_DATUM_POINT",
+            "PRO_FEAT_SUPPRESSED",
+            "PRO_MDL_PART",
+            "PRO_TK_E_NOT_FOUND",
+            "!probe.unknown &&",
+            "!probe.renderable",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, probe)
+        self.assertNotIn("volume", probe.lower())
+        self.assertLess(
+            shared.index("preview_has_no_geometry(model)"), shared.index("ProMdlDisplay(model)")
+        )
+
 
 class PreviewProjection(unittest.TestCase):
     def setUp(self):
@@ -221,6 +247,25 @@ class PreviewProjection(unittest.TestCase):
         self.assertIsNone(result["preview_file"])
         self.assertEqual(result["preview_code"], -5)
         self.assertEqual(result["preview"]["failed_step"], "raster")
+
+    def test_skipped_preview_does_not_probe_a_stale_file_or_claim_raster(self):
+        native = self.native_block("skipped_no_geometry", -1)
+        native.update(bytes=-1, failed_step=None, failed_code=None, file_check=None)
+        native["codes"] = {key: None for key in native["codes"]}
+        result = {"success": True, "preview_code": -1, "preview": native}
+        with patch.object(Path, "stat", side_effect=PermissionError(13, "Access denied")) as stat:
+            apply_preview_projection(result, directory=self.root)
+        stat.assert_not_called()
+        self.assertEqual(result["preview_status"], "skipped_no_geometry")
+        self.assertEqual(result["preview"]["status"], "skipped_no_geometry")
+        self.assertEqual(result["preview"]["codes"]["raster"], None)
+        self.assertIsNone(result["preview_code"])
+        self.assertIsNone(result["preview_file"])
+        self.assertFalse(result["preview"]["file_verified"])
+        self.assertIsNone(result["preview"]["verification_error"])
+        compact = bridge.compact_job({"status": "succeeded", "kind": "generic", "result": result})
+        self.assertEqual(compact["result"]["preview_status"], "skipped_no_geometry")
+        self.assertEqual(compact["result"]["preview"]["status"], "skipped_no_geometry")
 
     def test_claimed_written_image_must_exist_and_be_non_empty(self):
         self.image.unlink()
@@ -684,6 +729,23 @@ class DriverCoverage(unittest.TestCase):
         # file apart from a failed raster call.
         self.assertEqual(record["file_check"]["error_code"], 2)
         self.assertEqual(record["verification_error"], "FileNotFoundError")
+
+    def test_the_empty_part_skip_is_recorded_without_an_image(self):
+        preview = self.failed_preview()
+        preview.update(
+            status="skipped_no_geometry",
+            failed_step=None,
+            failed_code=None,
+            file_check=None,
+            verification_error=None,
+        )
+        preview["codes"] = {key: None for key in preview["codes"]}
+        record = self.acceptance().check_preview(
+            "empty_part", self.terminal(preview), expect_written=False
+        )
+        self.assertEqual(record["status"], "skipped_no_geometry")
+        self.assertIsNone(record["image"])
+        self.assertIsNone(record["failed_step"])
 
     def test_a_missing_image_is_never_reported_as_a_capture(self):
         # The same failed block must still be refused by the strict path: an
