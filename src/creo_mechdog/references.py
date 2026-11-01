@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator, WithJsonSchema
@@ -128,22 +129,80 @@ def validate_planar_reference(value: dict[str, Any], path: str) -> None:
 DATUM_PLANE_REFERENCE_KIND_DESCRIPTION = (
     "A datum_plane reference requires an explicit {kind:...} plane selection: "
     "{kind:'datum_plane',id:N}, an axis/normal filter such as "
-    "{kind:'datum_plane',axis:'z'}, {kind:'plane',id:N}, {kind:'surface',id:N} or "
-    "{kind:'datum_feature',label:'plane_label'}. A dictionary without a string kind "
-    "is rejected before a job is dispatched instead of failing inside the executor "
-    "as a missing JSON key."
+    "{kind:'datum_plane',axis:'z'}, {kind:'plane',id:N}, {kind:'surface',id:N}, "
+    "{kind:'datum_feature',label:'plane_label'} or the three-point form "
+    "{kind:'through_points',points:[label_a,label_b,label_c]}. A dictionary "
+    "without a string kind is rejected before a job is dispatched instead of "
+    "failing inside the executor as a missing JSON key. The executor-internal "
+    "{kind:'datum_point_feature',label:...} selection and the external "
+    "{thru_points:[...]} spelling are not datum_plane references and are "
+    "rejected before a job is dispatched; convert them to the through_points form."
+)
+
+THROUGH_POINTS_DESCRIPTION = (
+    "The three-point form {kind:'through_points',points:[label_a,label_b,label_c]} "
+    "takes exactly three distinct datum_points feature labels; each label must be "
+    "created by a datum_points operation earlier in the same plan and define a "
+    "single point. It cannot be combined with angle, axis or a nonzero offset."
+)
+
+# Mirrors schema.Label; kept local so this module stays importable by schema
+# without a cycle (the same pattern as feature_state/assembly_replay).
+_LABEL_PATTERN = r"^[a-z][a-z0-9_]{0,27}$"
+
+DATUM_PLANE_REFERENCE_KINDS = frozenset(
+    {"datum_plane", "plane", "surface", "datum_feature", "through_points"}
 )
 
 
+def validate_datum_plane_through_points(value: Any, path: str) -> None:
+    """Validate the three-point reference shape before dispatch (FEAT-053).
+
+    Three distinct datum_points feature labels only: no four-point fitting and
+    no guessing a first point out of a multi-point feature. Whether each label
+    really is an earlier single-point datum_points producer is checked at plan
+    level in ``schema.validate_operations``.
+    """
+    error = f"{path}.points: " + THROUGH_POINTS_DESCRIPTION
+    points = value.get("points")
+    if not isinstance(points, list) or len(points) != 3:
+        raise ValueError(error)
+    for index, label in enumerate(points):
+        if not isinstance(label, str) or not re.fullmatch(_LABEL_PATTERN, label):
+            raise ValueError(
+                f"{path}.points[{index}] must be a feature label string (lowercase start, "
+                "[a-z0-9_], at most 28 characters); " + THROUGH_POINTS_DESCRIPTION
+            )
+    if len(set(points)) != 3:
+        raise ValueError(
+            f"{path}.points: three distinct labels are required; " + THROUGH_POINTS_DESCRIPTION
+        )
+
+
 def validate_datum_plane_reference_kind(value: Any, path: str) -> None:
-    """Reject a kindless datum_plane reference before dispatch (BUG-094).
+    """Reject kindless or unknown datum_plane references before dispatch (BUG-094).
 
     The generic reference walk only inspects dictionaries that carry a kind, so a
     kindless reference used to reach the native executor and surface as a JSON
-    missing-key error.
+    missing-key error. FEAT-053 adds the through_points form and refuses the
+    external/internal spellings that must go through explicit conversion first.
     """
     if not isinstance(value, dict) or not isinstance(value.get("kind"), str) or not value["kind"]:
         raise ValueError(f"{path}: " + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION)
+    kind = value["kind"]
+    if kind == "datum_point_feature":
+        raise ValueError(
+            f"{path}: {{kind:'datum_point_feature',label:...}} is the executor-internal "
+            "single-point resolution target, not a datum_plane reference; convert it to "
+            "{kind:'through_points',points:[label_a,label_b,label_c]}"
+        )
+    if kind not in DATUM_PLANE_REFERENCE_KINDS:
+        raise ValueError(
+            f"{path}: unsupported datum_plane reference kind '{kind}'; "
+            + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION
+        )
+    if kind == "through_points":
+        validate_datum_plane_through_points(value, path)
 
 
 DATUM_PLANE_AXIS_DESCRIPTION = (

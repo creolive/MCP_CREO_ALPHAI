@@ -1293,9 +1293,11 @@ async def creo_datum_plane(
     angle: float | None = None,
     axis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Create an offset/angled datum plane. reference accepts datum_plane geometry ID
-    from inspect_model(datum_planes), planar surface ID, datum_feature label, or a
-    plane axis/normal filter; ID cannot share axis/normal/offset in that reference.
+    """Create an offset/angled/three-point datum plane. reference accepts datum_plane
+    geometry ID from inspect_model(datum_planes), planar surface ID, datum_feature
+    label, a plane axis/normal filter, or the three-point form
+    {kind:'through_points',points:[label_a,label_b,label_c]}; ID cannot share
+    axis/normal/offset in that reference.
     A filter such as {"kind":"plane","axis":"z"} or {"kind":"plane","normal":[0,0,1],
     "offset":10} matches an existing planar face of the current model with that normal
     and offset; it does not create a new plane from the normal. angle (including 0)
@@ -1306,6 +1308,15 @@ async def creo_datum_plane(
     {kind:'datum_axis_feature',label:'axis_label'} created earlier in the same model;
     a plane reference or datum_feature plane label is not a rotation axis. Missing
     kind and unknown labels are rejected before a job is dispatched.
+    The three-point form {kind:'through_points',points:[label_a,label_b,label_c]}
+    takes exactly three distinct labels of single-point datum_points features created
+    earlier in the same plan (submit the three datum_points operations and this plane
+    in one creo_execute_plan request); it is mutually exclusive with angle, axis and a
+    nonzero offset, rejects repeated/nearly collinear/unresolvable points, and the
+    external {thru_points:[...]} or {kind:'datum_point_feature',label:...} spellings
+    are refused instead of being passed through - convert them to the through_points
+    form. The job result reports the created plane's read-back frame
+    (plane_frame.normal/origin) and verification evidence.
     """
     op = {"op": "datum_plane", "label": label, "reference": reference, "offset": offset}
     if angle is not None:

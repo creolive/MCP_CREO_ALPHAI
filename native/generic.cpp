@@ -3014,6 +3014,224 @@ static J choice_inspection(const J &holder, const char *key);
 #include "sketch_edit.cpp"
 #include "placement.cpp"
 #include "feature_state.cpp"
+// FEAT-053: three-point datum plane ({kind:'through_points'}). Each label names
+// a datum_points feature contributing exactly one PRO_POINT; three non-collinear
+// points determine the plane through three PRO_DTMPLN_THRU constraints. The
+// points are read back and judged before creation with dimensionless ratios of
+// their own spacings, so the verdict never depends on the absolute
+// world-coordinate size (docs/work-items/FEAT-053.md), and the created plane is
+// verified against the same points afterwards. The reported plane_frame is the
+// real read-back frame; downstream work must use it instead of reconstructing
+// a frame from the input (Q06).
+static constexpr double kThruPointsDuplicateRatio = 1e-9;
+static constexpr double kThruPointsCollinearRatio = 1e-6;
+static constexpr double kThruPointsAlignTolerance = 1e-9;
+static constexpr double kThruPointsDistanceFloorMm = 1e-6;
+static constexpr double kThruPointsDistanceRatio = 1e-9;
+struct ThruPointRef {
+    std::string label;
+    int feature_id;
+    int point_id;
+    V position;
+};
+static ThruPointRef resolve_through_point(const std::string &label) {
+    ThruPointRef result;
+    result.label = label;
+    result.feature_id = feature_id(label);
+    ProFeature f;
+    CK(ProModelitemInit(board, result.feature_id, PRO_FEATURE, &f));
+    ProFeattype type = {};
+    CK(ProFeatureTypeGet(&f, &type));
+    if (type != PRO_FEAT_DATUM_POINT)
+        throw std::runtime_error("through_points label '" + label +
+                                 "' does not identify a datum point feature");
+    J ids = J::array();
+    CK(ProFeatureGeomitemVisit(&f, PRO_POINT, collect_geom_ids, nullptr, &ids));
+    if (ids.size() != 1)
+        throw std::runtime_error("through_points label '" + label +
+                                 "' must contain exactly one point (a single PRO_POINT); found " +
+                                 std::to_string(ids.size()));
+    result.point_id = ids[0]["id"].get<int>();
+    ProPoint point;
+    CK(ProPointInit((ProSolid)board, result.point_id, &point));
+    ProVector coordinates;
+    CK(ProPointCoordGet(point, coordinates));
+    result.position = {coordinates[0], coordinates[1], coordinates[2]};
+    for (double value : result.position)
+        if (!std::isfinite(value))
+            throw std::runtime_error("through_points label '" + label +
+                                     "' has non-finite coordinates; cannot determine the plane");
+    return result;
+}
+static J classify_through_points(const std::vector<ThruPointRef> &points) {
+    V a = points[0].position, b = points[1].position, c = points[2].position;
+    V ab = add(b, scale(a, -1)), bc = add(c, scale(b, -1)), ca = add(a, scale(c, -1));
+    V ac = add(c, scale(a, -1));
+    double sides[3] = {sqrt(dot(ab, ab)), sqrt(dot(bc, bc)), sqrt(dot(ca, ca))};
+    double longest = std::max({sides[0], sides[1], sides[2]});
+    double shortest = std::min({sides[0], sides[1], sides[2]});
+    if (!(longest > 0) || !std::isfinite(longest))
+        throw std::runtime_error("through_points cannot determine the plane: the three "
+                                 "read-back points do not span a measurable triangle");
+    V normal = cross(ab, ac);
+    double min_altitude = sqrt(dot(normal, normal)) / longest;
+    if (shortest <= kThruPointsDuplicateRatio * longest)
+        throw std::runtime_error("through_points refuses repeated points: two of the three "
+                                 "read-back points coincide within tolerance");
+    if (min_altitude <= kThruPointsCollinearRatio * longest)
+        throw std::runtime_error("through_points refuses nearly collinear points: the three "
+                                 "read-back points do not determine a unique plane");
+    return {{"classification", "ok"},
+            {"sides", J::array({sides[0], sides[1], sides[2]})},
+            {"longest_side", longest},
+            {"min_altitude", min_altitude},
+            {"min_altitude_ratio", min_altitude / longest},
+            {"duplicate_ratio_tolerance", kThruPointsDuplicateRatio},
+            {"collinear_altitude_ratio_tolerance", kThruPointsCollinearRatio}};
+}
+static J through_points_plane(const J &op) {
+    const J &reference = op.at("reference");
+    const J &labels = reference.at("points");
+    if (!labels.is_array() || labels.size() != 3)
+        throw std::runtime_error(
+            "through_points requires exactly 3 datum_points feature "
+            "labels ({kind:'through_points',points:[label_a,label_b,label_c]})");
+    if (op.contains("angle") || op.contains("axis") || fabs(op.value("offset", 0.0)) > 1e-9)
+        throw std::runtime_error("datum_plane {kind:'through_points'} is fully determined by "
+                                 "its three points and cannot be combined with angle, axis or "
+                                 "a nonzero offset");
+    auto units = inspect_length_units(board);
+    MillimeterScale unit_scale = length_scale_to_mm(board, units);
+    if (!unit_scale.known)
+        throw std::runtime_error("through_points cannot determine the model length unit; "
+                                 "cannot verify the three points, refusing to build the plane");
+    std::vector<ThruPointRef> points;
+    std::set<std::string> seen_labels;
+    for (const auto &entry : labels) {
+        std::string label = entry.get<std::string>();
+        if (!seen_labels.insert(label).second)
+            throw std::runtime_error("through_points refuses repeated point labels: " + label);
+        ThruPointRef point = resolve_through_point(label);
+        for (double &value : point.position)
+            value *= unit_scale.scale;
+        points.push_back(point);
+    }
+    J precheck = classify_through_points(points);
+    ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
+    integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_DATUM);
+    text(root, PRO_E_STD_FEATURE_NAME, wide(op.at("label")).c_str());
+    ProElement constraints = node(root, PRO_E_DTMPLN_CONSTRAINTS);
+    for (const auto &point : points) {
+        ProElement c = node(constraints, PRO_E_DTMPLN_CONSTRAINT);
+        integer(c, PRO_E_DTMPLN_CONSTR_TYPE, PRO_DTMPLN_THRU);
+        ProSelection s = selection(point.point_id, PRO_POINT);
+        ref(c, PRO_E_DTMPLN_CONSTR_REF, s);
+        ProSelectionFree(&s);
+    }
+    ProFeature f = create(root);
+    CK(ProElementFree(&root));
+    remember(op, f);
+    J points_json = J::array();
+    std::set<int> expected_ids;
+    for (const auto &point : points) {
+        points_json.push_back({{"label", point.label},
+                               {"feature_id", point.feature_id},
+                               {"point_id", point.point_id},
+                               {"position", xyz(point.position.data())}});
+        expected_ids.insert(point.point_id);
+    }
+    planes.clear();
+    CK(ProFeatureGeomitemVisit(&f, PRO_SURFACE, geom_cb, nullptr, nullptr));
+    if (planes.size() != 1) {
+        stage_operation_result({{"mode", "through_points"}, {"precheck", precheck}});
+        throw std::runtime_error("through_points verification failed: the created feature "
+                                 "must own exactly one plane surface; found " +
+                                 std::to_string(planes.size()));
+    }
+    const Plane &surface = planes[0];
+    V normal = normalized(V{surface.n[0], surface.n[1], surface.n[2]});
+    V origin = {surface.o[0] * unit_scale.scale, surface.o[1] * unit_scale.scale,
+                surface.o[2] * unit_scale.scale};
+    double longest = precheck["longest_side"].get<double>();
+    double distance_tolerance =
+        std::max(kThruPointsDistanceFloorMm, kThruPointsDistanceRatio * longest);
+    J distances = J::array();
+    double max_distance = 0;
+    for (const auto &point : points) {
+        double distance = fabs(dot(add(point.position, scale(origin, -1)), normal));
+        distances.push_back(distance);
+        max_distance = std::max(max_distance, distance);
+    }
+    V ab = add(points[1].position, scale(points[0].position, -1));
+    V ac = add(points[2].position, scale(points[0].position, -1));
+    double alignment = dot(normal, normalized(cross(ab, ac)));
+    ProElement tree = nullptr;
+    CK(ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree));
+    J constraint_records = J::array();
+    std::set<int> referenced;
+    bool constraints_ok = true;
+    for (int i = 0; i < 3; i++) {
+        ProElement type_element = indexed_element(
+            tree, {{PRO_E_DTMPLN_CONSTRAINTS, 0}, {-1, i}, {PRO_E_DTMPLN_CONSTR_TYPE, 0}});
+        int constr_type = -1;
+        ProError type_code = ProElementIntegerGet(type_element, nullptr, &constr_type);
+        ProElement ref_element = indexed_element(
+            tree, {{PRO_E_DTMPLN_CONSTRAINTS, 0}, {-1, i}, {PRO_E_DTMPLN_CONSTR_REF, 0}});
+        ProReference handle = nullptr;
+        ProError ref_code = ProElementReferenceGet(ref_element, nullptr, &handle);
+        int ref_id = -1;
+        ProType ref_type = PRO_TYPE_UNUSED;
+        if (!ref_code) {
+            ProReferenceTypeGet(handle, &ref_type);
+            ProReferenceIdGet(handle, &ref_id);
+            ProReferenceFree(&handle);
+        }
+        constraints_ok = constraints_ok && !type_code && !ref_code &&
+                         constr_type == PRO_DTMPLN_THRU && ref_type == PRO_POINT && ref_id >= 0;
+        if (ref_id >= 0)
+            referenced.insert(ref_id);
+        constraint_records.push_back(
+            {{"constr_type", constr_type},
+             {"constr_type_name", constr_type == PRO_DTMPLN_THRU ? J("thru") : J("other")},
+             {"ref_type", (int)ref_type},
+             {"ref_type_name", ref_type == PRO_POINT ? J("point") : J("other")},
+             {"ref_id", ref_id},
+             {"constr_type_query_code", (int)type_code},
+             {"ref_query_code", (int)ref_code}});
+    }
+    ProFeatureElemtreeFree(&f, tree);
+    bool references_ok = constraints_ok && referenced == expected_ids;
+    bool distances_ok = max_distance <= distance_tolerance;
+    bool alignment_ok = fabs(fabs(alignment) - 1) <= kThruPointsAlignTolerance;
+    J verification = {{"point_distances", distances},
+                      {"max_point_distance", max_distance},
+                      {"distance_tolerance", distance_tolerance},
+                      {"normal_alignment", alignment},
+                      {"alignment_tolerance", kThruPointsAlignTolerance},
+                      {"constraint_count", (int)constraint_records.size()},
+                      {"constraints", constraint_records},
+                      {"references_ok", references_ok},
+                      {"verified", distances_ok && alignment_ok && references_ok}};
+    J details = {{"mode", "through_points"},
+                 {"plane_frame",
+                  {{"surface_id", surface.id},
+                   {"normal", xyz(normal.data())},
+                   {"origin", xyz(origin.data())},
+                   {"length_unit", length_unit_json(units, unit_scale)}}},
+                 {"points", points_json},
+                 {"precheck", precheck},
+                 {"verification", verification}};
+    if (!distances_ok || !alignment_ok || !references_ok) {
+        stage_operation_result(details);
+        std::string reason = !distances_ok   ? "a point does not lie on the created plane"
+                             : !alignment_ok ? "the normal is not equivalent to the point-leg "
+                                               "cross product"
+                                             : "the created constraints do not reference the "
+                                               "three single points";
+        throw std::runtime_error("through_points verification failed: " + reason);
+    }
+    return details;
+}
 static void execute_operation_body(const J &op) {
     std::string kind = op.at("op");
     J details = J::object();
@@ -3090,30 +3308,53 @@ static void execute_operation_body(const J &op) {
     else if (kind == "recolor_assembly")
         recolor_assembly(op);
     else if (kind == "datum_plane") {
-        double angle = op.value("angle", 0.0);
-        // BUG-094 backstops; the Python PlaneOp contract rejects these first.
-        if (op.contains("angle") && fabs(op.value("offset", 0.0)) > 1e-9)
+        const J &plane_reference = op.at("reference");
+        std::string plane_ref_kind = plane_reference.is_object() &&
+                                             plane_reference.contains("kind") &&
+                                             plane_reference["kind"].is_string()
+                                         ? plane_reference["kind"].get<std::string>()
+                                         : std::string();
+        // FEAT-053 backstops; the Python contract rejects these first. The
+        // external 0.10.0 spellings must be converted to the explicit form
+        // instead of being forwarded to the executor.
+        if (plane_reference.is_object() && plane_reference.contains("thru_points"))
             throw std::runtime_error(
-                "datum_plane cannot combine an explicit angle with a nonzero offset; the "
-                "angled constraint silently drops the offset. Submit two explicit "
-                "datum_plane operations instead");
-        if (op.contains("angle")) {
-            const J axis_ref = op.value("axis", J());
-            std::string axis_kind =
-                axis_ref.is_object() && axis_ref.contains("kind") && axis_ref["kind"].is_string()
-                    ? axis_ref["kind"].get<std::string>()
-                    : std::string();
-            if (axis_kind != "axis" && axis_kind != "datum_axis_feature")
+                "datum_plane three-point references require the explicit form "
+                "{kind:'through_points',points:[label_a,label_b,label_c]}; the external "
+                "{thru_points:[...]} spelling is rejected and must be converted first");
+        if (plane_ref_kind == "datum_point_feature")
+            throw std::runtime_error(
+                "{kind:'datum_point_feature',label:...} is the executor-internal point "
+                "selection, not a datum_plane reference; convert it to "
+                "{kind:'through_points',points:[label_a,label_b,label_c]}");
+        if (plane_ref_kind == "through_points") {
+            details = through_points_plane(op);
+        } else {
+            double angle = op.value("angle", 0.0);
+            // BUG-094 backstops; the Python PlaneOp contract rejects these first.
+            if (op.contains("angle") && fabs(op.value("offset", 0.0)) > 1e-9)
                 throw std::runtime_error(
-                    "An angled datum_plane requires axis {kind:'axis',id:N} or "
-                    "{kind:'datum_axis_feature',label:'...'}; rejected: " +
-                    (axis_kind.empty() ? std::string("(missing kind)") : axis_kind));
+                    "datum_plane cannot combine an explicit angle with a nonzero offset; the "
+                    "angled constraint silently drops the offset. Submit two explicit "
+                    "datum_plane operations instead");
+            if (op.contains("angle")) {
+                const J axis_ref = op.value("axis", J());
+                std::string axis_kind = axis_ref.is_object() && axis_ref.contains("kind") &&
+                                                axis_ref["kind"].is_string()
+                                            ? axis_ref["kind"].get<std::string>()
+                                            : std::string();
+                if (axis_kind != "axis" && axis_kind != "datum_axis_feature")
+                    throw std::runtime_error(
+                        "An angled datum_plane requires axis {kind:'axis',id:N} or "
+                        "{kind:'datum_axis_feature',label:'...'}; rejected: " +
+                        (axis_kind.empty() ? std::string("(missing kind)") : axis_kind));
+            }
+            J axis = op.value("axis", J());
+            auto f = offset_plane(op["reference"], op.value("offset", 0.0), wide(op["label"]),
+                                  op.contains("angle") ? &angle : nullptr,
+                                  op.contains("axis") ? &axis : nullptr);
+            remember(op, f);
         }
-        J axis = op.value("axis", J());
-        auto f = offset_plane(op["reference"], op.value("offset", 0.0), wide(op["label"]),
-                              op.contains("angle") ? &angle : nullptr,
-                              op.contains("axis") ? &axis : nullptr);
-        remember(op, f);
     } else if (kind == "datum_axis") {
         ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
         integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_DATUM_AXIS);

@@ -630,6 +630,25 @@ class PlaneOp(StrictModel):
         # BUG-094: a kindless reference reached the native executor as a JSON
         # missing-key error, and an angled plane silently dropped a nonzero offset.
         validate_datum_plane_reference_kind(self.reference, "reference")
+        if self.reference.get("kind") == "through_points":
+            # FEAT-053: three points fully determine the plane; the angle/axis
+            # and offset modes are separate constraint forms and cannot mix in.
+            if self.angle is not None:
+                raise ValueError(
+                    "datum_plane reference {kind:'through_points'} is fully determined by its "
+                    "three points and cannot be combined with angle"
+                )
+            if self.axis is not None:
+                raise ValueError(
+                    "datum_plane reference {kind:'through_points'} is fully determined by its "
+                    "three points and cannot be combined with axis"
+                )
+            if self.offset != 0:
+                raise ValueError(
+                    "datum_plane reference {kind:'through_points'} is fully determined by its "
+                    "three points and cannot be combined with a nonzero offset"
+                )
+            return self
         if self.angle is not None:
             if self.offset != 0:
                 raise ValueError(
@@ -1596,6 +1615,56 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                 f"operations inside the same plan: {offenders}"
             )
 
+    # FEAT-053: a through_points reference names datum_points feature labels
+    # created earlier in this same plan. Each producer must be a single-point
+    # datum_points operation; a plan cannot forward-reference features that do
+    # not exist yet when the plane runs, and it never guesses a point out of a
+    # multi-point feature.
+    producers: dict[str, tuple[int, str, int]] = {}
+    for index, operation in enumerate(dumped):
+        label = operation.get("label")
+        if isinstance(label, str):
+            point_count = len(operation["points"]) if operation["op"] == "datum_points" else -1
+            producers[label] = (index, operation["op"], point_count)
+    for index, operation in enumerate(dumped):
+        if operation["op"] != "datum_plane":
+            continue
+        reference = operation.get("reference") or {}
+        if not isinstance(reference, dict) or reference.get("kind") != "through_points":
+            continue
+        for slot, label in enumerate(reference.get("points") or []):
+            where = f"operations[{index}].reference.points[{slot}]"
+            entry = producers.get(label)
+            if entry is None:
+                raise ValueError(
+                    f"{where}: through_points label '{label}' must be created by a "
+                    "datum_points operation earlier in the same plan; this plan does "
+                    "not create it"
+                )
+            producer_index, producer_op, point_count = entry
+            if producer_index == index:
+                raise ValueError(
+                    f"{where}: through_points label '{label}' is the plane's own label; "
+                    "the three points must be created earlier in the same plan"
+                )
+            if producer_index > index:
+                raise ValueError(
+                    f"{where}: through_points label '{label}' is created later in this "
+                    f"plan (operations[{producer_index}]); the three points must exist "
+                    "before the datum_plane runs"
+                )
+            if producer_op != "datum_points":
+                raise ValueError(
+                    f"{where}: through_points label '{label}' is created by "
+                    f"operations[{producer_index}] (op '{producer_op}'); through_points "
+                    "requires a datum_points feature"
+                )
+            if point_count != 1:
+                raise ValueError(
+                    f"{where}: datum_points label '{label}' defines {point_count} points; "
+                    "through_points requires a single-point datum_points feature"
+                )
+
     def references(x, path: str):
         if isinstance(x, list):
             for index, v in enumerate(x):
@@ -1621,6 +1690,11 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                         raise ValueError("Datum reference requires a label")
                 elif k in ("plane", "datum_plane"):
                     validate_planar_reference(x, path)
+                elif k == "through_points":
+                    # FEAT-053: the three-point datum_plane reference. Its shape
+                    # is validated by PlaneOp and its producers by the plan-level
+                    # check below; nothing else accepts this kind.
+                    pass
                 elif k not in ("body", "part", "default_csys"):
                     raise ValueError(f"Unsupported model reference kind: {k}")
             for key, v in x.items():
