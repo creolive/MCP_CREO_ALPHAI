@@ -30,6 +30,12 @@ FEAT-052 随 0.11.0 发布，公开工具 94→95；本机 Windows x64 / Creo 12
 - **未验范围**：WorkBuddy 黑盒未执行；busy/并发通道交错未做实机；Creo 9 本机无 SDK、实机编译与建模运行时仍未验收；Creo 10 独立复测不作为门槛，本机通过不外推其他环境。
 
 详见 [FEAT-052 工作卡](work-items/FEAT-052.md)与[功能计划](superpowers/plans/2026-10-31-assembly-recolor-plan.md)。
+## 2026-10-31：DEV-053 P08 首壁帧契约与候选边发现（离线交付，实机待排期）
+
+- **帧契约已文档化**：`depth` 沿有符号草图法向单侧生长（`direction=positive`→+法向、`negative`→−法向），`thickness` 是以草图线为中心、面内垂直于线的板厚。标准水平底板配方冻结为 `examples/sheetmetal_base_yz.json`（YZ+offset92.5、线 (−116,0.5)→(116,0.5)、depth=185、thickness=1、`direction=negative` → X±92.5/Y±116/Z[0,1]、V=42920、COG(0,0,0.5)）。`sheetmetal_wall` 的 `wall_contract` 新增实测帧回显（`frame.sketch_normal/depth_direction/thickness_direction/material_side`）、`wall_face_ids`（绿/白壁面）与非阻断 `parameter_hint`；`PRO_TK_BAD_CONTEXT (-8)` 报错改为携带草图平面/方向修正提示与官方例子。**新增公开回显字段与巡检 `wall_contour_check` 候选边结构归属 MINOR**（BUG-032/FEAT-014 卡注明）；帧说明与例子文档可按 PATCH 交付。
+- **真实支持**：自由端首折边与 `flip` 双向（0.8.5 实机：默认向外、`flip=true` 材料侧，两例保存重载通过）；`unbend`/`bend_back`/`flat_pattern` 的 `fixed_surface` 裸面引用语法 `{"kind":"surface","id":N}`（能否固定由原生执行器逐案判定，无"任意面皆可"保证；datum_plane/edge 引用建模前拒绝）；`adjacent_bend_ends` 邻接端创建前拒绝（N06 实机已证，候选边通过不解除该边界）。
+- **不支持/未证明**：四壁盒（上限 3/4，第三壁被邻接拒绝）；corner relief / miter；`end_trim_mm`（三轮实机 `trim_ignored`，语义未定）；`fixed_surface` 逐面 accept/refuse 结果与候选边 `wall_contour_check` 真实查询值待实机（`eligible|ineligible|unknown` 投影已离线回归）；`thickness≥depth` 属合法输入（仅给 `parameter_hint` 警告），但绿/白壁面会落在非最大面上，挂折边前必须核 `wall_face_ids`。
+- **三组对照离线 oracle 已冻结**（XY/depth1/t232、XY/depth232/t1/negative、YZ 标准配方）：逐组核 bbox、COG、体积、零件板厚与驱动壁面，V=42920 三组共用、不可单独作判据；实机执行由编排人排期。
 
 ## 当前验收规则（2026-10-15）
 

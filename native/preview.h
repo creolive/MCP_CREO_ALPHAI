@@ -12,6 +12,9 @@
 #pragma once
 #include "third_party/json.hpp"
 #include <ProMdl.h>
+#include <ProFeature.h>
+#include <ProFeatType.h>
+#include <ProSolid.h>
 #include <ProToolkit.h>
 #include <ProUtil.h>
 #include <ProView.h>
@@ -34,6 +37,7 @@ static ProMatrix preview_isometric_view = {
 
 struct PreviewStepOutcome {
     std::wstring path;
+    bool skipped_no_geometry = false;
     int window = -1;
     int display_code = 0;
     int window_get_code = 0;
@@ -66,6 +70,50 @@ struct PreviewStepOutcome {
     std::string failed_step;
     int failed_code = 0;
 };
+
+// A zero solid volume is not an empty preview: sketches and surfaces are
+// visible too. Only an inspected part with no active feature beyond datum
+// planes/axes/points and coordinate systems is safe to skip. Query failures
+// leave the answer unknown and preserve the original capture path.
+struct PreviewGeometryProbe {
+    bool renderable = false;
+    bool unknown = false;
+};
+
+static ProError preview_geometry_feature(ProFeature *feature, ProError status, ProAppData data) {
+    auto *probe = static_cast<PreviewGeometryProbe *>(data);
+    if (status != PRO_TK_NO_ERROR) {
+        probe->unknown = true;
+        return PRO_TK_NO_ERROR;
+    }
+    ProFeattype type;
+    ProFeatStatus state;
+    if (ProFeatureTypeGet(feature, &type) != PRO_TK_NO_ERROR ||
+        ProFeatureStatusGet(feature, &state) != PRO_TK_NO_ERROR) {
+        probe->unknown = true;
+        return PRO_TK_NO_ERROR;
+    }
+    if (state != PRO_FEAT_ACTIVE) {
+        if (state != PRO_FEAT_SUPPRESSED)
+            probe->unknown = true;
+        return PRO_TK_NO_ERROR;
+    }
+    if (type != PRO_FEAT_CSYS && type != PRO_FEAT_DATUM && type != PRO_FEAT_DATUM_AXIS &&
+        type != PRO_FEAT_DATUM_POINT)
+        probe->renderable = true;
+    return PRO_TK_NO_ERROR;
+}
+
+static bool preview_has_no_geometry(ProMdl model) {
+    ProMdlType kind;
+    if (ProMdlTypeGet(model, &kind) != PRO_TK_NO_ERROR || kind != PRO_MDL_PART)
+        return false;
+    PreviewGeometryProbe probe;
+    ProError code = ProSolidFeatVisit((ProSolid)model, preview_geometry_feature, nullptr, &probe);
+    // The SDK also returns NOT_FOUND when a solid has no features at all.
+    return (code == PRO_TK_NO_ERROR || code == PRO_TK_E_NOT_FOUND) && !probe.unknown &&
+           !probe.renderable;
+}
 
 static std::string preview_utf8(const std::wstring &value) {
     int size = WideCharToMultiByte(CP_UTF8, 0, value.data(), (int)value.size(), nullptr, 0, nullptr,
@@ -152,11 +200,6 @@ static void preview_confirm_file(PreviewStepOutcome &outcome) {
     }
 }
 
-// FEAT-052: the window-binding half of the shared capture - display the
-// model, prove that window belongs to it and make it current. Shared with the
-// display-only repaint after appearance changes, which never takes a raster.
-// Returns false when a binding step failed; every raw code is recorded.
-static bool bind_model_window(ProMdl model, PreviewStepOutcome &outcome) {
     int code = ProMdlDisplay(model);
     outcome.display_code = code;
     preview_record(outcome, "display", code);
@@ -257,6 +300,11 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
                                           double height_inches, ProRasterType type) {
     PreviewStepOutcome outcome;
     outcome.path = file;
+    if (preview_has_no_geometry(model)) {
+        outcome.skipped_no_geometry = true;
+        outcome.raster_code = PRO_TK_GENERAL_ERROR; // no raster call was made
+        return outcome;
+    }
     if (!bind_model_window(model, outcome))
         return outcome;
 
@@ -299,7 +347,8 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
 }
 
 static bool preview_written(const PreviewStepOutcome &outcome) {
-    return outcome.failed_step.empty() && outcome.raster_code == PRO_TK_NO_ERROR &&
+    return !outcome.skipped_no_geometry && outcome.failed_step.empty() &&
+           outcome.raster_code == PRO_TK_NO_ERROR &&
            outcome.file_bytes > 0;
 }
 
@@ -321,7 +370,7 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
     // The filesystem stage is only meaningful after a zero raster code; before
     // that there is no file to confirm and the block stays null.
     nlohmann::json file_check = nullptr;
-    if (outcome.raster_code == PRO_TK_NO_ERROR)
+    if (!outcome.skipped_no_geometry && outcome.raster_code == PRO_TK_NO_ERROR)
         file_check = {{"stage", "after_raster"},
                       {"absolute", outcome.file_check_absolute},
                       {"parent_exists", outcome.file_check_parent_exists},
@@ -335,7 +384,12 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
                       {"error_message", outcome.file_check_message.empty()
                                             ? nlohmann::json(nullptr)
                                             : nlohmann::json(outcome.file_check_message)}};
-    return {{"status", preview_written(outcome) ? "written" : "failed"},
+    if (outcome.skipped_no_geometry)
+        for (auto &entry : codes.items())
+            entry.value() = nullptr; // no Toolkit capture step was attempted
+    return {{"status", outcome.skipped_no_geometry
+                           ? "skipped_no_geometry"
+                           : preview_written(outcome) ? "written" : "failed"},
             {"path", outcome.path.empty() ? nlohmann::json(nullptr)
                                           : nlohmann::json(preview_utf8(outcome.path))},
             {"bytes", outcome.file_bytes},
@@ -347,5 +401,6 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
             {"codes", codes},
             {"failed_step", outcome.failed_step.empty() ? nlohmann::json(nullptr)
                                                         : nlohmann::json(outcome.failed_step)},
-            {"failed_code", outcome.failed_code}};
+            {"failed_code", outcome.skipped_no_geometry ? nlohmann::json(nullptr)
+                                                        : nlohmann::json(outcome.failed_code)}};
 }

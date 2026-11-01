@@ -58,6 +58,18 @@ using J = nlohmann::json;
 using V = std::array<double, 3>;
 static J aliases = J::object(), gfeatures = J::array(), gsurfaces = J::array(), gedges = J::array();
 static std::set<int> visited_edges;
+// P08/FEAT-014: bounded wall-contour (candidate edge) discovery. The per-edge
+// ProSmtedgeContourGet query runs only while inspecting a sheetmetal part (a
+// sheetmetal-related check), never creates a flange and never modifies the
+// model. It is capped at WALL_CONTOUR_EDGE_BUDGET edges per inspection and
+// lands in the top-level wall_contour_check block keyed by edge id; the
+// compared `edges` records keep their exact shape so snapshots taken before
+// this block existed still reconcile.
+static constexpr int WALL_CONTOUR_EDGE_BUDGET = 256;
+static bool wall_contour_query_enabled = false;
+static int wall_contour_checked = 0;
+static bool wall_contour_bounded = false;
+static J wall_contour_edges = J::array();
 static std::wstring generic_job;
 static int temporarily_suppressed_loft = -1;
 static J operation_results = J::array();
@@ -408,6 +420,23 @@ static ProError inspect_edge(ProEdge edge, ProError status, ProAppData) {
         ProSurfaceIdGet(sb, &b);
         item["adjacent_surfaces"] = J::array({a, b});
     }
+    // P08/FEAT-014 candidate-edge discovery: one read-only contour query per
+    // edge on sheetmetal parts. PRO_TK_NO_ERROR means the edge lies on a
+    // green/white wall contour, PRO_TK_BAD_CONTEXT means it does not; any
+    // other code stays unknown and keeps its real value. Budget-skipped edges
+    // simply carry no record here (never a fabricated one).
+    if (wall_contour_query_enabled) {
+        if (wall_contour_checked >= WALL_CONTOUR_EDGE_BUDGET)
+            wall_contour_bounded = true;
+        else {
+            ProEdge *contour = nullptr;
+            ProError code = ProSmtedgeContourGet((ProPart)board, edge, &contour);
+            if (contour)
+                ProArrayFree((ProArray *)&contour);
+            wall_contour_edges.push_back({{"edge_id", id}, {"wall_contour_query_code", code}});
+            wall_contour_checked++;
+        }
+    }
     gedges.push_back(item);
     return PRO_TK_NO_ERROR;
 }
@@ -502,6 +531,17 @@ static J inspection(bool require_healthy = true) {
     gedges = J::array();
     failed_features = J::array();
     visited_edges.clear();
+    // P08/FEAT-014: the bounded wall-contour query is a sheetmetal-related
+    // check only. A plain part or an assembly never pays for it.
+    wall_contour_query_enabled = false;
+    wall_contour_checked = 0;
+    wall_contour_bounded = false;
+    wall_contour_edges = J::array();
+    if (!assembly_model()) {
+        ProMdlsubtype subtype;
+        if (!ProMdlSubtypeGet(board, &subtype) && subtype == PROMDLSTYPE_PART_SHEETMETAL)
+            wall_contour_query_enabled = true;
+    }
     CK(ProSolidFeatVisit((ProSolid)board, inspect_feature, nullptr, nullptr));
     // System-required objects: the model's default coordinate system and the
     // template datum planes. A template datum is a parentless, non-embedded
@@ -663,6 +703,17 @@ static J inspection(bool require_healthy = true) {
         }
     result["datum_axes"] = axes;
     result["model_type"] = isasm ? "assembly" : "part";
+    // P08/FEAT-014 candidate-edge discovery result. The per-edge records carry
+    // only the real query code here; the eligible|ineligible|unknown status is
+    // projected from that code by the Python side (creo_mechdog.sheetmetal),
+    // alongside the model revision this check was observed at.
+    if (wall_contour_query_enabled)
+        log("WALL_CONTOUR_QUERY checked=%d bounded=%d\n", wall_contour_checked,
+            wall_contour_bounded ? 1 : 0);
+    result["wall_contour_check"] = {
+        {"query", "ProSmtedgeContourGet"},       {"enabled", wall_contour_query_enabled},
+        {"bounded", wall_contour_bounded},       {"budget", WALL_CONTOUR_EDGE_BUDGET},
+        {"checked_edges", wall_contour_checked}, {"edges", wall_contour_edges}};
     if (isasm)
         result["components"] = assembly_inspection();
     else {
@@ -969,8 +1020,37 @@ static Frame sketch_frame(const J &op) {
     } else {
         f.n = support_normal;
         f.origin = p.contains("origin") ? vec(p["origin"]) : support_origin;
-        if (fabs(dot(f.n, add(f.origin, scale(support_origin, -1)))) > 1e-6)
-            throw std::runtime_error("Sketch origin is outside support plane");
+        // BUG-095: an explicit origin is rejected against the actual support
+        // plane, and the rejection now carries the measured evidence instead
+        // of a bare message. signed_distance is n·(origin - support_origin)
+        // with the normalized support normal the sketch frame actually uses;
+        // constant_mm completes the plane equation n·x = constant. The
+        // suggested origin is an explicit projection of the requested point
+        // onto that plane: advice only, never an applied modification. The
+        // 1e-6 mm admission threshold is unchanged.
+        V origin_delta = add(f.origin, scale(support_origin, -1));
+        double signed_distance = dot(f.n, origin_delta);
+        if (fabs(signed_distance) > 1e-6) {
+            char message[256];
+            std::snprintf(message, sizeof(message),
+                          "Sketch origin is outside support plane: signed distance %.9g mm "
+                          "exceeds the 1e-06 mm tolerance; see sketch_origin_diagnostics in "
+                          "the operation result",
+                          signed_distance);
+            V suggested = add(f.origin, scale(f.n, -signed_distance));
+            stage_operation_result(
+                {{"sketch_origin_diagnostics",
+                  {{"status", "origin_outside_support_plane"},
+                   {"distance_to_plane_mm", fabs(signed_distance)},
+                   {"signed_distance_to_plane_mm", signed_distance},
+                   {"origin_tolerance_mm", 1e-6},
+                   {"support_plane",
+                    {{"normal", J::array({f.n[0], f.n[1], f.n[2]})},
+                     {"constant_mm", dot(f.n, support_origin)}}},
+                   {"requested_origin", J::array({f.origin[0], f.origin[1], f.origin[2]})},
+                   {"suggested_origin", J::array({suggested[0], suggested[1], suggested[2]})}}}});
+            throw std::runtime_error(message);
+        }
         V preferred = p.contains("u_axis") ? vec(p["u_axis"])
                                            : (fabs(f.n[0]) < 0.9 ? V{1, 0, 0} : V{0, 1, 0});
         double magnitude = sqrt(dot(preferred, preferred));

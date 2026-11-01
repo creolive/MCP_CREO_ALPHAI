@@ -443,10 +443,9 @@ class Acceptance:
     ) -> dict:
         """Record the raw capture codes and keep the image; never judge pixels.
 
-        ``expect_written=False`` records the outcome of a capture that is
-        allowed to fail (the empty new part) without turning the failure into a
-        driver error. The filesystem evidence is kept either way, so a missing
-        file can be told apart from a failed raster call.
+        ``expect_written=False`` records an empty part as skipped when the
+        native geometry probe confirms that only datums exist. Older workers
+        may still return failed or written; retain their raw evidence.
         """
         result = terminal["result"]
         preview = result.get("preview") if operation is None else operation.get("preview")
@@ -493,8 +492,12 @@ class Acceptance:
                 assert image.is_file() and image.stat().st_size > 0, record
                 record["image"] = self.keep_image(case, image)
             else:
-                assert preview.get("status") == "failed", record
-                assert preview.get("failed_step"), record
+                assert preview.get("status") in ("failed", "skipped_no_geometry"), record
+                if preview.get("status") == "failed":
+                    assert preview.get("failed_step"), record
+                else:
+                    assert not preview.get("failed_step"), record
+                    assert not preview.get("file_verified"), record
         return record
 
     async def run_case(
@@ -591,9 +594,7 @@ class Acceptance:
             "model_id": empty["terminal"]["model_id"],
             "revision": empty["terminal"]["revision"],
         }
-        empty_solid = await self.run_case(
-            "empty_part_solid", disk_plan(), empty_model, expect_written=False
-        )
+        empty_solid = await self.run_case("empty_part_solid", disk_plan(), empty_model)
         disk = await self.run_case("disk", disk_plan(), None)
         disk_model = {
             "model_id": disk["terminal"]["model_id"],
@@ -651,7 +652,7 @@ class Acceptance:
             # written capture, and the image content stays human review. The
             # same model continued with a solid body in the same session shows
             # the second half of the comparison.
-            empty_part_expectation="capture_may_fail_recorded_not_asserted",
+            empty_part_expectation="skipped_no_geometry_or_legacy_capture_recorded",
             empty_part_file_outcome={
                 "empty_part": empty["record"]["preview"]["status"],
                 "empty_part_solid": empty_solid["record"]["preview"]["status"],

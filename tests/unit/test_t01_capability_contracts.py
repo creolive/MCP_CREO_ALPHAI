@@ -67,6 +67,50 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(compact["complete_creo_coverage"], overview["complete_creo_coverage"])
 
 
+class SheetmetalInspectionProjectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_full_inspection_publishes_tri_state_and_snapshot_revision(self):
+        native = {
+            "revision": 4,
+            "inspection": {
+                "edges": [{"id": 12}],
+                "wall_contour_check": {
+                    "enabled": True,
+                    "bounded": False,
+                    "budget": 256,
+                    "edges": [{"edge_id": 12, "wall_contour_query_code": 0}],
+                },
+            },
+        }
+        async def fake_invoke(*_args):
+            return native
+
+        with patch.object(server, "invoke", side_effect=fake_invoke):
+            public = await server.creo_inspect_model("model", detail="full")
+        check = public["inspection"]["wall_contour_check"]
+        self.assertEqual(check["revision"], 4)
+        self.assertEqual(check["edges"][0]["wall_contour_status"], "eligible")
+        self.assertEqual(check["edges"][0]["wall_contour_query_code"], 0)
+        self.assertEqual(native["inspection"]["edges"], [{"id": 12}])
+
+    async def test_paged_metadata_projects_unknown_without_fabricating_edges(self):
+        native = {
+            "revision": 9,
+            "data": {"metadata": [{"name": "wall_contour_check", "value": {
+                "enabled": True,
+                "edges": [{"edge_id": 13, "wall_contour_query_code": -2}],
+            }}]},
+        }
+        async def fake_invoke(*_args):
+            return native
+
+        with patch.object(server, "invoke", side_effect=fake_invoke):
+            public = await server.creo_inspect_model("model", detail="full", section="metadata")
+        check = public["data"]["metadata"][0]["value"]
+        self.assertEqual(check["revision"], 9)
+        self.assertEqual(check["edges"][0]["wall_contour_status"], "unknown")
+        self.assertEqual(check["edges"][0]["wall_contour_query_code"], -2)
+
+
 class LocalReleaseStatusTests(unittest.TestCase):
     def test_local_version_maturity_is_independent_of_remote_update_cache(self):
         remote_cases = [
@@ -210,3 +254,31 @@ class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):
         new_sheetmetal = tools["creo_new_sheetmetal"].description
         self.assertIn("terminal state", new_sheetmetal)
         self.assertIn("never converts", new_sheetmetal)
+        # DEV-053 P08: the frozen depth/thickness frame contract, the standard
+        # YZ recipe and the measured wall echo on the wall tool
+        wall = tools["creo_sheetmetal_wall"].description
+        self.assertIn("signed sketch normal", wall)
+        self.assertIn("centered on the sketch line", wall)
+        self.assertIn("examples/sheetmetal_base_yz.json", wall)
+        self.assertIn("wall_face_ids", wall)
+        self.assertIn("parameter_hint", wall)
+        # candidate-edge discovery: tri-state, real query code, never an
+        # unconditional flange promise, and edges picked by geometry
+        flange = tools["creo_sheetmetal_flange"].description
+        self.assertIn("wall_contour_check", flange)
+        self.assertIn("eligible|ineligible|unknown", flange)
+        self.assertIn("adjacent_bend_ends", flange)
+        self.assertIn("green/white wall faces", flange)
+        # the unbend family rejects non-surface fixed_surface references and
+        # keeps the per-case native decision explicit
+        for name in (
+            "creo_sheetmetal_unbend",
+            "creo_sheetmetal_flat_pattern",
+            "creo_sheetmetal_bend_back",
+        ):
+            with self.subTest(tool=name):
+                text = " ".join(tools[name].description.split())
+                self.assertIn(
+                    "datum_plane or edge reference is rejected before any feature exists", text
+                )
+                self.assertIn("no blanket", text)

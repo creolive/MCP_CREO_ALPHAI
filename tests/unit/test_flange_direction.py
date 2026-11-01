@@ -65,5 +65,47 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(probe.HANG_BUDGET_SECONDS, 180.0)
 
 
+class PendingValidationDesignTest(unittest.TestCase):
+    """DEV-053 P08: the frozen live design awaiting the orchestrator's window."""
+
+    def test_free_end_first_flange_covers_flip_in_both_directions(self) -> None:
+        design = probe.FREE_END_FLANGE_DESIGN
+        self.assertEqual(len(design["cases"]), 2)
+        self.assertEqual([case["flip"] for case in design["cases"]], [False, True])
+        self.assertIn("bbox-only", design["oracle"])
+        self.assertIn("free", design["fixture"])
+
+    def test_fixed_surface_design_covers_the_unbend_family_and_rejects(self) -> None:
+        design = probe.FIXED_SURFACE_DESIGN
+        ops = {case["op"] for case in design["cases"]}
+        self.assertEqual(
+            ops, {"sheetmetal_unbend", "sheetmetal_bend_back", "sheetmetal_flat_pattern"}
+        )
+        self.assertIn("{kind:'surface',id:N}", design["reference_contract"])
+        controls = {control["name"] for control in design["negative_controls"]}
+        self.assertIn("fixed_surface_datum_plane", controls)
+        self.assertIn("fixed_surface_stale_edge_id", controls)
+        for control in design["negative_controls"]:
+            self.assertIn("reject", control["expect"])
+
+    def test_candidate_edge_pass_never_unlocks_the_adjacent_bend_boundary(self) -> None:
+        design = probe.CANDIDATE_EDGE_DESIGN
+        joined = " ".join(design["acceptance"])
+        self.assertIn("adjacent_bend_ends", joined)
+        self.assertIn("never unlocks", joined)
+        self.assertIn("creates no flange", joined)
+        self.assertIn("BY GEOMETRY", design["procedure"])
+
+    def test_pending_bundle_marks_everything_not_executed_offline(self) -> None:
+        pending = probe.pending_validation()
+        self.assertIn("free_end_first_flange", pending)
+        self.assertIn("fixed_surface_unbend_family", pending)
+        self.assertIn("candidate_edge_discovery", pending)
+        self.assertIn("not_executed", pending)
+        report = probe.offline_report(None)
+        self.assertIn("pending_live_validation", report)
+        self.assertIn("no Creo connection", report["not_executed"])
+
+
 if __name__ == "__main__":
     unittest.main()

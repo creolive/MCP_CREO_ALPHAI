@@ -103,6 +103,7 @@ def annotate_native_result(
         failed_index=failed_index if isinstance(failed_index, int) else None,
     )
     annotate_revolve_axis(result)
+    annotate_sketch_origin_diagnostics(result)
     if inputs is not None:
         annotate_profiles(result, inputs)
         annotate_arc_geometry(result, inputs)
@@ -387,4 +388,97 @@ def annotate_arc_geometry(result: dict[str, Any], inputs: list[dict[str, Any]]) 
         if not isinstance(entities, list) or not entities:
             continue
         operation["arc_geometry"] = project_arc_echo(entities, operation.get("arc_geometry"))
+    return result
+
+
+# BUG-095: frozen contract of the executor's sketch-origin rejection evidence.
+# Fields are computed by the executor from the actual support plane; this
+# projection only validates their shape and never recomputes or backfills them
+# from the request.
+_SKETCH_ORIGIN_DIAGNOSTIC_FIELDS = (
+    "status",
+    "distance_to_plane_mm",
+    "signed_distance_to_plane_mm",
+    "origin_tolerance_mm",
+    "support_plane",
+    "requested_origin",
+    "suggested_origin",
+)
+
+
+def _finite_number(value: Any) -> float | None:
+    return float(value) if type(value) in (int, float) and math.isfinite(value) else None
+
+
+def _unknown_sketch_origin_diagnostics() -> dict[str, Any]:
+    entry: dict[str, Any] = {key: None for key in _SKETCH_ORIGIN_DIAGNOSTIC_FIELDS}
+    entry["status"] = "unknown"
+    return entry
+
+
+def normalize_sketch_origin_diagnostics(block: Any) -> dict[str, Any]:
+    """Validate the executor's sketch-origin rejection evidence (BUG-095).
+
+    Values are only ever the executor's own measurements against the actual
+    support plane; the request's origin is never echoed here as evidence. A
+    record whose numbers cannot be trusted degrades to explicit unknown (null
+    fields plus the raw status) instead of keeping values of unclear
+    provenance. A missing block stays missing (legacy jobs) and is never
+    fabricated.
+    """
+    if not isinstance(block, dict):
+        return _unknown_sketch_origin_diagnostics()
+    status = block.get("status")
+    entry: dict[str, Any] = {
+        "status": status if isinstance(status, str) and status else "unknown",
+        "distance_to_plane_mm": _finite_number(block.get("distance_to_plane_mm")),
+        "signed_distance_to_plane_mm": _finite_number(
+            block.get("signed_distance_to_plane_mm")
+        ),
+        "origin_tolerance_mm": _finite_number(block.get("origin_tolerance_mm")),
+        "support_plane": None,
+        "requested_origin": _finite_vector(block.get("requested_origin"), 3),
+        "suggested_origin": _finite_vector(block.get("suggested_origin"), 3),
+    }
+    plane = block.get("support_plane")
+    if isinstance(plane, dict):
+        normal = _finite_vector(plane.get("normal"), 3)
+        constant = _finite_number(plane.get("constant_mm"))
+        # The executor normalizes the support normal; a non-unit normal means
+        # the block cannot be trusted as reported.
+        if (
+            normal is not None
+            and constant is not None
+            and abs(sum(item * item for item in normal) - 1) <= 1e-6
+        ):
+            entry["support_plane"] = {"normal": normal, "constant_mm": constant}
+    distance = entry["distance_to_plane_mm"]
+    signed = entry["signed_distance_to_plane_mm"]
+    if distance is not None and signed is not None and abs(abs(signed) - distance) > 1e-12:
+        entry["distance_to_plane_mm"] = None
+        entry["signed_distance_to_plane_mm"] = None
+    return entry
+
+
+def annotate_sketch_origin_diagnostics(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the sketch_origin_diagnostics block on failed sketch records.
+
+    The request's plane/origin are never read here: an unreported or
+    uninterpretable block stays absent or degrades to unknown rather than
+    being backfilled from the request.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in (
+            "sketch",
+            "airfoil_sketch",
+        ):
+            continue
+        if "sketch_origin_diagnostics" not in operation:
+            continue
+        operation["sketch_origin_diagnostics"] = normalize_sketch_origin_diagnostics(
+            operation.get("sketch_origin_diagnostics")
+        )
     return result

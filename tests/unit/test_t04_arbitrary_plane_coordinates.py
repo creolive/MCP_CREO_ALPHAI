@@ -88,6 +88,27 @@ class ArbitraryPlaneCoordinateValidation(unittest.TestCase):
         ]
         self.assertEqual(validate_operations(operations)[0]["dimensioning"], "coordinates")
 
+    def test_origin_omitted_and_exact_origin_still_admitted_unmodified(self):
+        # BUG-095: the origin rejection happens against the actual support
+        # plane inside the executor; admission neither requires nor rewrites
+        # origin, and both the omitted and the exact-on-plane forms pass
+        # through validate_operations unchanged.
+        omitted = validate_operations([sketch({"reference": {"kind": "plane", "id": 11}})])[0]
+        self.assertNotIn("origin", omitted["plane"])
+        exact = {
+            "reference": {"kind": "datum_plane", "id": 163},
+            "origin": [10, 0, 0],
+            "u_axis": [0, 0, 1],
+        }
+        dumped = validate_operations([sketch(exact)])[0]["plane"]
+        self.assertEqual(dumped["origin"], [10, 0, 0])
+
+    def test_malformed_origin_is_still_rejected_before_dispatch(self):
+        with self.assertRaisesRegex(ValueError, "origin"):
+            validate_operations(
+                [sketch({"reference": {"kind": "plane", "id": 11}, "origin": [1, 0]})]
+            )
+
 
 class CoordinateCapabilityText(unittest.IsolatedAsyncioTestCase):
     async def test_capability_summary_covers_any_valid_plane(self):
