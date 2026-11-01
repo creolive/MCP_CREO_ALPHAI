@@ -94,6 +94,33 @@ creo_recolor_assembly(
 
 下一步：实机阶段遵循 BUG-001／BUG-091 会话准入要求，由用户重新发起后运行 `tools/test_assembly_appearance.py` 与装配针对性回归；合入 `main` 时按项目规则完成新版本发布。
 
+### 2026-11-01 实机验收收口（run `assembly_appearance_live_20261101T060336Z558b3546`，28/28 通过）
+
+**会话准入（BUG-001/BUG-091 四门槛逐项核对）**：本轮用户指派后经 `creo_startup.py` 受限 Explorer/PSF 路径**仅请求一次**启动（parametric 9140 / xtop 7072 / nmsd 9792 / pro_comm_msg 19684，2026-11-01 12:57:53–12:58:00 本地）；GUI 核验——xtop 唯一可见顶层窗口 "Creo Parametric 12"、`IsHungAppWindow=false`、无模态/警告弹窗、四进程 `Responding=True`；唯一 E 盘 dev 客户端（Codex 配置 C 盘旧项 `enabled=false`）、无并行构建/worker 替换/活动原生作业，工作树 `jobs/`/`models/` 空；主仓库历史 unknown 保护原样保留未触碰；驱动 `wait_for_startup` 实测 `startup=ready/connected=true` 后才提交任何作业。
+
+**受测源码**：分支工作树 `c68beb2`+三项修复（提交 `3c4fa9d`/`e9ddc6d`/`b21dbb6`，文件内容与实机受测时一致，实机后按逻辑分组提交）；native `build/source.sha256=f7affbcb…8e36ecbc`、worker SHA256 `00730F45…`（R1/R2 轮）/`1FD68071…`（R3/R4 轮）。
+
+**四轮时间线（UTC 报告目录即 run tag）**：
+
+| 轮次 | 结果 | 定位与处置 |
+| --- | --- | --- |
+| R1 `20261101T050234Z74ca4441` | 14 作业全成功、3 检查过后中止 | 驱动"失败计划 1"误用三成员显式族表，被生产端在输入校验层**正确拒绝**（is_error、未建作业、revision 不变）——"族表必须无重复、完整覆盖组件"契约（计划文档）的活体证据；驱动改自动分族全量上色 |
+| R2 `20261101T051854Z4ebece26` | 失败计划 1 全过（9 检查）后 round A 失败 | 作业 `f4d0d50c` 在 `save_and_reload` 阶段 `[json.exception.invalid_iterator.208] cannot use operator[] for object iterators`——`native/appearance.h` 保存重载比对与回滚比对两处对 `.find()` 迭代器误用下标（R1 未触发是因基线全 absent 不走 RGB 比较）；修复为 `(*a)[i]`/`(*b)[i]`（提交 `3c4fa9d`）。上色与读回本身已成功（painted=80、容差内、失败巡检颜色 present） |
+| R3 `20261101T053544Z61515f3a` | 23 检查、1 项失败后放置段中止 | 失败计划 2 原生侧 `rollback_succeeded=true` 且 80/80 行核验通过，但顶层 `result.recolor` 经 `project_recolor` 白名单投影后**丢失** `rollback_appearance_verified/check`（操作条目块完整）——修复 `e9ddc6d` 透传两字段（+2 单测锁定不伪造）；驱动 `component_placement` 误带 schema 外 `placement` 字段被正确拒绝——驱动去字段（`b21dbb6`）。驱动 `ok = ok and check(...)` 短路导致依赖检查跳过，系驱动模式非生产缺陷 |
+| R4 `20261101T060336Z558b3546` | **28/28 检查通过、退出码 0** | 全部验收项通过（见下） |
+
+**R4 验收清单（全过）**：12 源件创建+保存重载 true；80 组件装配；初始全 absent（三态检查）；失败计划 1 全量自动分族上色→双 `remove_component` 原生失败→`rollback_succeeded=true`、`effect_status=rolled_back`、80 条 absent 基线、回滚后全员无组件外观、80 组件与身份恢复；round A 自动分族 80 painted 无 unmatched、12 族计数与建议包逐族一致、保存擦除重载前后读回 ≤1e-6、`saved_file_reloaded_and_verified=true`、revision+1；round B 显式族表+合族（`exp_crank_fan` 计 2 等 11 族）；round C 第三套色板复涂（读回与计数不变）；失败计划 2 显式全量表上色→原生失败→`rollback_appearance_verified=true`、回滚后全员回到 round A 颜色；`component_placement` 移动 c01 并保存后全员保色、仅 c01 位姿变化、体积不变、保存重载 true；12 源零件文件 SHA256 在（创建后/round A 后/B+C 后/最终）四个时点全部不变。
+
+**目视确认**：截屏 `build/assembly_appearance_live_20261101T060336Z558b3546/visual_check.png`（本机生成物）；编排方视觉核验——3D 区域呈现约 8–12 种可辨实色族（紫/蓝/绿/橙/青等）、网格规整、无弹窗无警告。
+
+**针对性回归（同会话串行）**：`tools/test_assembly_pipeline.py --session-health-verified` 两跑均 success=true（13 断言、10 作业全 succeeded，报告 `build/assembly_pipeline_live_20261101T061539Z75cf1bfe/report.json`）；`tools/test_t07_preview.py --live --confirm-session-usable` `preview_acceptance=passed`（7 例、`empty_part` 按预期 `skipped_no_geometry`，报告 `build/t07_preview_feat052_regress_20261101.json`）。覆盖本次触碰的装配检查（含新外观字段）与 preview 共享链。
+
+**修复后离线验证**：`-m unittest discover -s tests` **1814/1814 OK**（1812 基线+2 投影锁定新增）；`tools/dev_check.py` success=true（0 新增语言/格式回归）；`clang-format 23.1.3 --dry-run --Werror native/appearance.h` 通过。
+
+**未测范围（保持开放）**：busy/并发通道交错；`dry_run` 预览分页与游标失效的实机路径（离线单测范围）；非法输入拒绝的实机路径（生产拒绝已在 R1 以真实族表拒绝形式覆盖一类，其余离线单测范围）；读回错误/失配故障注入（离线受控范围）；WorkBuddy 纯 MCP 黑盒验收（按项目约定单独执行）；除本机 Creo 12.4.0.0 外所有版本（Creo 9 无 SDK、Creo 10 不作门槛）；实机成功不外推其他环境。
+
+**结论**：FEAT-052 实机验收通过，随 **0.11.0**（MINOR，公开工具 94→95）交付；版本入口/版本说明/台账/兼容矩阵/README 已同步。
+
 **2026-11-01（登记，仅文档与示例，无代码变更）**
 
 - 依据计划文件登记本卡；在 [BACKLOG](../BACKLOG.md) 新增 FEAT-052 行（P2，状态「开发中」）。
