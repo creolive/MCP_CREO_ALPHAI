@@ -201,6 +201,90 @@ def check_unchanged(before: dict, after: dict) -> None:
         near(new_body["bbox"], old_body["bbox"])
 
 
+# --- BUG-097 L1: section location identity semantics (shared offline oracle) ---
+#
+# The native sketch path decides its world->section UV mapping from
+# ProSectionLocationGet. On an incomplete feature over an oblique support the
+# returned matrix has been observed to be the identity, which cannot be the
+# true placement: a true identity would mean the section coordinate system is
+# the world axes with the section plane at world Z=0 through the origin. The
+# oracle below mirrors the native decision and its two projections so the
+# offline tests can verify the *semantics* (identity detection, plausibility
+# guard, frame-basis fallback, round trips) without a Creo session. The native
+# wiring itself is locked by source-marker assertions in tests/unit.
+
+IDENTITY_TOLERANCE = 1e-12
+PLACEMENT_TOLERANCE = 1e-9
+
+IDENTITY_4X4 = [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+]
+
+
+def location_is_identity(loc: list[list[float]]) -> bool:
+    """Full 4x4 identity check, same entries as the native detection."""
+    return all(
+        abs(loc[row][col] - (1.0 if row == col else 0.0)) <= IDENTITY_TOLERANCE
+        for row in range(4)
+        for col in range(4)
+    )
+
+
+def identity_is_plausible(normal: list[float], origin: list[float]) -> bool:
+    """Whether the identity could be the true location for this sketch placement."""
+    return (
+        abs(normal[0]) <= PLACEMENT_TOLERANCE
+        and abs(normal[1]) <= PLACEMENT_TOLERANCE
+        and abs(normal[2] - 1.0) <= PLACEMENT_TOLERANCE
+        and all(abs(component) <= PLACEMENT_TOLERANCE for component in origin)
+    )
+
+
+def uv_mapping_choice(loc: list[list[float]], normal: list[float], origin: list[float]) -> str:
+    """The native mapping decision: frame_basis only for a placeholder identity."""
+    if location_is_identity(loc) and not identity_is_plausible(normal, origin):
+        return "frame_basis"
+    return "location_matrix"
+
+
+def project_world_to_section(
+    point_uv: list[float],
+    origin: list[float],
+    u_axis: list[float],
+    v_axis: list[float],
+    use_frame_basis: bool,
+    loc: list[list[float]],
+) -> tuple[float, float]:
+    """World point of the user UV, mapped to section coordinates (native semantics)."""
+    world = [origin[i] + u_axis[i] * point_uv[0] + v_axis[i] * point_uv[1] for i in range(3)]
+    if use_frame_basis:
+        delta = [world[i] - origin[i] for i in range(3)]
+        return (
+            sum(delta[i] * u_axis[i] for i in range(3)),
+            sum(delta[i] * v_axis[i] for i in range(3)),
+        )
+    return tuple(sum((world[i] - loc[3][i]) * loc[axis][i] for i in range(3)) for axis in range(2))
+
+
+def project_section_to_world(
+    point_xy: tuple[float, float],
+    origin: list[float],
+    u_axis: list[float],
+    v_axis: list[float],
+    use_frame_basis: bool,
+    loc: list[list[float]],
+) -> list[float]:
+    """The inverse mapping; must reproduce the world point the UV came from."""
+    if use_frame_basis:
+        basis = [u_axis, v_axis, origin]
+    else:
+        basis = [loc[0], loc[1], loc[3]]
+    return [basis[2][i] + point_xy[0] * basis[0][i] + point_xy[1] * basis[1][i] for i in range(3)]
+
+
 def local_provenance() -> dict:
     """Same shape as tools/test_t05_native.local_provenance, for this driver."""
     from version import VERSION
@@ -500,6 +584,50 @@ def _rejected(callable_) -> None:
     raise AssertionError("Expected the check to reject this value")
 
 
+def tilted_frame_basis(tilt_degrees: float = 54.0, reverse_u: bool = False) -> dict:
+    """An orthonormal frame on a plane tilted off the X plane (DEV-049 basis).
+
+    Mirrors sketch_frame: the requested u direction is orthogonalized against
+    the support normal (the native path rejects nothing here but projects the
+    component out), and reverse_u negates the in-plane result so "reverse U"
+    means the exact opposite axis, not a different rotation.
+    """
+    angle = math.radians(tilt_degrees)
+    normal = [math.cos(angle), math.sin(angle), 0.0]
+    preferred = [1.0, 0.0, 0.0]
+    projection = sum(normal[i] * preferred[i] for i in range(3))
+    u_axis = unit([preferred[i] - normal[i] * projection for i in range(3)])
+    if reverse_u:
+        u_axis = [-component for component in u_axis]
+    return {
+        "normal": normal,
+        "u_axis": u_axis,
+        "v_axis": cross(normal, u_axis),
+        "origin": [0.0, 0.0, 0.0],
+    }
+
+
+def round_trip_error(
+    point_uv: list[float], frame_dict: dict, use_frame_basis: bool, loc: list[list[float]]
+) -> float:
+    """World->section->world distance for one UV point under one mapping choice."""
+    world = [
+        frame_dict["origin"][i]
+        + frame_dict["u_axis"][i] * point_uv[0]
+        + frame_dict["v_axis"][i] * point_uv[1]
+        for i in range(3)
+    ]
+    section = project_world_to_section(
+        point_uv, frame_dict["origin"], frame_dict["u_axis"], frame_dict["v_axis"],
+        use_frame_basis, loc,
+    )
+    restored = project_section_to_world(
+        section, frame_dict["origin"], frame_dict["u_axis"], frame_dict["v_axis"],
+        use_frame_basis, loc,
+    )
+    return math.sqrt(sum((restored[i] - world[i]) ** 2 for i in range(3)))
+
+
 def offline_checks() -> tuple[int, int]:
     """Validate plans and assertion logic only; nothing here is a native result."""
     passed = 0
@@ -629,6 +757,78 @@ def offline_checks() -> tuple[int, int]:
         resized["inspection"]["volume_mm3"] = 1600.0
         _rejected(lambda: check_unchanged(before, resized))
 
+    def section_location_semantics() -> None:
+        """BUG-097 L1: the mapping decision and both round trips, per case class."""
+        # identity 合法 XY: the named XY plane through the origin — the identity
+        # could be the true location, so the location matrix keeps the mapping.
+        xy_frame = {"normal": [0.0, 0.0, 1.0], "origin": [0.0, 0.0, 0.0]}
+        assert uv_mapping_choice(IDENTITY_4X4, xy_frame["normal"], xy_frame["origin"]) == (
+            "location_matrix"
+        )
+        # 平移 XY: a plane parallel to XY at z=30 can never have an identity
+        # placement, so a returned identity is a placeholder -> frame basis.
+        lifted = {**xy_frame, "origin": [0.0, 0.0, 30.0]}
+        assert uv_mapping_choice(IDENTITY_4X4, lifted["normal"], lifted["origin"]) == "frame_basis"
+        # 主平面 YZ/XZ: a true non-identity rotation keeps the location matrix.
+        yz_loc = [[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
+                  [0.0, 0.0, 0.0, 1.0]]
+        assert not location_is_identity(yz_loc)
+        assert uv_mapping_choice(yz_loc, [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]) == "location_matrix"
+        # ±54° 斜面 + 反向 U: identity over an oblique support is a placeholder.
+        for tilt in (54.0, -54.0):
+            for reverse in (False, True):
+                frame_dict = tilted_frame_basis(tilt, reverse_u=reverse)
+                assert uv_mapping_choice(
+                    IDENTITY_4X4, frame_dict["normal"], frame_dict["origin"]
+                ) == "frame_basis", (tilt, reverse)
+        # A non-identity matrix never triggers the fallback, whatever the frame.
+        assert uv_mapping_choice(yz_loc, [0.6, 0.8, 0.0], [1.0, 2.0, 3.0]) == "location_matrix"
+
+    def section_location_round_trips() -> None:
+        """Every accepted mapping must be its own inverse on its own plane."""
+        cases: list[tuple[str, dict, bool, list[list[float]]]] = []
+        # identity-plausible XY through the origin: location matrix, identity loc.
+        cases.append(
+            (
+                "identity_xy",
+                {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0],
+                 "v_axis": [0.0, 1.0, 0.0], "origin": [0.0, 0.0, 0.0]},
+                False,
+                IDENTITY_4X4,
+            )
+        )
+        # translated XY: frame-basis fallback over the placeholder identity.
+        cases.append(
+            (
+                "translated_xy",
+                {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0],
+                 "v_axis": [0.0, 1.0, 0.0], "origin": [0.0, 0.0, 30.0]},
+                True,
+                IDENTITY_4X4,
+            )
+        )
+        # principal YZ with its true rotation kept.
+        cases.append(
+            (
+                "principal_yz",
+                {"normal": [1.0, 0.0, 0.0], "u_axis": [0.0, 1.0, 0.0],
+                 "v_axis": [0.0, 0.0, 1.0], "origin": [0.0, 0.0, 0.0]},
+                False,
+                [[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
+                 [0.0, 0.0, 0.0, 1.0]],
+            )
+        )
+        # ±54° and reverse U over the placeholder identity: frame basis.
+        for tilt in (54.0, -54.0):
+            for reverse in (False, True):
+                frame_dict = tilted_frame_basis(tilt, reverse_u=reverse)
+                cases.append((f"tilted_{tilt:+g}_reverse_u_{reverse}", frame_dict, True,
+                              IDENTITY_4X4))
+        for name, frame_dict, use_frame_basis, loc in cases:
+            for point_uv in ([0.0, 0.0], [190.382228, 22.394433], [-4.0, -3.0], [7.5, -2.25]):
+                error = round_trip_error(point_uv, frame_dict, use_frame_basis, loc)
+                assert error <= 1e-9, (name, point_uv, error)
+
     check("select_right_plane picks one plane through the origin", selection)
     check("both +Z and -Z plans survive input validation", valid_plans)
     check("parallel U is currently rejected by the native boundary, not entry", parallel_plan)
@@ -637,6 +837,9 @@ def offline_checks() -> tuple[int, int]:
     check("frame assertions accept U/N/V and reject bad frames", frame_checks)
     check("measurement assertions reject wrong volume, bbox or center", measurement_checks)
     check("unchanged assertions reject a revision or volume change", unchanged_checks)
+    check("BUG-097 L1 identity/plausibility decision per case class", section_location_semantics)
+    check("BUG-097 L1 world<->section round trips over both mappings",
+          section_location_round_trips)
     return passed, total
 
 

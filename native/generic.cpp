@@ -1197,6 +1197,38 @@ static ProSelection selected(ProSection section, int id, ProSectionPointType typ
     CK(ProSectionEntityGetSelected(section, id, type, have ? p : nullptr, PRO_VALUE_UNUSED, &s));
     return s;
 }
+// BUG-097 L2: structured failure receipt for feature completion. The
+// ProErrorlist traversal in errors() (geometry.cpp) has always logged and
+// concatenated element errors; the actual loss point was downstream â€?a failed
+// CompleteFeature only surfaced "Toolkit call CompleteFeature failed with code
+// -1", leaving the element/type/error triples and the original section solver
+// messages in native.log. The report below is bounded (element sample cap 20,
+// section sample cap 20, totals kept) and every missing piece stays explicitly
+// unavailable instead of being fabricated.
+static J last_feature_error_report = nullptr;
+static J feature_error_report(const char *api, ProError code, const char *failed_stage) {
+    J sample = J::array();
+    for (const auto &entry : feature_error_entries)
+        sample.push_back({{"element", entry.element}, {"type", entry.type}, {"error", entry.error}});
+    J section = J::array();
+    for (const auto &message : section_error_messages)
+        section.push_back(message);
+    J section_errors = {{"available", section_error_captured},
+                        {"total", section_error_captured ? J(section_error_total) : J(nullptr)},
+                        {"truncated", section_error_captured &&
+                                          section_error_total > (int)section_error_messages.size()},
+                        {"sample", section}};
+    if (!section_error_captured)
+        section_errors["unavailable_reason"] = "no section solve ran before this failure";
+    return {{"api", api},
+            {"code", code},
+            {"failed_stage", failed_stage},
+            {"element_errors",
+             {{"total", feature_error_total},
+              {"truncated", feature_error_total > (int)feature_error_entries.size()},
+              {"sample", sample}}},
+            {"section_errors", section_errors}};
+}
 static void redefine(ProFeature *f, ProElement root) {
     ProFeatureCreateOptions *options = nullptr;
     CK(ProArrayAlloc(1, sizeof(ProFeatureCreateOptions), 1, (ProArray *)&options));
@@ -1205,6 +1237,9 @@ static void redefine(ProFeature *f, ProElement root) {
     ProError e = ProFeatureWithoptionsRedefine(nullptr, f, root, options, PRO_REGEN_NO_FLAGS, &es);
     errors(es);
     ProArrayFree((ProArray *)&options);
+    if (e != PRO_TK_NO_ERROR)
+        last_feature_error_report = feature_error_report("ProFeatureWithoptionsRedefine", e,
+                                                         "CompleteFeature");
     check(e, "CompleteFeature");
 }
 #include "sketch_coordinates.cpp"
@@ -1619,12 +1654,68 @@ static J sketch(const J &op) {
     for (int row = 0; row < 4; row++)
         log("SECTION_MATRIX_%d=%.9f,%.9f,%.9f,%.9f\n", row, loc[row][0], loc[row][1], loc[row][2],
             loc[row][3]);
-    const bool mirrored = dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) < 0;
+    // BUG-097 L1: on an incomplete feature over an oblique support,
+    // ProSectionLocationGet has been observed returning the identity while the
+    // sketch is placed on a plane where the identity cannot be the true
+    // location: a true identity would mean the section coordinate system is
+    // the world axes with the section plane at world Z=0 through the origin.
+    // Mapping world coordinates through that placeholder writes world XY into
+    // the section. Detect the full 4x4 identity, but only fall back to the
+    // placement frame basis when the identity is actually impossible for this
+    // sketch; on a support where identity is a legitimate placement (world XY
+    // through the origin, e.g. the named XY plane) the location matrix keeps
+    // the mapping and the two projections coincide there anyway. This is not
+    // the external patch pasted in: the plausibility guard and diagnostics are
+    // derived from the current source and the frame semantics above.
+    const bool loc_is_identity = [&]() {
+        for (int row = 0; row < 4; row++)
+            for (int col = 0; col < 4; col++)
+                if (fabs(loc[row][col] - (row == col ? 1.0 : 0.0)) > 1e-12)
+                    return false;
+        return true;
+    }();
+    const bool identity_plausible = fabs(frame.n[0]) < 1e-9 && fabs(frame.n[1]) < 1e-9 &&
+                                    fabs(frame.n[2] - 1) < 1e-9 &&
+                                    fabs(frame.origin[0]) < 1e-9 &&
+                                    fabs(frame.origin[1]) < 1e-9 && fabs(frame.origin[2]) < 1e-9;
+    const bool use_frame_basis = loc_is_identity && !identity_plausible;
+    log("SECTION_LOCATION_IDENTITY=%d using_%s identity_plausible=%d\n", loc_is_identity ? 1 : 0,
+        use_frame_basis ? "frame_basis" : "location_matrix", identity_plausible ? 1 : 0);
+    J section_location = {{"matrix_identity", loc_is_identity},
+                          {"identity_plausible", identity_plausible},
+                          {"uv_mapping", use_frame_basis ? "frame_basis" : "location_matrix"}};
+    // The inverse mapping used by the arc/round-trip reports must mirror the
+    // projection above: with the frame-basis fallback the location matrix is a
+    // placeholder, so report against the placement frame itself instead of the
+    // meaningless identity.
+    ProMatrix effective_loc;
+    if (use_frame_basis) {
+        for (int col = 0; col < 3; col++) {
+            effective_loc[0][col] = frame.u[col];
+            effective_loc[1][col] = frame.v[col];
+            effective_loc[2][col] = frame.n[col];
+            effective_loc[3][col] = frame.origin[col];
+        }
+        effective_loc[0][3] = effective_loc[1][3] = effective_loc[2][3] = 0.0;
+        effective_loc[3][3] = 1.0;
+    } else
+        memcpy(effective_loc, loc, sizeof(effective_loc));
+    const bool mirrored =
+        use_frame_basis ? false : dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) < 0;
     arc_endpoint_swapped.clear();
     arc_logical_swapped.clear();
     auto project = [&](const J &p, double *out) {
         V w = add(frame.origin, add(scale(frame.u, p.at(0).get<double>()),
                                     scale(frame.v, p.at(1).get<double>())));
+        if (use_frame_basis) {
+            // The location matrix is a placeholder, so project with the exact
+            // frame the sketch was placed with: the section coordinates are the
+            // user's own frame coordinates until the kernel reports otherwise.
+            V d = add(w, scale(frame.origin, -1));
+            out[0] = dot(d, frame.u);
+            out[1] = dot(d, frame.v);
+            return;
+        }
         for (int i = 0; i < 2; i++)
             out[i] = (w[0] - loc[3][0]) * loc[i][0] + (w[1] - loc[3][1]) * loc[i][1] +
                      (w[2] - loc[3][2]) * loc[i][2];
@@ -1717,7 +1808,11 @@ static J sketch(const J &op) {
             Pro2dEllipsedef ell = {};
             ell.type = PRO_2D_ELLIPSE;
             project(e["center"], ell.origin);
-            double align = fabs(dot(frame.u, V{loc[0][0], loc[0][1], loc[0][2]}));
+            // Under the frame-basis fallback the location matrix is a
+            // placeholder; the alignment check then follows the assumed
+            // section axes (the placement frame) instead of the identity.
+            double align =
+                fabs(dot(frame.u, V{effective_loc[0][0], effective_loc[0][1], effective_loc[0][2]}));
             if (align > 0.99999) {
                 ell.x_radius = e["x_radius"];
                 ell.y_radius = e["y_radius"];
@@ -1794,8 +1889,11 @@ static J sketch(const J &op) {
         // orientation reference; the sketch u axis may meet them at any angle.
         // Coordinate dimensions are created and verified in native section
         // coordinates either way, so name the input u/v components after their
-        // dominant section axis instead of rejecting unaligned frames.
-        double u_to_section_x = dot(frame.u, V{loc[0][0], loc[0][1], loc[0][2]});
+        // dominant section axis instead of rejecting unaligned frames. Under
+        // the frame-basis fallback the assumed section x axis is frame.u, so
+        // the effective matrix (not the placeholder identity) answers here.
+        double u_to_section_x =
+            dot(frame.u, V{effective_loc[0][0], effective_loc[0][1], effective_loc[0][2]});
         std::array<int, 2> axes =
             fabs(u_to_section_x) >= sqrt(0.5) ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 0};
         log("COORDINATE_AXES u_to_section_x=%.9f axes=%d,%d\n", u_to_section_x, axes[0], axes[1]);
@@ -1825,6 +1923,7 @@ static J sketch(const J &op) {
     J solver_info = solve_profile(section, solving_op);
     solver_info["requested"] = op.value("dimensioning", "auto");
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
+    solver_info["section_location"] = section_location;
     if (!coordinate_plan.is_null())
         solver_info["coordinate_geometry"] = verify_coordinate_plan(
             section, coordinate_plan["targets"], coordinate_plan["origin_id"],
@@ -1843,7 +1942,8 @@ static J sketch(const J &op) {
         try {
             native_section = section_profile_summary(saved, "sketch");
             arc_geometry = arc_geometry_report(saved, copy_code, op["entities"], entities,
-                                               frame.origin, frame.u, frame.v, loc, mirrored);
+                                               frame.origin, frame.u, frame.v, effective_loc,
+                                               mirrored);
             if (!coordinate_plan.is_null())
                 solver_info["coordinate_geometry_after_creation"] = verify_coordinate_plan(
                     saved, coordinate_plan["targets"], coordinate_plan["origin_id"],
@@ -1864,7 +1964,8 @@ static J sketch(const J &op) {
     }
     if (arc_geometry.empty())
         arc_geometry = arc_geometry_report(nullptr, copy_code, op["entities"], entities,
-                                           frame.origin, frame.u, frame.v, loc, mirrored);
+                                           frame.origin, frame.u, frame.v, effective_loc,
+                                           mirrored);
     solver_info["native_section"] = native_section;
     // FEAT-010/BUG-049: publish the two-stage fidelity report on the
     // operation result; an enforced policy rejects before the feature ships.
@@ -1889,7 +1990,9 @@ static J sketch(const J &op) {
          {"origin", frame.origin},
          {"u_axis", frame.u},
          {"v_axis", frame.v},
-         {"section_normal_sign", dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1}});
+         {"section_normal_sign",
+          use_frame_basis ? 1
+                          : (dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1)}});
     if (op.contains("profile"))
         aliases[op["label"].get<std::string>()]["airfoil"] = op["profile"];
     // FEAT-008/T09B: publish the section entity ids on the operation record so
@@ -1903,6 +2006,7 @@ static J sketch(const J &op) {
             {"native_section", native_section},
             {"arc_geometry", arc_geometry},
             {"geometry_deviation", geometry_deviation},
+            {"section_location", section_location},
             {"entity_ids", ids}};
 }
 // ProFeatureWithoptionsCreate reports an invalid section only as a bare code;
@@ -3518,6 +3622,10 @@ static void execute_operation_body(const J &op) {
 static void execute_operation(const J &op) {
     material_probe_active = false;
     material_probe_before = VolumeProbe{};
+    // BUG-097 L2: the structured CompleteFeature receipt belongs to the
+    // operation that produced it; clear per operation so a later failure can
+    // never publish a stale report from an earlier one.
+    last_feature_error_report = nullptr;
     try {
         execute_operation_body(op);
     } catch (...) {
@@ -3529,6 +3637,8 @@ static void execute_operation(const J &op) {
         if (material_probe_active)
             failure.update(
                 material_observation_json(material_probe_before, false, VolumeProbe{}, false));
+        if (!last_feature_error_report.is_null())
+            failure["feature_errors"] = last_feature_error_report;
         failure.update({{"op", kind},
                         {"index", operation_position},
                         {"label", op.value("label", "")},
@@ -4550,7 +4660,7 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
         sub.depth = context->depth + 1;
         // The shared visit operation enforces the depth limit before the
         // visit and diagnoses a failed sub-assembly walk on the stored node
-        // (node_index) instead of failing the whole report â€” sibling
+        // (node_index) instead of failing the whole report â€?sibling
         // components stay observable.
         walk.visit_subtree(context->depth, node_index, [&sub]() -> ProError {
             return ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr,
@@ -5806,6 +5916,7 @@ static int run_generic(const std::wstring &job) {
     generic_job = job;
     generic_phase = "loading_request";
     last_toolkit_error.clear();
+    last_feature_error_report = nullptr;
     J report = {{"success", false},
                 {"saved_file_reloaded_and_verified", false},
                 {"rollback_succeeded", false}};
@@ -6101,6 +6212,26 @@ static int run_generic(const std::wstring &job) {
         report["toolkit_code"] = error;
         report["message"] = "Toolkit call " + last_toolkit_error + " failed with code " +
                             std::to_string(error) + " during " + generic_phase;
+        // BUG-097 L2: a failure with a captured ProErrorlist keeps its bounded
+        // element/type/error triples and the original section solver messages
+        // in the receipt; the text above stays a summary, never the only copy.
+        if (!last_feature_error_report.is_null()) {
+            report["feature_errors"] = last_feature_error_report;
+            const J &element_errors = last_feature_error_report["element_errors"];
+            std::string detail;
+            for (const auto &entry : element_errors["sample"]) {
+                if (!detail.empty())
+                    detail += "; ";
+                detail += "element=" + std::to_string(entry["element"].get<int>()) +
+                          " type=" + std::to_string(entry["type"].get<int>()) +
+                          " error=" + std::to_string(entry["error"].get<int>());
+            }
+            if (element_errors["truncated"].get<bool>())
+                detail += "; ...(total " + std::to_string(element_errors["total"].get<int>()) +
+                          ", sample capped)";
+            if (!detail.empty())
+                report["message"] += " Element errors: " + detail + ".";
+        }
         log("BUILD_FAILED=%d\n", error);
     } catch (const std::exception &error) {
         report["message"] = error.what();

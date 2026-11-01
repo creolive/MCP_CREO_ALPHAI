@@ -18,6 +18,132 @@ from typing import Any
 EXECUTION_STATUSES = ("succeeded", "failed", "not_executed", "unknown")
 EFFECT_STATUSES = ("committed", "rolled_back", "no_effect", "unknown")
 
+#: BUG-097 L2: the native executor caps the element/section error samples; the
+#: projection re-applies the same bound defensively and keeps totals visible.
+FEATURE_ERROR_SAMPLE_LIMIT = 20
+SECTION_ERROR_SAMPLE_LIMIT = 20
+
+
+def _bounded_count(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _bounded_truncated(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def normalize_feature_errors(block: Any) -> dict[str, Any]:
+    """Normalize the structured CompleteFeature failure receipt (BUG-097 L2).
+
+    The block carries the failing API, the raw Toolkit code, the failed stage,
+    bounded ``element_errors`` (element/type/error triples from the
+    ProErrorlist) and the original ``section_errors`` from the section solve.
+    Values are only ever the executor's own reports: an uninterpretable block
+    degrades to an explicit unavailable state instead of inventing entries, and
+    a missing block stays missing (legacy jobs are never fabricated here).
+    """
+    if not isinstance(block, dict):
+        return {
+            "api": None,
+            "code": None,
+            "failed_stage": None,
+            "element_errors": {"total": None, "truncated": None, "sample": []},
+            "section_errors": {
+                "available": False,
+                "total": None,
+                "truncated": None,
+                "sample": [],
+                "unavailable_reason": "the executor did not report a structured error block",
+            },
+        }
+    element_sample: list[dict[str, Any]] = []
+    raw_elements = block.get("element_errors")
+    element_total: int | None = None
+    element_truncated: bool | None = None
+    if isinstance(raw_elements, dict):
+        element_total = _bounded_count(raw_elements.get("total"))
+        element_truncated = _bounded_truncated(raw_elements.get("truncated"))
+        raw_sample = raw_elements.get("sample")
+        if isinstance(raw_sample, list):
+            for item in raw_sample:
+                if not isinstance(item, dict):
+                    element_truncated = True
+                    continue
+                error = item.get("error")
+                entry = {
+                    "element": _bounded_count(item.get("element")),
+                    "type": _bounded_count(item.get("type")),
+                    # A Toolkit error code may be negative; only its type matters.
+                    "error": error if type(error) is int else None,
+                }
+                if len(element_sample) < FEATURE_ERROR_SAMPLE_LIMIT:
+                    element_sample.append(entry)
+                else:
+                    element_truncated = True
+    section_sample: list[str] = []
+    section_total: int | None = None
+    section_truncated: bool | None = None
+    section_available = False
+    unavailable_reason: str | None = None
+    raw_section = block.get("section_errors")
+    if isinstance(raw_section, dict):
+        section_available = raw_section.get("available") is True
+        section_total = _bounded_count(raw_section.get("total"))
+        section_truncated = _bounded_truncated(raw_section.get("truncated"))
+        raw_messages = raw_section.get("sample")
+        if isinstance(raw_messages, list):
+            for item in raw_messages:
+                if not isinstance(item, str):
+                    section_truncated = True
+                    continue
+                if len(section_sample) < SECTION_ERROR_SAMPLE_LIMIT:
+                    section_sample.append(item)
+                else:
+                    section_truncated = True
+        reason = raw_section.get("unavailable_reason")
+        unavailable_reason = reason if isinstance(reason, str) else None
+    if not section_available and unavailable_reason is None:
+        unavailable_reason = "no section error capture accompanied this failure"
+    api = block.get("api")
+    failed_stage = block.get("failed_stage")
+    code = block.get("code")
+    return {
+        "api": api if isinstance(api, str) and api else None,
+        "code": code if type(code) is int else None,
+        "failed_stage": failed_stage if isinstance(failed_stage, str) and failed_stage else None,
+        "element_errors": {
+            "total": element_total,
+            "truncated": element_truncated,
+            "sample": element_sample,
+        },
+        "section_errors": {
+            "available": section_available,
+            "total": section_total,
+            "truncated": section_truncated,
+            "sample": section_sample,
+            "unavailable_reason": unavailable_reason,
+        },
+    }
+
+
+def annotate_feature_errors(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the bounded CompleteFeature error receipt on a failed result.
+
+    Both the report-level block and each operation record's block share the
+    same normalization; records without a block are left untouched so legacy
+    results never gain synthetic error entries.
+    """
+    if "feature_errors" in result:
+        result["feature_errors"] = normalize_feature_errors(result.get("feature_errors"))
+    operations = result.get("operations")
+    if isinstance(operations, list):
+        for operation in operations:
+            if isinstance(operation, dict) and "feature_errors" in operation:
+                operation["feature_errors"] = normalize_feature_errors(
+                    operation.get("feature_errors")
+                )
+    return result
+
 
 def _execution_status(op: dict[str, Any], job_status: str, failed_index: int | None) -> str:
     if op.get("execution_status") in EXECUTION_STATUSES:
@@ -89,6 +215,9 @@ def annotate_native_result(
     result: dict[str, Any], *, readonly: bool, inputs: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
     """Normalize an accepted native result before it is persisted on the job."""
+    # BUG-097 L2: the error receipt is projected even when no operation list
+    # exists (a worker-level failure may still carry the structured block).
+    annotate_feature_errors(result)
     operations = result.get("operations")
     if not isinstance(operations, list):
         # No operation record exists (for example the worker never delivered a

@@ -9,6 +9,9 @@ static void section_errors(ProWSecerror error, const char *phase) {
         char utf8[4096] = {};
         WideCharToMultiByte(CP_UTF8, 0, msg, -1, utf8, sizeof(utf8), nullptr, nullptr);
         log("SECTION_ERROR phase=%s message=%s\n", phase, utf8);
+        // BUG-097 L2: keep the original section messages for the structured
+        // CompleteFeature failure receipt (bounded capture, see geometry.cpp).
+        capture_section_error(phase, utf8);
     }
 }
 static J solve_profile(ProSection section, const J &op) {
@@ -18,6 +21,10 @@ static J solve_profile(ProSection section, const J &op) {
     std::string mode = op.value("dimensioning", "auto");
     CK(ProSectionIntentManagerModeSet(section, PRO_B_FALSE));
     CK(ProSectionEpsilonSet(section, mode == "coordinates" ? 0.000000001 : 0.0001));
+    // BUG-097 L2: this solve is the section-error provenance for a possible
+    // CompleteFeature failure later in the same operation; start a fresh
+    // bounded capture so a previous operation's messages cannot leak in.
+    reset_section_error_capture();
     ProWSecerror error = nullptr;
     CK(ProSecerrorAlloc(&error));
     J info = {
