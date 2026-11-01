@@ -969,8 +969,37 @@ static Frame sketch_frame(const J &op) {
     } else {
         f.n = support_normal;
         f.origin = p.contains("origin") ? vec(p["origin"]) : support_origin;
-        if (fabs(dot(f.n, add(f.origin, scale(support_origin, -1)))) > 1e-6)
-            throw std::runtime_error("Sketch origin is outside support plane");
+        // BUG-095: an explicit origin is rejected against the actual support
+        // plane, and the rejection now carries the measured evidence instead
+        // of a bare message. signed_distance is n·(origin - support_origin)
+        // with the normalized support normal the sketch frame actually uses;
+        // constant_mm completes the plane equation n·x = constant. The
+        // suggested origin is an explicit projection of the requested point
+        // onto that plane: advice only, never an applied modification. The
+        // 1e-6 mm admission threshold is unchanged.
+        V origin_delta = add(f.origin, scale(support_origin, -1));
+        double signed_distance = dot(f.n, origin_delta);
+        if (fabs(signed_distance) > 1e-6) {
+            char message[256];
+            std::snprintf(message, sizeof(message),
+                          "Sketch origin is outside support plane: signed distance %.9g mm "
+                          "exceeds the 1e-06 mm tolerance; see sketch_origin_diagnostics in "
+                          "the operation result",
+                          signed_distance);
+            V suggested = add(f.origin, scale(f.n, -signed_distance));
+            stage_operation_result(
+                {{"sketch_origin_diagnostics",
+                  {{"status", "origin_outside_support_plane"},
+                   {"distance_to_plane_mm", fabs(signed_distance)},
+                   {"signed_distance_to_plane_mm", signed_distance},
+                   {"origin_tolerance_mm", 1e-6},
+                   {"support_plane",
+                    {{"normal", J::array({f.n[0], f.n[1], f.n[2]})},
+                     {"constant_mm", dot(f.n, support_origin)}}},
+                   {"requested_origin", J::array({f.origin[0], f.origin[1], f.origin[2]})},
+                   {"suggested_origin", J::array({suggested[0], suggested[1], suggested[2]})}}}});
+            throw std::runtime_error(message);
+        }
         V preferred = p.contains("u_axis") ? vec(p["u_axis"])
                                            : (fabs(f.n[0]) < 0.9 ? V{1, 0, 0} : V{0, 1, 0});
         double magnitude = sqrt(dot(preferred, preferred));
