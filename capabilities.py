@@ -90,6 +90,12 @@ def require_available(operations: list[dict]) -> None:
 
 def families() -> dict:
     return {
+        "job_reporting": {
+            "failed_stage": "Terminal failed jobs prefer the native failed_stage when reported; otherwise retain the last known stage",
+            "busy": "Busy requests are rejected without a job; blocking owner fields are preserved",
+            "retry_after_seconds": 5,
+            "retry_interval": "Suggested interval only, not a completion estimate; inspect the owner and poll accepted jobs",
+        },
         "callback_lifecycle": {
             "enabled": True,
             "tool": "creo_callback_status",

@@ -378,8 +378,9 @@ class ToolkitBusy(RuntimeError):
             "build or another client. "
         )
         guidance += (
-            "This request was not accepted. Retry this request after 1 second only when "
-            "the occupying operation has finished; re-read the model revision before writing. "
+            "This request was not accepted. A suggested retry interval is 5 seconds, not "
+            "a completion estimate; retry only when the occupying operation has finished. "
+            "Re-read the model revision before writing. "
             "Do not resubmit an already accepted job."
         )
         self.payload = {
@@ -391,7 +392,7 @@ class ToolkitBusy(RuntimeError):
             "blocking_operation": holder.get("operation"),
             "owner_snapshot": holder or None,
             "owner_determined": bool(holder),
-            "retry_after_seconds": 1,
+            "retry_after_seconds": 5,
             "retry_guidance": guidance,
             "message": message or "Creo Toolkit is busy with another operation",
         }
@@ -880,6 +881,18 @@ def note_native_outcome(manifest: dict) -> None:
         )
 
 
+def apply_terminal_stage(manifest: dict) -> None:
+    """Use the native failure stage when one was actually reported."""
+    if manifest.get("status") == "failed":
+        result = manifest.get("result")
+        if (
+            isinstance(result, dict)
+            and isinstance(result.get("failed_stage"), str)
+            and result["failed_stage"]
+        ):
+            manifest["stage"] = result["failed_stage"]
+
+
 def session_status(connect_timeout_seconds: int = 30, *, build_worker: bool = True) -> dict:
     if (
         isinstance(connect_timeout_seconds, bool)
@@ -1177,6 +1190,7 @@ def run_job(job_id: str) -> None:
         )
     except Exception as exc:
         manifest.update(status="unknown_outcome" if worker_started else "failed", message=str(exc))
+    apply_terminal_stage(manifest)
     note_native_outcome(manifest)
     manifest["finished_at"] = now()
     write_json(directory / "job.json", manifest)
@@ -1209,6 +1223,7 @@ def get_job(job_id: str, detail: str = "full") -> dict:
             manifest["stage"] = stages[-1]
         if manifest["status"] in ("failed", "unknown_outcome"):
             manifest["native_log_tail"] = tail[-4000:]
+    apply_terminal_stage(manifest)
     if manifest["status"] in ("queued", "running"):
         age = (
             datetime.now(timezone.utc) - datetime.fromisoformat(manifest["created_at"])
@@ -1263,6 +1278,8 @@ def get_job(job_id: str, detail: str = "full") -> dict:
 
 def compact_job(manifest: dict) -> dict:
     """Bound polling payloads without losing the outcome or recovery information."""
+    manifest = dict(manifest)
+    apply_terminal_stage(manifest)
     keys = (
         "job_id",
         "kind",
