@@ -152,24 +152,22 @@ static void preview_confirm_file(PreviewStepOutcome &outcome) {
     }
 }
 
-// One capture attempt. apply_view_matrix is false for drawings, whose view is
-// owned by the drawing view rather than by the model orientation.
-static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file,
-                                          bool apply_view_matrix, double width_inches,
-                                          double height_inches, ProRasterType type) {
-    PreviewStepOutcome outcome;
-    outcome.path = file;
+// FEAT-052: the window-binding half of the shared capture - display the
+// model, prove that window belongs to it and make it current. Shared with the
+// display-only repaint after appearance changes, which never takes a raster.
+// Returns false when a binding step failed; every raw code is recorded.
+static bool bind_model_window(ProMdl model, PreviewStepOutcome &outcome) {
     int code = ProMdlDisplay(model);
     outcome.display_code = code;
     preview_record(outcome, "display", code);
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return false;
 
     code = ProMdlWindowGet(model, &outcome.window);
     outcome.window_get_code = code;
     preview_record(outcome, "window_get", code);
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return false;
 
     // Target-window selection: the window must show this very model. A stale
     // window left over from another job would capture the wrong solid even
@@ -188,18 +186,18 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
             outcome.window_matches_model = !wcscmp(window_name, model_named);
     }
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return false;
     if (!outcome.window_matches_model) {
         outcome.failed_step = "window_model_mismatch";
         outcome.failed_code = PRO_TK_GENERAL_ERROR;
-        return outcome;
+        return false;
     }
 
     code = ProWindowCurrentSet(outcome.window);
     outcome.current_set_code = code;
     preview_record(outcome, "current_set", code);
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return false;
 
     int current = -1;
     code = ProWindowCurrentGet(&current);
@@ -207,14 +205,63 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
     preview_record(outcome, "current_get", code);
     outcome.current_window_matches = code == PRO_TK_NO_ERROR && current == outcome.window;
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return false;
 
     // ProWindowActivate only takes effect after control returns to Creo, so it
     // is recorded but never treated as a step that can fail the capture.
     outcome.activate_code = ProWindowActivate(outcome.window);
+    return true;
+}
+
+// FEAT-052: the refit/refresh/repaint tail shared by the raster capture and
+// the display-only repaint after appearance changes.
+static bool repaint_bound_window(int window, PreviewStepOutcome &outcome) {
+    int code = ProWindowRefit(window);
+    outcome.refit_code = code;
+    preview_record(outcome, "refit", code);
+    if (code != PRO_TK_NO_ERROR)
+        return false;
+
+    // Refresh clears temporary graphics without dropping highlights; Repaint is
+    // the full redraw. Both are recorded because a display-list capture that
+    // runs before them is exactly the stale/blank image BUG-066 reports.
+    outcome.refresh_code = ProWindowRefresh(window);
+    code = ProWindowRepaint(window);
+    outcome.repaint_code = code;
+    preview_record(outcome, "repaint", code);
+    return code == PRO_TK_NO_ERROR;
+}
+
+// Compact raw-code report for the display-only repaint path (FEAT-052): the
+// same recorded steps as the raster capture minus the raster itself.
+static nlohmann::json preview_window_codes_json(const PreviewStepOutcome &outcome) {
+    return {{"display", outcome.display_code},
+            {"window_get", outcome.window_get_code},
+            {"window_model_get", outcome.window_model_code},
+            {"current_set", outcome.current_set_code},
+            {"current_get", outcome.current_get_code},
+            {"activate", outcome.activate_code},
+            {"refit", outcome.refit_code},
+            {"refresh", outcome.refresh_code},
+            {"repaint", outcome.repaint_code},
+            {"window_matches_model", outcome.window_matches_model},
+            {"failed_step", outcome.failed_step.empty() ? nlohmann::json(nullptr)
+                                                        : nlohmann::json(outcome.failed_step)},
+            {"failed_code", outcome.failed_code}};
+}
+
+// One capture attempt. apply_view_matrix is false for drawings, whose view is
+// owned by the drawing view rather than by the model orientation.
+static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file,
+                                          bool apply_view_matrix, double width_inches,
+                                          double height_inches, ProRasterType type) {
+    PreviewStepOutcome outcome;
+    outcome.path = file;
+    if (!bind_model_window(model, outcome))
+        return outcome;
 
     if (apply_view_matrix) {
-        code = ProViewMatrixSet(model, nullptr, preview_isometric_view);
+        int code = ProViewMatrixSet(model, nullptr, preview_isometric_view);
         outcome.view_matrix_set_code = code;
         preview_record(outcome, "view_matrix_set", code);
         if (code != PRO_TK_NO_ERROR)
@@ -230,20 +277,7 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
         outcome.view_matrix_matches = preview_rotation_matches(actual);
     }
 
-    code = ProWindowRefit(outcome.window);
-    outcome.refit_code = code;
-    preview_record(outcome, "refit", code);
-    if (code != PRO_TK_NO_ERROR)
-        return outcome;
-
-    // Refresh clears temporary graphics without dropping highlights; Repaint is
-    // the full redraw. Both are recorded because a display-list capture that
-    // runs before them is exactly the stale/blank image BUG-066 reports.
-    outcome.refresh_code = ProWindowRefresh(outcome.window);
-    code = ProWindowRepaint(outcome.window);
-    outcome.repaint_code = code;
-    preview_record(outcome, "repaint", code);
-    if (code != PRO_TK_NO_ERROR)
+    if (!repaint_bound_window(outcome.window, outcome))
         return outcome;
 
     if (file.size() >= PRO_PATH_SIZE) {
@@ -253,8 +287,8 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
     }
     ProPath output;
     wcscpy_s(output, PRO_PATH_SIZE, file.c_str());
-    code = ProRasterFileWrite(outcome.window, PRORASTERDEPTH_24, width_inches, height_inches,
-                              PRORASTERDPI_100, type, output);
+    int code = ProRasterFileWrite(outcome.window, PRORASTERDEPTH_24, width_inches, height_inches,
+                                  PRORASTERDPI_100, type, output);
     outcome.raster_code = code;
     preview_record(outcome, "raster", code);
     if (code != PRO_TK_NO_ERROR)

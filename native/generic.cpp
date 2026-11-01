@@ -2894,6 +2894,7 @@ static J populate_profile(ProSection section, const J &op) {
 // here so component sources can resolve controlled detail references (BUG-077).
 static J read_inspection_ref(const J &ref);
 static J choice_inspection(const J &holder, const char *key);
+#include "appearance.h"
 #include "advanced.cpp"
 #include "surfaces.cpp"
 #include "udf.cpp"
@@ -2976,6 +2977,8 @@ static void execute_operation_body(const J &op) {
     else if (kind == "component_placement" || kind == "component_constraints" ||
              kind == "remove_component")
         modify_component(op);
+    else if (kind == "recolor_assembly")
+        recolor_assembly(op);
     else if (kind == "datum_plane") {
         double angle = op.value("angle", 0.0);
         // BUG-094 backstops; the Python PlaneOp contract rejects these first.
@@ -3340,6 +3343,13 @@ static void verify_saved(const J &before, const J &after, bool feature_state_com
             auto a = before["components"][i], b = after["components"][i];
             if (a["feature_id"] != b["feature_id"] || a["model_name"] != b["model_name"])
                 throw std::runtime_error("Saved component changed");
+            // FEAT-052: the component appearance must survive save/reload and
+            // rollback. Baselines recorded before FEAT-052 carry no appearance
+            // field and stay compatible; the recolor op refuses components
+            // without an appearance baseline instead of guessing one.
+            if (a.contains("appearance") && b.contains("appearance") &&
+                !appearance_records_equal(a["appearance"], b["appearance"]))
+                throw std::runtime_error("Saved component appearance changed");
             const auto &verified_transform = component_transform_for_verification(a, b);
             for (int r = 0; r < 4; r++)
                 for (int c = 0; c < 4; c++)
@@ -5295,6 +5305,9 @@ static int run_generic(const std::wstring &job) {
             if (item.value().contains("inspection_ref"))
                 item.value()["inspection"] = read_inspection_ref(item.value().at("inspection_ref"));
         }
+        // FEAT-052: recolor evidence is job-scoped; reset before any op can run.
+        recolor_reset();
+        g_recolor_readonly = request.value("readonly", false);
         template_file = wide(request.at("template_file"));
         if (!model["part_file"].is_null())
             checkpoint = wide(model["part_file"]);
@@ -5402,7 +5415,11 @@ static int run_generic(const std::wstring &job) {
                 if ((model.contains("inspection") || model.contains("inspection_ref")) &&
                     !request.value("readonly", false)) {
                     try {
-                        verify_saved(choice_inspection(model, "inspection"), inspection());
+                        // FEAT-052: keep the admission appearance records; the
+                        // recolor op refuses components without this baseline.
+                        const J admission = choice_inspection(model, "inspection");
+                        recolor_set_admission(admission);
+                        verify_saved(admission, inspection());
                     } catch (const std::exception &error) {
                         throw std::runtime_error(std::string("model_reconciliation_required: ") +
                                                  error.what());
@@ -5466,6 +5483,10 @@ static int run_generic(const std::wstring &job) {
                 CK(ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board));
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 state = inspection();
+                // FEAT-052: extend the recolor block with the persisted
+                // appearance readback before the strict comparison, so the
+                // evidence exists even when the comparison throws.
+                recolor_after_reload(state, report);
                 verify_saved(before, state, feature_state_touched);
                 verify_assertions(state, request.value("assertions", J::object()));
                 // The reloaded model must reproduce the recorded intentional
@@ -5574,6 +5595,11 @@ static int run_generic(const std::wstring &job) {
                                  ? read_inspection_ref(rollback_model.at("inspection_ref"))
                                  : rollback_model["inspection"],
                              restored);
+                // FEAT-052: after the checkpoint reload, compare the restored
+                // appearance against the baseline captured before the first
+                // appearance write; an unprovable or mismatching restore keeps
+                // the existing unknown protection.
+                recolor_rollback_check(restored);
                 aliases = rollback_model.contains("aliases_ref")
                               ? read_inspection_ref(rollback_model.at("aliases_ref"))
                               : rollback_model["aliases"];
@@ -5602,6 +5628,9 @@ static int run_generic(const std::wstring &job) {
         // the operations that were never started.
         report["operations"] = operation_results;
     }
+    // FEAT-052: publish the final recolor evidence (including the rollback
+    // appearance check on the failure path) into the job terminal state.
+    recolor_publish(report);
     generic_stage("disconnect");
     if (recovery_deadline)
         recovery_deadline->complete();

@@ -1834,11 +1834,18 @@ static J assembly_inspection() {
             ProMdl child = nullptr;
             ProError child_code = ProAsmcompMdlGet(&comp, &child);
             if (child_code || !child) {
+                // FEAT-052: an unresolvable component model cannot be queried
+                // for appearance; the record keeps the three-state shape with
+                // the raw model query code instead of a fabricated state.
                 components.push_back({{"feature_id", comp.id},
                                       {"model_name", nullptr},
                                       {"model_type", nullptr},
                                       {"missing", true},
-                                      {"model_query_code", (int)child_code}});
+                                      {"model_query_code", (int)child_code},
+                                      {"appearance",
+                                       {{"state", "query_failed"},
+                                        {"rgb", nullptr},
+                                        {"query_code", (int)child_code}}}});
                 continue;
             }
             ProMdlType child_type;
@@ -1853,7 +1860,11 @@ static J assembly_inspection() {
                                       {"model_name", nullptr},
                                       {"model_type", nullptr},
                                       {"missing", true},
-                                      {"model_query_code", (int)name_code}});
+                                      {"model_query_code", (int)name_code},
+                                      {"appearance",
+                                       {{"state", "query_failed"},
+                                        {"rgb", nullptr},
+                                        {"query_code", (int)name_code}}}});
                 continue;
             }
             ProMatrix position;
@@ -1880,6 +1891,9 @@ static J assembly_inspection() {
                  {"initial_transform", initial_matrix},
                  {"packaged", packaged == PRO_B_TRUE},
                  {"underconstrained", under == PRO_B_TRUE},
+                 // FEAT-052: three-state component appearance record
+                 // (present / absent / query_failed) with the raw query code.
+                 {"appearance", component_appearance_record(&comp, child)},
                  {"constraints", inspect_constraints(&comp)}});
         }
     return components;
