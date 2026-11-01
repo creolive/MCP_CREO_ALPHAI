@@ -1,12 +1,12 @@
 # 0.11.0 发布验证记录
 
-日期：2026-11-01。版本入口 [version.py](../../version.py)（`VERSION = "0.11.0"`）、[版本说明](../RELEASE_NOTES_0.11.0.md)、[开发入口](../DEVELOPMENT.md) 与[主台账](../BACKLOG.md)（FEAT-052 行）随版一致。本版为 **MINOR**：FEAT-052 装配按零件族上色，公开工具 94→95。本记录发布前为候选事实，主干提交/标签/附件/远端核对各节在发布后回填终值。
+日期：2026-11-01。版本入口 [version.py](../../version.py)（`VERSION = "0.11.0"`）、[版本说明](../RELEASE_NOTES_0.11.0.md)、[开发入口](../DEVELOPMENT.md) 与[主台账](../BACKLOG.md)（FEAT-052 行）随版一致。本版为 **MINOR**：FEAT-052 装配按零件族上色，公开工具 94→95。发布后补记：以下各节为已核对的终值（2026-11-01 发布当日回填）。
 
 ## 交付提交与标签
 
 - 开发分支 `codex/FEAT-052-assembly-recolor`（基于 main `89ee542`）：`7f944ad`(台账文档)→`b3db096`(Python 侧)→`1d37aff`(原生侧)→`c68beb2`(离线证据回填)→`3c4fa9d`(原生迭代器下标修复)→`e9ddc6d`(结果投影透传回滚核验)→`b21dbb6`(驱动夹具修正)→实机证据提交→0.11.0 版本准备提交。
-- 主干提交：（发布时回填，快进合入自上述分支；远端核对后回填）
-- 附注标签：`v0.11.0`（标签对象与剥离后指向，发布时回填）。
+- 主干提交：`262ef204b235fbee7c261256d6f7f664300e25db`（`main`，快进合入自 `codex/FEAT-052-assembly-recolor`，远端 `89ee542..262ef20` 已核对一致）。
+- 附注标签：`v0.11.0`（标签对象 `09114c7d91386fac34d88e4d3074d817c8aecdf2`，经 API 剥离后指向 `262ef20`，远端已核对）。
 
 ## 本机实机验收（FEAT-052）
 
@@ -31,6 +31,15 @@ R4 清单：12 源件创建+保存重载 true；80 组件装配；初始全 abse
 
 WorkBuddy 纯 MCP 黑盒未执行；busy/并发通道交错未做实机；`dry_run` 分页/游标失效、非法输入拒绝、读回故障注入属离线范围；Creo 9 本机无 SDK、实机编译与建模运行时未验收；Creo 10 独立复测不作为门槛；本机通过不外推其他环境；BUG-091 根因未定，实机准入纪律持续有效。
 
-## 附件与远端核验（发布时回填）
+## 附件与远端核验
 
-（候选）附件四件：`MCP_CREO_MechDog-0.11.0-source.zip`（+.sha256）、`MCP_CREO_MechDog-0.11.0-seed-library.zip`（+.sha256）；种子包确定性双建同哈希、源码包以 `--seed-archive` 成对生成；Release 正文直接列两 ZIP 文件名与完整 SHA256；发布后从远端逐件下载核对字节数与哈希、核对 `.sha256` 内容指向对应 ZIP，并核对远端 main 提交、`v0.11.0` 标签剥离后指向、Release `draft=false`/非预发布。实际数值与 Release 链接发布后回填。
+正式 Release（`draft=false`、`prerelease=false`）：https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.11.0 （Release id 430412112；正文直接列两 ZIP 文件名与完整 SHA256）。种子包确定性三建同哈希（工作树双建 + 主干重建）；源码包以 `--seed-archive` 成对生成（1126 文件）。四附件均从远端逐件下载核对：
+
+| 附件 | 远端字节数 | 下载后 SHA256 | 核验 |
+| --- | ---: | --- | --- |
+| `MCP_CREO_MechDog-0.11.0-source.zip` | 6 734 245 | `d657c845d6164b99ad20d960cc9659ac6f44c91f6490ab82f57e2f6a2b76477a` | 通过（与本地构建同哈希） |
+| `MCP_CREO_MechDog-0.11.0-source.zip.sha256` | 101 | 内容为 `d657c845…477a  MCP_CREO_MechDog-0.11.0-source.zip` | 通过（指向源码包哈希） |
+| `MCP_CREO_MechDog-0.11.0-seed-library.zip` | 493 442 | `3d922e0ec6185a624f3e85155651d0b62c94c66ac89e9bc40da9949423b213cf` | 通过（确定性三建同哈希，24 文件 9 种子） |
+| `MCP_CREO_MechDog-0.11.0-seed-library.zip.sha256` | 107 | 内容为 `3d922e0e…13cf  MCP_CREO_MechDog-0.11.0-seed-library.zip` | 通过（指向种子包哈希） |
+
+远端核对还包括：`refs/heads/main` = `262ef20`、`refs/tags/v0.11.0` 标签对象剥离后指向同一提交、Release 正文包含两完整 SHA256、四附件 `state=uploaded`。本机生成物原件（报告/截屏/校验文件）在 `build/assembly_appearance_live_20261101T060336Z558b3546/` 与 `E:\Projects\MCP_CREO_MechDog-release-0.11.0\`（仓库外），不入库。

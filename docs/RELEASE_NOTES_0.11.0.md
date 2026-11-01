@@ -24,7 +24,7 @@ WorkBuddy 纯 MCP 黑盒验收未执行；busy/并发通道交错未做实机（
 
 | 附件 | SHA256 |
 | --- | --- |
-| `MCP_CREO_MechDog-0.11.0-source.zip` | 发布时填入 |
-| `MCP_CREO_MechDog-0.11.0-seed-library.zip` | 发布时填入 |
+| `MCP_CREO_MechDog-0.11.0-source.zip` | `d657c845d6164b99ad20d960cc9659ac6f44c91f6490ab82f57e2f6a2b76477a` |
+| `MCP_CREO_MechDog-0.11.0-seed-library.zip` | `3d922e0ec6185a624f3e85155651d0b62c94c66ac89e9bc40da9949423b213cf` |
 
 发布状态见 [发布记录](validation/RELEASE-0.11.0.md)。
