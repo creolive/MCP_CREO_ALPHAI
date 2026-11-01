@@ -495,6 +495,20 @@ class ReadbackAssertionStubTests(unittest.TestCase):
         detail["verification"]["constraints"][1]["ref_type_name"] = "axis"
         self._rejected(detail)
 
+    def test_unavailable_reference_evidence_is_explicit(self):
+        detail = self._detail()
+        del detail["verification"]["references_ok"]
+        detail["verification"]["references_status"] = {
+            "available": False,
+            "reason": "reference_element_query_deferred_after_bug098",
+        }
+        summary = driver.check_readback(detail, [70, 71, 72])
+        self.assertFalse(summary["references_available"])
+        self.assertEqual(
+            summary["references_unavailable_reason"],
+            "reference_element_query_deferred_after_bug098",
+        )
+
     def test_unverified_flag_is_rejected(self):
         detail = self._detail()
         detail["verification"]["verified"] = False

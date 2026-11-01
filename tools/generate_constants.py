@@ -32,6 +32,12 @@ HEADERS = [
     "ProSmtBendBack.h",
     "ProAsmcomp.h",
     "ProSmtDrvSurf.h",
+    # Q07 G5 probe symbols: boundary blend form, trim sides/types and section
+    # selection enums are declared outside the original feature-header list.
+    "Probbl.h",
+    "ProTrim.h",
+    "ProStdSection.h",
+    "ProMerge.h",
 ]
 
 PROBES = ("PRO_E_HLE_ADD_PARAMETERS", "PRO_HOLE_NO_PARAMETERS_FLAG")

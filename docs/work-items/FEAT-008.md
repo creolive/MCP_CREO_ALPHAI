@@ -402,3 +402,7 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 ## 2026-11-01 Q15 离线集成状态
 
 离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。
+
+## 2026-11-01 Q13 首次实机：未通过
+
+`tools/test_t07_preview.py --live --confirm-session-usable` 在 `disk_cut_pattern` 用例的 `save_and_reload` 阶段失败：作业 `61777b5bc9bb4653b912bb1e2bcdd569` 返回 `ProMdlnameBackup(board, destination)` -1，预览/分页矩阵未继续执行。磁盘剩余约 1.3 TB、会话干净，失败原因未定；本卡不宣称 Q13 实机通过。证据：`build/live-0.11.1/q13_preview.json` 与该作业 `native.log`。

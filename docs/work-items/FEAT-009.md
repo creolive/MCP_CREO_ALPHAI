@@ -48,6 +48,10 @@
 
 **下一步：** Q08 按契约 §2.1/§6.1/§6.2 实现 `surface_loft`（Python 模型 `SurfaceLoftOp`；原生 `generic_surface_loft`）；开工前必须先完成契约 §7 的 **P1 实机探针**并回填实际元素树。P1 判定"路线不成立"时**只阻断 Q08**，Q09/Q10 不受阻。共享测量 helper 唯一归属 `native/surface_measure.h`（契约 §4.7，本卡实现者为首个维护人）。
 
+### 2026-11-01 P1 实机探针：路线不成立
+
+`creo_create_feature_tree` 用契约 §2.1 树 + `PRO_E_EXT_SURF_CUT_SOLID_TYPE`/`PRO_E_BNBLN_TAN_FLD_TYPE`/`PRO_E_BNBLN_TAN_COND_TYPE` 尝试创建两直线截面边界混合：`ProFeatureWithoptionsCreate=0`，但生成特征 status 6（`PRO_FEAT_UNREGENERATED`）、无 geometry item，作业按“再生产生失败/抑制/不完整特征”回滚，无 `ProErrorlist`。详见[契约 §9](../development/G5-NATIVE-CONTRACT.md#9-2026-11-01-实机探针结果p1p3)。**Q08 不开工**，需重新取得可行树后再实现。
+
 
 ## 2026-11-01 Q15 离线集成状态
 

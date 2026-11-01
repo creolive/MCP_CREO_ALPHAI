@@ -224,7 +224,7 @@ def failing_plan(tag: str) -> list[dict]:
             "op": "round",
             "label": f"{tag}_bad_round",
             "size": 1,
-            "references": [{"kind": "edge", "id": 999999}],
+            "references": [{"edge": {"kind": "edge", "id": 999999}}],
         }
     ]
 
@@ -298,6 +298,9 @@ class LiveRun:
         return [entry.get("name") for entry in listing.get("models", [])]
 
     async def run(self) -> None:
+        from tools.mcp_readiness import wait_for_startup
+
+        await wait_for_startup(self.client, self.report, self.output)
         status = await self.call("creo_session_status", {})
         if not status.get("connected"):
             raise RuntimeError(f"session not connected; nothing submitted: {status}")

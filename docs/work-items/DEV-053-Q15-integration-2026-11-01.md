@@ -45,4 +45,16 @@
 - 执行：`tools/test_datum_plane_through_points.py --live --confirm-session-usable` 第一个用例 `main_plane`。
 - 结果：三个 `datum_points` 与 `datum_plane`（id=47，normal 0,0,1）创建完成；`native.log` 停在 `ProFeatureElemtreeExtract` / `ProElemtreeElementGet`，作业 `b620c5a6c9d54d28a2815cb5083bfa6e` 持续 `running` 6 分钟，驱动按 360 s 预算停止轮询且未重提。worker CPU 冻结，`parametric` hidden+hung、`xtop` 正常。
 - 处置：按 BUG-001/BUG-091 规则停止新提交，保留现场（未结束 Creo、未清 unknown、未重提作业），登记 [BUG-098](../../work-items/BUG-098.md)。0.11.1 未发布；Q06 L2、Q07 P1–P3、Q02/Q03/Q13 实机均未执行。
-- 新增离线驱动：`tools/test_tilted_sketch_3pt.py`（smoke_3pt 原案经 FEAT-053 契约转换）与 `tests/unit/test_tilted_sketch_3pt.py`，离线 4 项单测通过；因通道卡死未运行 live。
+- 新增离线驱动：`tools/test_tilted_sketch_3pt.py`（smoke_3pt 原案经 FEAT-053 契约转换）与 `tests/unit/test_tilted_sketch_3pt.py`，离线 4 项单测通过；后续已执行 live，见下。
+
+### 第二轮实机（BUG-098 修复后）
+
+BUG-098 定位到三点定面创建后的逐约束特征树读取会阻塞 Toolkit；将校验改为 `ProElementArrayCount` 只读数组计数（`references_status.available=false` 明示）后：
+
+- **Q05 通过 8/8**：5 个有效例 + 3 个拒绝例；`build/live-0.11.1/q05_through_points_r2.json`。
+- **Q06 L1 通过、L2 未过**：`using_frame_basis` 生效；`CompleteFeature=-1` 且 element/section 错误为空，L2 根因仍未定；`build/live-0.11.1/q06_l2_smoke3pt.json`。
+- **Q07 P1/P2/P3 均“路线不成立”**：P1/P3 特征停在 `PRO_FEAT_UNREGENERATED`，P2 创建失败；Q08–Q10 不开工；见契约 §9。
+- **Q03 未通过**：S1 `saved_since_creation` 跳过、同名不可复用；S3 `rollback_succeeded` 缺失。
+- **Q13 未通过**：`disk_cut_pattern` 的 `save_and_reload` 报 `ProMdlnameBackup` -1。
+
+因此 0.11.1 的实机验收门槛未全部满足，未进行版本裁定或发布。

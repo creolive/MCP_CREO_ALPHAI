@@ -62,6 +62,12 @@
 **下一步：** Q09 实现 `project_curve`（模型 `ProjectCurveOp`；原生 `generic_project_curve`），Q10 实现 `surface_trim`（模型 `SurfaceTrimOp`；原生 `generic_surface_trim`）。两者开工前必须分别完成契约 §7 的 **P2 / P3 实机探针**并回填实际元素树。P2 判定"路线不成立"**只阻断 Q09**（Q10 的 trim 仍可开工，但"投影曲线作为 trim 工具"的子路径一并阻断），**不得用 body 布尔或曲面求交冒充投影曲线**；P3 判定"路线不成立"**只阻断 Q10**。共享测量 helper 唯一归属 `native/surface_measure.h`（契约 §4.7，由 FEAT-009 实现者维护，本卡实现者只消费）。
 
 
+### 2026-11-01 P2/P3 实机探针：均不成立
+
+- **P2（COPYTRIM）**：圆柱面 quilt + 沿 Z 源直线（真实曲线 id 73）尝试 `PRO_FEAT_CURVE` + `PRO_E_COPYTRIM_CURVE_DATA`，作业 `68a4ec1edb8f42a8866bb9d9645ce64d` 失败，`ProFeatureWithoptionsCreate` 未通过；COPYTRIM 族在本机仍无可证树。**Q09 不开工**。
+- **P3（use-quilt trim）**：40×20 `surface_fill` + 过 x=20 基准面，按 `ProTrim.h` §2 完整树（含补 `PRO_E_BODY`）两次创建：`ProFeatureWithoptionsCreate=0`，但特征 87 `P3_ONE` type 916 停在 status 6（`PRO_FEAT_UNREGENERATED`）、无 geometry item，作业按不健康特征回滚。**Q10 不开工**。
+- 详见[契约 §9](../development/G5-NATIVE-CONTRACT.md#9-2026-11-01-实机探针结果p1p3)；证据 `build/live-0.11.1/p2_probe.json`、`p3_probe.json`。
+
 ## 2026-11-01 Q15 离线集成状态
 
 离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。

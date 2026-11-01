@@ -561,3 +561,22 @@ PRO_E_FEATURE_TREE
 | 本机 `constants.inc` 未导出 `ProTrim.h` / `Probbl.h` / `ProStdSection.h` / `ProMerge.h` 的符号 | **已核实**（需集成人统一补 `HEADERS` 后重新生成） |
 | Creo 9 / Creo 10 的同名常量与树 | **未验证**（本机只有 12.4） |
 | 本任务未连接 Creo、未编译、未占通道 | 事实记录 |
+
+---
+
+## 9. 2026-11-01 实机探针结果（P1–P3）
+
+环境：Creo 12.4.0.0 / Toolkit x86e_win64 / 本机匹配 SDK；提交 `807cf22` + 实机修复（`native/preview.h` 合并截断、三点定面约束校验改为数组计数、`generate_constants.py` 增补 `Probbl.h`/`ProTrim.h`/`ProStdSection.h`/`ProMerge.h`）。探针通过 `creo_create_feature_tree` 低层入口逐条构造候选树，串行执行；每次新零件、单作业。
+
+| 探针 | 前置 | 创建结果 | 抽取/状态 | 判定 |
+| --- | --- | --- | --- | --- |
+| P1 surface_loft | 两个平行直线草图（z=0 / z=20，各 40 mm），由 `feature_geometry` 取到真实曲线 id 44/52 | `ProFeatureWithoptionsCreate=0` | 生成特征 54 `P1_BLEND`，type 942（datum surface），**status 6 = `PRO_FEAT_UNREGENERATED`，无 geometry item**；无 `ProErrorlist` 内容 | **路线不成立**（本次树未能再生） |
+| P2 project_curve | 圆柱面 quilt + 沿 Z 源直线（feature_geometry 取曲线 73） | 作业 `68a4ec1edb8f42a8866bb9d9645ce64d` 失败 | `ProFeatureWithoptionsCreate` 失败；COPYTRIM 候选树未被接受 | **路线不成立** |
+| P3 surface_trim | 40×20 `surface_fill` quilt + 过 x=20 基准面 | `ProFeatureWithoptionsCreate=0`（两次，含补 `PRO_E_BODY`） | 生成特征 87 `P3_ONE`，type 916（cut），**status 6 = `PRO_FEAT_UNREGENERATED`，无 geometry item** | **路线不成立**（本次树未能再生） |
+
+**结论与影响（2026-11-01）：**
+
+- 三棵候选树均未产生可再生的健康特征；P1/P3 的特征停在 `PRO_FEAT_UNREGENERATED`，没有可读 `ProErrorlist`，不能据此宣称“元素树路线可行”。
+- `PRO_E_CTRL_PTS`/`PRO_E_BLEND_TYPE`、`PRO_E_BNBLN_TAN_COND_TYPE`（`TAN_COND_FREE` 无符号定义）与 trim 的 body/side 组合仍是未定项；本次没有继续试错，避免把未经证明的树写进公开实现。
+- **Q08 / Q09 / Q10 均不开工**，直到重新取得“可行”证据并回填 §2/§3/§4。Q08 只受 P1 阻断，Q09 只受 P2 阻断，Q10 只受 P3 阻断；本次三项同时不成立。
+- 证据：`build/live-0.11.1/p1_probe.json`、`p2_probe.json`、`p3_probe.json` 及对应 `jobs/*/native.log`（本机忽略目录）。

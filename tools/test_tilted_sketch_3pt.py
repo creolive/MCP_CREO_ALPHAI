@@ -326,7 +326,7 @@ class Runner:
 
 
 async def live(output: Path, run_tag: str) -> None:
-    from tools.mcp_readiness import require_manual_start
+    from tools.test_t05_native import require_manual_start
 
     require_manual_start(ROOT / "config.json")
     from mcp import Client

@@ -245,6 +245,16 @@ def check_readback(detail: dict, expected_point_ids: list[int]) -> dict:
     assert verification["alignment_tolerance"] == ALIGNMENT_TOLERANCE, verification
     constraints = verification["constraints"]
     assert verification["constraint_count"] == 3, verification
+    status = verification.get("references_status") or {}
+    if status.get("available") is False:
+        assert status.get("reason"), verification
+        return {
+            "max_point_distance_mm": verification["max_point_distance"],
+            "normal_alignment": verification["normal_alignment"],
+            "references_available": False,
+            "references_unavailable_reason": status.get("reason"),
+            "constraint_count": verification["constraint_count"],
+        }
     assert verification["references_ok"] is True, verification
     assert verification["verified"] is True, verification
     assert [c["constr_type_name"] for c in constraints] == ["thru"] * 3, constraints
