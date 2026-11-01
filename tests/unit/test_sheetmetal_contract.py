@@ -15,12 +15,18 @@ MCP client is instantiated and no Toolkit connection is made.
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from pydantic import ValidationError
 
 from creo_mechdog.schema import validate_operations
-from creo_mechdog.sheetmetal import first_wall_section_problem
+from creo_mechdog.sheetmetal import (
+    first_wall_section_problem,
+    normalize_wall_contract,
+    project_wall_contour,
+    wall_contour_status_from_code,
+)
 from tools import test_sheetmetal_contract as contract_driver
 
 LINE_LENGTH_MM = 185.0
@@ -391,6 +397,140 @@ class SdkApiCompileGuardTest(unittest.TestCase):
         ):
             self.assertTrue(checks[name], name)
         self.assertEqual(report["unguarded_sdk_calls"], [])
+
+
+class FrameGroupOracleTest(unittest.TestCase):
+    """DEV-053 P08: the three comparison groups and the frozen frame rule.
+
+    depth grows one-sided along the signed sketch normal; thickness is the
+    sheet gauge centered on the sketch line. The frozen numbers and the
+    independent plate_oracle derivation cross-check each other, and the G1/G3
+    pair shares V=42920, so volume alone can never be the verdict.
+    """
+
+    def test_frozen_numbers_match_the_independent_derivation(self) -> None:
+        report = contract_driver.check_frame_groups()
+        self.assertTrue(report["passed"])
+        for row in report["groups"]:
+            with self.subTest(tag=row["tag"]):
+                self.assertTrue(row["derived_matches_frozen"])
+                self.assertEqual(row["expected_volume_mm3"], 42_920.0)
+
+    def test_g1_and_g3_share_volume_but_not_thickness_or_gauge_axis(self) -> None:
+        report = contract_driver.check_frame_groups()
+        distinction = report["volume_alone_cannot_distinguish"]
+        self.assertEqual(distinction["shared_volume_mm3"], 42_920.0)
+        self.assertTrue(any("part_thickness_mm" in item for item in distinction["g1_vs_g3_distinguishers"]))
+
+    def test_centroid_rule_is_centered_on_the_sketch_line(self) -> None:
+        # The legacy fixture line (0,0)->(185,0) on XY: a centered gauge keeps
+        # the centroid on the line (y=0), the old one-sided rule would put it
+        # at y=t/2. Live bboxes (y in [-116,116] for a v=0 line with t=232)
+        # prove the centered rule.
+        centroid = contract_driver.oracle_centroid_mm(1.0, 232.0)
+        self.assertEqual(centroid["y"], 0.0)
+        self.assertAlmostEqual(centroid["z"], 0.5, places=9)
+        g1 = contract_driver.FRAME_GROUPS[0]
+        derived = contract_driver.plate_oracle(
+            g1["plane"], g1["line"], g1["depth"], g1["thickness"], g1["direction"], g1["offset"]
+        )
+        self.assertEqual(derived["centroid_mm"], [0.0, 0.5, 0.5])
+        g2 = contract_driver.FRAME_GROUPS[1]
+        derived2 = contract_driver.plate_oracle(
+            g2["plane"], g2["line"], g2["depth"], g2["thickness"], g2["direction"], g2["offset"]
+        )
+        # F5's reported (0, 0.5, -116) for the row-2 writing.
+        self.assertEqual(derived2["centroid_mm"], [0.0, 0.5, -116.0])
+
+    def test_example_matches_the_frozen_yz_recipe(self) -> None:
+        report = contract_driver.check_example_recipe()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["frozen_targets"]["volume_mm3"], 42_920.0)
+
+
+class WallContourProjectionTest(unittest.TestCase):
+    """FEAT-014: wall_contour_status tri-state with real codes and revision."""
+
+    def test_status_mapping_table(self) -> None:
+        self.assertEqual(wall_contour_status_from_code(0), "eligible")
+        self.assertEqual(wall_contour_status_from_code(-8), "ineligible")
+        self.assertEqual(wall_contour_status_from_code(-2), "unknown")
+        self.assertIsNone(wall_contour_status_from_code(None))
+        self.assertIsNone(wall_contour_status_from_code("0"))
+
+    def test_wall_edge_rim_edge_query_failure_and_missing(self) -> None:
+        report = contract_driver.check_wall_contour_projection()
+        self.assertTrue(report["passed"])
+        self.assertIn("wall_face_edge_eligible", report["cases"])
+        self.assertIn("rim_side_edge_ineligible", report["cases"])
+        self.assertIn("query_failure_unknown_with_real_code", report["cases"])
+        self.assertIn("not_queried_edge_stays_missing", report["cases"])
+
+    def test_eligible_does_not_unlock_the_adjacent_bend_ends_rejection(self) -> None:
+        report = contract_driver.check_wall_contour_projection()
+        self.assertIn("adjacent_bend_ends", report["adjacent_bend_ends_note"])
+        checks = contract_driver.check_native_source()["static_source_assertions"]
+        self.assertTrue(checks["adjacent_bend_ends_guard_still_rejects"])
+        projected = project_wall_contour({"edges": [], "wall_contour_check": {"enabled": True}})
+        self.assertIn("does not promise flange creation", projected["wall_contour_check"]["meaning"])
+        self.assertNotIn("flange_available", json.dumps(projected))
+
+    def test_revision_is_stamped_only_when_an_integer(self) -> None:
+        projected = project_wall_contour(
+            {
+                "edges": [{"id": 1}],
+                "wall_contour_check": {
+                    "edges": [{"edge_id": 1, "wall_contour_query_code": 0}],
+                },
+            },
+            revision=7,
+        )
+        self.assertEqual(projected["wall_contour_check"]["revision"], 7)
+        projected = project_wall_contour({}, revision="7")
+        self.assertIsNone(projected["wall_contour_check"]["revision"])
+
+
+class WallContractProjectionTest(unittest.TestCase):
+    """BUG-032: wall_contract frame echo keeps measurements and degrades safely."""
+
+    def test_missing_block_stays_missing(self) -> None:
+        self.assertIsNone(normalize_wall_contract(None))
+        self.assertIsNone(normalize_wall_contract("wall_contract"))
+
+    def test_frame_fields_are_kept_or_degraded_to_unknown(self) -> None:
+        report = contract_driver.check_wall_contract_projection()
+        self.assertTrue(report["passed"])
+        entry = normalize_wall_contract(
+            {
+                "frame": {
+                    "sketch_normal": [0.0, 0.0, 2.0],
+                    "depth_direction": [0.0, 0.0, 1.0],
+                    "material_side": "left",
+                }
+            }
+        )
+        self.assertIsNone(entry["frame"]["sketch_normal"])
+        self.assertIsNone(entry["frame"]["material_side"])
+        self.assertEqual(entry["frame"]["depth_direction"], [0.0, 0.0, 1.0])
+
+    def test_native_source_keeps_the_frame_echo_and_candidate_edge_discovery(self) -> None:
+        checks = contract_driver.check_native_source()["static_source_assertions"]
+        for name in (
+            "frame_echo_recorded",
+            "frame_depth_direction",
+            "frame_thickness_direction",
+            "frame_material_side",
+            "wall_face_ids_echo",
+            "parameter_hint_nonblocking",
+            "attach_error_names_the_sketch_recipe",
+            "wall_contour_block_emitted",
+            "wall_contour_budget_bound",
+            "wall_contour_real_code_kept",
+            "wall_contour_sheetmetal_gate_only",
+            "wall_contour_no_fabricated_status",
+            "flange_available_name_removed",
+        ):
+            self.assertTrue(checks[name], name)
 
 
 if __name__ == "__main__":

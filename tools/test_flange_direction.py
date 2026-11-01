@@ -59,6 +59,149 @@ CASES = (
     ("angle90_inward", "flip=true: the opposite, material side", True, "down"),
 )
 
+# DEV-053 P08 (FEAT-014) validation design, frozen here and scheduled for the
+# live window by the orchestrator. Nothing below runs offline; the design is
+# the contract the live cases must judge against, and it records what is
+# genuinely supported versus still unproven.
+FREE_END_FLANGE_DESIGN = {
+    "subject": "free-end first flange with flip in both directions",
+    "fixture": (
+        "one fresh 185x232x1 wall per case (tests.unit.test_sheetmetal_flange "
+        "wall_sketch + wall_base_op); the +x top edge selected by geometry from the "
+        "current inspection, both bend ends at free plate corners"
+    ),
+    "cases": [
+        {
+            "name": "free_end_default_outward",
+            "flip": False,
+            "expect": (
+                "real 90 degree bend out of the attachment face: |bbox Z growth| >= 72 mm, "
+                "direction up on the top edge, saved_file_reloaded_and_verified true, "
+                "revision +1"
+            ),
+        },
+        {
+            "name": "free_end_flip_inward",
+            "flip": True,
+            "expect": (
+                "the same bend on the opposite, material side: direction down on the top "
+                "edge, |bbox Z growth| >= 72 mm, saved_file_reloaded_and_verified true"
+            ),
+        },
+    ],
+    "oracle": (
+        "bbox-only bend detection plus the explicit per-case side expectation; the "
+        "volume delta alone cannot separate a bend from a coplanar extension"
+    ),
+    "status": "supported_on_free_end_pending_this_live_run",
+}
+
+FIXED_SURFACE_DESIGN = {
+    "subject": "fixed_surface allowed for sheetmetal_unbend / bend_back / flat_pattern",
+    "reference_contract": (
+        "bare reference object {kind:'surface',id:N} taken from model inspection; the "
+        "native executor decides whether that geometry can stay fixed - there is no "
+        "unconditional 'any surface works' guarantee"
+    ),
+    "cases": [
+        {
+            "name": "unbend_fixed_on_wall_face",
+            "op": "sheetmetal_unbend",
+            "fixed_surface": {"kind": "surface", "id": "<wall_face_id from wall_contract>"},
+            "expect": (
+                "all bends unfold about the chosen wall face; wall volume unchanged; "
+                "saved_file_reloaded_and_verified true; revision +1"
+            ),
+        },
+        {
+            "name": "bend_back_fixed_on_wall_face",
+            "op": "sheetmetal_bend_back",
+            "fixed_surface": {"kind": "surface", "id": "<wall_face_id from wall_contract>"},
+            "expect": (
+                "the previously unbent bends return; bbox and volume match the pre-unbend "
+                "state; saved_file_reloaded_and_verified true"
+            ),
+        },
+        {
+            "name": "flat_pattern_fixed_on_wall_face",
+            "op": "sheetmetal_flat_pattern",
+            "fixed_surface": {"kind": "surface", "id": "<wall_face_id from wall_contract>"},
+            "expect": (
+                "flat pattern created about the chosen wall face; the solid volume "
+                "unchanged; saved_file_reloaded_and_verified true"
+            ),
+        },
+        {
+            "name": "fixed_surface_on_flange_face",
+            "op": "sheetmetal_unbend",
+            "fixed_surface": {"kind": "surface", "id": "<flange wall face id>"},
+            "expect": (
+                "either the bend unfolds about the flange face with matching geometry, or "
+                "the native executor refuses with a real error and a rollback - an "
+                "accepted-but-wrong geometry is a failure"
+            ),
+        },
+    ],
+    "negative_controls": [
+        {
+            "name": "fixed_surface_datum_plane",
+            "input": {"kind": "datum_plane", "id": 11},
+            "expect": (
+                "admission rejects the non-surface reference before any feature exists; "
+                "the historical F4 S6 complaint must not be re-read as a supported input"
+            ),
+        },
+        {
+            "name": "fixed_surface_stale_edge_id",
+            "input": {"kind": "edge", "id": 121},
+            "expect": (
+                "rejected as the wrong reference kind; historical fixed edge ids are never "
+                "reused - references are re-selected by geometry from the current inspection"
+            ),
+        },
+    ],
+    "status": (
+        "reference syntax supported; the native accept/refuse outcome per face is "
+        "unproven and stays open until the live run"
+    ),
+}
+
+CANDIDATE_EDGE_DESIGN = {
+    "subject": "candidate edge discovery before a flange attempt",
+    "procedure": (
+        "inspect the model (the bounded wall_contour_check runs on sheetmetal parts), "
+        "read wall_contour_status/query_code/revision from the public full inspection "
+        "(wall_contour_check in the whole snapshot or metadata page), "
+        "then pick the attach edge BY GEOMETRY from the current inspection (the "
+        "2026-10-31 F5 flow: the Z=0 bottom edges of the standard base plate) - never "
+        "by a historical edge id"
+    ),
+    "acceptance": [
+        "edges with wall_contour_status=eligible carry a flange attempt; ineligible "
+        "edges are skipped without a submission",
+        "query failure keeps status=unknown with the real code and is never treated as "
+        "ineligible",
+        "an eligible edge whose end is adjacent to an existing bend is STILL rejected "
+        "before create (failure_reason=adjacent_bend_ends): the candidate-edge pass "
+        "never unlocks that boundary",
+        "the discovery query creates no flange and modifies no model",
+    ],
+    "status": "projection tested offline; the real query values await the live run",
+}
+
+
+def pending_validation() -> dict:
+    """The live schedule the orchestrator still owes (DEV-053 P08)."""
+    return {
+        "free_end_first_flange": FREE_END_FLANGE_DESIGN,
+        "fixed_surface_unbend_family": FIXED_SURFACE_DESIGN,
+        "candidate_edge_discovery": CANDIDATE_EDGE_DESIGN,
+        "not_executed": (
+            "offline stage only; --live --confirm-session-usable runs these under the "
+            "orchestrator's serial Creo window"
+        ),
+    }
+
 
 def native_section() -> dict:
     """The flange function body, so a regression is caught without Creo."""
@@ -130,12 +273,13 @@ def plan() -> list[dict]:
 
 def offline_report(output: Path | None) -> dict:
     report = {
-        "task": "FEAT-014 / DEV-051 T05/T11",
+        "task": "FEAT-014 / DEV-051 T05/T11 / DEV-053 P08",
         "scope": "one flange per model, bbox Z growth decides a 90 degree bend",
         "mode": "offline",
         "hang_budget_seconds": HANG_BUDGET_SECONDS,
         "native_section": native_section(),
         "cases": plan(),
+        "pending_live_validation": pending_validation(),
         "not_executed": "no MCP client, no Creo connection; use --live --confirm-session-usable",
     }
     if output is not None:

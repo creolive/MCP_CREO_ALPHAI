@@ -621,6 +621,66 @@ static void generic_sheetmetal_wall(const J &op) {
             std::to_string(thickness) +
             " mm; the conversion did not sync the part thickness parameter, so thickness "
             "rules must not run against this wall");
+    // P08/BUG-032/FEAT-008: publish the measured frame and the measured wall
+    // faces. Every value comes from the created model (the sketch's recorded
+    // frame, the converted body bbox and the sheetmetal surface types); the
+    // request is never echoed as evidence. A correct volume alone cannot show
+    // a swapped depth/thickness pair or an unexpected wall-face orientation -
+    // the 2026-10-31 feedback built a geometrically perfect 185x232x1 plate
+    // whose green/white wall faces were the 185x1 rim strips.
+    J frame = nullptr;
+    J wall_face_ids = J::array();
+    bool wall_faces_complete = true;
+    V wall_center = {};
+    bool wall_center_known = false;
+    for (auto item : state["bodies"])
+        if (item.contains("bbox") && item["bbox"].is_array() && item["bbox"].size() == 2) {
+            V low = vec(item["bbox"][0]), high = vec(item["bbox"][1]);
+            wall_center = scale(add(low, high), 0.5);
+            wall_center_known = true;
+            break;
+        }
+    for (auto surf : state["surfaces"]) {
+        if (!surf.contains("sheetmetal_type")) {
+            wall_faces_complete = false;
+            continue;
+        }
+        int smt_type = surf["sheetmetal_type"].get<int>();
+        if ((smt_type == PRO_SMT_SURF_FACE || smt_type == PRO_SMT_SURF_OFFSET) &&
+            wall_face_ids.size() < 64)
+            wall_face_ids.push_back(surf["id"]);
+    }
+    const J *sketch_record =
+        op["sketch"].is_string() ? alias_entry(op["sketch"].get<std::string>()) : nullptr;
+    if (sketch_record && sketch_record->contains("normal") && sketch_record->contains("origin") &&
+        wall_center_known) {
+        V sketch_normal = normalized(vec((*sketch_record)["normal"]));
+        V sketch_origin = vec((*sketch_record)["origin"]);
+        V delta = add(wall_center, scale(sketch_origin, -1));
+        V depth_direction = scale(sketch_normal, dot(delta, sketch_normal) >= 0 ? 1.0 : -1.0);
+        V thickness_direction = vec(face["normal"]);
+        V face_origin = face.contains("origin") ? vec(face["origin"]) : wall_center;
+        double material = dot(add(wall_center, scale(face_origin, -1)), thickness_direction);
+        frame = {{"sketch_normal", xyz(sketch_normal.data())},
+                 {"sketch_origin", xyz(sketch_origin.data())},
+                 {"depth_direction", xyz(depth_direction.data())},
+                 {"thickness_direction", xyz(thickness_direction.data())},
+                 {"material_side",
+                  material < 0 ? "opposite_thickness_direction" : "along_thickness_direction"}};
+    }
+    // Evidence-based, non-blocking hint: thickness >= depth is exactly the
+    // signature of the historical depth/thickness swap (BUG-032 T03), but a
+    // thick gauge is a legal input, so this only restates the measured axes
+    // and the standard recipe - it never rejects.
+    J parameter_hint = nullptr;
+    if (!frame.is_null() && thickness >= depth)
+        parameter_hint =
+            "thickness >= depth: thickness is the sheet gauge spread centered on the sketch "
+            "line and depth grows one-sided along the signed sketch normal, so a gauge larger "
+            "than the depth means the wall faces (wall_face_ids) are not the largest faces. "
+            "Flanges attach on those green/white wall faces. For the standard horizontal base "
+            "plate recipe see examples/sheetmetal_base_yz.json. This hint does not reject the "
+            "wall.";
     remember(op, f,
              {{"base_feature", base},
               {"construction", "thin_extrude_then_native_sheetmetal_conversion"},
@@ -632,7 +692,11 @@ static void generic_sheetmetal_wall(const J &op) {
                 {"driving_axis", axis},
                 {"part_thickness_before_mm", part_before},
                 {"part_thickness_mm", part_after},
-                {"part_thickness_synced", synced}}}});
+                {"part_thickness_synced", synced},
+                {"frame", frame},
+                {"wall_face_ids", wall_face_ids},
+                {"wall_face_ids_complete", wall_faces_complete},
+                {"parameter_hint", parameter_hint}}}});
 }
 static void generic_sheetmetal_unbend(const J &op) {
     bool back = op["op"] == "sheetmetal_bend_back", flat = op["op"] == "sheetmetal_flat_pattern";
@@ -1337,8 +1401,15 @@ static void generic_sheetmetal_flange(const J &op) {
                 ": ProSmtedgeContourGet returned PRO_TK_BAD_CONTEXT (-8), so this edge is not "
                 "on a sheetmetal wall face (green/white contour). Pick an edge on a wall face "
                 "boundary: an edge shared by two side/rim surfaces cannot carry a flange. "
-                "Build the base with sheetmetal_wall(depth=plate size, thickness=sheet "
-                "thickness) so the wall faces are the ones the flange attaches to.");
+                "Frame contract: depth grows one-sided along the signed sketch normal and "
+                "thickness is the sheet gauge spread centered on the sketch line, so the "
+                "green/white wall faces are the gauge faces (see wall_contract.wall_face_ids). "
+                "To build a horizontal base plate whose large faces are the wall faces, sketch "
+                "on the YZ plane (or a YZ plane with offset) one line along +Y and call "
+                "sheetmetal_wall with depth=plate size along the normal and thickness=sheet "
+                "thickness; the frozen recipe with coordinates is examples/sheetmetal_base_yz"
+                ".json. Confirm the result via wall_contract.frame and wall_face_ids before "
+                "attaching flanges.");
     }
     // DEV-052 N06 (FEAT-014): the confirmed trigger shape - an attachment-edge
     // end adjacent to an existing bend - is refused here, before any feature

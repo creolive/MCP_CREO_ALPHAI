@@ -1,0 +1,24 @@
+{
+  "model_type": "sheetmetal",
+  "description": "Standard horizontal base plate, frozen YZ recipe (DEV-053 P08 / BUG-032 / FEAT-008). Sketch on YZ (u=+Y, v=+Z, normal=+X) with offset 92.5, one open line (-116,0.5)->(116,0.5). depth=185 grows one-sided along the signed sketch normal (direction=negative -> -X from the offset plane), thickness=1 is the sheet gauge centered on the sketch line (in-plane perpendicular, v=+Z). Expected: bbox X[-92.5,92.5], Y[-116,116], Z[0,1], volume 42920 mm3, COG (0,0,0.5), part thickness 1 mm, and the 185x232 faces at Z=0/1 are the green/white wall faces (wall_contract.wall_face_ids) a flange can attach to. Always confirm via wall_contract.frame and wall_face_ids, and select edges by geometry from the current inspection - never by a historical edge id.",
+  "operations": [
+    {
+      "op": "sketch",
+      "label": "base_line",
+      "plane": "YZ",
+      "offset": 92.5,
+      "entities": [
+        {"type": "line", "name": "plate_line", "start": [-116.0, 0.5], "end": [116.0, 0.5]}
+      ]
+    },
+    {
+      "op": "sheetmetal_wall",
+      "label": "base_wall",
+      "sketch": "base_line",
+      "depth": 185.0,
+      "thickness": 1.0,
+      "direction": "negative"
+    }
+  ],
+  "assertions": {"require_solid": true, "volume_mm3": 42920.0}
+}

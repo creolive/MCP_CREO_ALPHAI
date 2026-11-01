@@ -57,6 +57,7 @@ from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
 from creo_mechdog.session_health import snapshot as session_health
 from creo_mechdog.session_models import list_session_models
+from creo_mechdog.sheetmetal import project_wall_contour
 from version import VERSION
 
 logging.basicConfig(level=logging.WARNING)
@@ -1557,8 +1558,20 @@ async def creo_sheetmetal_wall(
 ) -> dict[str, Any]:
     """Create the first flat sheetmetal wall from an open straight-line sketch, depth and thickness.
 
-    The native tree contains the driving sketch, thin extrusion and sheetmetal conversion.
-    Use flange tools for subsequent bent walls. Curved or closed first-wall sketches are not validated.
+    Frame contract: depth grows one-sided along the signed sketch normal (direction=positive
+    grows toward +normal, direction=negative toward -normal); thickness is the sheet gauge
+    spread centered on the sketch line, in-plane perpendicular to it. Standard horizontal
+    base plate (185x232x1, bbox X+-92.5/Y+-116/Z[0,1], COG (0,0,0.5)): sketch on YZ with
+    offset 92.5, one open line (-116,0.5)->(116,0.5), then depth=185, thickness=1,
+    direction=negative (see examples/sheetmetal_base_yz.json). The wall_contract echo
+    reports the measured frame (frame.sketch_normal/depth_direction/thickness_direction/
+    material_side), wall_face_ids (the green/white faces a flange attaches to) and the
+    measured part thickness - volume alone cannot reveal a swapped depth/thickness pair or
+    the wrong wall-face orientation, so compare the echo against your target axes. When
+    thickness >= depth a non-blocking parameter_hint restates the measured axes; legal
+    thick gauges are never rejected. The native tree contains the driving sketch, thin
+    extrusion and sheetmetal conversion. Use flange tools for subsequent bent walls.
+    Curved or closed first-wall sketches are not validated.
     """
     return await invoke(
         general.submit,
@@ -1628,6 +1641,17 @@ async def creo_sheetmetal_flange(
     rejected before creation (failure_reason=adjacent_bend_ends); four-wall boxes are not
     supported yet.
 
+    Attachable edges are the boundaries of the green/white wall faces (the wall faces are
+    wall_contract.wall_face_ids of the base wall); an edge shared by two side/rim surfaces
+    is refused with PRO_TK_BAD_CONTEXT (-8) and a correction hint naming the sketch
+    plane/direction recipe. Inspection of a sheetmetal part carries a bounded
+    wall_contour_check block (one ProSmtedgeContourGet query per edge, real query codes
+    preserved; eligible|ineligible|unknown is projected from those codes): eligible means
+    the edge lies on a wall contour, NOT that a flange will succeed - adjacent_bend_ends
+    and the native geometry checks still reject at creation. Select edges by geometry from
+    the current inspection (endpoint coordinates, adjacent surfaces), never by a
+    historical edge id.
+
     Optional relief adds a single rectangular notch to the selected bend end(s); without it
     both ends keep PRO_BEND_RLF_NONE exactly as before. Relief geometry is not verified
     against the corner overlap and the flange keeps no in-place relief edit.
@@ -1661,8 +1685,11 @@ async def creo_sheetmetal_unbend(
 
     fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
     model inspection: the geometry kept fixed while the selected bends unfold. references
-    selects individual bends to unbend; omitting them targets all bends. Whether the
-    chosen geometry can actually stay fixed is decided by the native executor."""
+    selects individual bends to unbend; omitting them targets all bends. A datum_plane or
+    edge reference is rejected before any feature exists. wall_contract.wall_face_ids of
+    the base wall lists the wall faces; whether the chosen geometry can actually stay
+    fixed is decided by the native executor and must be proven per case - there is no
+    blanket "any surface works" guarantee."""
     return await invoke(
         general.submit,
         [
@@ -1686,7 +1713,9 @@ async def creo_sheetmetal_flat_pattern(
     """Create a native flat-pattern feature about a fixed sheetmetal surface.
 
     fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
-    model inspection; the native executor decides whether that geometry can stay fixed."""
+    model inspection; a datum_plane or edge reference is rejected before any feature
+    exists, and the native executor decides whether that geometry can stay fixed (proven
+    per case, no blanket guarantee)."""
     return await invoke(
         general.submit,
         [
@@ -1714,7 +1743,9 @@ async def creo_sheetmetal_bend_back(
     """Refold previously unbent sheetmetal about a fixed surface. Omit references to bend back all bends.
 
     fixed_surface is a bare reference object such as {"kind":"surface","id":N} taken from
-    model inspection; the native executor decides whether that geometry can stay fixed."""
+    model inspection; a datum_plane or edge reference is rejected before any feature
+    exists, and the native executor decides whether that geometry can stay fixed (proven
+    per case, no blanket guarantee)."""
     return await invoke(
         general.submit,
         [
@@ -1976,7 +2007,31 @@ async def creo_inspect_model(
     bound to the snapshot and limited to 32 KiB, default 50/max 200 records.
     Model changes invalidate cursors. Use refresh_model for live Creo inspection.
     """
-    return await invoke(general.inspect_model, model_id, detail, section, limit, cursor)
+    response = await invoke(general.inspect_model, model_id, detail, section, limit, cursor)
+    if detail != "full" or not isinstance(response, dict):
+        return response
+
+    # Keep the saved native inspection immutable. Project only the public
+    # wall-contour record, keyed by edge id, with this snapshot's revision.
+    def checked(block: Any) -> dict[str, Any]:
+        projected = project_wall_contour({"wall_contour_check": block}, response.get("revision"))
+        return {
+            **projected["wall_contour_check"],
+            "edges": projected["wall_contour_records"],
+        }
+
+    inspection = response.get("inspection")
+    if isinstance(inspection, dict) and isinstance(inspection.get("wall_contour_check"), dict):
+        response["inspection"] = {
+            **inspection,
+            "wall_contour_check": checked(inspection["wall_contour_check"]),
+        }
+    metadata = response.get("data", {}).get("metadata") if isinstance(response.get("data"), dict) else None
+    if isinstance(metadata, list):
+        for entry in metadata:
+            if isinstance(entry, dict) and entry.get("name") == "wall_contour_check" and isinstance(entry.get("value"), dict):
+                entry["value"] = checked(entry["value"])
+    return response
 
 
 @mcp.tool(annotations=READ)
