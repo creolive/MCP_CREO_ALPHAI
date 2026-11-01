@@ -16,7 +16,7 @@
 
 本项目按可交付的 Creo MCP 工具维护，采用功能条目驱动、短分支和分批整理。日常开发从 [统一台账](BACKLOG.md) 选择条目；新增工作先登记，复杂条目复制 [模板](templates/WORK_ITEM.md)。开发准入对小修复同样适用，内容可精简为几行。
 
-当前服务／源码版本以 [version.py](../version.py) 为准，为 **0.11.0 / 95 个公开工具**。FEAT-052 已交付；Q00–Q15 接续状态见[后续派工计划](superpowers/plans/2026-11-01-feedback0100-agent-dispatch.md)，晚间反馈的归档、逐章映射与新登记 ID 见[本轮登记映射](validation/feedback-0.10.0-2026-11-01/MAPPING.md)，本次本地维护见 [DEV-054](work-items/DEV-054.md)。
+当前服务／源码版本以 [version.py](../version.py) 为准，为 **0.11.0 / 95 个公开工具**。FEAT-052 已交付；Q00–Q15 接续状态见[后续派工计划](superpowers/plans/2026-11-01-feedback0100-agent-dispatch.md)，晚间反馈的归档、逐章映射与新登记 ID 见[本轮登记映射](validation/feedback-0.10.0-2026-11-01/MAPPING.md)，本次本地维护见 [DEV-054](work-items/DEV-054.md)。**0.11.1 候选（task/11）离线集成已构建，首次实机在 Q05 三点定面首例卡死（[BUG-098](work-items/BUG-098.md)），未验收、未发布；恢复会话前不继续实机。**
 
 **0.10.0 历史验收摘要（以下保留原环境与当时未测项，BUG-092/093 指定范围后来已在 0.10.1 收口）：** 当时服务／源码版本为 **0.10.0**（DEV-052 N13 集成批次：FEAT-051 round/chamfer/draft 逐操作体积差与方向/引用应用回报、FEAT-008 草图结果 `entity_ids`、FEAT-014 折边邻接折弯端 `adjacent_bend_ends` 拒绝语义，含 FEAT-035/T12 盲孔 tip 口径、FEAT-034/T02 编辑弧回显、FEAT-008/T09B 中心线计数修复与 BUG-049 端点诊断，MINOR 性质，公开工具仍 94）。本机 Creo 12.4.0.0 实机（2026-10-31 第二轮）：N04 七夹具、N06 邻接拒绝终验（RUN PASSED）、N08/N09/N10 六例、N11（含人工图像复核）通过；N07 创建 5/5+编辑 3/3 通过（`illegal_dir_zero` 反例待查）；N12 发布时 large 每类 n=2，发布后补轮每类 n=3（small 每类 n=3；两轮分开统计）。四壁不支持、Creo 9/10 未验。见 [0.10.0 版本说明](RELEASE_NOTES_0.10.0.md)、[发布记录](validation/RELEASE-0.10.0.md)；0.9.0 及更早范围见 [0.9.0 版本说明](RELEASE_NOTES_0.9.0.md)、[发布记录](validation/RELEASE-0.9.0.md)与 [0.8.5 版本说明](RELEASE_NOTES_0.8.5.md)、[发布记录](validation/RELEASE-0.8.5.md)。
 

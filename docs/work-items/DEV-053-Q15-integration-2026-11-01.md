@@ -1,6 +1,6 @@
 ﻿# DEV-053 Q15 离线集成报告（2026-11-01）
 
-状态：**离线开发完成，待实机验收**。工作树 `codex/q15-integration`，基点 `50636bf`；本轮未连接 Creo、未原生构建、未合 main、未改版本或发布。
+状态：**离线开发完成；首次实机尝试被 BUG-098 阻断，未验收、未发布**。工作树 `codex/q15-integration`，基点 `50636bf`；离线阶段未连接 Creo、未原生构建、未合 main、未改版本或发布。2026-11-01 晚间在 task/11 合并后完成原生构建并开始首轮实机，详见下文“首次实机窗口”。
 
 ## 合并顺序与冲突裁决
 
@@ -36,4 +36,13 @@
 4. 记录每次调用、job_id/model_id、终态、几何/参数、保存重载 `saved_file_reloaded_and_verified=true`、revision、回滚、原始错误及未测范围。只有实际并发调用才报告并发通过。
 5. 实机结束后讨论候选集成版本 `0.12.0` 或 `0.11.x`；本轮不定版、不发布。
 
-剩余：style 修复、全量与基线复测、原生构建、实机、WorkBuddy 黑盒、main 合入和 Release。Q08–Q10 仍待 Q07 探针与实现；Q12 的 0.11.0 已交付状态不变。
+剩余：style 修复、全量与基线复测、实机、WorkBuddy 黑盒、main 合入和 Release。Q08–Q10 仍待 Q07 探针与实现；Q12 的 0.11.0 已交付状态不变。
+
+## 首次实机窗口（2026-11-01 晚间，本机 Creo 12.4.0.0）
+
+- 环境：Windows 11 x64、Creo 12.4.0.0（`release_numeric=44`）、匹配 SDK、MSVC x64；新开本机 Creo 会话，`bridge.py status` 首测 `connected=true`、`toolkit_code=0`、`disconnect_code=0`。
+- 集成修复：`native/preview.h` 有两处 Q15 合并截断——`bind_model_window()` 函数头丢失、返回块后残留重复的 `datum_display` 片段。修复后 `.venv\\Scripts\\python.exe bridge.py build` 通过（首次 build 报 C2143/C2059/C3861，修复后无错误）。
+- 执行：`tools/test_datum_plane_through_points.py --live --confirm-session-usable` 第一个用例 `main_plane`。
+- 结果：三个 `datum_points` 与 `datum_plane`（id=47，normal 0,0,1）创建完成；`native.log` 停在 `ProFeatureElemtreeExtract` / `ProElemtreeElementGet`，作业 `b620c5a6c9d54d28a2815cb5083bfa6e` 持续 `running` 6 分钟，驱动按 360 s 预算停止轮询且未重提。worker CPU 冻结，`parametric` hidden+hung、`xtop` 正常。
+- 处置：按 BUG-001/BUG-091 规则停止新提交，保留现场（未结束 Creo、未清 unknown、未重提作业），登记 [BUG-098](../../work-items/BUG-098.md)。0.11.1 未发布；Q06 L2、Q07 P1–P3、Q02/Q03/Q13 实机均未执行。
+- 新增离线驱动：`tools/test_tilted_sketch_3pt.py`（smoke_3pt 原案经 FEAT-053 契约转换）与 `tests/unit/test_tilted_sketch_3pt.py`，离线 4 项单测通过；因通道卡死未运行 live。

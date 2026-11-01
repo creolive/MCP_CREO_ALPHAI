@@ -1,6 +1,6 @@
 # FEAT-053：`datum_plane` 三点定面（`thru_points`）
 
-日期：2026-11-01。类型：功能。优先级：P2。状态：离线实现完成（2026-11-01，Q05 分支），实机待验收。目标版本：未排期。
+日期：2026-11-01。类型：功能。优先级：P2。状态：离线实现完成（2026-11-01，Q05 分支）；首次实机被 [BUG-098](BUG-098.md) 阻断，实机待验收。目标版本：未排期。
 
 来源：[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §4、[03_BUG094报告](../validation/feedback-0.10.0-2026-11-01/originals/03_BUG094报告.md) §二/§六 与 [04_generic_cpp_patches](../validation/feedback-0.10.0-2026-11-01/originals/04_generic_cpp_patches.md) §补丁 1；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-008](FEAT-008.md)、[BUG-097](BUG-097.md)、[BUG-094](BUG-094.md)、[FEAT-009](FEAT-009.md)、[FEAT-039](FEAT-039.md)。
 
@@ -81,3 +81,7 @@
 ## 2026-11-01 Q15 离线集成状态
 
 离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。
+
+## 2026-11-01 首次实机尝试（阻断）
+
+`bridge.py build` 已通过，Creo 12.4.0.0 会话准入通过。`tools/test_datum_plane_through_points.py --live --confirm-session-usable` 的 `main_plane` 首例中，三个 `datum_points` 与 `datum_plane`（id=47）创建完成，随后特征树校验的 `ProElemtreeElementGet` 不返回，作业 `b620c5a6c9d54d28a2815cb5083bfa6e` 持续 `running` 6 分钟。驱动按预算停止且未重提，现场保留。详见 [BUG-098](BUG-098.md)。本卡实机验收状态仍为**未通过**，其余 live 用例未执行。
