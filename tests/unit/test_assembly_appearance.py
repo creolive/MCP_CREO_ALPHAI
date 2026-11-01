@@ -712,6 +712,41 @@ class ResultProjection(unittest.TestCase):
         self.assertIsNone(second["appearance"]["state"])
         self.assertIsNone(second["appearance"]["rgb"])
 
+    def test_rollback_verification_passthrough(self):
+        rows = [
+            {
+                "label": "gear_a",
+                "baseline_state": "present",
+                "restored_state": "present",
+                "abs_err": 0.0,
+                "within_tolerance": True,
+                "verified": True,
+            }
+        ]
+        block = appearance.project_recolor(
+            {
+                "painted": 1,
+                "rollback_appearance_verified": True,
+                "rollback_appearance_check": rows,
+            }
+        )
+        self.assertTrue(block["rollback_appearance_verified"])
+        self.assertEqual(block["rollback_appearance_check"], rows)
+        annotated = {"recolor": {"painted": 1, "rollback_appearance_verified": True}}
+        appearance.annotate_recolor(annotated)
+        self.assertTrue(annotated["recolor"]["rollback_appearance_verified"])
+        self.assertIsNone(annotated["recolor"]["rollback_appearance_check"])
+
+    def test_rollback_verification_never_fabricated(self):
+        block = appearance.project_recolor({"painted": 1})
+        self.assertIsNone(block["rollback_appearance_verified"])
+        self.assertIsNone(block["rollback_appearance_check"])
+        broken = appearance.project_recolor(
+            {"rollback_appearance_verified": "yes", "rollback_appearance_check": "rows"}
+        )
+        self.assertIsNone(broken["rollback_appearance_verified"])
+        self.assertIsNone(broken["rollback_appearance_check"])
+
     def test_missing_or_broken_block_is_never_fabricated(self):
         self.assertIsNone(appearance.project_recolor(None)["painted"])
         self.assertIsNone(appearance.project_recolor("junk")["family_counts"])
@@ -734,6 +769,8 @@ class ResultProjection(unittest.TestCase):
                 "readback_tolerance": 1e-6,
                 "readback_all_within_tolerance": True,
                 "component_appearance_baseline": [{}],
+                "rollback_appearance_verified": True,
+                "rollback_appearance_check": [{}, {}],
             }
         )
         summary = appearance.compact_recolor(full)
@@ -748,10 +785,18 @@ class ResultProjection(unittest.TestCase):
                 "readback_tolerance": 1e-6,
                 "readback_all_within_tolerance": True,
                 "component_appearance_baseline_count": 1,
+                "rollback_appearance_verified": True,
             },
         )
+        self.assertNotIn("rollback_appearance_check", summary)
         self.assertEqual(appearance.compact_recolor(None)["painted"], None)
         self.assertIsNone(appearance.compact_recolor(None)["unmatched_count"])
+        self.assertIsNone(appearance.compact_recolor({})["rollback_appearance_verified"])
+        self.assertIsNone(
+            appearance.compact_recolor({"rollback_appearance_verified": 1})[
+                "rollback_appearance_verified"
+            ]
+        )
 
 
 if __name__ == "__main__":

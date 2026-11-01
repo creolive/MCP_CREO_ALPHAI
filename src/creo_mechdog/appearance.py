@@ -575,6 +575,8 @@ def _unknown_recolor() -> dict[str, Any]:
         "readback_tolerance": None,
         "readback_all_within_tolerance": None,
         "component_appearance_baseline": None,
+        "rollback_appearance_verified": None,
+        "rollback_appearance_check": None,
     }
 
 
@@ -643,6 +645,14 @@ def project_recolor(block: Any) -> dict[str, Any]:
     out["component_appearance_baseline"] = (
         [_baseline_entry(entry) for entry in baseline] if isinstance(baseline, list) else None
     )
+    verified = block.get("rollback_appearance_verified")
+    out["rollback_appearance_verified"] = verified if isinstance(verified, bool) else None
+    checks = block.get("rollback_appearance_check")
+    out["rollback_appearance_check"] = (
+        [dict(entry) for entry in checks if isinstance(entry, dict)]
+        if isinstance(checks, list)
+        else None
+    )
     return out
 
 
@@ -666,6 +676,7 @@ def compact_recolor(block: Any) -> dict[str, Any]:
     source = block if isinstance(block, dict) else {}
     unmatched = source.get("unmatched")
     counts = source.get("family_counts")
+    verified = source.get("rollback_appearance_verified")
     return {
         "painted": source.get("painted"),
         "unmatched_count": len(unmatched) if isinstance(unmatched, list) else None,
@@ -675,4 +686,5 @@ def compact_recolor(block: Any) -> dict[str, Any]:
         "readback_tolerance": source.get("readback_tolerance"),
         "readback_all_within_tolerance": source.get("readback_all_within_tolerance"),
         "component_appearance_baseline_count": count("component_appearance_baseline"),
+        "rollback_appearance_verified": verified if isinstance(verified, bool) else None,
     }
