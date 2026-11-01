@@ -507,7 +507,8 @@ class RegistryJobs(RegistryFixture, unittest.TestCase):
         job = bridge.get_job(created["job_id"])
         model = generic_bridge.model_info(created["model_id"])
         self.assertEqual(job["status"], "failed")
-        self.assertNotIn("result", job)
+        self.assertEqual(job["result"]["failed_model_cleanup"]["status"], "unknown")
+        self.assertFalse(job["result"]["failed_model_cleanup"]["attempted"])
         self.assertEqual(model["revision"], 0)
         self.assertIsNone(model["pending_job"])
 

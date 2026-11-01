@@ -433,7 +433,7 @@ static void capture_preview_steps(ProMdl model, const std::wstring &file, bool a
     if (preview_has_no_geometry(model)) {
         outcome.skipped_no_geometry = true;
         outcome.raster_code = PRO_TK_GENERAL_ERROR; // no raster call was made
-        return outcome;
+        return;
     }
     if (!bind_model_window(model, outcome))
         return;

@@ -398,3 +398,7 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 - **文档**：README 补 revision 异步使用说明、钣金前置与 fixed_surface、装配 Euler 逐轴约定、`native_bundle` 状态链接（[FEAT-031](FEAT-031.md)）、round/chamfer 面配对示例；[REFERENCE_SYNTAX](../REFERENCE_SYNTAX.md) 新增"平面 axis/normal 筛选器（匹配已有面）"与"钣金展开固定面"两节，并链接字典 offset 旧摘要（F4 S6）到当前真实契约；欧拉角按 [ASSEMBLY_REBUILD](../ASSEMBLY_REBUILD.md) 约定链接。
 - **验证**：`python -m unittest tests.unit.test_t01_capability_contracts tests.unit.test_capability_pages` 18/18 通过（本机 Windows / Python 3.12，未连接 Toolkit、未构建原生）。未测：实机 MCP 受理→终态→inspect 三 revision 场景、`creo_capabilities` 实机分页；统一 dev_check 归 P14。
 - 本次保留他人 dirty（`seeds.py`、`docs/validation/RELEASE-0.8.5.md`、`session_activity.json` 等）不纳入提交；未触碰 P04 窗口的打包/种子文件与 native/、preview、打包系列。
+
+## 2026-11-01 Q15 ??????
+
+????????????????????????? [Q15 ????](DEV-053-Q15-integration-2026-11-01.md)????????????Creo ?????????????

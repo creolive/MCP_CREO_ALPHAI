@@ -6,6 +6,7 @@
 
 ## 当前安排
 
+- **2026-11-01 DEV-053 / Q15 ?????** Q01?Q07?Q11?Q13?Q14 ?????????? `codex/q15-integration`?????? [Q15 ????](work-items/DEV-053-Q15-integration-2026-11-01.md)?????????**????????????**?Q08?Q10 ?? Q07 ??????Q12 ?? 0.11.0 ??????/????????????????????????????????
 - **2026-11-01 DEV-053 接续 / Q00 归档与登记：** 0.10.0 晚间反馈包**十件原件逐字节归档**（10/10 长度、SHA256 与字节一致，[manifest](validation/feedback-0.10.0-2026-11-01/manifest.json)、[逐章映射与缺件表](validation/feedback-0.10.0-2026-11-01/MAPPING.md)），登记 [BUG-096](work-items/BUG-096.md)（E 失败作业遗留会话对象，交叉关联 BUG-012/FEAT-018）、[BUG-097](work-items/BUG-097.md)（斜面草图 L1/L2，关联 FEAT-010/BUG-087/BUG-095）、[FEAT-053](work-items/FEAT-053.md)（三点定面 `thru_points`，关联 FEAT-008），并补建缺失的 [FEAT-009](work-items/FEAT-009.md)、[FEAT-010](work-items/FEAT-010.md) 工作卡。Q 任务负责人：Q02→写程序高手、Q03→代码编写者、Q04→codex代码，其余 unassigned。本轮为文档登记，不连 Creo、不跑产品测试、不合 main、不发布。
 
 - **2026-11-01 DEV-054 / 本地维护：** 重核 [Q00–Q15 后续计划](superpowers/plans/2026-11-01-feedback0100-agent-dispatch.md)，按 0.11.0 已交付事实退出 Q12 开发派工；已删除2个合并分支引用，将重复检查包与旧虚拟环境共94.6 MiB移入可恢复归档（未释放磁盘），保留未合入功能、模型与发布证据。见[工作卡](work-items/DEV-054.md)；本轮不提交 main、不发布。

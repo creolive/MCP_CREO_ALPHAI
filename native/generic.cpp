@@ -1199,7 +1199,7 @@ static ProSelection selected(ProSection section, int id, ProSectionPointType typ
 }
 // BUG-097 L2: structured failure receipt for feature completion. The
 // ProErrorlist traversal in errors() (geometry.cpp) has always logged and
-// concatenated element errors; the actual loss point was downstream â€?a failed
+// concatenated element errors; the actual loss point was downstream ï¿½?a failed
 // CompleteFeature only surfaced "Toolkit call CompleteFeature failed with code
 // -1", leaving the element/type/error triples and the original section solver
 // messages in native.log. The report below is bounded (element sample cap 20,
@@ -4660,7 +4660,7 @@ static ProError assembly_feature_callback(ProFeature *feature, ProError status, 
         sub.depth = context->depth + 1;
         // The shared visit operation enforces the depth limit before the
         // visit and diagnoses a failed sub-assembly walk on the stored node
-        // (node_index) instead of failing the whole report â€?sibling
+        // (node_index) instead of failing the whole report ï¿½?sibling
         // components stay observable.
         walk.visit_subtree(context->depth, node_index, [&sub]() -> ProError {
             return ProSolidFeatVisit(sub.owner, assembly_feature_callback, nullptr,

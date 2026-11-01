@@ -77,3 +77,7 @@
 - 原案转换：`tools/test_datum_plane_through_points.py::convert_plane_operation` / `converted_smoke_operations()`——`{"thru_points":[…]}` → `{"kind":"through_points","points":[…]}`；转换后的 smoke 计划可直接 `validate_operations`（单测已锁定）。
 - 真实帧：操作回执 `operations[].plane_frame`（`surface_id`/`normal`/`origin`/`length_unit`，创建特征回读、毫米）；亦可经 `inspect_model(datum_planes)` 按 `surface_id` 查询。**禁止从输入点或矩阵表象重建帧**（Review Focus 3）。
 - 三点平面成功不代表斜面草图可创建（[BUG-097](BUG-097.md)）；Q11 拆点后须保证每个 `datum_plane` 与其三个单点 `datum_points` 在同一计划内（按真实依赖分批）。
+
+## 2026-11-01 Q15 ??????
+
+????????????????????????? [Q15 ????](DEV-053-Q15-integration-2026-11-01.md)????????????Creo ?????????????

@@ -283,10 +283,9 @@ def smoke_3pt_volume_oracle() -> dict:
 
 def smoke_3pt_schema_gate() -> dict:
     """Whether this tree already accepts the explicit three-point contract."""
-    plane_op = smoke_3pt_min_repro_operations()[3]
     try:
-        validate_operations([plane_op])
-    except Exception as error:  # the FEAT-053 kind is not registered yet
+        validate_operations(smoke_3pt_min_repro_operations()[:4])
+    except Exception as error:
         return {
             "accepted": False,
             "blocked_pending": "FEAT-053",

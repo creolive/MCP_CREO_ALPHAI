@@ -201,12 +201,10 @@ class Bug097Smoke3ptFixtureTests(unittest.TestCase):
 
     def test_schema_gate_records_the_missing_three_point_contract(self):
         gate = lifecycle.smoke_3pt_schema_gate()
-        # This tree has not integrated FEAT-053 yet; the fixture must stay
-        # blocked rather than being validated against a contract that does not
-        # exist. When Q05 lands, the gate flips to accepted.
-        self.assertFalse(gate["accepted"])
-        self.assertEqual(gate["blocked_pending"], "FEAT-053")
-        self.assertIn("kind", gate["reason"])
+        # Q05 registers FEAT-053; validate the preceding point producers too.
+        self.assertTrue(gate["accepted"])
+        self.assertIsNone(gate["blocked_pending"])
+        self.assertIsNone(gate["reason"])
 
     def test_offline_report_embeds_the_fixture_and_stage_markers(self):
         report = lifecycle.offline_report("abc12345")

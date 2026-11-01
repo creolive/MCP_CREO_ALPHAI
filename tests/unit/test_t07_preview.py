@@ -190,7 +190,7 @@ class NativeSharedStep(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, probe)
         self.assertNotIn("volume", probe.lower())
-        capture = region(shared, "static PreviewStepOutcome capture_preview", "static bool preview_written")
+        capture = region(shared, "static void capture_preview_steps", "static PreviewStepOutcome capture_preview")
         self.assertLess(
             capture.index("preview_has_no_geometry(model)"),
             capture.index("bind_model_window(model, outcome)"),
