@@ -476,14 +476,15 @@ async def run() -> None:
         )
 
         # ---- failing plan 1: rollback onto NO component appearance --------
-        # The recolor paints three components, then remove_component(c02) runs
-        # and the second remove_component(c02) hits its tombstone natively,
-        # failing the plan mid-execution after the paint.
-        probe_labels = ["c01", "c02", "c03"]
+        # The recolor paints all 80 components through automatic source
+        # grouping (no families key), then remove_component(c02) runs twice
+        # and the second call hits its tombstone natively, failing the plan
+        # mid-execution after the full paint.
         failing_recolor = {
             "op": "recolor_assembly",
-            "families": {"fail_probe": probe_labels},
-            "palette": {"fail_probe": [0.9, 0.1, 0.1]},
+            "palette": {
+                sources[family]["model_id"]: FAMILIES[family]["rgb"] for family in range(12)
+            },
         }
         validate_operations([failing_recolor, {"op": "remove_component", "component": "c02"}])
         failed = await job(
@@ -515,9 +516,9 @@ async def run() -> None:
         )
         probe_block = recolor_block(payload)
         ok = ok and check(
-            "failing plan 1 recolor block captured a three-entry absent baseline",
-            probe_block.get("painted") == 3
-            and len(probe_block.get("component_appearance_baseline", [])) == 3
+            "failing plan 1 recolor block captured a full absent baseline",
+            probe_block.get("painted") == 80
+            and len(probe_block.get("component_appearance_baseline", [])) == 80
             and all(
                 entry["appearance"]["state"] == "absent"
                 for entry in probe_block["component_appearance_baseline"]
@@ -697,7 +698,6 @@ async def run() -> None:
                         "op": "component_placement",
                         "component": "c01",
                         "translation": [5, 5, 0],
-                        "placement": "fixed",
                     }
                 ],
             },
