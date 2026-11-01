@@ -405,4 +405,4 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 
 ## 2026-11-01 Q13 首次实机：未通过
 
-`tools/test_t07_preview.py --live --confirm-session-usable` 在 `disk_cut_pattern` 用例的 `save_and_reload` 阶段失败：作业 `61777b5bc9bb4653b912bb1e2bcdd569` 返回 `ProMdlnameBackup(board, destination)` -1，预览/分页矩阵未继续执行。磁盘剩余约 1.3 TB、会话干净，失败原因未定；本卡不宣称 Q13 实机通过。证据：`build/live-0.11.1/q13_preview.json` 与该作业 `native.log`。
+`tools/test_t07_preview.py --live --confirm-session-usable` 在 `disk_cut_pattern` 用例的 `save_and_reload` 阶段失败：作业 `61777b5bc9bb4653b912bb1e2bcdd569` 返回 `ProMdlnameBackup(board, destination)` -1，预览/分页矩阵未继续执行。磁盘剩余约 1.3 TB、会话干净，失败原因未定。同一会话重跑一次（作业 `510b73fb998c4706a7e71b6f170acb8f`）仍在同一用例同一阶段失败，属确定性失败而非偶发。本卡不宣称 Q13 实机通过。证据：`build/live-0.11.1/q13_preview.json`、`q13_preview_r2.json` 与对应 `native.log`。
