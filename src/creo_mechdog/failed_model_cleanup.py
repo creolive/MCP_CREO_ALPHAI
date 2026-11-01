@@ -242,9 +242,7 @@ def validate_receipt(raw: Any) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("failed_model_cleanup must be an object")
     if set(raw) != set(RECEIPT_KEYS):
-        raise ValueError(
-            f"failed_model_cleanup must contain exactly {list(RECEIPT_KEYS)}"
-        )
+        raise ValueError(f"failed_model_cleanup must contain exactly {list(RECEIPT_KEYS)}")
     if type(raw["attempted"]) is not bool:
         raise ValueError("attempted must be a boolean")
     if raw["status"] not in RECEIPT_STATUSES:

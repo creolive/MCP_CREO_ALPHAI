@@ -137,9 +137,10 @@ class Bug097Smoke3ptFixtureTests(unittest.TestCase):
         fixture = lifecycle.smoke_3pt_fixture()
         self.assertEqual(fixture["evidence_class"], "substitute_fixture_not_original_job_replay")
         ops = fixture["operations"]
-        self.assertEqual([op["op"] for op in ops],
-                         ["datum_points", "datum_points", "datum_points", "datum_plane",
-                          "sketch", "extrude"])
+        self.assertEqual(
+            [op["op"] for op in ops],
+            ["datum_points", "datum_points", "datum_points", "datum_plane", "sketch", "extrude"],
+        )
         plane_ref = ops[3]["reference"]
         self.assertEqual(plane_ref["kind"], "through_points")
         self.assertEqual(plane_ref["points"], ["dpa0", "dpb0", "dpd0"])

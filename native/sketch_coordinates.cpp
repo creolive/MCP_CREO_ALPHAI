@@ -267,7 +267,8 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
         throw std::runtime_error(
             "Coordinate dimensioning changed the supplied geometry; maximum deviation mm=" +
             std::to_string(deviation));
-    return {{"point_count", points}, {"max_deviation_mm", deviation}, {"tolerance_mm", tolerance_mm}};
+    return {
+        {"point_count", points}, {"max_deviation_mm", deviation}, {"tolerance_mm", tolerance_mm}};
 }
 
 // FEAT-010/BUG-049: post-solve geometry fidelity reporting. The snapshot and
@@ -277,13 +278,20 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
 // unavailable with a reason; they never degrade to an all-zero pass.
 static const char *entity_kind_name(int type) {
     switch (type) {
-    case PRO_2D_LINE: return "line";
-    case PRO_2D_CENTER_LINE: return "centerline";
-    case PRO_2D_CIRCLE: return "circle";
-    case PRO_2D_ARC: return "arc";
-    case PRO_2D_ELLIPSE: return "ellipse";
-    case PRO_2D_SPLINE: return "spline";
-    default: return "unknown";
+    case PRO_2D_LINE:
+        return "line";
+    case PRO_2D_CENTER_LINE:
+        return "centerline";
+    case PRO_2D_CIRCLE:
+        return "circle";
+    case PRO_2D_ARC:
+        return "arc";
+    case PRO_2D_ELLIPSE:
+        return "ellipse";
+    case PRO_2D_SPLINE:
+        return "spline";
+    default:
+        return "unknown";
     }
 }
 
@@ -301,7 +309,9 @@ static J section_target_snapshot(ProSection section, const std::map<std::string,
         if (def->type == PRO_2D_LINE || def->type == PRO_2D_CENTER_LINE) {
             auto line = (Pro2dLinedef *)def;
             row["points"] = {
-                {{"sense", PRO_ENT_START}, {"key", "start"}, {"xy", {line->end1[0], line->end1[1]}}},
+                {{"sense", PRO_ENT_START},
+                 {"key", "start"},
+                 {"xy", {line->end1[0], line->end1[1]}}},
                 {{"sense", PRO_ENT_END}, {"key", "end"}, {"xy", {line->end2[0], line->end2[1]}}}};
         } else if (def->type == PRO_2D_CIRCLE) {
             auto circle = (Pro2dCircledef *)def;
@@ -339,12 +349,8 @@ static J section_target_snapshot(ProSection section, const std::map<std::string,
 // One verification point: compare every named target against the section.
 // Non-throwing by design; per-entity failures are recorded with a reason.
 static J unavailable_deviation_stage(const std::string &reason) {
-    return {{"available", false},
-            {"max_deviation_mm", nullptr},
-            {"total", 0},
-            {"sample", J::array()},
-            {"truncated", false},
-            {"unavailable_reason", reason}};
+    return {{"available", false},   {"max_deviation_mm", nullptr}, {"total", 0},
+            {"sample", J::array()}, {"truncated", false},          {"unavailable_reason", reason}};
 }
 static J geometry_deviation_stage(ProSection section, const J &targets) {
     J sample = J::array();
@@ -372,8 +378,7 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
         Pro2dEntdef *def = nullptr;
         ProError code = ProSectionEntityGet(section, row["id"], &def);
         if (code != PRO_TK_NO_ERROR) {
-            entry["reason"] =
-                "ProSectionEntityGet failed (code " + std::to_string((int)code) + ")";
+            entry["reason"] = "ProSectionEntityGet failed (code " + std::to_string((int)code) + ")";
             if (failure.empty())
                 failure = entry["reason"].get<std::string>();
             keep();
@@ -415,9 +420,8 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
         } else if (type == PRO_2D_LINE) {
             auto line = (Pro2dLinedef *)def;
             for (const auto &point : row["points"]) {
-                const double *actual = point["sense"].get<int>() == PRO_ENT_START
-                                           ? line->end1
-                                           : line->end2;
+                const double *actual =
+                    point["sense"].get<int>() == PRO_ENT_START ? line->end1 : line->end2;
                 for (int axis = 0; axis < 2; axis++)
                     moved = std::max(moved, fabs(actual[axis] - point["xy"][axis].get<double>()));
             }
@@ -435,10 +439,10 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             moved = std::max(moved, fabs(arc->radius - row["radius"].get<double>()));
             double actual[] = {arc->start_angle, arc->end_angle};
             for (int i = 0; i < 2; i++)
-                moved = std::max(moved,
-                                 row["radius"].get<double>() *
-                                     fabs(remainder(actual[i] - row["angles"][i].get<double>(),
-                                                    2 * acos(-1.0))));
+                moved =
+                    std::max(moved, row["radius"].get<double>() *
+                                        fabs(remainder(actual[i] - row["angles"][i].get<double>(),
+                                                       2 * acos(-1.0))));
             measurement = "center_radius_angles";
         } else if (type == PRO_2D_ELLIPSE) {
             auto ellipse = (Pro2dEllipsedef *)def;
@@ -455,7 +459,8 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             } else {
                 for (unsigned i = 0; spline->point_arr && i < spline->n_points; i++)
                     moved = std::max(
-                        {moved, fabs(spline->point_arr[i][0] - row["points_xy"][i][0].get<double>()),
+                        {moved,
+                         fabs(spline->point_arr[i][0] - row["points_xy"][i][0].get<double>()),
                          fabs(spline->point_arr[i][1] - row["points_xy"][i][1].get<double>())});
                 measurement = "control_points";
             }
@@ -478,9 +483,9 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             {"sample", sample},
             {"truncated", truncated},
             {"unavailable_reason",
-             any_measured ? J(nullptr)
-                          : J(failure.empty() ? "no measurable entities in the target snapshot"
-                                              : failure)}};
+             any_measured
+                 ? J(nullptr)
+                 : J(failure.empty() ? "no measurable entities in the target snapshot" : failure)}};
 }
 
 // Merges both verification points into the published geometry_deviation
@@ -504,8 +509,8 @@ static J skipped_geometry_deviation(const std::string &reason) {
 }
 static J geometry_deviation_report(const J &regenerate_stage, const J &feature_stage,
                                    double tolerance_mm, bool enforce, const char *source) {
-    bool available = regenerate_stage["available"].get<bool>() ||
-                     feature_stage["available"].get<bool>();
+    bool available =
+        regenerate_stage["available"].get<bool>() || feature_stage["available"].get<bool>();
     double worst = 0;
     bool has = false;
     for (const J *stage : {&regenerate_stage, &feature_stage}) {
@@ -592,9 +597,9 @@ static void enforce_geometry_deviation(const J &report, const char *context) {
         if (stage["max_deviation_mm"].get<double>() > tolerance) {
             log("GEOMETRY_DEVIATION_REJECTED stage=%s max=%.12f tolerance=%.12f\n", name,
                 stage["max_deviation_mm"].get<double>(), tolerance);
-            throw std::runtime_error(
-                std::string(context) + " changed the supplied geometry; maximum deviation mm=" +
-                std::to_string(stage["max_deviation_mm"].get<double>()));
+            throw std::runtime_error(std::string(context) +
+                                     " changed the supplied geometry; maximum deviation mm=" +
+                                     std::to_string(stage["max_deviation_mm"].get<double>()));
         }
     }
 }

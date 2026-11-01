@@ -141,7 +141,9 @@ def normalize_wall_contract(block: Any) -> dict[str, Any] | None:
         "driving_face_id": block.get("driving_face_id")
         if type(block.get("driving_face_id")) is int
         else None,
-        "driving_axis": block.get("driving_axis") if type(block.get("driving_axis")) is int else None,
+        "driving_axis": block.get("driving_axis")
+        if type(block.get("driving_axis")) is int
+        else None,
         "part_thickness_before_mm": _finite_number(block.get("part_thickness_before_mm")),
         "part_thickness_mm": _finite_number(block.get("part_thickness_mm")),
         "part_thickness_synced": block.get("part_thickness_synced")
@@ -262,4 +264,8 @@ def project_wall_contour(inspection: Any, revision: Any = None) -> dict[str, Any
             "and native geometry checks still reject at creation time"
         ),
     }
-    return {"edges": edges, "wall_contour_check": summary, "wall_contour_records": projected_records}
+    return {
+        "edges": edges,
+        "wall_contour_check": summary,
+        "wall_contour_records": projected_records,
+    }

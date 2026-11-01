@@ -179,8 +179,7 @@ CANDIDATE_EDGE_DESIGN = {
     "acceptance": [
         "edges with wall_contour_status=eligible carry a flange attempt; ineligible "
         "edges are skipped without a submission",
-        "query failure keeps status=unknown with the real code and is never treated as "
-        "ineligible",
+        "query failure keeps status=unknown with the real code and is never treated as ineligible",
         "an eligible edge whose end is adjacent to an existing bend is STILL rejected "
         "before create (failure_reason=adjacent_bend_ends): the candidate-edge pass "
         "never unlocks that boundary",

@@ -618,12 +618,20 @@ def round_trip_error(
         for i in range(3)
     ]
     section = project_world_to_section(
-        point_uv, frame_dict["origin"], frame_dict["u_axis"], frame_dict["v_axis"],
-        use_frame_basis, loc,
+        point_uv,
+        frame_dict["origin"],
+        frame_dict["u_axis"],
+        frame_dict["v_axis"],
+        use_frame_basis,
+        loc,
     )
     restored = project_section_to_world(
-        section, frame_dict["origin"], frame_dict["u_axis"], frame_dict["v_axis"],
-        use_frame_basis, loc,
+        section,
+        frame_dict["origin"],
+        frame_dict["u_axis"],
+        frame_dict["v_axis"],
+        use_frame_basis,
+        loc,
     )
     return math.sqrt(sum((restored[i] - world[i]) ** 2 for i in range(3)))
 
@@ -770,17 +778,22 @@ def offline_checks() -> tuple[int, int]:
         lifted = {**xy_frame, "origin": [0.0, 0.0, 30.0]}
         assert uv_mapping_choice(IDENTITY_4X4, lifted["normal"], lifted["origin"]) == "frame_basis"
         # 主平面 YZ/XZ: a true non-identity rotation keeps the location matrix.
-        yz_loc = [[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
-                  [0.0, 0.0, 0.0, 1.0]]
+        yz_loc = [
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
         assert not location_is_identity(yz_loc)
         assert uv_mapping_choice(yz_loc, [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]) == "location_matrix"
         # ±54° 斜面 + 反向 U: identity over an oblique support is a placeholder.
         for tilt in (54.0, -54.0):
             for reverse in (False, True):
                 frame_dict = tilted_frame_basis(tilt, reverse_u=reverse)
-                assert uv_mapping_choice(
-                    IDENTITY_4X4, frame_dict["normal"], frame_dict["origin"]
-                ) == "frame_basis", (tilt, reverse)
+                assert (
+                    uv_mapping_choice(IDENTITY_4X4, frame_dict["normal"], frame_dict["origin"])
+                    == "frame_basis"
+                ), (tilt, reverse)
         # A non-identity matrix never triggers the fallback, whatever the frame.
         assert uv_mapping_choice(yz_loc, [0.6, 0.8, 0.0], [1.0, 2.0, 3.0]) == "location_matrix"
 
@@ -791,8 +804,12 @@ def offline_checks() -> tuple[int, int]:
         cases.append(
             (
                 "identity_xy",
-                {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0],
-                 "v_axis": [0.0, 1.0, 0.0], "origin": [0.0, 0.0, 0.0]},
+                {
+                    "normal": [0.0, 0.0, 1.0],
+                    "u_axis": [1.0, 0.0, 0.0],
+                    "v_axis": [0.0, 1.0, 0.0],
+                    "origin": [0.0, 0.0, 0.0],
+                },
                 False,
                 IDENTITY_4X4,
             )
@@ -801,8 +818,12 @@ def offline_checks() -> tuple[int, int]:
         cases.append(
             (
                 "translated_xy",
-                {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0],
-                 "v_axis": [0.0, 1.0, 0.0], "origin": [0.0, 0.0, 30.0]},
+                {
+                    "normal": [0.0, 0.0, 1.0],
+                    "u_axis": [1.0, 0.0, 0.0],
+                    "v_axis": [0.0, 1.0, 0.0],
+                    "origin": [0.0, 0.0, 30.0],
+                },
                 True,
                 IDENTITY_4X4,
             )
@@ -811,19 +832,28 @@ def offline_checks() -> tuple[int, int]:
         cases.append(
             (
                 "principal_yz",
-                {"normal": [1.0, 0.0, 0.0], "u_axis": [0.0, 1.0, 0.0],
-                 "v_axis": [0.0, 0.0, 1.0], "origin": [0.0, 0.0, 0.0]},
+                {
+                    "normal": [1.0, 0.0, 0.0],
+                    "u_axis": [0.0, 1.0, 0.0],
+                    "v_axis": [0.0, 0.0, 1.0],
+                    "origin": [0.0, 0.0, 0.0],
+                },
                 False,
-                [[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
-                 [0.0, 0.0, 0.0, 1.0]],
+                [
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
             )
         )
         # ±54° and reverse U over the placeholder identity: frame basis.
         for tilt in (54.0, -54.0):
             for reverse in (False, True):
                 frame_dict = tilted_frame_basis(tilt, reverse_u=reverse)
-                cases.append((f"tilted_{tilt:+g}_reverse_u_{reverse}", frame_dict, True,
-                              IDENTITY_4X4))
+                cases.append(
+                    (f"tilted_{tilt:+g}_reverse_u_{reverse}", frame_dict, True, IDENTITY_4X4)
+                )
         for name, frame_dict, use_frame_basis, loc in cases:
             for point_uv in ([0.0, 0.0], [190.382228, 22.394433], [-4.0, -3.0], [7.5, -2.25]):
                 error = round_trip_error(point_uv, frame_dict, use_frame_basis, loc)
@@ -838,8 +868,7 @@ def offline_checks() -> tuple[int, int]:
     check("measurement assertions reject wrong volume, bbox or center", measurement_checks)
     check("unchanged assertions reject a revision or volume change", unchanged_checks)
     check("BUG-097 L1 identity/plausibility decision per case class", section_location_semantics)
-    check("BUG-097 L1 world<->section round trips over both mappings",
-          section_location_round_trips)
+    check("BUG-097 L1 world<->section round trips over both mappings", section_location_round_trips)
     return passed, total
 
 

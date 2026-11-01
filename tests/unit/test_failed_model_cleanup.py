@@ -114,7 +114,9 @@ class CandidateSafetyPolicy(unittest.TestCase):
     def test_incomplete_evidence_is_refused(self):
         # A probe that never ran is not a probe that returned "safe".
         with self.assertRaises(ValueError):
-            cleanup.evaluate_candidate({key: True for key in ("created_by_job", "identity_matches")})
+            cleanup.evaluate_candidate(
+                {key: True for key in ("created_by_job", "identity_matches")}
+            )
 
     def test_non_boolean_probe_is_refused(self):
         with self.assertRaises(ValueError):
@@ -145,7 +147,9 @@ class ReceiptContract(unittest.TestCase):
         # 查询没执行时不得填成功: a kept object was never queried as absent.
         with self.assertRaises(ValueError):
             cleanup.validate_receipt(
-                receipt(status="skipped", reason="user_modified", erase_code=None, absence_verified=True)
+                receipt(
+                    status="skipped", reason="user_modified", erase_code=None, absence_verified=True
+                )
             )
 
     def test_erased_without_erase_attempt_code_is_rejected(self):
@@ -179,13 +183,20 @@ class ReceiptContract(unittest.TestCase):
     def test_unknown_status_may_not_claim_verified_absence(self):
         with self.assertRaises(ValueError):
             cleanup.validate_receipt(
-                receipt(status="unknown", reason="erase_unconfirmed", erase_code=0, absence_verified=True)
+                receipt(
+                    status="unknown",
+                    reason="erase_unconfirmed",
+                    erase_code=0,
+                    absence_verified=True,
+                )
             )
 
     def test_skipped_reasons_carry_no_erase_code(self):
         with self.assertRaises(ValueError):
             cleanup.validate_receipt(
-                receipt(status="skipped", reason="window_open", erase_code=-1, absence_verified=False)
+                receipt(
+                    status="skipped", reason="window_open", erase_code=-1, absence_verified=False
+                )
             )
 
     def test_unknown_reason_shapes_are_accepted(self):
@@ -280,7 +291,10 @@ class TerminalRegistration(unittest.TestCase):
         manifest = {
             "status": "failed",
             "kind": "generic",
-            "result": {"success": False, "failed_model_cleanup": receipt(status="skipped", reason="cleaned")},
+            "result": {
+                "success": False,
+                "failed_model_cleanup": receipt(status="skipped", reason="cleaned"),
+            },
         }
         cleanup.ensure_terminal_receipt(manifest)
         value = manifest["result"]["failed_model_cleanup"]

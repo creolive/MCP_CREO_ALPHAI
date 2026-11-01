@@ -89,13 +89,16 @@ def oracle_area_mm2() -> float:
     for corner in CORNER_ANGLES_DEG:
         hexagon.append(tangent_point(corner, -60.0))
         hexagon.append(tangent_point(corner, 60.0))
-    shoelace = abs(
-        sum(
-            hexagon[i][0] * hexagon[(i + 1) % len(hexagon)][1]
-            - hexagon[(i + 1) % len(hexagon)][0] * hexagon[i][1]
-            for i in range(len(hexagon))
+    shoelace = (
+        abs(
+            sum(
+                hexagon[i][0] * hexagon[(i + 1) % len(hexagon)][1]
+                - hexagon[(i + 1) % len(hexagon)][0] * hexagon[i][1]
+                for i in range(len(hexagon))
+            )
         )
-    ) / 2
+        / 2
+    )
     sweep = math.radians(180.0 - INTERIOR_ANGLE_DEG)
     segment = 0.5 * FILLET_RADIUS_MM**2 * (sweep - math.sin(sweep))
     return shoelace + 3 * segment
@@ -111,16 +114,23 @@ PLANES = ("XY", "dictionary_tilted")
 
 
 def sketch_op(mode: str, tolerance_side: str, plane: str, *, edit: bool = False) -> dict:
-    tolerance = (
-        0.002 if mode == "autodim" else 4 * COORDINATES_DEFAULT_TOLERANCE_MM
-    )
+    tolerance = 0.002 if mode == "autodim" else 4 * COORDINATES_DEFAULT_TOLERANCE_MM
     op = {
         "op": "update_sketch_geometry" if edit else "sketch",
-        **({} if edit else {"label": "profile", "plane": "XY" if plane == "XY" else {
-            "reference": {"kind": "datum_plane", "id": 11},
-            "origin": [0.0, 0.0, 0.0],
-            "u_axis": TILTED_U_AXIS,
-        }}),
+        **(
+            {}
+            if edit
+            else {
+                "label": "profile",
+                "plane": "XY"
+                if plane == "XY"
+                else {
+                    "reference": {"kind": "datum_plane", "id": 11},
+                    "origin": [0.0, 0.0, 0.0],
+                    "u_axis": TILTED_U_AXIS,
+                },
+            }
+        ),
         **({} if not edit else {"sketch": "profile"}),
         "entities": rounded_triangle_entities(),
         "dimensioning": mode,
@@ -165,24 +175,27 @@ def build_cases(run_tag: str) -> list[dict]:
     cases.append(
         {
             "case": "rejected_bool_tolerance",
-            "operations": [sketch_op("coordinates", "default", "XY")
-                           | {"geometry_tolerance_mm": True}],
+            "operations": [
+                sketch_op("coordinates", "default", "XY") | {"geometry_tolerance_mm": True}
+            ],
             "expect_admission_error": True,
         }
     )
     cases.append(
         {
             "case": "rejected_zero_tolerance",
-            "operations": [sketch_op("coordinates", "default", "XY")
-                           | {"geometry_tolerance_mm": 0}],
+            "operations": [
+                sketch_op("coordinates", "default", "XY") | {"geometry_tolerance_mm": 0}
+            ],
             "expect_admission_error": True,
         }
     )
     cases.append(
         {
             "case": "rejected_negative_tolerance",
-            "operations": [sketch_op("autodim", "default", "XY")
-                           | {"geometry_tolerance_mm": -1e-3}],
+            "operations": [
+                sketch_op("autodim", "default", "XY") | {"geometry_tolerance_mm": -1e-3}
+            ],
             "expect_admission_error": True,
         }
     )
@@ -279,9 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         # contract, revision, rollback and save/reload evidence per case.
         # Offline-phase builds the matrix only; live execution is not
         # implemented here so it can never bypass admission checks.
-        report["live_execution"] = (
-            "prepared_only; run by integration owner with verified admission"
-        )
+        report["live_execution"] = "prepared_only; run by integration owner with verified admission"
     path = args.output or ROOT / "build" / "sketch_geometry_deviation" / run_tag / "report.json"
     if path.exists():
         parser.error(f"refusing to overwrite {path}")

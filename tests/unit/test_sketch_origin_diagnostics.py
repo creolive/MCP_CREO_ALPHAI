@@ -46,9 +46,7 @@ def diagnostics_block(plane, requested_origin):
         "origin_tolerance_mm": ORIGIN_TOLERANCE_MM,
         "support_plane": dict(plane),
         "requested_origin": list(requested_origin),
-        "suggested_origin": [
-            requested_origin[i] - signed * plane["normal"][i] for i in range(3)
-        ],
+        "suggested_origin": [requested_origin[i] - signed * plane["normal"][i] for i in range(3)],
     }
 
 
@@ -206,8 +204,12 @@ class SketchOriginProjectionTest(unittest.TestCase):
             "failed_operation_index": 1,
             "operations": [
                 {"op": "sketch", "label": "base", "succeeded": True, "index": 0},
-                {"op": "airfoil_sketch", "succeeded": False, "index": 1,
-                 "sketch_origin_diagnostics": dict(block)},
+                {
+                    "op": "airfoil_sketch",
+                    "succeeded": False,
+                    "index": 1,
+                    "sketch_origin_diagnostics": dict(block),
+                },
             ],
         }
         annotated = annotate_native_result(result, readonly=False)

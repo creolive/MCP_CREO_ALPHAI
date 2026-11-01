@@ -2054,10 +2054,16 @@ async def creo_inspect_model(
             **inspection,
             "wall_contour_check": checked(inspection["wall_contour_check"]),
         }
-    metadata = response.get("data", {}).get("metadata") if isinstance(response.get("data"), dict) else None
+    metadata = (
+        response.get("data", {}).get("metadata") if isinstance(response.get("data"), dict) else None
+    )
     if isinstance(metadata, list):
         for entry in metadata:
-            if isinstance(entry, dict) and entry.get("name") == "wall_contour_check" and isinstance(entry.get("value"), dict):
+            if (
+                isinstance(entry, dict)
+                and entry.get("name") == "wall_contour_check"
+                and isinstance(entry.get("value"), dict)
+            ):
                 entry["value"] = checked(entry["value"])
     return response
 

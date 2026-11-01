@@ -133,9 +133,7 @@ def check_oracle_matrix() -> dict:
                 near(block["distance_to_plane_mm"], deviation)
                 near(abs(block["signed_distance_to_plane_mm"]), deviation)
                 # The suggested origin is advice only and lies on the plane.
-                residual = signed_distance(
-                    normal, constant, block["suggested_origin"]
-                )
+                residual = signed_distance(normal, constant, block["suggested_origin"])
                 near(residual, 0.0, 1e-12)
                 checked += 1
     return {"planes": len(planes), "points_checked": checked, "passed": True}
@@ -160,13 +158,18 @@ def check_admission_matrix() -> dict:
     )[0]
     assert exact["plane"]["origin"] == [10, 0, 0], exact["plane"]
     try:
-        validate_operations([sketch_op({"reference": {"kind": "plane", "id": 11}, "origin": [1, 0]})])
+        validate_operations(
+            [sketch_op({"reference": {"kind": "plane", "id": 11}, "origin": [1, 0]})]
+        )
     except ValueError as error:
         assert "origin" in str(error), str(error)
     else:
         raise AssertionError("malformed origin rejection missing")
-    return {"positives": ["origin_omitted", "origin_exact"], "rejections": ["origin_malformed"],
-            "passed": True}
+    return {
+        "positives": ["origin_omitted", "origin_exact"],
+        "rejections": ["origin_malformed"],
+        "passed": True,
+    }
 
 
 def check_native_source() -> dict:
@@ -289,8 +292,7 @@ def find_z_datum_plane(snapshot: dict) -> dict:
     planes = [
         p
         for p in snapshot["inspection"]["datum_planes"]
-        if abs(abs(unit(p["normal"])[2]) - 1) <= 1e-9
-        and abs(dot(p["normal"], p["origin"])) <= 1e-9
+        if abs(abs(unit(p["normal"])[2]) - 1) <= 1e-9 and abs(dot(p["normal"], p["origin"])) <= 1e-9
     ]
     assert planes, snapshot["inspection"]["datum_planes"]
     return planes[0]

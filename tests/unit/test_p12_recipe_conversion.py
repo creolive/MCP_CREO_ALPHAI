@@ -15,10 +15,21 @@ class P12ConversionTests(unittest.TestCase):
 
     def test_counts_batches_and_thickness(self):
         m = self.manifest
-        self.assertEqual((m["source_feature_count"], m["split_only_operation_count"], m["operation_count"]), (391, 583, 580))
+        self.assertEqual(
+            (m["source_feature_count"], m["split_only_operation_count"], m["operation_count"]),
+            (391, 583, 580),
+        )
         self.assertEqual([len(b["operations"]) for b in m["batches"]], [194, 192, 192, 2])
         self.assertEqual(len(m["triangles"]), 96)
-        self.assertEqual({op["depth"] for b in m["batches"] for op in b["operations"] if op["op"] == "extrude" and op.get("new_body")}, {THICKNESS})
+        self.assertEqual(
+            {
+                op["depth"]
+                for b in m["batches"]
+                for op in b["operations"]
+                if op["op"] == "extrude" and op.get("new_body")
+            },
+            {THICKNESS},
+        )
 
     def test_repeated_point_names_are_group_scoped(self):
         ops = {op.get("label"): op for b in self.manifest["batches"] for op in b["operations"]}

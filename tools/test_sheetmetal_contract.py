@@ -559,8 +559,12 @@ def check_example_recipe() -> dict:
     assert wall["direction"] == group["direction"] == "negative", wall
     near(recipe["assertions"]["volume_mm3"], group["expected"]["volume_mm3"])
     derived = plate_oracle(
-        group["plane"], group["line"], group["depth"], group["thickness"],
-        group["direction"], group["offset"],
+        group["plane"],
+        group["line"],
+        group["depth"],
+        group["thickness"],
+        group["direction"],
+        group["offset"],
     )
     near(derived["volume_mm3"], 42_920.0)
     return {
@@ -1116,7 +1120,9 @@ async def run_frame_group_case(runner: LiveRunner, group: dict) -> dict:
         "part_thickness": thickness_check["passed"],
         "driving_axis": frame_contract.get("driving_axis") == expected["gauge_axis"],
         "frame_normal": is_parallel(frame.get("sketch_normal"), group_plane_normal(group)),
-        "depth_direction": is_parallel(frame.get("depth_direction"), expected_depth_direction(group)),
+        "depth_direction": is_parallel(
+            frame.get("depth_direction"), expected_depth_direction(group)
+        ),
         "thickness_direction": frame.get("thickness_direction") is not None,
         "material_side": frame.get("material_side") in MATERIAL_SIDES,
         "wall_faces": bool(wall_face_ids),

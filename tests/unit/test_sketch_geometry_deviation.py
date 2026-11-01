@@ -92,13 +92,16 @@ def oracle_area_hexagon_plus_segments() -> float:
     for corner in CORNER_ANGLES_DEG:
         hexagon.append(tangent_point(corner, -60.0))
         hexagon.append(tangent_point(corner, 60.0))
-    shoelace = abs(
-        sum(
-            hexagon[i][0] * hexagon[(i + 1) % len(hexagon)][1]
-            - hexagon[(i + 1) % len(hexagon)][0] * hexagon[i][1]
-            for i in range(len(hexagon))
+    shoelace = (
+        abs(
+            sum(
+                hexagon[i][0] * hexagon[(i + 1) % len(hexagon)][1]
+                - hexagon[(i + 1) % len(hexagon)][0] * hexagon[i][1]
+                for i in range(len(hexagon))
+            )
         )
-    ) / 2
+        / 2
+    )
     sweep = math.radians(180.0 - INTERIOR_ANGLE_DEG)
     segment = 0.5 * FILLET_RADIUS_MM**2 * (sweep - math.sin(sweep))
     return shoelace + 3 * segment
@@ -106,9 +109,7 @@ def oracle_area_hexagon_plus_segments() -> float:
 
 def oracle_area_corner_cut() -> float:
     """Triangle area minus three corner pieces (independent closed form)."""
-    triangle = (
-        3 * TRIANGLE_CIRCUMRADIUS_MM**2 * math.sin(math.radians(120.0)) / 2
-    )
+    triangle = 3 * TRIANGLE_CIRCUMRADIUS_MM**2 * math.sin(math.radians(120.0)) / 2
     t = FILLET_RADIUS_MM / math.tan(math.radians(INTERIOR_ANGLE_DEG / 2))
     corner_polygon = 0.5 * t * t * math.sin(math.radians(INTERIOR_ANGLE_DEG))
     sweep = math.radians(180.0 - INTERIOR_ANGLE_DEG)
@@ -234,10 +235,20 @@ class SketchToleranceSchema(unittest.TestCase):
 def native_report(**overrides):
     """A well-formed native two-stage report for the rounded triangle."""
     sample = [
-        {"entity": "fillet_0", "kind": "arc", "measurement": "radius",
-         "deviation_mm": 0.0, "reason": None},
-        {"entity": "fillet_1", "kind": "arc", "measurement": "center",
-         "deviation_mm": 1.7e-6, "reason": None},
+        {
+            "entity": "fillet_0",
+            "kind": "arc",
+            "measurement": "radius",
+            "deviation_mm": 0.0,
+            "reason": None,
+        },
+        {
+            "entity": "fillet_1",
+            "kind": "arc",
+            "measurement": "center",
+            "deviation_mm": 1.7e-6,
+            "reason": None,
+        },
     ]
     stages = {
         "section_regenerate": {
@@ -285,14 +296,11 @@ class GeometryDeviationNormalization(unittest.TestCase):
         self.assertEqual(report["measurement_scope"], "named_section_entities")
         self.assertEqual(report["total"], 26)
         self.assertFalse(report["truncated"])
-        self.assertEqual(
-            set(report["stages"]), {"section_regenerate", "complete_feature"}
-        )
+        self.assertEqual(set(report["stages"]), {"section_regenerate", "complete_feature"})
 
     def test_exceeds_warning_is_recomputed_not_trusted(self):
         report = normalize_geometry_deviation(
-            native_report(max_deviation_mm=2e-3, warning_threshold_mm=1e-3,
-                          exceeds_warning=False)
+            native_report(max_deviation_mm=2e-3, warning_threshold_mm=1e-3, exceeds_warning=False)
         )
         self.assertTrue(report["exceeds_warning"])
 
@@ -333,8 +341,13 @@ class GeometryDeviationNormalization(unittest.TestCase):
 
     def test_sample_is_capped_and_truncation_is_reported(self):
         flood = [
-            {"entity": f"e{i}", "kind": "line", "measurement": "end",
-             "deviation_mm": 0.0, "reason": None}
+            {
+                "entity": f"e{i}",
+                "kind": "line",
+                "measurement": "end",
+                "deviation_mm": 0.0,
+                "reason": None,
+            }
             for i in range(SAMPLE_LIMIT + 5)
         ]
         report = normalize_geometry_deviation(
@@ -345,8 +358,13 @@ class GeometryDeviationNormalization(unittest.TestCase):
 
     def test_sample_entries_reject_non_finite_deviations(self):
         flooded = [
-            {"entity": "fillet_0", "kind": "arc", "measurement": "radius",
-             "deviation_mm": float("nan"), "reason": None},
+            {
+                "entity": "fillet_0",
+                "kind": "arc",
+                "measurement": "radius",
+                "deviation_mm": float("nan"),
+                "reason": None,
+            },
         ]
         report = normalize_geometry_deviation(native_report(sample=flooded))
         self.assertEqual(report["sample"][0]["deviation_mm"], None)
@@ -369,9 +387,11 @@ class GeometryDeviationNormalization(unittest.TestCase):
         self.assertIn("geometry_deviation_report", coordinates)
         for marker in ("section_regenerate", "complete_feature"):
             with self.subTest(marker=marker):
-                joined = coordinates + (ROOT / "native" / "generic.cpp").read_text(
-                    encoding="utf-8"
-                ) + (ROOT / "native" / "sketch_edit.cpp").read_text(encoding="utf-8")
+                joined = (
+                    coordinates
+                    + (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
+                    + (ROOT / "native" / "sketch_edit.cpp").read_text(encoding="utf-8")
+                )
                 self.assertIn(marker, joined)
         self.assertNotIn("coordinates_lenient", coordinates)
 
@@ -395,9 +415,12 @@ class RoundedTriangleOracle(unittest.TestCase):
         self.assertEqual(report["closed_contour_count"], 1)
         self.assertEqual(report["open_contour_count"], 0)
         self.assertEqual(report["entity_count"], 6)
-        self.assertLess(report["max_endpoint_gap_mm"] if "max_endpoint_gap_mm" in report
-                        else max(c["max_join_gap_mm"] for c in report["contours"]),
-                        1e-12)
+        self.assertLess(
+            report["max_endpoint_gap_mm"]
+            if "max_endpoint_gap_mm" in report
+            else max(c["max_join_gap_mm"] for c in report["contours"]),
+            1e-12,
+        )
         self.assertAlmostEqual(
             report["material_area_mm2"], oracle_area_hexagon_plus_segments(), delta=1e-6
         )

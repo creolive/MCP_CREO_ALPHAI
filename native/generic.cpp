@@ -1209,7 +1209,8 @@ static J last_feature_error_report = nullptr;
 static J feature_error_report(const char *api, ProError code, const char *failed_stage) {
     J sample = J::array();
     for (const auto &entry : feature_error_entries)
-        sample.push_back({{"element", entry.element}, {"type", entry.type}, {"error", entry.error}});
+        sample.push_back(
+            {{"element", entry.element}, {"type", entry.type}, {"error", entry.error}});
     J section = J::array();
     for (const auto &message : section_error_messages)
         section.push_back(message);
@@ -1238,8 +1239,8 @@ static void redefine(ProFeature *f, ProElement root) {
     errors(es);
     ProArrayFree((ProArray *)&options);
     if (e != PRO_TK_NO_ERROR)
-        last_feature_error_report = feature_error_report("ProFeatureWithoptionsRedefine", e,
-                                                         "CompleteFeature");
+        last_feature_error_report =
+            feature_error_report("ProFeatureWithoptionsRedefine", e, "CompleteFeature");
     check(e, "CompleteFeature");
 }
 #include "sketch_coordinates.cpp"
@@ -1675,8 +1676,7 @@ static J sketch(const J &op) {
         return true;
     }();
     const bool identity_plausible = fabs(frame.n[0]) < 1e-9 && fabs(frame.n[1]) < 1e-9 &&
-                                    fabs(frame.n[2] - 1) < 1e-9 &&
-                                    fabs(frame.origin[0]) < 1e-9 &&
+                                    fabs(frame.n[2] - 1) < 1e-9 && fabs(frame.origin[0]) < 1e-9 &&
                                     fabs(frame.origin[1]) < 1e-9 && fabs(frame.origin[2]) < 1e-9;
     const bool use_frame_basis = loc_is_identity && !identity_plausible;
     log("SECTION_LOCATION_IDENTITY=%d using_%s identity_plausible=%d\n", loc_is_identity ? 1 : 0,
@@ -1811,8 +1811,8 @@ static J sketch(const J &op) {
             // Under the frame-basis fallback the location matrix is a
             // placeholder; the alignment check then follows the assumed
             // section axes (the placement frame) instead of the identity.
-            double align =
-                fabs(dot(frame.u, V{effective_loc[0][0], effective_loc[0][1], effective_loc[0][2]}));
+            double align = fabs(
+                dot(frame.u, V{effective_loc[0][0], effective_loc[0][1], effective_loc[0][2]}));
             if (align > 0.99999) {
                 ell.x_radius = e["x_radius"];
                 ell.y_radius = e["y_radius"];
@@ -1876,9 +1876,9 @@ static J sketch(const J &op) {
     // malformed explicit tolerance fails before any mutation.
     const DeviationPolicy deviation_policy =
         resolve_geometry_tolerance(op, solving_op["dimensioning"].get<std::string>());
-    const char *deviation_context =
-        std::string(deviation_policy.source) == "request" ? "geometry_tolerance_mm"
-                                                          : "Coordinate dimensioning";
+    const char *deviation_context = std::string(deviation_policy.source) == "request"
+                                        ? "geometry_tolerance_mm"
+                                        : "Coordinate dimensioning";
     J deviation_targets;
     if (solving_op["dimensioning"] == "coordinates") {
         if (!op.value("dimensions", J::array()).empty() ||
@@ -1925,9 +1925,9 @@ static J sketch(const J &op) {
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
     solver_info["section_location"] = section_location;
     if (!coordinate_plan.is_null())
-        solver_info["coordinate_geometry"] = verify_coordinate_plan(
-            section, coordinate_plan["targets"], coordinate_plan["origin_id"],
-            deviation_policy.tolerance);
+        solver_info["coordinate_geometry"] =
+            verify_coordinate_plan(section, coordinate_plan["targets"],
+                                   coordinate_plan["origin_id"], deviation_policy.tolerance);
     CK(ProElementSpecialvalueSet(sk, (ProAppData)section));
     redefine(&f, root);
     CK(ProFeatureElemtreeFree(&f, root));
@@ -1941,9 +1941,9 @@ static J sketch(const J &op) {
     if (!copy_code) {
         try {
             native_section = section_profile_summary(saved, "sketch");
-            arc_geometry = arc_geometry_report(saved, copy_code, op["entities"], entities,
-                                               frame.origin, frame.u, frame.v, effective_loc,
-                                               mirrored);
+            arc_geometry =
+                arc_geometry_report(saved, copy_code, op["entities"], entities, frame.origin,
+                                    frame.u, frame.v, effective_loc, mirrored);
             if (!coordinate_plan.is_null())
                 solver_info["coordinate_geometry_after_creation"] = verify_coordinate_plan(
                     saved, coordinate_plan["targets"], coordinate_plan["origin_id"],
@@ -1958,14 +1958,13 @@ static J sketch(const J &op) {
         check(copy_code, "CopySketchSection");
     else {
         log("SECTION_PROFILE_UNAVAILABLE phase=sketch copy_code=%d\n", copy_code);
-        deviation_feature = unavailable_deviation_stage(
-            "the solved feature section could not be copied (code " +
-            std::to_string((int)copy_code) + ")");
+        deviation_feature =
+            unavailable_deviation_stage("the solved feature section could not be copied (code " +
+                                        std::to_string((int)copy_code) + ")");
     }
     if (arc_geometry.empty())
         arc_geometry = arc_geometry_report(nullptr, copy_code, op["entities"], entities,
-                                           frame.origin, frame.u, frame.v, effective_loc,
-                                           mirrored);
+                                           frame.origin, frame.u, frame.v, effective_loc, mirrored);
     solver_info["native_section"] = native_section;
     // FEAT-010/BUG-049: publish the two-stage fidelity report on the
     // operation result; an enforced policy rejects before the feature ships.
@@ -1991,8 +1990,7 @@ static J sketch(const J &op) {
          {"u_axis", frame.u},
          {"v_axis", frame.v},
          {"section_normal_sign",
-          use_frame_basis ? 1
-                          : (dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1)}});
+          use_frame_basis ? 1 : (dot(V{loc[2][0], loc[2][1], loc[2][2]}, frame.n) > 0 ? 1 : -1)}});
     if (op.contains("profile"))
         aliases[op["label"].get<std::string>()]["airfoil"] = op["profile"];
     // FEAT-008/T09B: publish the section entity ids on the operation record so

@@ -47,9 +47,7 @@ def validate_tolerance_mm(value: Any) -> float | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(
-            "geometry_tolerance_mm must be a finite positive number of millimeters"
-        )
+        raise ValueError("geometry_tolerance_mm must be a finite positive number of millimeters")
     number = float(value)
     if not math.isfinite(number):
         raise ValueError("geometry_tolerance_mm must be a finite positive number of millimeters")
@@ -107,7 +105,9 @@ def _normalize_stage(raw: Any) -> dict[str, Any] | None:
     sample, sample_truncated = _normalize_sample(raw.get("sample"))
     return {
         "available": available,
-        "max_deviation_mm": _finite_non_negative(raw.get("max_deviation_mm")) if available else None,
+        "max_deviation_mm": _finite_non_negative(raw.get("max_deviation_mm"))
+        if available
+        else None,
         "total": _optional_int(raw.get("total")),
         "sample": sample,
         "truncated": bool(raw.get("truncated")) or sample_truncated,
@@ -167,8 +167,10 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
         for name in _STAGES
         if (normalized := _normalize_stage(block.get("stages", {}).get(name))) is not None
     }
-    if available and max_deviation is None and not any(
-        stage["available"] for stage in stages.values()
+    if (
+        available
+        and max_deviation is None
+        and not any(stage["available"] for stage in stages.values())
     ):
         # "available" without any usable measurement is contradictory; keep
         # the record explicitly unavailable instead of implying success.
@@ -188,7 +190,9 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
         # Recomputed from the reported values; the executor's own flag is
         # never trusted over the numbers it published.
         "exceeds_warning": (
-            max_deviation > threshold if max_deviation is not None and threshold is not None else None
+            max_deviation > threshold
+            if max_deviation is not None and threshold is not None
+            else None
         ),
         "total": _optional_int(block.get("total")),
         "sample": sample,

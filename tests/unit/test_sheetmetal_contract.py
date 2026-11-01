@@ -420,7 +420,9 @@ class FrameGroupOracleTest(unittest.TestCase):
         report = contract_driver.check_frame_groups()
         distinction = report["volume_alone_cannot_distinguish"]
         self.assertEqual(distinction["shared_volume_mm3"], 42_920.0)
-        self.assertTrue(any("part_thickness_mm" in item for item in distinction["g1_vs_g3_distinguishers"]))
+        self.assertTrue(
+            any("part_thickness_mm" in item for item in distinction["g1_vs_g3_distinguishers"])
+        )
 
     def test_centroid_rule_is_centered_on_the_sketch_line(self) -> None:
         # The legacy fixture line (0,0)->(185,0) on XY: a centered gauge keeps
@@ -472,7 +474,9 @@ class WallContourProjectionTest(unittest.TestCase):
         checks = contract_driver.check_native_source()["static_source_assertions"]
         self.assertTrue(checks["adjacent_bend_ends_guard_still_rejects"])
         projected = project_wall_contour({"edges": [], "wall_contour_check": {"enabled": True}})
-        self.assertIn("does not promise flange creation", projected["wall_contour_check"]["meaning"])
+        self.assertIn(
+            "does not promise flange creation", projected["wall_contour_check"]["meaning"]
+        )
         self.assertNotIn("flange_available", json.dumps(projected))
 
     def test_revision_is_stamped_only_when_an_integer(self) -> None:

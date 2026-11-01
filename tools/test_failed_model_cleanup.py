@@ -207,9 +207,7 @@ def valid_plan(tag: str) -> list[dict]:
             "op": "sketch",
             "label": f"{tag}_profile",
             "plane": "XY",
-            "entities": [
-                {"type": "circle", "name": f"{tag}_c", "center": [0, 0], "radius": 5}
-            ],
+            "entities": [{"type": "circle", "name": f"{tag}_c", "center": [0, 0], "radius": 5}],
         },
         {"op": "extrude", "label": f"{tag}_solid", "sketch": f"{tag}_profile", "depth": 10},
     ]
@@ -278,8 +276,14 @@ class LiveRun:
                 raise TimeoutError(f"job {job_id} did not reach a terminal state")
             await asyncio.sleep(2)
 
-    async def plan(self, operations: list, *, model_id: str | None = None,
-                   revision: int | None = None, model_name: str | None = None) -> dict:
+    async def plan(
+        self,
+        operations: list,
+        *,
+        model_id: str | None = None,
+        revision: int | None = None,
+        model_name: str | None = None,
+    ) -> dict:
         args: dict = {"operations": operations}
         if model_id is not None:
             args.update(model_id=model_id, expected_revision=revision)
@@ -403,18 +407,14 @@ class LiveRun:
             failing_job={
                 "job_id": failed["accepted"]["job_id"],
                 "status": failed["job"].get("status"),
-                "rollback_succeeded": failed["job"]
-                .get("result", {})
-                .get("rollback_succeeded"),
+                "rollback_succeeded": failed["job"].get("result", {}).get("rollback_succeeded"),
                 "failed_model_cleanup": receipt,
             },
             revision_after=after.get("revision"),
         )
         scenario["assertions"] = {
             "job_failed": failed["job"].get("status") == "failed",
-            "rollback_kept_old_semantics": failed["job"]
-            .get("result", {})
-            .get("rollback_succeeded")
+            "rollback_kept_old_semantics": failed["job"].get("result", {}).get("rollback_succeeded")
             is True,
             "revision_unchanged": after.get("revision") == before.get("revision"),
             "cleanup_reports_not_applicable": receipt.get("reason") == "not_new_model_job",

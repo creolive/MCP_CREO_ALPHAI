@@ -508,9 +508,9 @@ static void generic_sketch_edit(const J &op) {
     // snapshot the pre-solve section so the solved geometry is measured
     // against the same named entities.
     const DeviationPolicy deviation_policy = resolve_geometry_tolerance(op, mode);
-    const char *deviation_context =
-        std::string(deviation_policy.source) == "request" ? "geometry_tolerance_mm"
-                                                          : "Coordinate dimensioning";
+    const char *deviation_context = std::string(deviation_policy.source) == "request"
+                                        ? "geometry_tolerance_mm"
+                                        : "Coordinate dimensioning";
     J coordinate_plan;
     J deviation_targets;
     if (mode == "coordinates") {
@@ -558,9 +558,9 @@ static void generic_sketch_edit(const J &op) {
     meta["solver"]["requested"] = op.value("dimensioning", "auto");
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
     if (!coordinate_plan.is_null())
-        meta["solver"]["coordinate_geometry"] = verify_coordinate_plan(
-            section, coordinate_plan["targets"], coordinate_plan["origin_id"],
-            deviation_policy.tolerance);
+        meta["solver"]["coordinate_geometry"] =
+            verify_coordinate_plan(section, coordinate_plan["targets"],
+                                   coordinate_plan["origin_id"], deviation_policy.tolerance);
     CK(ProElementSpecialvalueSet(sk, (ProAppData)section));
     redefine(&f, root);
     CK(ProFeatureElemtreeFree(&f, root));
@@ -598,10 +598,9 @@ static void generic_sketch_edit(const J &op) {
         } else {
             try {
                 if (!coordinate_plan.is_null())
-                    meta["solver"]["coordinate_geometry_after_creation"] =
-                        verify_coordinate_plan(saved, coordinate_plan["targets"],
-                                               coordinate_plan["origin_id"],
-                                               deviation_policy.tolerance);
+                    meta["solver"]["coordinate_geometry_after_creation"] = verify_coordinate_plan(
+                        saved, coordinate_plan["targets"], coordinate_plan["origin_id"],
+                        deviation_policy.tolerance);
                 deviation_feature = geometry_deviation_stage(saved, deviation_targets);
             } catch (...) {
                 ProSectionFree(&saved);

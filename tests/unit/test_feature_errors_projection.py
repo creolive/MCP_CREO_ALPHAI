@@ -28,6 +28,11 @@ def region(source: str, start: str, stop: str) -> str:
     return source[begin : source.index(stop, begin)]
 
 
+def compact(source: str) -> str:
+    """Whitespace-free view so source markers survive clang-format line breaks."""
+    return "".join(source.split())
+
+
 def native_block(**overrides) -> dict:
     block = {
         "api": "ProFeatureWithoptionsRedefine",
@@ -190,8 +195,8 @@ class NativeWiringTests(unittest.TestCase):
         self.assertIn("ProFeatureWithoptionsRedefine", body)
         self.assertIn("errors(es);", body)
         self.assertIn(
-            'last_feature_error_report = feature_error_report(',
-            body,
+            compact("last_feature_error_report = feature_error_report("),
+            compact(body),
         )
         self.assertIn('"ProFeatureWithoptionsRedefine"', body)
         self.assertIn('check(e, "CompleteFeature");', body)
@@ -214,12 +219,16 @@ class NativeWiringTests(unittest.TestCase):
 
     def test_geometry_caps_the_element_sample_and_keeps_the_total(self):
         geometry = native_source("geometry.cpp")
-        body = region(geometry, "static void errors(const ProErrorlist &es)",
-                      "static ProFeature create")
+        body = region(
+            geometry, "static void errors(const ProErrorlist &es)", "static ProFeature create"
+        )
         self.assertIn("FEATURE_ERROR_SAMPLE_LIMIT", body)
         self.assertIn("feature_error_total = es.error_number;", body)
-        limit = region(geometry, "static const int FEATURE_ERROR_SAMPLE_LIMIT",
-                       "static void reset_section_error_capture")
+        limit = region(
+            geometry,
+            "static const int FEATURE_ERROR_SAMPLE_LIMIT",
+            "static void reset_section_error_capture",
+        )
         self.assertIn("= 20;", limit)
         # The historical log line and unbounded string stay (log dig remains).
         self.assertIn('log("feature_error element=%d type=%d error=%d\\n"', body)
@@ -237,11 +246,12 @@ class NativeWiringTests(unittest.TestCase):
 
     def test_execute_operation_clears_and_attaches_the_receipt(self):
         generic = native_source("generic.cpp")
-        body = region(generic, "static void execute_operation(const J &op)",
-                      "static void finalize_operation_results")
-        self.assertLess(
-            body.index("last_feature_error_report = nullptr;"), body.index("try {")
+        body = region(
+            generic,
+            "static void execute_operation(const J &op)",
+            "static void finalize_operation_results",
         )
+        self.assertLess(body.index("last_feature_error_report = nullptr;"), body.index("try {"))
         self.assertIn('failure["feature_errors"] = last_feature_error_report;', body)
         self.assertLess(
             body.index('failure["feature_errors"]'), body.index("append_operation_result")
@@ -250,7 +260,7 @@ class NativeWiringTests(unittest.TestCase):
     def test_job_level_failure_publishes_the_receipt_and_bounded_text(self):
         generic = native_source("generic.cpp")
         body = region(
-            generic, 'log("BUILD_SUCCESS=1\\n");', '} catch (const std::exception &error) {'
+            generic, 'log("BUILD_SUCCESS=1\\n");', "} catch (const std::exception &error) {"
         )
         self.assertIn("} catch (ProError error) {", body)
         self.assertIn('report["feature_errors"] = last_feature_error_report;', body)
@@ -276,8 +286,9 @@ class Bug097L1NativeWiringTests(unittest.TestCase):
 
     def test_identity_detection_covers_the_full_4x4_matrix(self):
         generic = native_source("generic.cpp")
-        body = region(generic, "const bool loc_is_identity = [&]() {",
-                      "const bool identity_plausible")
+        body = region(
+            generic, "const bool loc_is_identity = [&]() {", "const bool identity_plausible"
+        )
         self.assertIn("row == col ? 1.0 : 0.0", body)
         self.assertIn("for (int row = 0; row < 4; row++)", body)
         self.assertIn("for (int col = 0; col < 4; col++)", body)
@@ -292,13 +303,19 @@ class Bug097L1NativeWiringTests(unittest.TestCase):
         body = region(generic, "const bool identity_plausible", "const bool use_frame_basis")
         # The plausibility guard pins normal to +Z and the origin to the world
         # origin: only there can the identity be the true placement.
-        for expected in ("frame.n[0]", "frame.n[1]", "frame.n[2] - 1",
-                         "frame.origin[0]", "frame.origin[1]", "frame.origin[2]"):
+        for expected in (
+            "frame.n[0]",
+            "frame.n[1]",
+            "frame.n[2] - 1",
+            "frame.origin[0]",
+            "frame.origin[1]",
+            "frame.origin[2]",
+        ):
             self.assertIn(expected, body)
 
     def test_diagnostic_log_marker_and_structured_block_exist(self):
         generic = native_source("generic.cpp")
-        self.assertIn('SECTION_LOCATION_IDENTITY=%d using_%s identity_plausible=%d', generic)
+        self.assertIn("SECTION_LOCATION_IDENTITY=%d using_%s identity_plausible=%d", generic)
         self.assertIn('"matrix_identity", loc_is_identity', generic)
         self.assertIn('"identity_plausible", identity_plausible', generic)
         self.assertIn('use_frame_basis ? "frame_basis" : "location_matrix"', generic)
@@ -307,8 +324,11 @@ class Bug097L1NativeWiringTests(unittest.TestCase):
 
     def test_projection_and_inverse_use_the_same_mapping(self):
         generic = native_source("generic.cpp")
-        body = region(generic, "auto project = [&](const J &p, double *out) {",
-                      "CK(ProSectionIntentManagerModeSet(section, PRO_B_FALSE));")
+        body = region(
+            generic,
+            "auto project = [&](const J &p, double *out) {",
+            "CK(ProSectionIntentManagerModeSet(section, PRO_B_FALSE));",
+        )
         self.assertIn("if (use_frame_basis) {", body)
         self.assertIn("out[0] = dot(d, frame.u);", body)
         self.assertIn("out[1] = dot(d, frame.v);", body)

@@ -395,23 +395,29 @@ class Bug097SectionLocationTests(unittest.TestCase):
     def test_identity_on_the_named_xy_plane_is_a_legal_location(self):
         # The identity could be the true placement here: keep the matrix. The
         # frame-basis projection coincides with it anyway for this frame.
-        self.assertEqual(driver.uv_mapping_choice(driver.IDENTITY_4X4, **self.XY),
-                         "location_matrix")
+        self.assertEqual(
+            driver.uv_mapping_choice(driver.IDENTITY_4X4, **self.XY), "location_matrix"
+        )
 
     def test_identity_over_translated_or_oblique_supports_is_a_placeholder(self):
         cases = {
             "translated_xy": ([0.0, 0.0, 1.0], [0.0, 0.0, 30.0]),
             "yz_principal": ([1.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
             "xz_principal": ([0.0, -1.0, 0.0], [0.0, 0.0, 0.0]),
-            "tilted_plus_54": ([math.cos(math.radians(54)), math.sin(math.radians(54)), 0.0],
-                               [0.0, 0.0, 0.0]),
-            "tilted_minus_54": ([math.cos(math.radians(54)), -math.sin(math.radians(54)), 0.0],
-                                [0.0, 0.0, 0.0]),
+            "tilted_plus_54": (
+                [math.cos(math.radians(54)), math.sin(math.radians(54)), 0.0],
+                [0.0, 0.0, 0.0],
+            ),
+            "tilted_minus_54": (
+                [math.cos(math.radians(54)), -math.sin(math.radians(54)), 0.0],
+                [0.0, 0.0, 0.0],
+            ),
         }
         for name, (normal, origin) in cases.items():
             with self.subTest(case=name):
-                self.assertEqual(driver.uv_mapping_choice(driver.IDENTITY_4X4, normal, origin),
-                                 "frame_basis")
+                self.assertEqual(
+                    driver.uv_mapping_choice(driver.IDENTITY_4X4, normal, origin), "frame_basis"
+                )
 
     def test_reverse_u_on_a_tilted_support_still_falls_back_and_round_trips(self):
         for tilt in (54.0, -54.0):
@@ -431,32 +437,51 @@ class Bug097SectionLocationTests(unittest.TestCase):
     def test_non_identity_matrix_never_triggers_the_fallback(self):
         normal, origin = [0.6, 0.8, 0.0], [1.0, 2.0, 3.0]
         self.assertFalse(driver.location_is_identity(self.YZ_LOC))
-        self.assertEqual(driver.uv_mapping_choice(self.YZ_LOC, normal, origin),
-                         "location_matrix")
+        self.assertEqual(driver.uv_mapping_choice(self.YZ_LOC, normal, origin), "location_matrix")
 
     def test_world_section_round_trips_hold_for_every_case_class(self):
         cases = [
-            ("identity_xy",
-             {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0], "v_axis": [0.0, 1.0, 0.0],
-              "origin": [0.0, 0.0, 0.0]},
-             False, driver.IDENTITY_4X4),
-            ("translated_xy",
-             {"normal": [0.0, 0.0, 1.0], "u_axis": [1.0, 0.0, 0.0], "v_axis": [0.0, 1.0, 0.0],
-              "origin": [0.0, 0.0, 30.0]},
-             True, driver.IDENTITY_4X4),
-            ("principal_yz",
-             {"normal": [1.0, 0.0, 0.0], "u_axis": [0.0, 1.0, 0.0], "v_axis": [0.0, 0.0, 1.0],
-              "origin": [0.0, 0.0, 0.0]},
-             False, self.YZ_LOC),
-            ("tilted_54",
-             driver.tilted_frame_basis(54.0),
-             True, driver.IDENTITY_4X4),
-            ("tilted_minus_54",
-             driver.tilted_frame_basis(-54.0),
-             True, driver.IDENTITY_4X4),
-            ("tilted_reverse_u",
-             driver.tilted_frame_basis(54.0, reverse_u=True),
-             True, driver.IDENTITY_4X4),
+            (
+                "identity_xy",
+                {
+                    "normal": [0.0, 0.0, 1.0],
+                    "u_axis": [1.0, 0.0, 0.0],
+                    "v_axis": [0.0, 1.0, 0.0],
+                    "origin": [0.0, 0.0, 0.0],
+                },
+                False,
+                driver.IDENTITY_4X4,
+            ),
+            (
+                "translated_xy",
+                {
+                    "normal": [0.0, 0.0, 1.0],
+                    "u_axis": [1.0, 0.0, 0.0],
+                    "v_axis": [0.0, 1.0, 0.0],
+                    "origin": [0.0, 0.0, 30.0],
+                },
+                True,
+                driver.IDENTITY_4X4,
+            ),
+            (
+                "principal_yz",
+                {
+                    "normal": [1.0, 0.0, 0.0],
+                    "u_axis": [0.0, 1.0, 0.0],
+                    "v_axis": [0.0, 0.0, 1.0],
+                    "origin": [0.0, 0.0, 0.0],
+                },
+                False,
+                self.YZ_LOC,
+            ),
+            ("tilted_54", driver.tilted_frame_basis(54.0), True, driver.IDENTITY_4X4),
+            ("tilted_minus_54", driver.tilted_frame_basis(-54.0), True, driver.IDENTITY_4X4),
+            (
+                "tilted_reverse_u",
+                driver.tilted_frame_basis(54.0, reverse_u=True),
+                True,
+                driver.IDENTITY_4X4,
+            ),
         ]
         for name, frame_dict, use_frame_basis, loc in cases:
             for point_uv in ([0.0, 0.0], [190.382228, 22.394433], [-4.0, -3.0], [7.5, -2.25]):
@@ -468,12 +493,13 @@ class Bug097SectionLocationTests(unittest.TestCase):
     def test_native_wiring_matches_the_oracle_semantics(self):
         source = (driver.ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
         # The gate, the diagnostics marker and the structured block are wired.
-        self.assertIn("const bool use_frame_basis = loc_is_identity && !identity_plausible;",
-                      source)
+        self.assertIn(
+            "const bool use_frame_basis = loc_is_identity && !identity_plausible;", source
+        )
         self.assertIn("SECTION_LOCATION_IDENTITY=%d using_%s identity_plausible=%d", source)
         self.assertIn('use_frame_basis ? "frame_basis" : "location_matrix"', source)
         # The frame-basis branch projects with the placement frame, not with loc.
-        body = source[source.index("auto project = [&](const J &p, double *out) {"):]
+        body = source[source.index("auto project = [&](const J &p, double *out) {") :]
         self.assertIn("out[0] = dot(d, frame.u);", body[:600])
         self.assertIn("out[1] = dot(d, frame.v);", body[:600])
 

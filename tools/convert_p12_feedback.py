@@ -7,10 +7,12 @@ import json
 import math
 from pathlib import Path
 
-
-SOURCE = next(Path(__file__).resolve().parents[1].glob(
-    "docs/validation/feedback-0.10.0-2026-11-01/originals/06_P12*/p12_v12_native_tree.json"
-))
+SOURCE = next(
+    Path(__file__)
+    .resolve()
+    .parents[1]
+    .glob("docs/validation/feedback-0.10.0-2026-11-01/originals/06_P12*/p12_v12_native_tree.json")
+)
 ROUTES = ("strip_prism",)
 THICKNESS = 9.87008714331235
 
@@ -35,7 +37,11 @@ def _geometry(points):
 def convert_recipe(tree: dict, *, route: str) -> dict:
     if route not in ROUTES:
         raise ValueError(f"unsupported route: {route}")
-    if not isinstance(tree, dict) or not isinstance(tree.get("meta"), dict) or not isinstance(tree.get("features"), list):
+    if (
+        not isinstance(tree, dict)
+        or not isinstance(tree.get("meta"), dict)
+        or not isinstance(tree.get("features"), list)
+    ):
         raise ValueError("tree requires meta and features")
     features = tree["features"]
     if not features:
@@ -57,7 +63,11 @@ def convert_recipe(tree: dict, *, route: str) -> dict:
         "merge_all_bodies": {"seq", "op"},
     }
     for expected, feature in enumerate(features, 1):
-        if not isinstance(feature, dict) or feature.get("seq") != expected or not isinstance(feature.get("op"), str):
+        if (
+            not isinstance(feature, dict)
+            or feature.get("seq") != expected
+            or not isinstance(feature.get("op"), str)
+        ):
             raise ValueError(f"invalid feature at sequence {expected}")
         op, seq = feature["op"], feature["seq"]
         seq_map[str(seq)] = []
@@ -76,56 +86,131 @@ def convert_recipe(tree: dict, *, route: str) -> dict:
                 raise ValueError(f"invalid datum_points at {seq}")
             current = {}
             for point in points:
-                if not isinstance(point, dict) or set(point) != {"name", "position"} or not isinstance(point["name"], str) or len(point["position"]) != 3:
+                if (
+                    not isinstance(point, dict)
+                    or set(point) != {"name", "position"}
+                    or not isinstance(point["name"], str)
+                    or len(point["position"]) != 3
+                ):
                     raise ValueError(f"invalid point at {seq}")
                 name = point["name"]
                 if name in current:
                     raise ValueError(f"duplicate point at {seq}")
                 suffix = {"p_a": "a", "p_b": "b", "p_c": "c"}.get(name)
                 if suffix is None:
-                    unresolved.append({"seq": seq, "field": "points.name", "reason": f"unmapped point name {name}"})
+                    unresolved.append(
+                        {
+                            "seq": seq,
+                            "field": "points.name",
+                            "reason": f"unmapped point name {name}",
+                        }
+                    )
                     continue
                 new_label = f"{label}_{suffix}"
                 if len(new_label) > 28 or new_label in used or not new_label[0].islower():
                     raise ValueError(f"invalid or duplicate generated label {new_label}")
                 used.add(new_label)
                 current[(label, name)] = new_label
-                mapped.append({"op": "datum_points", "label": new_label, "points": [{"name": new_label, "position": point["position"]}]})
+                mapped.append(
+                    {
+                        "op": "datum_points",
+                        "label": new_label,
+                        "points": [{"name": new_label, "position": point["position"]}],
+                    }
+                )
                 seq_map[str(seq)].append(new_label)
             current["source_label"] = label
             current["points"] = points
             continue
         if op == "datum_plane":
             if current is None or feature.get("thru_points") != ["p_a", "p_b", "p_c"]:
-                unresolved.append({"seq": seq, "field": "thru_points", "reason": "cannot resolve group scoped point names"})
+                unresolved.append(
+                    {
+                        "seq": seq,
+                        "field": "thru_points",
+                        "reason": "cannot resolve group scoped point names",
+                    }
+                )
                 continue
             source_label = current["source_label"]
             item.pop("thru_points")
-            item["reference"] = {"kind": "through_points", "points": [current[(source_label, n)] for n in feature["thru_points"]]}
+            item["reference"] = {
+                "kind": "through_points",
+                "points": [current[(source_label, n)] for n in feature["thru_points"]],
+            }
             current["plane"] = feature["label"]
         elif op == "sketch" and isinstance(feature.get("entities"), dict):
-            if current is None or feature.get("plane") != {"datum_plane_label": current.get("plane")} or set(feature["entities"]) != {"triangle_uv"}:
-                unresolved.append({"seq": seq, "field": "sketch", "reason": "unresolved triangle or plane placeholder"})
+            if (
+                current is None
+                or feature.get("plane") != {"datum_plane_label": current.get("plane")}
+                or set(feature["entities"]) != {"triangle_uv"}
+            ):
+                unresolved.append(
+                    {
+                        "seq": seq,
+                        "field": "sketch",
+                        "reason": "unresolved triangle or plane placeholder",
+                    }
+                )
                 continue
             a, ab, projection, height, area = _geometry(current["points"])
-            item["plane"] = {"type": "frame", "origin": a, "reference": {"kind": "datum_feature", "label": current["plane"]}, "u_axis": ab}
+            item["plane"] = {
+                "type": "frame",
+                "origin": a,
+                "reference": {"kind": "datum_feature", "label": current["plane"]},
+                "u_axis": ab,
+            }
             item["dimensioning"] = "coordinates"
-            item["entities"] = [{"type": "polyline", "name": "tri", "points": [[0, 0], [math.dist(a, current["points"][1]["position"]), 0], [projection, height]], "closed": True}]
+            item["entities"] = [
+                {
+                    "type": "polyline",
+                    "name": "tri",
+                    "points": [
+                        [0, 0],
+                        [math.dist(a, current["points"][1]["position"]), 0],
+                        [projection, height],
+                    ],
+                    "closed": True,
+                }
+            ]
             triangles.append({"source_seq": seq, "area_mm2": area, "volume_mm3": area * THICKNESS})
-        elif op == "sketch" and (not isinstance(feature.get("entities"), list) or not isinstance(feature.get("plane"), str)):
+        elif op == "sketch" and (
+            not isinstance(feature.get("entities"), list)
+            or not isinstance(feature.get("plane"), str)
+        ):
             unresolved.append({"seq": seq, "field": "sketch", "reason": "unmapped sketch payload"})
             continue
         elif op == "axis_pattern":
-            unresolved.append({"seq": seq, "field": "note", "reason": "leader requires unioned blade body; body grouping unproven"})
+            unresolved.append(
+                {
+                    "seq": seq,
+                    "field": "note",
+                    "reason": "leader requires unioned blade body; body grouping unproven",
+                }
+            )
             continue
         elif op == "merge_all_bodies":
-            unresolved.append({"seq": seq, "field": "op", "reason": "no equivalent supported operation"})
+            unresolved.append(
+                {"seq": seq, "field": "op", "reason": "no equivalent supported operation"}
+            )
             continue
         elif op == "round":
-            unresolved.append({"seq": seq, "field": "edge_anchor", "reason": "edge anchor has no proven round reference mapping"})
+            unresolved.append(
+                {
+                    "seq": seq,
+                    "field": "edge_anchor",
+                    "reason": "edge anchor has no proven round reference mapping",
+                }
+            )
             continue
         if op == "extrude" and feature.get("new_body") and feature.get("depth") != THICKNESS:
-            unresolved.append({"seq": seq, "field": "depth", "reason": "strip thickness differs from source precision"})
+            unresolved.append(
+                {
+                    "seq": seq,
+                    "field": "depth",
+                    "reason": "strip thickness differs from source precision",
+                }
+            )
         if "label" in item:
             if item["label"] in used:
                 raise ValueError(f"duplicate label {item['label']}")
@@ -134,19 +219,46 @@ def convert_recipe(tree: dict, *, route: str) -> dict:
         mapped.append(item)
     if len(triangles) != 96:
         unresolved.append({"field": "triangles", "reason": f"expected 96, found {len(triangles)}"})
-    unresolved.extend([
-        {"field": "family_table", "reason": "80 entry index to component mapping has no source proof"},
-        {"field": "surface_chain", "reason": "Q08-Q10 loft/project/trim and thicken chain not present in prism source"},
-    ])
+    unresolved.extend(
+        [
+            {
+                "field": "family_table",
+                "reason": "80 entry index to component mapping has no source proof",
+            },
+            {
+                "field": "surface_chain",
+                "reason": "Q08-Q10 loft/project/trim and thicken chain not present in prism source",
+            },
+        ]
+    )
     batches = []
-    starts = [0, 194, 386, 578, len(mapped)] if len(mapped) == 580 else list(range(0, len(mapped), 196)) + [len(mapped)]
+    starts = (
+        [0, 194, 386, 578, len(mapped)]
+        if len(mapped) == 580
+        else list(range(0, len(mapped), 196)) + [len(mapped)]
+    )
     for start, stop in zip(starts, starts[1:]):
         batch_id = f"p12_{len(batches) + 1:02d}"
-        batches.append({"batch_id": batch_id, "depends_on": [batches[-1]["batch_id"]] if batches else [], "operations": mapped[start:stop]})
-    return {"status": "blocked" if unresolved else "ready", "route": route, "source_sha256": digest,
-            "source_seq_map": seq_map, "source_feature_count": len(features), "split_only_operation_count": len(features) + 192,
-            "operation_count": len(mapped), "batches": batches, "unresolved": unresolved,
-            "triangles": triangles, "approximation": "96 independent triangle prisms over 48 strips; overlap prevents summing to union volume"}
+        batches.append(
+            {
+                "batch_id": batch_id,
+                "depends_on": [batches[-1]["batch_id"]] if batches else [],
+                "operations": mapped[start:stop],
+            }
+        )
+    return {
+        "status": "blocked" if unresolved else "ready",
+        "route": route,
+        "source_sha256": digest,
+        "source_seq_map": seq_map,
+        "source_feature_count": len(features),
+        "split_only_operation_count": len(features) + 192,
+        "operation_count": len(mapped),
+        "batches": batches,
+        "unresolved": unresolved,
+        "triangles": triangles,
+        "approximation": "96 independent triangle prisms over 48 strips; overlap prevents summing to union volume",
+    }
 
 
 def main():
@@ -155,7 +267,17 @@ def main():
     args = parser.parse_args()
     tree = json.loads(SOURCE.read_text(encoding="utf-8"))
     manifest = convert_recipe(tree, route=args.route)
-    print(json.dumps({k: v for k, v in manifest.items() if k not in {"batches", "source_seq_map", "triangles"}}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                k: v
+                for k, v in manifest.items()
+                if k not in {"batches", "source_seq_map", "triangles"}
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     print("batch_sizes:", [len(b["operations"]) for b in manifest["batches"]])
 
 

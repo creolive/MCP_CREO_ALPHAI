@@ -39,6 +39,11 @@ def region(source: str, start: str, stop: str) -> str:
     return source[begin : source.index(stop, begin)]
 
 
+def compact(source: str) -> str:
+    """Whitespace-free view so source markers survive clang-format line breaks."""
+    return "".join(source.split())
+
+
 class NativeSharedStep(unittest.TestCase):
     """Structural guard: both image paths go through native/preview.h."""
 
@@ -190,7 +195,9 @@ class NativeSharedStep(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, probe)
         self.assertNotIn("volume", probe.lower())
-        capture = region(shared, "static void capture_preview_steps", "static PreviewStepOutcome capture_preview")
+        capture = region(
+            shared, "static void capture_preview_steps", "static PreviewStepOutcome capture_preview"
+        )
         self.assertLess(
             capture.index("preview_has_no_geometry(model)"),
             capture.index("bind_model_window(model, outcome)"),
@@ -1032,12 +1039,14 @@ class DatumDisplayGuardNative(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertIn(key, block)
         # The block is a sibling of the capture codes, not a rewrite of them.
-        self.assertIn('{"datum_display",', self.shared)
+        self.assertIn('{"datum_display",', compact(self.shared))
 
     def test_the_capture_status_never_reads_the_datum_fields(self):
         written = region(self.shared, "static bool preview_written", "// Result/diagnostic block.")
         self.assertNotIn("datum", written)
-        self.assertIn('preview_written(outcome) ? "written" : "failed"', self.shared)
+        self.assertIn(
+            compact('preview_written(outcome) ? "written" : "failed"'), compact(self.shared)
+        )
 
 
 class OcclusionProjection(unittest.TestCase):

@@ -81,6 +81,7 @@ class SheetmetalInspectionProjectionTests(unittest.IsolatedAsyncioTestCase):
                 },
             },
         }
+
         async def fake_invoke(*_args):
             return native
 
@@ -95,11 +96,19 @@ class SheetmetalInspectionProjectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_paged_metadata_projects_unknown_without_fabricating_edges(self):
         native = {
             "revision": 9,
-            "data": {"metadata": [{"name": "wall_contour_check", "value": {
-                "enabled": True,
-                "edges": [{"edge_id": 13, "wall_contour_query_code": -2}],
-            }}]},
+            "data": {
+                "metadata": [
+                    {
+                        "name": "wall_contour_check",
+                        "value": {
+                            "enabled": True,
+                            "edges": [{"edge_id": 13, "wall_contour_query_code": -2}],
+                        },
+                    }
+                ]
+            },
         }
+
         async def fake_invoke(*_args):
             return native
 

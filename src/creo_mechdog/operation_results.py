@@ -143,6 +143,8 @@ def annotate_feature_errors(result: dict[str, Any]) -> dict[str, Any]:
                     operation.get("feature_errors")
                 )
     return result
+
+
 # ---------------------------------------------------------------------------
 # FEAT-008 / BUG-088 (Q13): one bounded-summary contract for compact results.
 # ---------------------------------------------------------------------------
@@ -724,9 +726,7 @@ def normalize_sketch_origin_diagnostics(block: Any) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "status": status if isinstance(status, str) and status else "unknown",
         "distance_to_plane_mm": _finite_number(block.get("distance_to_plane_mm")),
-        "signed_distance_to_plane_mm": _finite_number(
-            block.get("signed_distance_to_plane_mm")
-        ),
+        "signed_distance_to_plane_mm": _finite_number(block.get("signed_distance_to_plane_mm")),
         "origin_tolerance_mm": _finite_number(block.get("origin_tolerance_mm")),
         "support_plane": None,
         "requested_origin": _finite_vector(block.get("requested_origin"), 3),

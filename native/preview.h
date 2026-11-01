@@ -330,60 +330,60 @@ static void preview_confirm_file(PreviewStepOutcome &outcome) {
     }
 }
 
-    int code = ProMdlDisplay(model);
-    outcome.display_code = code;
-    preview_record(outcome, "display", code);
-    if (code != PRO_TK_NO_ERROR)
-        return false;
+int code = ProMdlDisplay(model);
+outcome.display_code = code;
+preview_record(outcome, "display", code);
+if (code != PRO_TK_NO_ERROR)
+    return false;
 
-    code = ProMdlWindowGet(model, &outcome.window);
-    outcome.window_get_code = code;
-    preview_record(outcome, "window_get", code);
-    if (code != PRO_TK_NO_ERROR)
-        return false;
+code = ProMdlWindowGet(model, &outcome.window);
+outcome.window_get_code = code;
+preview_record(outcome, "window_get", code);
+if (code != PRO_TK_NO_ERROR)
+    return false;
 
-    // Target-window selection: the window must show this very model. A stale
-    // window left over from another job would capture the wrong solid even
-    // though every later call succeeds.
-    ProMdl window_model = nullptr;
-    code = ProWindowMdlGet(outcome.window, &window_model);
-    outcome.window_model_code = code;
-    preview_record(outcome, "window_model_get", code);
-    outcome.window_matches_model = code == PRO_TK_NO_ERROR && window_model == model;
-    if (code == PRO_TK_NO_ERROR && !outcome.window_matches_model) {
-        // Two handles can differ while naming the same session model; compare
-        // names before reporting a stale window.
-        ProMdlName window_name = {}, model_named = {};
-        if (ProMdlMdlnameGet(window_model, window_name) == PRO_TK_NO_ERROR &&
-            ProMdlMdlnameGet(model, model_named) == PRO_TK_NO_ERROR)
-            outcome.window_matches_model = !wcscmp(window_name, model_named);
-    }
-    if (code != PRO_TK_NO_ERROR)
-        return false;
-    if (!outcome.window_matches_model) {
-        outcome.failed_step = "window_model_mismatch";
-        outcome.failed_code = PRO_TK_GENERAL_ERROR;
-        return false;
-    }
+// Target-window selection: the window must show this very model. A stale
+// window left over from another job would capture the wrong solid even
+// though every later call succeeds.
+ProMdl window_model = nullptr;
+code = ProWindowMdlGet(outcome.window, &window_model);
+outcome.window_model_code = code;
+preview_record(outcome, "window_model_get", code);
+outcome.window_matches_model = code == PRO_TK_NO_ERROR && window_model == model;
+if (code == PRO_TK_NO_ERROR && !outcome.window_matches_model) {
+    // Two handles can differ while naming the same session model; compare
+    // names before reporting a stale window.
+    ProMdlName window_name = {}, model_named = {};
+    if (ProMdlMdlnameGet(window_model, window_name) == PRO_TK_NO_ERROR &&
+        ProMdlMdlnameGet(model, model_named) == PRO_TK_NO_ERROR)
+        outcome.window_matches_model = !wcscmp(window_name, model_named);
+}
+if (code != PRO_TK_NO_ERROR)
+    return false;
+if (!outcome.window_matches_model) {
+    outcome.failed_step = "window_model_mismatch";
+    outcome.failed_code = PRO_TK_GENERAL_ERROR;
+    return false;
+}
 
-    code = ProWindowCurrentSet(outcome.window);
-    outcome.current_set_code = code;
-    preview_record(outcome, "current_set", code);
-    if (code != PRO_TK_NO_ERROR)
-        return false;
+code = ProWindowCurrentSet(outcome.window);
+outcome.current_set_code = code;
+preview_record(outcome, "current_set", code);
+if (code != PRO_TK_NO_ERROR)
+    return false;
 
-    int current = -1;
-    code = ProWindowCurrentGet(&current);
-    outcome.current_get_code = code;
-    preview_record(outcome, "current_get", code);
-    outcome.current_window_matches = code == PRO_TK_NO_ERROR && current == outcome.window;
-    if (code != PRO_TK_NO_ERROR)
-        return false;
+int current = -1;
+code = ProWindowCurrentGet(&current);
+outcome.current_get_code = code;
+preview_record(outcome, "current_get", code);
+outcome.current_window_matches = code == PRO_TK_NO_ERROR && current == outcome.window;
+if (code != PRO_TK_NO_ERROR)
+    return false;
 
-    // ProWindowActivate only takes effect after control returns to Creo, so it
-    // is recorded but never treated as a step that can fail the capture.
-    outcome.activate_code = ProWindowActivate(outcome.window);
-    return true;
+// ProWindowActivate only takes effect after control returns to Creo, so it
+// is recorded but never treated as a step that can fail the capture.
+outcome.activate_code = ProWindowActivate(outcome.window);
+return true;
 }
 
 // FEAT-052: the refit/refresh/repaint tail shared by the raster capture and
@@ -491,8 +491,7 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
 
 static bool preview_written(const PreviewStepOutcome &outcome) {
     return !outcome.skipped_no_geometry && outcome.failed_step.empty() &&
-           outcome.raster_code == PRO_TK_NO_ERROR &&
-           outcome.file_bytes > 0;
+           outcome.raster_code == PRO_TK_NO_ERROR && outcome.file_bytes > 0;
 }
 
 // Result/diagnostic block. Raw codes are kept as returned; status is derived
@@ -545,7 +544,9 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
              {"hidden", option.hidden},
              {"restored", option.restored}});
     }
-    return {{"status", outcome.skipped_no_geometry ? "skipped_no_geometry" : preview_written(outcome) ? "written" : "failed"},
+    return {{"status", outcome.skipped_no_geometry ? "skipped_no_geometry"
+                       : preview_written(outcome)  ? "written"
+                                                   : "failed"},
             {"path", outcome.path.empty() ? nlohmann::json(nullptr)
                                           : nlohmann::json(preview_utf8(outcome.path))},
             {"bytes", outcome.file_bytes},
@@ -559,17 +560,20 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
                                                         : nlohmann::json(outcome.failed_step)},
             {"failed_code", outcome.skipped_no_geometry ? nlohmann::json(nullptr)
                                                         : nlohmann::json(outcome.failed_code)}};
-            {"failed_code", outcome.failed_code},
-            {"datum_display",
-             {{"model_type", outcome.datum_model_type},
-              {"type_query_code", outcome.datum_type_query_code},
-              {"applicable", outcome.datum_applicable},
-              {"attempted", outcome.datum_attempted},
-              {"hide_status", outcome.datum_hide_status},
-              {"restore_status", outcome.datum_restore_status},
-              {"options", datum_options},
-              // Session display options only: ProConfigoptSet changes the
-              // session value and the guard restores it; the user's config.pro
-              // is never written by a capture.
-              {"config_file_written", false}}}};
+    {"failed_code", outcome.failed_code}, {
+        "datum_display", {
+            {"model_type", outcome.datum_model_type},
+                {"type_query_code", outcome.datum_type_query_code},
+                {"applicable", outcome.datum_applicable}, {"attempted", outcome.datum_attempted},
+                {"hide_status", outcome.datum_hide_status},
+                {"restore_status", outcome.datum_restore_status}, {"options", datum_options},
+            // Session display options only: ProConfigoptSet changes the
+            // session value and the guard restores it; the user's config.pro
+            // is never written by a capture.
+            {
+                "config_file_written", false
+            }
+        }
+    }
+};
 }
