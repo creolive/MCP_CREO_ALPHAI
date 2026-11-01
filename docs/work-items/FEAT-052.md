@@ -75,6 +75,25 @@ creo_recolor_assembly(
 
 ## 实现与证据
 
+**2026-11-01（离线实现落地，隔离工作树分支 `codex/FEAT-052-assembly-recolor`，提交 7f944ad / b3db096 / 1d37aff，基于 89ee542）**
+
+- Python 侧：`src/creo_mechdog/appearance.py` 承载全部业务逻辑（RGB/族名校验、自动分族按绑定唯一 `source_model_id`、显式族表完整覆盖与去重、注册表只读预览分页（≤32 KiB、游标绑定 revision+请求+快照指纹）、作业提交与 full/compact 结果投影、外观基线缺失时拒绝执行并指引 `creo_save_model`）；`server.py` 注册 `creo_recolor_assembly`；`schema.py` 新增 `RecolorAssemblyOp` 并在计划校验中拒绝引用计划内后建组件；`generic_bridge.py`/`bridge.py` 接入通道锁内准入与 compact 投影；`capabilities.py` 登记 `recolor_assembly` 操作与 `assembly_appearance` 能力族。
+- 原生侧：`native/appearance.h` 组件外观设置与读回（`ProMdlTypeGet` 取实际类型构造 `ProAsmitem`，修正建议包传 `PRO_FEATURE` 的问题；`ProMdlVisibleSideAppearancepropsGet` 的 `PRO_TK_NOT_EXIST` 区分「无组件外观」）、写前三态基线、写后与保存擦除重载后两阶段读回（容差 1e-6）、失败回滚外观核对；`generic.cpp` 分发与保存核验/回滚接入；`advanced.cpp` 组件检查条目增加三态 `appearance` 字段；`preview.h` 提取共享窗口绑定/重绘链。只按 Python 显式 `assignments` 定位，不按遍历序或名称前缀猜族。
+- 集成期修正两处接缝问题：① `schema.py` 顶层 import `appearance.py` 会拖入根目录 `bridge`，破坏「包导入不依赖工作目录」契约（`test_helper_layout` 失败）——纯校验函数移入 `schema.py`、依赖反转为 appearance→schema；② 显式族表按特征 ID 引用（组件无标签时唯一途径）时 `assignments[].label` 为整数，原生按字符串取值会抛类型异常——原生接受 string|int 双引用并优先使用附带 `feature_id` 复核，去重键改为解析后特征 ID。
+- 命令与结果（隔离工作树独立 `.venv`，Python 3.12.14 / ruff 0.17.0 / clang-format 23.1.3 / MSVC，匹配 Creo 12.4.0.0 SDK；源码提交后 clean）：
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `.\.venv\Scripts\python.exe bridge.py build` | 0 | `build\creo_worker.exe` 产出；基线（实现前）同样通过 |
+| `.\.venv\Scripts\python.exe -m unittest discover -s tests` | 0 | **1812 tests OK**（基线 1782 OK；+30 为 `tests/unit/test_assembly_appearance.py`；多轮复跑均 OK，期间一次单例瞬时失败复跑消失） |
+| `.\.venv\Scripts\python.exe tools\dev_check.py --skip-unit` | 0 | `success=true`，0 新增诊断，无未格式化新增文件 |
+| `.\.venv\Scripts\clang-format.exe --dry-run --Werror native\appearance.h native\generic.cpp native\advanced.cpp native\preview.h` | 0 | 格式通过 |
+
+- 口径更新：`capabilities.py` 已登记 95 个工具（94 既有 + `creo_recolor_assembly`）；工具已在离线单测下可用，但**实机行为全部未验证**。
+- 未测范围：`tools/test_assembly_appearance.py` 已编写但**未运行**（本阶段按计划不连接 Creo）——80 组件/12 族夹具、写色与两阶段读回、保存擦除重载保色、源零件字节不变、身份/位置/约束/几何不变、再次换色与后续改位置/保存保色、中途失败回滚恢复、屏幕显示目视确认均待实机；原生 `recolor` 块真实返回形状未联调（离线单测用契约替身）；busy/并发沿用全局既有契约测试；WorkBuddy 黑盒验收、Creo 9/10 未测。
+
+下一步：实机阶段遵循 BUG-001／BUG-091 会话准入要求，由用户重新发起后运行 `tools/test_assembly_appearance.py` 与装配针对性回归；合入 `main` 时按项目规则完成新版本发布。
+
 **2026-11-01（登记，仅文档与示例，无代码变更）**
 
 - 依据计划文件登记本卡；在 [BACKLOG](../BACKLOG.md) 新增 FEAT-052 行（P2，状态「开发中」）。
