@@ -384,8 +384,20 @@ def families() -> dict:
         },
         "datums": {
             "enabled": True,
-            "scope": "coordinate systems and dimensioned point arrays in addition to planes and axes",
+            "scope": (
+                "coordinate systems and dimensioned point arrays in addition to planes "
+                "and axes; datum_plane also accepts the three-point form "
+                "{kind:'through_points',points:[label_a,label_b,label_c]} with three "
+                "distinct single-point datum_points labels created earlier in the same "
+                "plan (mutually exclusive with angle/axis/nonzero offset; external "
+                "{thru_points:[...]} spellings must be converted first)"
+            ),
             "native_test": "XYZ offsets 10/20/30, Z rotation 45 degrees, native origin check and offset dimension edit",
+            "limits": (
+                "three-point planes: offline contract and native judgment implemented "
+                "(FEAT-053); Creo 12.4 live acceptance pending; no four-point fitting "
+                "and no guessing a point out of a multi-point feature"
+            ),
         },
         "surface_solid": {
             "enabled": True,
