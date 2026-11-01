@@ -1,7 +1,7 @@
 # Creo 装配按零件族上色
 
 > 保存日期：2026-10-31（Asia/Shanghai）。
-> 状态：计划暂存，尚未实施。用户要求先等待当前开发版本收尾，后续由用户重新发起实施；本文件不安排自动执行。
+> 当前状态（2026-11-01 对账）：FEAT-052 已随 0.11.0 交付，95 个公开工具；本机 80组件/12族、28/28检查通过。见 [工作卡](../../work-items/FEAT-052.md)及[发布记录](../../validation/RELEASE-0.11.0.md)。本文保留原接口与实施方案，不再作为待开发任务。WorkBuddy、真实 busy/并发、Creo 9/10 等未测范围以发布记录为准。
 > 已确认范围：装配按零件族上色；自动按来源分组并支持显式族表；仅 MCP 受管装配。
 > 建议包位置：`C:\Users\Administrator\Downloads\2026-10-31_CREO_MechDog_上色能力建议包_recolor_assembly\creo_recolor_assembly_proposal`。
 
