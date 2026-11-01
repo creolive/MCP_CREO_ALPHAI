@@ -29,3 +29,22 @@
 ## 实现与证据
 
 2026-10-31 仅补建工作卡并按晚间包补充方向，无实现。实现前须先由 Q07 冻结原生契约（sections 顺序、quilt/curve 引用唯一性、方向坐标系/单位、回执字段），不得照抄未经证明的外部元素树数值 ID。Q07 未冻结前不承诺具体模型/函数名。
+
+### Q07 契约冻结（2026-11-01）
+
+**冻结契约：[docs/development/G5-NATIVE-CONTRACT.md](../development/G5-NATIVE-CONTRACT.md)**。Q08–Q10 以该文档为唯一接口依据；未经该文档冻结的原生元素树、引用形态、测量字段和单位语义不得自行实现。
+
+本机 SDK 核实结论（Creo 12.4.0.0 / `C:\Program Files\PTC\Creo 12.4.0.0\Common Files\protoolkit\includes`，逐项见契约 §1）：
+
+| 结论 | 内容 |
+| --- | --- |
+| **已核实** | `PRO_FEAT_DATUM_SURF`(`ProFeatType.h:44`)、`PRO_USE_SURFS`/`PRO_BLEND`(`ProFeatForm.h`)、`PRO_E_BNBLN_CURVES`/`_1DIR`/`_2DIR`/`_DIR_CURVES`/`PRO_E_STD_CHAIN_HOLDER`/`PRO_E_STD_CURVE_COLLECTION_APPL`/`PRO_E_CTRL_PTS`/`PRO_E_BLEND_TYPE`/`PRO_E_BBL_ADD_CLOSED`/`PRO_E_BNBLN_RULED`(`ProElemId.h`)、`Probbl.h` 的边界混合元素树（`PRO_E_DTM_SRF_TYPE = PRO_E_DTM_SRF_TYPE_BND_BLEND`，`Probbl.h:218`）、`ProSurfaceAreaEval`/`ProContourAreaEval`/`ProCurveLengthEval`/`ProCurveXyzdataEval`(`ProSurface.h`/`ProContour.h`/`ProCurve.h`) |
+| **本机 SDK 差异** | 外部方案 §2 的 `PRO_E_BLEND_SECTIONS`、`PRO_E_BLEND_ATTRIBUTES`、`PRO_BLEND_SURF`、`PRO_STD_BLEND` **在本机 SDK 不存在**；`ProSurfaceEval`、`ProMeasurable` 亦不存在。边界混合的截面是**曲线链集合**（chain holder + `PRO_E_STD_CURVE_COLLECTION_APPL`），不是 `PRO_E_STD_SECTION`/草图 section |
+| **未验证** | `PRO_E_BLEND_TYPE` 取值语义；`TAN_COND_FREE` 无可引用符号定义；COPYTRIM 族（本机无任何父子关系文档）；`PRO_E_BNBLN_RULED` 语义；`keep_side` 与 `side` 的物理绑定（须实机探针） |
+
+**首版能力边界（契约 §3）：** 恰好两条曲线截面、只支持 `straight`；`smooth`/`closed`/连续性**不公开**；`sections` 顺序即放样方向，index 0 为起点；`surface_area_mm2` + `surface_area_status`（单位查询失败为 null + 原因）。
+
+**元素常量来源（契约 §1.5）：** 一律由 `tools/generate_constants.py` 机制按 SDK 头文件**符号名**解析，**禁止硬编码数值**。本机 `constants.inc` 未导出 `Probbl.h` 的 `PRO_E_DTM_SRF_TYPE_BND_BLEND`（及其它 `ProTrim.h`/`ProStdSection.h`/`ProMerge.h` 符号）；`HEADERS` 增补是共享改动，由集成人统一收取。`native/constants.inc` 是本机生成物，不复制、不入库。
+
+**下一步：** Q08 按契约 §2.1/§6.1/§6.2 实现 `surface_loft`（Python 模型 `SurfaceLoftOp`；原生 `generic_surface_loft`）；开工前必须先完成契约 §7 的 **P1 实机探针**并回填实际元素树。P1 判定"路线不成立"时**只阻断 Q08**，Q09/Q10 不受阻。共享测量 helper 唯一归属 `native/surface_measure.h`（契约 §4.7，本卡实现者为首个维护人）。
+
