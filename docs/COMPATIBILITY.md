@@ -19,14 +19,15 @@
 
 逐项状态矩阵见 [DEV-051 工作卡](work-items/DEV-051.md#2026-10-30-离线批次十个提交与当前状态矩阵)。
 
-## 开发分支（2026-11-01，未发布）：装配按零件族上色（FEAT-052）
+## 0.11.0（2026-11-01 发布）：装配按零件族上色（FEAT-052）
 
-分支 `codex/FEAT-052-assembly-recolor` **未合 main、未发布、无实机验收**，因此**不改变任何已发布范围**（已发布的 0.10.1 仍为 94 个公开工具），只预告下一版的接口增量与环境前提：
+FEAT-052 随 0.11.0 发布，公开工具 94→95；本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK / MSVC 实机验收通过（run `assembly_appearance_live_20261101T060336Z558b3546`，80 组件/12 族夹具 28/28 检查，另过装配 pipeline 与 T07 预览回归）：
 
-- **新增公开工具（离线开发中，实机验收未做）**：`creo_recolor_assembly` 给 **MCP 受管的单层装配**按零件族上色；公开工具数 94→95。默认按组件绑定中唯一的 `source_model_id` 自动分族，也支持显式族表 `families={族名:[组件标签或特征ID]}`；`palette` 给出各族 RGB（三个 `0..1` 有限数值，拒绝布尔值）。同步新增 `recolor_assembly` 计划操作供 `creo_execute_plan` 使用。
-- **预览与执行语义**：`dry_run=true` 为分组预览，不连接 Toolkit、不创建作业、不推进 revision，分页单页不超过 32 KiB；执行走现有作业通道、始终保存，成功后 revision 加一；颜色写在装配组件层，源零件文件字节不变。
+- **新增公开工具 `creo_recolor_assembly`**：给 **MCP 受管的单层装配**按零件族上色。默认按组件绑定中唯一的 `source_model_id` 自动分族，也支持显式族表 `families={族名:[组件标签或特征ID]}`（须无重复且完整覆盖全部组件）；`palette` 给出各族 RGB（三个 `0..1` 有限数值，拒绝布尔值）。同步新增 `recolor_assembly` 计划操作供 `creo_execute_plan` 使用。
+- **预览与执行语义**：`dry_run=true` 为分组预览，不连接 Toolkit、不创建作业、不推进 revision，分页单页不超过 32 KiB；执行走现有作业通道、始终保存，成功后 revision 加一；颜色写在装配组件层，源零件文件字节不变（实机全程 SHA256 复核不变）。
+- **读回与回滚**：保存擦除重载前后逐组件读回 RGB 误差 ≤1e-6；`creo_list_components` 每组件新增三态 `appearance` 字段（present/absent/query_failed）；任一步失败沿用检查点回滚并核验外观点恢复，无法证明恢复保留 unknown 保护。
 - **能力边界**：仅 MCP 受管单层装配；独立零件、面级、嵌套装配与外部装配不在此版；来源缺失或冲突时要求显式族表，不猜测分组。
-- **环境前提不变**：本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK；本阶段离线开发**不连接 Creo**。Creo 9 本机无 SDK、实机编译与建模运行时仍未验收；Creo 10 独立复测不作为门槛；WorkBuddy 本批未执行。
+- **未验范围**：WorkBuddy 黑盒未执行；busy/并发通道交错未做实机；Creo 9 本机无 SDK、实机编译与建模运行时仍未验收；Creo 10 独立复测不作为门槛，本机通过不外推其他环境。
 
 详见 [FEAT-052 工作卡](work-items/FEAT-052.md)与[功能计划](superpowers/plans/2026-10-31-assembly-recolor-plan.md)。
 
