@@ -482,3 +482,30 @@ def annotate_sketch_origin_diagnostics(result: dict[str, Any]) -> dict[str, Any]
             operation.get("sketch_origin_diagnostics")
         )
     return result
+
+
+def annotate_geometry_deviation(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the post-solve fidelity block on sketch create/edit records.
+
+    The executor owns the measurement; this projection only validates the
+    reported shape. A missing block stays missing (legacy jobs are never
+    fabricated), and a malformed or contradictory record degrades to an
+    explicit unavailable state with a reason instead of zeros.
+    """
+    from creo_mechdog.geometry_deviation import normalize_geometry_deviation
+
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in (
+            "sketch",
+            "update_sketch_geometry",
+        ):
+            continue
+        if "geometry_deviation" not in operation:
+            continue
+        operation["geometry_deviation"] = normalize_geometry_deviation(
+            operation.get("geometry_deviation")
+        )
+    return result
