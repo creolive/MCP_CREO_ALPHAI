@@ -399,6 +399,6 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 - **验证**：`python -m unittest tests.unit.test_t01_capability_contracts tests.unit.test_capability_pages` 18/18 通过（本机 Windows / Python 3.12，未连接 Toolkit、未构建原生）。未测：实机 MCP 受理→终态→inspect 三 revision 场景、`creo_capabilities` 实机分页；统一 dev_check 归 P14。
 - 本次保留他人 dirty（`seeds.py`、`docs/validation/RELEASE-0.8.5.md`、`session_activity.json` 等）不纳入提交；未触碰 P04 窗口的打包/种子文件与 native/、preview、打包系列。
 
-## 2026-11-01 Q15 ??????
+## 2026-11-01 Q15 离线集成状态
 
-????????????????????????? [Q15 ????](DEV-053-Q15-integration-2026-11-01.md)????????????Creo ?????????????
+离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。
