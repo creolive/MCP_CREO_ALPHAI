@@ -68,6 +68,40 @@ static void log(const char *fmt, ...) {
 }
 static std::string last_toolkit_error;
 static std::string last_feature_errors;
+// BUG-097 L2: the ProErrorlist traversal below has always existed; what was
+// missing was a bounded, structured copy of it for the failure receipt. The
+// last CompleteFeature/create error list is kept here element by element (the
+// sample is capped, the total is not) so generic.cpp can publish
+// element/type/error triples instead of leaving them in native.log only.
+struct FeatureErrorEntry {
+    int element, type, error;
+};
+static std::vector<FeatureErrorEntry> feature_error_entries;
+static int feature_error_total = 0;
+static const int FEATURE_ERROR_SAMPLE_LIMIT = 20;
+// BUG-097 L2: bounded capture of the raw section solver messages (solve,
+// autodimension, regenerate phases). sketch_solver.cpp's section_errors()
+// appends here; a CompleteFeature failure receipt carries them as the
+// original section errors instead of forcing a log dig.
+static std::vector<std::string> section_error_messages;
+static int section_error_total = 0;
+static bool section_error_captured = false;
+static const int SECTION_ERROR_SAMPLE_LIMIT = 20;
+static void reset_section_error_capture() {
+    section_error_messages.clear();
+    section_error_total = 0;
+    section_error_captured = false;
+}
+static void capture_section_error(const char *phase, const char *message) {
+    section_error_captured = true;
+    section_error_total++;
+    if ((int)section_error_messages.size() < SECTION_ERROR_SAMPLE_LIMIT) {
+        std::string entry = phase;
+        entry += ": ";
+        entry += message;
+        section_error_messages.push_back(std::move(entry));
+    }
+}
 static void check(ProError e, const char *op) {
     log("%s=%d\n", op, e);
     if (e != PRO_TK_NO_ERROR) {
@@ -124,6 +158,8 @@ static ProElement get(ProElement root, std::initializer_list<int> ids) {
 }
 static void errors(const ProErrorlist &es) {
     last_feature_errors.clear();
+    feature_error_entries.clear();
+    feature_error_total = es.error_number;
     for (int i = 0; i < es.error_number; i++) {
         log("feature_error element=%d type=%d error=%d\n", es.error_list[i].err_item_id,
             es.error_list[i].err_item_type, es.error_list[i].error);
@@ -132,6 +168,13 @@ static void errors(const ProErrorlist &es) {
         last_feature_errors += "element=" + std::to_string(es.error_list[i].err_item_id) +
                                " type=" + std::to_string(es.error_list[i].err_item_type) +
                                " error=" + std::to_string(es.error_list[i].error);
+        // Bounded structured sample: the full list stays in the log line above
+        // and in last_feature_errors; the receipt carries at most the cap and
+        // flags truncation through feature_error_total.
+        if ((int)feature_error_entries.size() < FEATURE_ERROR_SAMPLE_LIMIT)
+            feature_error_entries.push_back({es.error_list[i].err_item_id,
+                                             es.error_list[i].err_item_type,
+                                             es.error_list[i].error});
     }
 }
 static ProFeature create(ProElement root, ProFeatureCreateOptions opt = PRO_FEAT_CR_NO_OPTS) {

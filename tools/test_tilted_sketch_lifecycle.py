@@ -38,6 +38,323 @@ STRATEGIES = ("autodim", "coordinates")
 REFERENCES = ("datum_plane_id", "datum_feature_label")
 SECOND_REFERENCES = ("available", "unavailable_candidate")
 
+# --- BUG-097: four-stage separation and the smoke 3pt fixture -------------
+#
+# The plan requires the failure to be located to exactly one of four stages:
+# frame validation, UV write, SectionRegenerate, CompleteFeature. The native
+# log carries one marker family per stage; this scanner classifies a captured
+# native.log (or a synthetic fixture in the unit tests) without a session.
+
+STAGE_MARKERS = {
+    "frame_validation": (
+        "SKETCH_ANCHOR_PLANE=",
+        "SKETCH_ANCHOR_AXIS=",
+        "SKETCH_ANCHOR_SKIPPED=",
+        "SKETCH_REFERENCE_INCOMPLETE",
+        "PROJECT_REFERENCE",
+        "SECTION_MATRIX_",
+        "parallel to the support plane normal",
+        "Sketch support must be planar",
+        "No sketch orientation reference",
+    ),
+    "uv_write": (
+        "SECTION_LOCATION_IDENTITY=",
+        "COORDINATE_AXES ",
+        "LINE_",
+        "COORDINATE_DEVIATION",
+    ),
+    "section_regenerate": (
+        "SKETCH_SOLVE=",
+        "AutodimensionSketch=",
+        "SectionRegenerate=",
+        "SECTION_ERRORS phase=",
+        "RegenerateSolvedSketch",
+    ),
+    "complete_feature": (
+        "CompleteFeature=",
+        "feature_error element=",
+    ),
+}
+
+# smoke_3pt_min_repro.json (archived original 06_P12_v12_配方), re-expressed in
+# this repository's contracts. The datum_plane reference uses the planned
+# FEAT-053 explicit kind; until that schema lands, the fixture is recorded as
+# blocked instead of being validated against a contract that does not exist.
+# The external identity-only fallback is NOT copied: expectations below are
+# derived from the frame semantics oracle in test_dev048_plane_frame.
+SMOKE_3PT_POINTS = {
+    "dpa0": [-95.191114, 40.0, -88.395141],
+    "dpb0": [95.191114, 40.0, 88.395141],
+    "dpd0": [94.701973, 50.416667, 89.27114],
+}
+SMOKE_3PT_TRIANGLE_UV = [[0.0, 0.0], [190.382228, 22.394433], [189.893088, 32.838154]]
+SMOKE_3PT_DEPTH_MM = 9.87008714331235  # original precision, never rounded to 9.87
+SMOKE_3PT_REPORTED_NORMAL = [-0.678, -0.093, 0.730]  # external report, 3-decimal rounding
+
+
+def smoke_3pt_min_repro_operations() -> list[dict]:
+    """The archived minimum case with an explicit three-point reference kind."""
+    return [
+        {
+            "op": "datum_points",
+            "label": "dpa0",
+            "points": [{"name": "pa", "position": list(SMOKE_3PT_POINTS["dpa0"])}],
+        },
+        {
+            "op": "datum_points",
+            "label": "dpb0",
+            "points": [{"name": "pb", "position": list(SMOKE_3PT_POINTS["dpb0"])}],
+        },
+        {
+            "op": "datum_points",
+            "label": "dpd0",
+            "points": [{"name": "pd", "position": list(SMOKE_3PT_POINTS["dpd0"])}],
+        },
+        {
+            "op": "datum_plane",
+            "label": "pl00a",
+            "reference": {
+                "kind": "through_points",
+                "points": ["dpa0", "dpb0", "dpd0"],
+            },
+        },
+        {
+            "op": "sketch",
+            "label": "smk",
+            "plane": {
+                "reference": {"kind": "datum_feature", "label": "pl00a"},
+                "origin": list(SMOKE_3PT_POINTS["dpa0"]),
+                "u_axis": [190.382228, 0.0, 0.0],
+            },
+            "dimensioning": "coordinates",
+            "entities": [
+                {
+                    "type": "polyline",
+                    "name": "tri",
+                    "points": [list(point) for point in SMOKE_3PT_TRIANGLE_UV],
+                    "closed": True,
+                }
+            ],
+        },
+        {
+            "op": "extrude",
+            "label": "smk_ex",
+            "sketch": "smk",
+            "depth": SMOKE_3PT_DEPTH_MM,
+            "direction": "symmetric",
+            "new_body": True,
+        },
+    ]
+
+
+def smoke_3pt_plane_oracle() -> dict:
+    """Independent plane basis and the two externally observed mappings.
+
+    The normal comes from the cross product of the datum chords (order
+    pb-pa x pd-pa reproduces the report's sign); u is the input direction
+    orthogonalized against that normal exactly as sketch_frame does, and
+    v = n x u. The oracle must reproduce both external evidence points:
+
+    - the pre-fix defect: with the placeholder identity treated as the location
+      matrix, vertex UV (0,0)/(190.382228,22.394433) are written as world XY
+      (-95.191114,40.000000)->(44.838428,45.875213), the values in the
+      archived native.log excerpt;
+    - the L1 fix: the frame-basis projection returns the input UV exactly and
+      the world->section->world round trip closes on the real vertex positions.
+    """
+    from test_dev048_plane_frame import (
+        IDENTITY_4X4,
+        project_section_to_world,
+        project_world_to_section,
+        uv_mapping_choice,
+    )
+
+    pa = SMOKE_3PT_POINTS["dpa0"]
+    pb = SMOKE_3PT_POINTS["dpb0"]
+    pd = SMOKE_3PT_POINTS["dpd0"]
+
+    def sub(a, b):
+        return [a[i] - b[i] for i in range(3)]
+
+    def cross(a, b):
+        return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+
+    def dot(a, b):
+        return sum(a[i] * b[i] for i in range(3))
+
+    def unit(a):
+        length = math.sqrt(dot(a, a))
+        return [component / length for component in a]
+
+    normal = unit(cross(sub(pb, pa), sub(pd, pa)))
+    preferred = [1.0, 0.0, 0.0]  # the input u_axis [190.382228,0,0] normalized
+    projection = dot(normal, preferred)
+    u_axis = unit([preferred[i] - normal[i] * projection for i in range(3)])
+    v_axis = unit(cross(normal, u_axis))
+    frame = {"normal": normal, "u_axis": u_axis, "v_axis": v_axis, "origin": list(pa)}
+    mapping = uv_mapping_choice(IDENTITY_4X4, normal, pa)
+    vertices = []
+    for position, uv in enumerate(SMOKE_3PT_TRIANGLE_UV):
+        world = [pa[i] + u_axis[i] * uv[0] + v_axis[i] * uv[1] for i in range(3)]
+        via_location_matrix = project_world_to_section(
+            uv, frame["origin"], u_axis, v_axis, False, IDENTITY_4X4
+        )
+        via_frame_basis = project_world_to_section(
+            uv, frame["origin"], u_axis, v_axis, True, IDENTITY_4X4
+        )
+        restored = project_section_to_world(
+            tuple(via_frame_basis), frame["origin"], u_axis, v_axis, True, IDENTITY_4X4
+        )
+        vertices.append(
+            {
+                "vertex": position,
+                "input_uv": list(uv),
+                "world_mm": world,
+                "via_location_matrix_uv": list(via_location_matrix),
+                "via_frame_basis_uv": list(via_frame_basis),
+                "frame_basis_round_trip_error_mm": math.sqrt(
+                    sum((restored[i] - world[i]) ** 2 for i in range(3))
+                ),
+            }
+        )
+    reported_normal_error = max(abs(normal[i] - SMOKE_3PT_REPORTED_NORMAL[i]) for i in range(3))
+    external_buggy = {
+        0: [-95.191114, 40.000000],
+        1: [44.838428, 45.875213],
+    }
+    buggy_reproduced = all(
+        max(
+            abs(vertices[index]["via_location_matrix_uv"][axis] - external_buggy[index][axis])
+            for axis in range(2)
+        )
+        <= 1e-6
+        for index in external_buggy
+    )
+    frame_basis_exact = all(
+        max(
+            abs(vertices[index]["via_frame_basis_uv"][axis] - vertices[index]["input_uv"][axis])
+            for axis in range(2)
+        )
+        <= 1e-9
+        for index in range(len(SMOKE_3PT_TRIANGLE_UV))
+    )
+    return {
+        "normal": normal,
+        "reported_normal": SMOKE_3PT_REPORTED_NORMAL,
+        "reported_normal_abs_error": reported_normal_error,
+        "reported_normal_tolerance": 1e-3,
+        "origin": list(pa),
+        "u_axis_orthogonalized": u_axis,
+        "u_axis_note": "the input [190.382228,0,0] is orthogonalized against the plane normal, "
+        "matching sketch_frame; the raw direction is not in the plane",
+        "v_axis": v_axis,
+        "identity_loc_mapping": mapping,
+        "vertices": vertices,
+        "external_buggy_line_uv_reproduced": buggy_reproduced,
+        "frame_basis_returns_input_uv": frame_basis_exact,
+        "max_round_trip_error_mm": max(
+            vertex["frame_basis_round_trip_error_mm"] for vertex in vertices
+        ),
+    }
+
+
+def smoke_3pt_volume_oracle() -> dict:
+    """Symmetric extrusion volume: shoelace area of the UV triangle x depth."""
+    points = SMOKE_3PT_TRIANGLE_UV
+    shoelace = (
+        abs(
+            sum(
+                points[i][0] * points[(i + 1) % 3][1] - points[(i + 1) % 3][0] * points[i][1]
+                for i in range(3)
+            )
+        )
+        / 2
+    )
+    return {
+        "triangle_area_mm2": shoelace,
+        "depth_mm": SMOKE_3PT_DEPTH_MM,
+        "symmetric_volume_mm3": shoelace * SMOKE_3PT_DEPTH_MM,
+    }
+
+
+def smoke_3pt_schema_gate() -> dict:
+    """Whether this tree already accepts the explicit three-point contract."""
+    plane_op = smoke_3pt_min_repro_operations()[3]
+    try:
+        validate_operations([plane_op])
+    except Exception as error:  # the FEAT-053 kind is not registered yet
+        return {
+            "accepted": False,
+            "blocked_pending": "FEAT-053",
+            "reason": f"{type(error).__name__}: {error}",
+        }
+    return {"accepted": True, "blocked_pending": None, "reason": None}
+
+
+def smoke_3pt_fixture() -> dict:
+    """The archived smoke case as a fixture: oracle, expectations, gate state."""
+    return {
+        "source": "docs/validation/feedback-0.10.0-2026-11-01/originals/06_P12_v12_配方/"
+        "smoke_3pt_min_repro.json",
+        "evidence_class": "substitute_fixture_not_original_job_replay",
+        "operations": smoke_3pt_min_repro_operations(),
+        "plane_oracle": smoke_3pt_plane_oracle(),
+        "volume_oracle": smoke_3pt_volume_oracle(),
+        "schema_gate": smoke_3pt_schema_gate(),
+        "expected_l1_diagnostics": {
+            "section_location_identity": 1,
+            "uv_mapping": "frame_basis",
+            "first_line_uv": "0.000000000,0.000000000 -> 190.382228,22.394433",
+        },
+        "original_l2_expectation": "ProFeatureWithoptionsRedefine may still fail; the "
+        "feature_errors receipt must then carry element/type/error entries",
+        "depth_precision_note": "9.87008714331235 kept verbatim; never rounded to 9.87",
+    }
+
+
+def scan_native_log_stages(log_text: str) -> dict:
+    """Classify a native.log into the four BUG-097 stages and locate the failure.
+
+    A stage counts as reached when any of its markers appears. A stage counts
+    as failed only on explicit failure evidence (a nonzero completion code or
+    a validation refusal); absence of a stage's markers means it was not
+    reached, never that it passed.
+    """
+    stages: dict[str, dict] = {}
+    for stage, markers in STAGE_MARKERS.items():
+        found = [marker for marker in markers if marker in log_text]
+        stages[stage] = {"reached": bool(found), "markers": found}
+    stages["frame_validation"]["failed"] = any(
+        marker in log_text
+        for marker in (
+            "parallel to the support plane normal",
+            "Sketch support must be planar",
+            "No sketch orientation reference",
+        )
+    )
+    stages["uv_write"]["failed"] = "COORDINATE_DEVIATION" in log_text
+    stages["section_regenerate"]["failed"] = any(
+        marker in log_text
+        for marker in ("SectionRegenerate=-1", "SKETCH_SOLVE=-1", "AutodimensionSketch=-1")
+    )
+    stages["complete_feature"]["failed"] = "CompleteFeature=-1" in log_text
+    failure_stage = None
+    for stage in ("complete_feature", "section_regenerate", "uv_write", "frame_validation"):
+        if stages[stage]["failed"]:
+            failure_stage = stage
+            break
+    return {
+        "stages": stages,
+        "failure_stage": failure_stage,
+        "section_location_identity": "SECTION_LOCATION_IDENTITY=1" in log_text,
+        "frame_basis_fallback": "using_frame_basis" in log_text,
+        "feature_error_entries": log_text.count("feature_error element="),
+    }
+
 
 def independent_area_mm2() -> float:
     """Thirty isosceles triangles with circumradius 5 mm."""
@@ -206,6 +523,8 @@ def offline_report(run_tag: str) -> dict:
         "cases": cases,
         "native_acceptance": "not_run",
         "contamination_hypothesis": "not_reproduced_offline",
+        "bug097_stage_markers": {stage: list(markers) for stage, markers in STAGE_MARKERS.items()},
+        "bug097_smoke_3pt_fixture": smoke_3pt_fixture(),
         "provenance": provenance(),
     }
 
