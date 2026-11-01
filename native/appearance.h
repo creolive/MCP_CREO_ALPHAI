@@ -122,7 +122,7 @@ static bool appearance_records_equal(const J &before, const J &after) {
         a->size() != 3 || b->size() != 3)
         return false;
     for (int i = 0; i < 3; i++)
-        if (fabs(a[i].get<double>() - b[i].get<double>()) > kAppearanceReadbackTolerance)
+        if (fabs((*a)[i].get<double>() - (*b)[i].get<double>()) > kAppearanceReadbackTolerance)
             return false;
     return true;
 }
@@ -548,7 +548,7 @@ static void recolor_rollback_check(const J &restored) {
             } else {
                 double err = 0;
                 for (int i = 0; i < 3; i++)
-                    err = std::max(err, fabs(a[i].get<double>() - b[i].get<double>()));
+                    err = std::max(err, fabs((*a)[i].get<double>() - (*b)[i].get<double>()));
                 check["abs_err"] = err;
                 within = err <= kAppearanceReadbackTolerance;
             }
