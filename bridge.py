@@ -1291,11 +1291,6 @@ def get_job(
 
 
 def compact_job(manifest: dict) -> dict:
-<<<<<<< HEAD
-    """Bound polling payloads without losing the outcome or recovery information."""
-    manifest = dict(manifest)
-    apply_terminal_stage(manifest)
-=======
     """Bound polling payloads without losing the outcome or recovery information.
 
     FEAT-008/BUG-088: every value is projected through the shared bounded
@@ -1306,7 +1301,8 @@ def compact_job(manifest: dict) -> dict:
     """
     from creo_mechdog.operation_results import bounded_summary, enforce_compact_budget
 
->>>>>>> codex/q13-result-budget
+    manifest = dict(manifest)
+    apply_terminal_stage(manifest)
     keys = (
         "job_id",
         "kind",

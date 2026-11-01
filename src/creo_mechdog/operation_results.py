@@ -18,7 +18,6 @@ from typing import Any
 EXECUTION_STATUSES = ("succeeded", "failed", "not_executed", "unknown")
 EFFECT_STATUSES = ("committed", "rolled_back", "no_effect", "unknown")
 
-<<<<<<< HEAD
 #: BUG-097 L2: the native executor caps the element/section error samples; the
 #: projection re-applies the same bound defensively and keeps totals visible.
 FEATURE_ERROR_SAMPLE_LIMIT = 20
@@ -144,7 +143,6 @@ def annotate_feature_errors(result: dict[str, Any]) -> dict[str, Any]:
                     operation.get("feature_errors")
                 )
     return result
-=======
 # ---------------------------------------------------------------------------
 # FEAT-008 / BUG-088 (Q13): one bounded-summary contract for compact results.
 # ---------------------------------------------------------------------------
@@ -308,7 +306,6 @@ def enforce_compact_budget(summary: dict[str, Any], *, budget: int | None = None
         ),
     }
     return summary
->>>>>>> codex/q13-result-budget
 
 
 def _execution_status(op: dict[str, Any], job_status: str, failed_index: int | None) -> str:

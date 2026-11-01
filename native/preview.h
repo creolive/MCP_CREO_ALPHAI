@@ -527,14 +527,9 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
                       {"error_message", outcome.file_check_message.empty()
                                             ? nlohmann::json(nullptr)
                                             : nlohmann::json(outcome.file_check_message)}};
-<<<<<<< HEAD
     if (outcome.skipped_no_geometry)
         for (auto &entry : codes.items())
             entry.value() = nullptr; // no Toolkit capture step was attempted
-    return {{"status", outcome.skipped_no_geometry
-                           ? "skipped_no_geometry"
-                           : preview_written(outcome) ? "written" : "failed"},
-=======
     // FEAT-008/BUG-088 (H): occlusion diagnostics in their own block. The
     // capture status and the raw codes above are never rewritten here.
     nlohmann::json datum_options = nlohmann::json::array();
@@ -550,8 +545,7 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
              {"hidden", option.hidden},
              {"restored", option.restored}});
     }
-    return {{"status", preview_written(outcome) ? "written" : "failed"},
->>>>>>> codex/q13-result-budget
+    return {{"status", outcome.skipped_no_geometry ? "skipped_no_geometry" : preview_written(outcome) ? "written" : "failed"},
             {"path", outcome.path.empty() ? nlohmann::json(nullptr)
                                           : nlohmann::json(preview_utf8(outcome.path))},
             {"bytes", outcome.file_bytes},
@@ -563,10 +557,8 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
             {"codes", codes},
             {"failed_step", outcome.failed_step.empty() ? nlohmann::json(nullptr)
                                                         : nlohmann::json(outcome.failed_step)},
-<<<<<<< HEAD
             {"failed_code", outcome.skipped_no_geometry ? nlohmann::json(nullptr)
                                                         : nlohmann::json(outcome.failed_code)}};
-=======
             {"failed_code", outcome.failed_code},
             {"datum_display",
              {{"model_type", outcome.datum_model_type},
@@ -580,5 +572,4 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
               // session value and the guard restores it; the user's config.pro
               // is never written by a capture.
               {"config_file_written", false}}}};
->>>>>>> codex/q13-result-budget
 }

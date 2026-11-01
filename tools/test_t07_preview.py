@@ -513,11 +513,9 @@ class Acceptance:
     ) -> dict:
         """Record the raw capture codes and keep the image; never judge pixels.
 
-<<<<<<< HEAD
         ``expect_written=False`` records an empty part as skipped when the
         native geometry probe confirms that only datums exist. Older workers
         may still return failed or written; retain their raw evidence.
-=======
         ``expect_written=False`` records the outcome of a capture that is
         allowed to fail (the empty new part) without turning the failure into a
         driver error. The filesystem evidence is kept either way, so a missing
@@ -528,7 +526,6 @@ class Acceptance:
         must be restored (``restore_status="restored"``) - including after a
         failed capture. The block is evidence beside the preview status and
         never replaces the P11 empty-model states.
->>>>>>> codex/q13-result-budget
         """
         result = terminal["result"]
         preview = result.get("preview") if operation is None else operation.get("preview")
