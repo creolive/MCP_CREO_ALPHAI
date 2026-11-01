@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <vector>
 
 // Canonical 3/4 view used by every preview and export. Each row is unit length
 // and the rows are orthogonal, which the SDK view-matrix setter requires.
@@ -31,6 +32,21 @@ static ProMatrix preview_isometric_view = {
     {0.7071067811865476, 0.4082482904638631, -0.5773502691896258, 0},
     {0, 0.8164965809277260, 0.5773502691896258, 0},
     {0, 0, 0, 1}};
+
+// One session display option behind the datum display (planes, axes, points,
+// coordinate systems). The previous value is read first so it can be put back
+// exactly as it was; an option whose previous value cannot be read is never
+// hidden, because it could not be restored afterwards.
+struct PreviewDatumOptionOutcome {
+    std::wstring name;
+    int get_code = 0;
+    int hide_code = 0;
+    int restore_code = 0;
+    std::wstring previous_value;
+    bool previous_known = false;
+    bool hidden = false;
+    bool restored = false;
+};
 
 struct PreviewStepOutcome {
     std::wstring path;
@@ -65,6 +81,16 @@ struct PreviewStepOutcome {
     std::string file_check_message;
     std::string failed_step;
     int failed_code = 0;
+    // FEAT-008/BUG-088 (H): datum-occlusion diagnostics in a separate block.
+    // These fields never rewrite the capture status or the raw codes above;
+    // the empty-model skip states of P11 stay a separate concern.
+    std::string datum_model_type = "unknown";
+    int datum_type_query_code = 0;
+    bool datum_applicable = false;
+    bool datum_attempted = false;
+    std::string datum_hide_status = "not_attempted";
+    std::string datum_restore_status = "not_attempted";
+    std::vector<PreviewDatumOptionOutcome> datum_options;
 };
 
 static std::string preview_utf8(const std::wstring &value) {
@@ -110,6 +136,110 @@ static bool preview_rotation_matches(const ProMatrix actual) {
                 return false;
     return true;
 }
+
+// FEAT-008/BUG-088 (H): temporary datum-display hide/restore around an
+// assembly capture. Assemblies drown their preview in displayed datums, so
+// the session display options behind planes, axes, points and coordinate
+// systems are read first, set to "no" for the duration of the capture and put
+// back exactly as they were. ProConfigoptSet only changes the session value:
+// the user's config.pro is never written. The guard restores on every exit
+// path of the capture, failed steps included (its destructor is the safety
+// net), and the per-option codes land in the separate `datum_display` block -
+// preview.status and the raw capture codes are never rewritten by it.
+static wchar_t preview_datum_option_names[][PRO_NAME_SIZE] = {
+    L"DATUM_DISPLAY", L"AXIS_DISPLAY", L"DATUM_POINT_DISPLAY", L"DISPLAY_COORDINATE_SYS"};
+
+struct PreviewDatumDisplayGuard {
+    PreviewStepOutcome &outcome;
+    bool armed = false;
+
+    explicit PreviewDatumDisplayGuard(PreviewStepOutcome &target) : outcome(target) {
+    }
+    ~PreviewDatumDisplayGuard() {
+        restore();
+    }
+
+    void hide(ProMdl model) {
+        ProMdlType model_type = PRO_MDL_UNUSED;
+        outcome.datum_type_query_code = ProMdlTypeGet(model, &model_type);
+        if (outcome.datum_type_query_code != PRO_TK_NO_ERROR) {
+            outcome.datum_hide_status = "unknown";
+            outcome.datum_restore_status = "unknown";
+            return;
+        }
+        outcome.datum_model_type = model_type == PRO_ASSEMBLY  ? "assembly"
+                                   : model_type == PRO_PART    ? "part"
+                                   : model_type == PRO_DRAWING ? "drawing"
+                                                               : "other";
+        // Datum-occlusion handling belongs to the correct assembly preview
+        // path; parts and drawings keep their existing capture, and the
+        // empty-model skip states of P11 stay a separate concern.
+        if (model_type != PRO_ASSEMBLY) {
+            outcome.datum_hide_status = "not_applicable";
+            outcome.datum_restore_status = "not_applicable";
+            return;
+        }
+        outcome.datum_applicable = true;
+        outcome.datum_attempted = true;
+        int hidden_count = 0;
+        for (size_t index = 0;
+             index < sizeof(preview_datum_option_names) / sizeof(preview_datum_option_names[0]);
+             index++) {
+            PreviewDatumOptionOutcome option;
+            option.name = preview_datum_option_names[index];
+            ProPath value = {};
+            option.get_code = ProConfigoptionGet(preview_datum_option_names[index], value);
+            if (option.get_code == PRO_TK_NO_ERROR) {
+                option.previous_value = value;
+                option.previous_known = true;
+                ProPath hidden_value = {};
+                wcscpy_s(hidden_value, PRO_PATH_SIZE, L"no");
+                option.hide_code = ProConfigoptSet(preview_datum_option_names[index], hidden_value);
+                option.hidden = option.hide_code == PRO_TK_NO_ERROR;
+                if (option.hidden) {
+                    armed = true;
+                    hidden_count++;
+                }
+            }
+            // An option whose previous value cannot be read is never hidden:
+            // it could not be restored afterwards. Its codes stay recorded.
+            outcome.datum_options.push_back(option);
+        }
+        outcome.datum_hide_status = hidden_count == 0 ? "failed"
+                                    : hidden_count == (int)(sizeof(preview_datum_option_names) /
+                                                            sizeof(preview_datum_option_names[0]))
+                                        ? "hidden"
+                                        : "partial";
+    }
+
+    void restore() {
+        if (!armed)
+            return;
+        armed = false;
+        int hidden_count = 0;
+        int restored_count = 0;
+        for (PreviewDatumOptionOutcome &option : outcome.datum_options) {
+            if (!option.hidden)
+                continue;
+            hidden_count++;
+            ProName key = {};
+            ProPath value = {};
+            wcscpy_s(key, PRO_NAME_SIZE, option.name.c_str());
+            if (option.previous_known) {
+                wcscpy_s(value, PRO_PATH_SIZE, option.previous_value.c_str());
+                option.restore_code = ProConfigoptSet(key, value);
+            } else {
+                option.restore_code = PRO_TK_BAD_INPUTS;
+            }
+            option.restored = option.restore_code == PRO_TK_NO_ERROR;
+            if (option.restored)
+                restored_count++;
+        }
+        outcome.datum_restore_status = restored_count == hidden_count ? "restored"
+                                       : restored_count == 0          ? "failed"
+                                                                      : "partial";
+    }
+};
 
 // Filesystem confirmation of the raster output (BUG-088). This is a separate
 // stage from the raster call: the probe records the target path shape, the
@@ -250,40 +380,43 @@ static nlohmann::json preview_window_codes_json(const PreviewStepOutcome &outcom
             {"failed_code", outcome.failed_code}};
 }
 
-// One capture attempt. apply_view_matrix is false for drawings, whose view is
-// owned by the drawing view rather than by the model orientation.
-static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file,
-                                          bool apply_view_matrix, double width_inches,
-                                          double height_inches, ProRasterType type) {
-    PreviewStepOutcome outcome;
+// One capture attempt. Shared step body: the datum-display guard writes its
+// restore evidence into `outcome` by reference, so every exit path - failed
+// steps included - leaves the original display state restored.
+static void capture_preview_steps(ProMdl model, const std::wstring &file, bool apply_view_matrix,
+                                  double width_inches, double height_inches, ProRasterType type,
+                                  PreviewStepOutcome &outcome) {
     outcome.path = file;
     if (!bind_model_window(model, outcome))
-        return outcome;
+        return;
+
+    PreviewDatumDisplayGuard datums(outcome);
+    datums.hide(model);
 
     if (apply_view_matrix) {
         int code = ProViewMatrixSet(model, nullptr, preview_isometric_view);
         outcome.view_matrix_set_code = code;
         preview_record(outcome, "view_matrix_set", code);
         if (code != PRO_TK_NO_ERROR)
-            return outcome;
+            return;
         ProMatrix actual = {};
         code = ProViewMatrixGet(model, nullptr, actual);
         outcome.view_matrix_get_code = code;
         preview_record(outcome, "view_matrix_get", code);
         if (code != PRO_TK_NO_ERROR)
-            return outcome;
+            return;
         // Creo applies its own shift and scale to the requested matrix, so only
         // the rotation can be compared. A mismatch is reported, not fatal.
         outcome.view_matrix_matches = preview_rotation_matches(actual);
     }
 
     if (!repaint_bound_window(outcome.window, outcome))
-        return outcome;
+        return;
 
     if (file.size() >= PRO_PATH_SIZE) {
         outcome.failed_step = "output_path";
         outcome.failed_code = PRO_TK_BAD_INPUTS;
-        return outcome;
+        return;
     }
     ProPath output;
     wcscpy_s(output, PRO_PATH_SIZE, file.c_str());
@@ -292,9 +425,19 @@ static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file
     outcome.raster_code = code;
     preview_record(outcome, "raster", code);
     if (code != PRO_TK_NO_ERROR)
-        return outcome;
+        return;
 
     preview_confirm_file(outcome);
+}
+
+// One capture attempt. apply_view_matrix is false for drawings, whose view is
+// owned by the drawing view rather than by the model orientation.
+static PreviewStepOutcome capture_preview(ProMdl model, const std::wstring &file,
+                                          bool apply_view_matrix, double width_inches,
+                                          double height_inches, ProRasterType type) {
+    PreviewStepOutcome outcome;
+    capture_preview_steps(model, file, apply_view_matrix, width_inches, height_inches, type,
+                          outcome);
     return outcome;
 }
 
@@ -335,6 +478,21 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
                       {"error_message", outcome.file_check_message.empty()
                                             ? nlohmann::json(nullptr)
                                             : nlohmann::json(outcome.file_check_message)}};
+    // FEAT-008/BUG-088 (H): occlusion diagnostics in their own block. The
+    // capture status and the raw codes above are never rewritten here.
+    nlohmann::json datum_options = nlohmann::json::array();
+    for (const PreviewDatumOptionOutcome &option : outcome.datum_options) {
+        datum_options.push_back(
+            {{"name", preview_utf8(option.name)},
+             {"get_code", option.get_code},
+             {"hide_code", option.hide_code},
+             {"restore_code", option.restore_code},
+             {"previous_value", option.previous_known
+                                    ? nlohmann::json(preview_utf8(option.previous_value))
+                                    : nlohmann::json(nullptr)},
+             {"hidden", option.hidden},
+             {"restored", option.restored}});
+    }
     return {{"status", preview_written(outcome) ? "written" : "failed"},
             {"path", outcome.path.empty() ? nlohmann::json(nullptr)
                                           : nlohmann::json(preview_utf8(outcome.path))},
@@ -347,5 +505,17 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
             {"codes", codes},
             {"failed_step", outcome.failed_step.empty() ? nlohmann::json(nullptr)
                                                         : nlohmann::json(outcome.failed_step)},
-            {"failed_code", outcome.failed_code}};
+            {"failed_code", outcome.failed_code},
+            {"datum_display",
+             {{"model_type", outcome.datum_model_type},
+              {"type_query_code", outcome.datum_type_query_code},
+              {"applicable", outcome.datum_applicable},
+              {"attempted", outcome.datum_attempted},
+              {"hide_status", outcome.datum_hide_status},
+              {"restore_status", outcome.datum_restore_status},
+              {"options", datum_options},
+              // Session display options only: ProConfigoptSet changes the
+              // session value and the guard restores it; the user's config.pro
+              // is never written by a capture.
+              {"config_file_written", false}}}};
 }

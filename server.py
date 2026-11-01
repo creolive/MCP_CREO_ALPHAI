@@ -358,9 +358,15 @@ async def creo_create_plate(
 
 
 @mcp.tool(annotations=READ)
-async def creo_get_job(job_id: str, detail: Literal["compact", "full"] = "full") -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes; full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
-    return await invoke(bridge.get_job, job_id, detail)
+async def creo_get_job(
+    job_id: str,
+    detail: Literal["compact", "full"] = "full",
+    section: str | None = None,
+    limit: int = Field(default=50, ge=1, le=200),
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
+    return await invoke(bridge.get_job, job_id, detail, section, limit, cursor)
 
 
 @mcp.tool(annotations=CREATE)

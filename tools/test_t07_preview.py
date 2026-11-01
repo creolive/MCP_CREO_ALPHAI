@@ -18,6 +18,12 @@ same model is then continued in the same session with real geometry so the two
 file outcomes can be compared. A sheetmetal part is captured as well, so a
 thin wall is compared with a solid body instead of with another disk.
 
+A non-empty assembly with its own datum axis and two components covers the
+datum-occlusion case (FEAT-008/BUG-088 H): the shared capture hides the datum
+display for an assembly and must restore it afterwards, evidence recorded in
+the separate ``datum_display`` block. That case is deliberately separate from
+the empty-part one: P11 owns the empty-model states.
+
 Every run writes a unique report and image directory and refuses to overwrite
 an existing report, so historical evidence is never replaced.
 """
@@ -212,6 +218,45 @@ def sheetmetal_model_name(run_id: str) -> str:
     return f"t07_sheetmetal_{suffix}"
 
 
+def assembly_model_name(run_id: str) -> str:
+    """A unique model name for the assembly datum-occlusion case."""
+    suffix = run_id.rsplit("_", 1)[-1]
+    return f"t07_asm_{suffix}"
+
+
+def assembly_plan(source_model_id: str) -> list[dict]:
+    """A non-empty assembly whose preview is the datum-occlusion case.
+
+    The assembly carries a datum axis of its own and two fixed components of
+    the same managed source part, so displayed datums would drown the capture
+    exactly as the H feedback describes. Labels follow the repository rule.
+    """
+    return [
+        {
+            "op": "datum_axis",
+            "label": "asm_zaxis",
+            "references": [
+                {"kind": "datum_plane", "axis": "x", "offset": 0},
+                {"kind": "datum_plane", "axis": "y", "offset": 0},
+            ],
+        },
+        {
+            "op": "assemble_component",
+            "label": "plate_a",
+            "source_model_id": source_model_id,
+            "translation": [0, 0, 0],
+            "placement": "fixed",
+        },
+        {
+            "op": "assemble_component",
+            "label": "plate_b",
+            "source_model_id": source_model_id,
+            "translation": [100, 0, 0],
+            "placement": "fixed",
+        },
+    ]
+
+
 def require_live(args: argparse.Namespace) -> bool:
     if args.live and not args.confirm_session_usable:
         raise ValueError(
@@ -404,6 +449,30 @@ class Acceptance:
             )
         return terminal
 
+    async def assembly_case(self) -> dict:
+        """Create the non-empty assembly behind the datum-occlusion case.
+
+        The model stays in the Creo session under a unique name; components
+        come from managed parts created earlier in the same run.
+        """
+        name = assembly_model_name(self.report["run_id"])
+        accepted = await self.call("creo_new_assembly", {"model_name": name})
+        terminal = await self.terminal(accepted["job_id"])
+        self.report["assembly_model"] = {
+            "model_name": name,
+            "job_id": terminal.get("job_id"),
+            "model_id": terminal.get("model_id"),
+            "revision": terminal.get("revision"),
+            "status": terminal.get("status"),
+            "created_with": "creo_new_assembly",
+        }
+        self.save()
+        if terminal.get("status") != "succeeded":
+            raise RuntimeError(
+                f"assembly {name}: job {terminal.get('job_id')} ended {terminal.get('status')}"
+            )
+        return terminal
+
     async def terminal(self, job_id: str) -> dict:
         deadline = time.monotonic() + 360
         while time.monotonic() < deadline:
@@ -440,6 +509,7 @@ class Acceptance:
         *,
         operation: dict | None = None,
         expect_written: bool = True,
+        expect_datums: bool = False,
     ) -> dict:
         """Record the raw capture codes and keep the image; never judge pixels.
 
@@ -447,6 +517,12 @@ class Acceptance:
         allowed to fail (the empty new part) without turning the failure into a
         driver error. The filesystem evidence is kept either way, so a missing
         file can be told apart from a failed raster call.
+
+        ``expect_datums=True`` is the H contract for an assembly capture: the
+        occlusion handling must apply to the assembly path and whatever it hid
+        must be restored (``restore_status="restored"``) - including after a
+        failed capture. The block is evidence beside the preview status and
+        never replaces the P11 empty-model states.
         """
         result = terminal["result"]
         preview = result.get("preview") if operation is None else operation.get("preview")
@@ -469,8 +545,20 @@ class Acceptance:
             # BUG-088: keep the filesystem stage beside the raster code so a
             # missing file can be told apart from a failed raster call.
             "file_check": preview.get("file_check"),
+            # FEAT-008/BUG-088 (H): occlusion diagnostics, recorded per case
+            # and never folded into the preview status above.
+            "datum_display": preview.get("datum_display"),
             "verification_error": preview.get("verification_error"),
         }
+        if expect_datums:
+            block = record["datum_display"]
+            assert isinstance(block, dict), record
+            assert block.get("applicable") is True, record
+            assert block.get("attempted") is True, record
+            assert block.get("hide_status") in ("hidden", "partial"), record
+            if block.get("hide_status") in ("hidden", "partial"):
+                # Everything the capture hid must be back, also on failure.
+                assert block.get("restore_status") == "restored", record
         # Raw codes are the evidence. A zero raster code alone does not mean the
         # picture is correct, so the image is retained for human review.
         if expect_written:
@@ -505,6 +593,7 @@ class Acceptance:
         *,
         expect_written: bool = True,
         empty_part: bool = False,
+        expect_datums: bool = False,
     ) -> dict:
         terminal = (
             await self.empty_part_case()
@@ -531,7 +620,9 @@ class Acceptance:
         record["saved_file_reloaded_and_verified"] = terminal["result"].get(
             "saved_file_reloaded_and_verified"
         )
-        record["preview"] = self.check_preview(case, terminal, expect_written=expect_written)
+        record["preview"] = self.check_preview(
+            case, terminal, expect_written=expect_written, expect_datums=expect_datums
+        )
         try:
             snapshot = await self.snapshot(terminal["model_id"])
             inspection = snapshot["inspection"]
@@ -629,6 +720,22 @@ class Acceptance:
             "model_id": sheetmetal["terminal"]["model_id"],
             "revision": sheetmetal["terminal"]["revision"],
         }
+        # FEAT-008/BUG-088 (H): a correct, non-empty assembly whose preview is
+        # the datum-occlusion case. Kept separate from the empty-part case
+        # above: P11 owns the empty-model skip states, this case asserts the
+        # occlusion hide/restore contract on the assembly path.
+        source = await self.run_case("assembly_source", disk_plan(), None)
+        assembly_created = await self.assembly_case()
+        assembly_model = {
+            "model_id": assembly_created["model_id"],
+            "revision": assembly_created["revision"],
+        }
+        assembly = await self.run_case(
+            "assembly_components",
+            assembly_plan(source["terminal"]["model_id"]),
+            assembly_model,
+            expect_datums=True,
+        )
         await self.export_case(pattern_model)
         self.report.update(
             preview_acceptance="passed",
@@ -639,12 +746,15 @@ class Acceptance:
                 "cut": cut_plan(),
                 "pattern": pattern_plan(),
                 "sheetmetal_wall": sheetmetal_plan(),
+                "assembly_source": disk_plan(),
+                "assembly_components": assembly_plan(source["terminal"]["model_id"]),
             },
             expected_volumes_mm3={
                 "disk": disk_volume(),
                 "after_cut": disk_volume() - cut_volume(1),
                 "after_pattern": disk_volume() - cut_volume(PATTERN_COUNT),
                 "sheetmetal_wall": sheetmetal_volume(),
+                "assembly_two_plates": 2 * disk_volume(),
             },
             # The empty part is expected to produce no image in the reported
             # configuration. Its file outcome is recorded, never asserted as a
@@ -664,6 +774,8 @@ class Acceptance:
                 ),
             },
             sheetmetal_model_id=sheetmetal_model["model_id"],
+            assembly_model_id=assembly["terminal"]["model_id"],
+            assembly_source_model_id=source["terminal"]["model_id"],
             pending_native_acceptance=[],
         )
 
