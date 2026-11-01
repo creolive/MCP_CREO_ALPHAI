@@ -247,6 +247,7 @@ def submit(
             "component_placement",
             "component_constraints",
             "remove_component",
+            "recolor_assembly",
         }
         for op in operations:
             if op["op"].startswith("drawing_") and actual_type != "drawing":
@@ -318,6 +319,13 @@ def submit(
         # the saved inspection, refuse system objects/members, and require every
         # affected dependency to be listed (native re-checks before executing).
         feature_state.validate_plan(model if not new else None, operations)
+        # FEAT-052: recolor_assembly admission and payload resolution share one
+        # path for the standalone tool and execute_plan (the verified
+        # checkpoint, appearance baseline, family grouping and complete
+        # palette are checked here, before a job exists).
+        from creo_mechdog import appearance
+
+        operations = appearance.prepare_recolor_operations(model if not new else None, operations)
         from creo_mechdog import airfoil
 
         operations = airfoil.prepare(operations, aliases)
@@ -505,6 +513,12 @@ def run_generic_job(job_id: str, manifest: dict):
                         readonly=request["readonly"],
                         inputs=request["operations"],
                     )
+                    # FEAT-052: project the native recolor block into the
+                    # stable result shape (missing fields stay unknown and are
+                    # never fabricated).
+                    from creo_mechdog import appearance
+
+                    appearance.annotate_recolor(result)
                     # Shared preview projection (T07): raw capture codes live on
                     # the result, a failed image stays a failed image, and the
                     # model save/revision outcome is never altered by it.

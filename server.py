@@ -23,6 +23,7 @@ import seeds
 from capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
 from creo_mechdog import update_check
 from creo_mechdog.adoption import adopt
+from creo_mechdog.appearance import preview_recolor, submit_recolor
 from creo_mechdog.assembly_replay import plan_assembly_rebuild
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
 from creo_mechdog.capability_pages import capabilities_response
@@ -103,6 +104,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/capability_pages.py",
     "src/creo_mechdog/capability_summary.py",
     "src/creo_mechdog/model_queries.py",
+    "src/creo_mechdog/appearance.py",
     "src/creo_mechdog/startup_state.py",
     "src/creo_mechdog/windows_boot.py",
     "src/creo_mechdog/window_observations.py",
@@ -211,7 +213,13 @@ class Hole(BaseModel):
 
 async def invoke(fn, *args, **kwargs):
     try:
-        if fn in (bridge.create_job, general.submit, general.new_loft_part, submit_open_file):
+        if fn in (
+            bridge.create_job,
+            general.submit,
+            general.new_loft_part,
+            submit_open_file,
+            submit_recolor,
+        ):
             startup.require_ready()
         return await asyncio.to_thread(fn, *args, **kwargs)
     except bridge.ToolkitBusy as exc:
@@ -1856,6 +1864,26 @@ async def creo_list_components(model_id: str) -> dict[str, Any]:
         "identity_key": projection["identity_key"],
         "aliases": model_registry.aliases_of(model),
     }
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_recolor_assembly(
+    model_id: str,
+    expected_revision: int,
+    palette: dict[str, Any] | None = None,
+    families: dict[str, Any] | None = None,
+    dry_run: bool = False,
+    limit: int = Field(default=50, ge=1, le=50),
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Paint the components of an MCP-managed single-level assembly by part family (FEAT-052); colors are written at the assembly component level and source part files keep their exact bytes. Omit families for automatic grouping by the component binding's unique source_model_id (palette keys are those source model ids); pass families={family: [component labels or feature IDs]} for explicit families whose names follow the project label rule (lowercase start, [a-z0-9_], at most 28 characters). The family table must assign every checkpoint component exactly once: duplicated or omitted components are refused with their identities listed, an entry matching no component is reported as unmatched (never invented or guessed), an ambiguous label that matches several components is refused (select those by feature ID), and in execute_plan an entry naming a component created by the same plan's assemble_component is refused - only components that already exist before the plan runs may be painted. Automatic grouping refuses components with missing or conflicting sources (multi-bound or unlabeled) and asks for an explicit family table instead. RGB colors are three finite numbers in 0..1; booleans are refused even nested in lists. dry_run=true previews the grouping, per-family counts, unmatched entries and appearance-baseline readiness from persisted registry data only (component bindings plus the verified checkpoint): no Toolkit connection, no job, no revision change and no channel lock; the palette may be omitted or partial there, limit (1-50, default 50) pages the groups within 32 KiB, and next_cursor is bound to the revision and request content so registry, revision or request changes invalidate old cursors (restart without cursor). dry_run=false submits one job on the single Toolkit channel (busy rejects immediately with blocking_job_id and retry guidance; nothing queues) and requires a palette covering every family exactly (extra, missing and unknown keys refuse); pagination parameters are preview-only and refused here. Poll creo_get_job: full detail reports painted count, unmatched items, per-family counts and both per-component readbacks (after the write and again after save/erase/reload) plus the component appearance baseline; compact keeps counts and verification status only. Success always saves and advances the revision by exactly one. Only MCP-managed assemblies with a verified checkpoint of at least one component are accepted; a stale expected_revision, a non-assembly model, an assembly without components, or a checkpoint whose component snapshot predates the appearance baseline (run creo_save_model to establish and verify a new checkpoint first) are refused before any job exists. Component readback values and the on-screen display are verified separately; face-level painting, standalone parts, nested/external assemblies and non-RGB appearance properties are out of scope."""
+    if dry_run:
+        return await invoke(
+            preview_recolor, model_id, expected_revision, palette, families, limit, cursor
+        )
+    return await invoke(
+        submit_recolor, model_id, expected_revision, palette, families, limit, cursor
+    )
 
 
 @mcp.tool(annotations=CREATE)

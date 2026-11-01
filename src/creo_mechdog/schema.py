@@ -978,6 +978,158 @@ class RemoveComponentOp(StrictModel):
     component: str | int
 
 
+# FEAT-052 recolor shape validation. It lives here (not in appearance.py)
+# because RecolorAssemblyOp validates at import time of this module and the
+# installed package must stay importable without the repo root (bridge is a
+# root-only module); appearance.py imports these helpers from here.
+FAMILY_NAME_PATTERN = r"^[a-z][a-z0-9_]{0,27}$"
+SOURCE_MODEL_PATTERN = re.compile(r"^[a-f0-9]{32}\Z")
+MEMBER_ID_MAX = 2147483647
+MAX_FAMILIES = 200
+MAX_MEMBERS_PER_FAMILY = 500
+MAX_MEMBERS_TOTAL = 2000
+
+
+def validate_rgb(value: Any, path: str = "rgb") -> list[float]:
+    """Three finite numbers in 0..1; booleans are refused, even nested in lists."""
+    if not isinstance(value, list) or len(value) != 3:
+        raise ValueError(f"{path} must be exactly three numbers [r,g,b] in 0..1")
+    color = []
+    for item in value:
+        if isinstance(item, bool) or type(item) not in (int, float):
+            raise ValueError(
+                f"{path} components must be finite numbers in 0..1; booleans and non-numbers "
+                "are refused"
+            )
+        if not math.isfinite(item) or not 0.0 <= item <= 1.0:
+            raise ValueError(f"{path} components must be finite numbers in 0..1")
+        color.append(float(item))
+    return color
+
+
+def validate_family_name(value: Any, path: str = "family name") -> str:
+    """Project label rule: lowercase start, [a-z0-9_], at most 28 characters."""
+    if not isinstance(value, str) or not re.fullmatch(FAMILY_NAME_PATTERN, value):
+        raise ValueError(
+            f"{path} must start with a lowercase letter and contain only [a-z0-9_], "
+            "at most 28 characters"
+        )
+    return value
+
+
+def normalize_member_ref(value: Any, path: str = "component reference") -> str | int:
+    """A family member is a component label or a nonnegative feature ID."""
+    if isinstance(value, bool):
+        raise ValueError(f"{path} must be a component label or feature ID, not a boolean")
+    if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+        value = int(value)
+    if type(value) is int:
+        if not 0 <= value <= MEMBER_ID_MAX:
+            raise ValueError(f"{path} feature IDs must be nonnegative 32-bit integers")
+        return value
+    if isinstance(value, str) and re.fullmatch(FAMILY_NAME_PATTERN, value):
+        return value
+    raise ValueError(
+        f"{path} must be a component label starting with a lowercase letter "
+        "([a-z0-9_], at most 28 characters) or a nonnegative feature ID"
+    )
+
+
+def validate_families(families: Any, path: str = "families") -> dict[str, list[str | int]] | None:
+    if families is None:
+        return None
+    if not isinstance(families, dict) or not families:
+        raise ValueError(
+            f"{path} must be a non-empty object mapping family names to component lists "
+            "(omit it entirely for automatic grouping)"
+        )
+    if len(families) > MAX_FAMILIES:
+        raise ValueError(f"{path} supports at most {MAX_FAMILIES} families")
+    checked: dict[str, list[str | int]] = {}
+    total = 0
+    for raw_name, members in families.items():
+        name = validate_family_name(raw_name, f"{path} key {raw_name!r}")
+        if not isinstance(members, list) or not members:
+            raise ValueError(
+                f"{path}.{name} must be a non-empty list of component labels or feature IDs"
+            )
+        if len(members) > MAX_MEMBERS_PER_FAMILY:
+            raise ValueError(f"{path}.{name} supports at most {MAX_MEMBERS_PER_FAMILY} components")
+        refs = [
+            normalize_member_ref(item, f"{path}.{name}[{position}]")
+            for position, item in enumerate(members)
+        ]
+        total += len(refs)
+        checked[name] = refs
+    if total > MAX_MEMBERS_TOTAL:
+        raise ValueError(f"{path} supports at most {MAX_MEMBERS_TOTAL} component references")
+    return checked
+
+
+def validate_palette(palette: Any, path: str = "palette") -> dict[str, list[float]] | None:
+    if palette is None:
+        return None
+    if not isinstance(palette, dict) or not palette:
+        raise ValueError(
+            f"{path} must be a non-empty object mapping family names to [r,g,b] colors "
+            "(omit it entirely for a dry_run preview without colors)"
+        )
+    checked: dict[str, list[float]] = {}
+    for key, value in palette.items():
+        if not isinstance(key, str) or not key or len(key) > 64:
+            raise ValueError(f"{path} keys must be non-empty names of at most 64 characters")
+        checked[key] = validate_rgb(value, f"{path}[{key!r}]")
+    return checked
+
+
+def validate_recolor_shape(
+    families: Any, palette: Any
+) -> tuple[dict[str, list[str | int]] | None, dict[str, list[float]] | None]:
+    """Shape validation shared by the tool entry, the plan op and submission.
+
+    Palette key identity depends on the grouping mode: automatic (families
+    omitted) keys must look like source model ids; explicit keys must name the
+    supplied families. Completeness of the palette is an execution rule and is
+    checked later against the resolved families.
+    """
+    checked_families = validate_families(families)
+    checked_palette = validate_palette(palette)
+    if checked_palette is not None:
+        if checked_families is None:
+            for key in checked_palette:
+                if not SOURCE_MODEL_PATTERN.fullmatch(key):
+                    raise ValueError(
+                        "palette keys must be source model_ids (32 lowercase hex characters) "
+                        f"when families is omitted; got {key!r}"
+                    )
+        else:
+            for key in checked_palette:
+                if key not in checked_families:
+                    raise ValueError(
+                        f"palette key {key!r} does not name a family; "
+                        f"known families: {sorted(checked_families)}"
+                    )
+    return checked_families, checked_palette
+
+
+class RecolorAssemblyOp(StrictModel):
+    # FEAT-052 plan operation: paint existing components of a managed
+    # single-level assembly by part family. It reuses the exact validation of
+    # creo_recolor_assembly in execution mode: palette required and complete,
+    # families optional (automatic grouping by source_model_id). The preview
+    # parameters of the standalone tool (dry_run/limit/cursor) are not part of
+    # a plan and are refused by extra="forbid"; only components that already
+    # exist before the plan runs may be selected (plan-created ones refuse).
+    op: Literal["recolor_assembly"]
+    palette: dict[str, Any]
+    families: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def recolor_request_valid(self):
+        self.families, self.palette = validate_recolor_shape(self.families, self.palette)
+        return self
+
+
 def _normalize_feature_target(value: Any) -> Any:
     if isinstance(value, bool):
         raise ValueError("Feature targets must be feature labels or nonnegative feature IDs")
@@ -1356,6 +1508,7 @@ Operation = Annotated[
         ComponentPlacementOp,
         ComponentConstraintsOp,
         RemoveComponentOp,
+        RecolorAssemblyOp,
         FeatureStateOp,
         GenericFeatureOp,
         SimpleOp,
@@ -1408,6 +1561,22 @@ def validate_operations(operations: list[dict]) -> list[dict]:
     for index, operation in enumerate(dumped):
         if operation["op"] in ("sketch", "airfoil_sketch") and isinstance(operation["plane"], dict):
             validate_sketch_plane_frame(operation["plane"], f"operations[{index}].plane")
+    # FEAT-052: recolor_assembly paints only components that already exist
+    # before the plan runs; a label this same plan creates with
+    # assemble_component is refused instead of silently matching the
+    # component once the plan has built it.
+    plan_components = {op["label"] for op in dumped if op["op"] == "assemble_component"}
+    for index, operation in enumerate(dumped):
+        if operation["op"] != "recolor_assembly":
+            continue
+        members = [ref for refs in (operation.get("families") or {}).values() for ref in refs]
+        offenders = sorted({ref for ref in members if ref in plan_components})
+        if offenders:
+            raise ValueError(
+                f"operations[{index}]: recolor_assembly only selects components that already "
+                "exist before the plan runs; these labels are created by assemble_component "
+                f"operations inside the same plan: {offenders}"
+            )
 
     def references(x, path: str):
         if isinstance(x, list):

@@ -1413,6 +1413,12 @@ def compact_job(manifest: dict) -> dict:
             }
             for op in result.get("operations", [])
         ]
+        if "recolor" in result:
+            # FEAT-052: compact keeps counts and verification status only;
+            # the full per-component readbacks stay on detail=full.
+            from creo_mechdog.appearance import compact_recolor
+
+            native["recolor"] = compact_recolor(result["recolor"])
         summary["result"] = native
     if "native_log_tail" in manifest:
         summary["native_log_tail"] = manifest["native_log_tail"][-2000:]

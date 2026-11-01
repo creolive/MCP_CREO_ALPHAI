@@ -36,6 +36,7 @@ REGISTERED_OPERATIONS = (
     "component_placement",
     "component_constraints",
     "remove_component",
+    "recolor_assembly",
     "feature_state",
     "set_dimensions",
     "set_sketch_dimensions",
@@ -494,5 +495,41 @@ def families() -> dict:
             ),
             "pipeline": "single execute_plan job inserts multiple components (distinct labels per occurrence); official rebuild pipeline: docs/ASSEMBLY_REBUILD.md with examples/assembly_rebuild_pipeline.json",
             "limits": "MCP-owned part/sheetmetal sources; no nested assemblies; source edits do not update snapshots (regenerate via remove + re-assemble or rebuild); mate/insert/csys/default placement need further validation",
+        },
+        "assembly_appearance": {
+            "enabled": True,
+            "tool": "creo_recolor_assembly",
+            "op": "recolor_assembly",
+            "modes": ["automatic", "explicit"],
+            "scope": (
+                "Paint managed single-level assembly components by part family at the "
+                "component level (source part bytes unchanged): automatic grouping by the "
+                "component binding's unique source_model_id, or an explicit family table of "
+                "component labels/feature IDs; RGB colors are finite 0..1 triples, booleans "
+                "refused; dry_run previews grouping, family counts and unmatched entries "
+                "from persisted registry data in 32 KiB pages without Toolkit, jobs or "
+                "revision changes"
+            ),
+            "guarantees": (
+                "one validation path for the tool and the execute_plan recolor_assembly "
+                "operation; family tables refuse duplicated or omitted components and "
+                "plan-created component references; writes require a complete palette and "
+                "always save once with the revision advancing exactly one; job results "
+                "report painted/unmatched/family counts, both per-component readbacks "
+                "(write and save/erase/reload) and the component appearance baseline"
+            ),
+            "limits": (
+                "managed single-level assemblies with a verified checkpoint of at least one "
+                "component only; non-assembly models, assemblies without components, stale "
+                "expected_revision, ambiguous labels and old checkpoints without a component "
+                "appearance baseline are refused (run creo_save_model first); automatic "
+                "grouping refuses missing or conflicting sources and demands an explicit "
+                "family table; entries matching no component stay unmatched instead of being "
+                "guessed; face-level painting, standalone parts, nested/external assemblies, "
+                "non-RGB appearance properties and queueing/scheduling beyond the single "
+                "busy-rejecting Toolkit channel are out of scope; component readback values "
+                "and on-screen display are verified separately; live Creo acceptance has NOT "
+                "been performed for this feature yet"
+            ),
         },
     }
