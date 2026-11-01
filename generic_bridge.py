@@ -667,6 +667,7 @@ def run_generic_job(job_id: str, manifest: dict):
             # A killed helper or a saved checkpoint is not a confirmed operation outcome.
             model["pending_job"] = job_id if manifest["status"] == "unknown_outcome" else None
             model["last_job"] = job_id
+            bridge.apply_terminal_stage(manifest)
             bridge.note_native_outcome(manifest)
             model_registry.write_model(path, model)
     except bridge.ToolkitBusy as exc:

@@ -4,6 +4,7 @@ import asyncio
 import ctypes
 import errno
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -103,7 +104,8 @@ except bridge.ToolkitBusy as exc:
             self.assertEqual(busy["blocking_model_id"], "b" * 32)
             self.assertEqual(busy["blocking_operation"], "execute_plan")
             self.assertFalse(busy["accepted"])
-            self.assertEqual(busy["retry_after_seconds"], 1)
+            self.assertEqual(busy["retry_after_seconds"], 5)
+            self.assertIn("suggested", busy["retry_guidance"].lower())
             self.assertIn("unknown_outcome", busy["retry_guidance"])
         self.assertEqual(self.contender(), {"acquired": True})
         self.assertFalse((self.root / "toolkit-owner.lock").exists())
@@ -286,6 +288,7 @@ server.mcp.run()
                     command=sys.executable,
                     args=["-c", bootstrap, str(self.root)],
                     cwd=self.checkout,
+                    env={**os.environ, "PYTHONPATH": f"{self.checkout};{self.checkout / 'src'}"},
                 ),
                 read_timeout_seconds=10,
             ) as client:

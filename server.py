@@ -181,7 +181,8 @@ mcp = MCPServer(
     "Open existing on-disk .prt/.asm read-only with creo_open_file (no managed model); adopt before managed editing. "
     "Success requires status=succeeded and saved_file_reloaded_and_verified=true for mutations. "
     "Busy errors mean this request was not accepted; inspect blocking_job_id, blocking_model_id "
-    "and retry_guidance. Poll accepted jobs instead of resubmitting them. "
+    "and retry_guidance; retry_after_seconds is a suggested interval, not a completion estimate. "
+    "Poll accepted jobs instead of resubmitting them. "
     "Create sheetmetal/assembly models with the corresponding new-model tools or model_type in execute_plan. "
     "Use creo_capabilities for enabled and tested operations; reserved unavailable tools reject before native mutation. "
     "Creo startup detection runs in the background; poll creo_startup_status until ready before modeling. "
@@ -577,7 +578,7 @@ def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
             "admission": "reject_busy_without_creating_a_job",
             "busy_error": "isError=true with matching JSON text and structuredContent",
             "owner_fields": ["blocking_job_id", "blocking_model_id", "blocking_operation"],
-            "retry_after_seconds": 1,
+            "retry_after_seconds": 5,
             "retry_interval_is_completion_estimate": False,
             "terminal_contract": "Model finalized under channel lock; job terminal published after release. Another caller may then occupy the channel.",
             "runner_channel_wait_seconds": 120,
