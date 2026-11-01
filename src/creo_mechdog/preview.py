@@ -46,6 +46,19 @@ FILE_CHECK_KEYS = (
     "error_category",
     "error_message",
 )
+# FEAT-008/BUG-088 (H): datum-occlusion diagnostics ride their own block and
+# never touch the preview status or the raw codes. The empty-model skip states
+# of P11 stay a separate concern, so this is passed through by name only.
+DATUM_DISPLAY_KEYS = (
+    "model_type",
+    "type_query_code",
+    "applicable",
+    "attempted",
+    "hide_status",
+    "restore_status",
+    "options",
+    "config_file_written",
+)
 
 
 def _file_state(path: Path | None) -> tuple[bool, int | None, str | None]:
@@ -125,6 +138,12 @@ def normalize_preview(
         if isinstance(raw_check, dict)
         else None
     )
+    raw_datums = native.get("datum_display") if isinstance(native, dict) else None
+    datum_display = (
+        {key: raw_datums[key] for key in DATUM_DISPLAY_KEYS if key in raw_datums}
+        if isinstance(raw_datums, dict)
+        else None
+    )
 
     failed_step = native.get("failed_step") if isinstance(native, dict) else None
     failed_code = native.get("failed_code") if isinstance(native, dict) else None
@@ -161,6 +180,7 @@ def normalize_preview(
         "failed_step": failed_step if isinstance(failed_step, str) else None,
         "failed_code": failed_code if isinstance(failed_code, int) else None,
         "file_check": file_check,
+        "datum_display": datum_display,
         "verification_error": stat_error,
     }
     for key in (

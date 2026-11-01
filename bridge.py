@@ -1196,9 +1196,17 @@ def run_job(job_id: str) -> None:
     write_json(directory / "job.json", manifest)
 
 
-def get_job(job_id: str, detail: str = "full") -> dict:
+def get_job(
+    job_id: str,
+    detail: str = "full",
+    section: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+) -> dict:
     if detail not in ("compact", "full"):
         raise ValueError("detail must be compact or full")
+    if detail == "compact" and (section is not None or cursor is not None):
+        raise ValueError("section/cursor require detail=full")
     directory = job_path(job_id)
     if not (directory / "job.json").exists():
         raise ValueError("Unknown job_id")
@@ -1273,13 +1281,32 @@ def get_job(job_id: str, detail: str = "full") -> dict:
         failed_model_cleanup.ensure_terminal_receipt(manifest)
     if detail == "compact":
         manifest = compact_job(manifest)
-    return manifest
+        return manifest
+    # FEAT-008/BUG-088: detail=full keeps the whole manifest view when it fits
+    # the response budget and pages the rest through the shared query cursor,
+    # so a large plan echo is never returned unbounded.
+    from creo_mechdog.job_pages import job_page
+
+    return job_page(manifest, section=section, limit=limit, cursor=cursor)
 
 
 def compact_job(manifest: dict) -> dict:
+<<<<<<< HEAD
     """Bound polling payloads without losing the outcome or recovery information."""
     manifest = dict(manifest)
     apply_terminal_stage(manifest)
+=======
+    """Bound polling payloads without losing the outcome or recovery information.
+
+    FEAT-008/BUG-088: every value is projected through the shared bounded
+    summary (``operation_results.bounded_summary``) and the finished summary
+    is held to the 32 KiB response budget. Failure reasons, revision, rollback
+    and save/reload evidence are never cut; truncations carry their
+    total/truncated markers.
+    """
+    from creo_mechdog.operation_results import bounded_summary, enforce_compact_budget
+
+>>>>>>> codex/q13-result-budget
     keys = (
         "job_id",
         "kind",
@@ -1369,6 +1396,12 @@ def compact_job(manifest: dict) -> dict:
             "feature_tombstones",
             "suppressed_features",
             "inspection_warnings",
+            # FEAT-008/BUG-088: new operation diagnostics ride the same
+            # bounded summary (Q02 geometry_deviation, Q03 failed_model_cleanup,
+            # Q06 feature_errors; color/surface receipts follow when present).
+            "geometry_deviation",
+            "failed_model_cleanup",
+            "feature_errors",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary
@@ -1392,67 +1425,84 @@ def compact_job(manifest: dict) -> dict:
                 visible.setdefault("inspection_summary", inspection_summary(inline))
             native["live"] = visible
         native["operations"] = [
-            {
-                key: op[key]
-                for key in (
-                    "op",
-                    "index",
-                    "label",
-                    "succeeded",
-                    "execution_status",
-                    "effect_status",
-                    "unchanged",
-                    "native_geometry_verified",
-                    "size",
-                    "file",
-                    "feature_id",
-                    "preserved_feature_id",
-                    "reordered",
-                    "sheet",
-                    "parameters",
-                    "metadata",
-                    "material_removed_mm3",
-                    "volume_before_mm3",
-                    "volume_after_mm3",
-                    "material_delta_mm3",
-                    "material_measurement",
-                    "draft_geometry",
-                    "reference_application",
-                    "surface_id",
-                    "origin",
-                    "normal",
-                    "u_axis",
-                    "v_axis",
-                    "datum_axes",
-                    "axes_query_code",
-                    "length_unit",
-                    "profile",
-                    "native_section",
-                    "preview_code",
-                    "preview",
-                    "feature_state",
-                    "targets",
-                    "target_count",
-                    "requested_target_count",
-                    "targets_complete",
-                    "elapsed_seconds",
-                    "message",
-                )
-                if key in op
-            }
+            bounded_summary(
+                {
+                    key: op[key]
+                    for key in (
+                        "op",
+                        "index",
+                        "label",
+                        "succeeded",
+                        "execution_status",
+                        "effect_status",
+                        "unchanged",
+                        "native_geometry_verified",
+                        "size",
+                        "file",
+                        "feature_id",
+                        "preserved_feature_id",
+                        "reordered",
+                        "sheet",
+                        "parameters",
+                        "metadata",
+                        "material_removed_mm3",
+                        "volume_before_mm3",
+                        "volume_after_mm3",
+                        "material_delta_mm3",
+                        "material_measurement",
+                        "draft_geometry",
+                        "reference_application",
+                        "surface_id",
+                        "origin",
+                        "normal",
+                        "u_axis",
+                        "v_axis",
+                        "datum_axes",
+                        "axes_query_code",
+                        "length_unit",
+                        "profile",
+                        "native_section",
+                        "preview_code",
+                        "preview",
+                        "feature_state",
+                        "targets",
+                        "target_count",
+                        "requested_target_count",
+                        "targets_complete",
+                        "elapsed_seconds",
+                        "message",
+                        # FEAT-008/BUG-088: bounded new diagnostics.
+                        "geometry_deviation",
+                        "feature_errors",
+                        "failed_model_cleanup",
+                    )
+                    if key in op
+                }
+            )
             for op in result.get("operations", [])
         ]
+        if "operations" in native:
+            # Population markers stay visible even before any trim; the budget
+            # enforcement updates them when a cut actually happens.
+            native["operations_total"] = len(native["operations"])
+            native["operations_truncated"] = False
         if "recolor" in result:
             # FEAT-052: compact keeps counts and verification status only;
             # the full per-component readbacks stay on detail=full.
             from creo_mechdog.appearance import compact_recolor
 
             native["recolor"] = compact_recolor(result["recolor"])
+        for key in list(native):
+            if key != "operations":
+                native[key] = bounded_summary(native[key])
         summary["result"] = native
     if "native_log_tail" in manifest:
         summary["native_log_tail"] = manifest["native_log_tail"][-2000:]
     summary["full_result_available"] = bool(result)
-    return summary
+    for key in list(summary):
+        if key != "result":
+            summary[key] = bounded_summary(summary[key])
+    return enforce_compact_budget(summary)
 
 
 def list_jobs(limit: int = 10, detail: str = "compact") -> list[dict]:

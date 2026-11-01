@@ -952,5 +952,430 @@ class SheetmetalFixture(unittest.TestCase):
         self.assertNotIn("creo_execute_plan", [name for name, _ in client.calls])
 
 
+class DatumDisplayGuardNative(unittest.TestCase):
+    """FEAT-008/BUG-088 (H): hide for an assembly capture, restore always.
+
+    Structural guards over native/preview.h: the previous display state is
+    read before anything is hidden, the restore runs on every exit path of the
+    capture (failed steps included), and the user's config.pro is never
+    written - only session display options are touched and put back.
+    """
+
+    def setUp(self):
+        self.shared = native_source("preview.h")
+
+    def hide_block(self) -> str:
+        return region(self.shared, "void hide(ProMdl model)", "void restore()")
+
+    def restore_block(self) -> str:
+        return region(self.shared, "void restore()", "// Filesystem confirmation")
+
+    def test_the_previous_value_is_read_before_anything_is_hidden(self):
+        hide = self.hide_block()
+        self.assertIn("ProConfigoptionGet", hide)
+        self.assertLess(hide.index("ProConfigoptionGet"), hide.index("ProConfigoptSet"))
+        self.assertIn("previous_known = true", hide)
+        # An option whose previous value cannot be read is never hidden.
+        self.assertIn("never hidden", hide)
+        restore = self.restore_block()
+        self.assertIn("ProConfigoptSet", restore)
+        self.assertIn("previous_value.c_str()", restore)
+
+    def test_only_an_assembly_capture_hides_datums(self):
+        hide = self.hide_block()
+        self.assertIn("ProMdlTypeGet", hide)
+        self.assertIn("model_type != PRO_ASSEMBLY", hide)
+        self.assertIn('"not_applicable"', hide)
+        for name in (
+            "DATUM_DISPLAY",
+            "AXIS_DISPLAY",
+            "DATUM_POINT_DISPLAY",
+            "DISPLAY_COORDINATE_SYS",
+        ):
+            with self.subTest(option=name):
+                self.assertIn(name, self.shared)
+
+    def test_the_restore_runs_on_every_exit_path(self):
+        # The guard is constructed by the step body and writes its evidence
+        # into the outcome by reference, so bare `return;` statements cannot
+        # skip the restore: the destructor is the safety net.
+        destructor = region(self.shared, "~PreviewDatumDisplayGuard()", "void hide(ProMdl model)")
+        self.assertIn("restore();", destructor)
+        steps = region(self.shared, "static void capture_preview_steps", "// One capture attempt.")
+        self.assertIn("PreviewStepOutcome &outcome", steps)
+        self.assertIn("PreviewDatumDisplayGuard datums(outcome)", steps)
+        self.assertLess(steps.index("datums.hide(model)"), steps.index("ProRasterFileWrite"))
+        self.assertNotIn("return outcome", steps)
+        restore = self.restore_block()
+        self.assertIn("datum_restore_status = restored_count == hidden_count", restore)
+        self.assertIn('"restored"', restore)
+
+    def test_the_user_config_file_is_never_written(self):
+        # No config-file write API and no config.pro path literal: only the
+        # session display options are read, changed and put back.
+        for token in ("ProConfigStore", "ProFileEdit", "ProConfigfileWrite", '"config.pro"'):
+            with self.subTest(token=token):
+                self.assertNotIn(token, self.shared)
+        self.assertIn("ProConfigoptSet", self.shared)
+        self.assertIn("ProConfigoptionGet", self.shared)
+
+    def test_the_occlusion_evidence_is_published_in_its_own_block(self):
+        block = region(self.shared, '"datum_display"', '"config_file_written", false')
+        for key in (
+            '"model_type"',
+            '"applicable"',
+            '"attempted"',
+            '"hide_status"',
+            '"restore_status"',
+            '"options"',
+        ):
+            with self.subTest(key=key):
+                self.assertIn(key, block)
+        # The block is a sibling of the capture codes, not a rewrite of them.
+        self.assertIn('{"datum_display",', self.shared)
+
+    def test_the_capture_status_never_reads_the_datum_fields(self):
+        written = region(self.shared, "static bool preview_written", "// Result/diagnostic block.")
+        self.assertNotIn("datum", written)
+        self.assertIn('preview_written(outcome) ? "written" : "failed"', self.shared)
+
+
+class OcclusionProjection(unittest.TestCase):
+    """The projection passes the block through and leaves the status alone."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_datums_")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        (self.root / "output").mkdir()
+        self.image = self.root / "output" / "preview.jpg"
+        self.image.write_bytes(b"\xff\xd8\xff assembly capture")
+
+    def native(self, **overrides) -> dict:
+        block = {
+            "status": "written",
+            "path": str(self.image),
+            "bytes": 20,
+            "codes": {"display": 0, "refit": 0, "repaint": 0, "raster": 0},
+            "failed_step": None,
+            "failed_code": None,
+            "datum_display": {
+                "model_type": "assembly",
+                "type_query_code": 0,
+                "applicable": True,
+                "attempted": True,
+                "hide_status": "hidden",
+                "restore_status": "restored",
+                "options": [
+                    {
+                        "name": "DATUM_DISPLAY",
+                        "get_code": 0,
+                        "hide_code": 0,
+                        "restore_code": 0,
+                        "previous_value": "yes",
+                        "hidden": True,
+                        "restored": True,
+                    }
+                ],
+                "config_file_written": False,
+            },
+        }
+        block.update(overrides)
+        return block
+
+    def test_the_block_passes_through_without_touching_the_status(self):
+        result = {"success": True, "preview": self.native()}
+        block = normalize_preview(result, directory=self.root)
+        self.assertEqual(block["status"], "written")
+        self.assertEqual(block["datum_display"]["hide_status"], "hidden")
+        self.assertEqual(block["datum_display"]["restore_status"], "restored")
+        self.assertFalse(block["datum_display"]["config_file_written"])
+        self.assertEqual(block["datum_display"]["options"][0]["previous_value"], "yes")
+
+    def test_the_status_survives_every_occlusion_outcome(self):
+        for status in ("written", "failed", "not_attempted"):
+            for datums in (
+                self.native()["datum_display"],
+                {
+                    "model_type": "assembly",
+                    "applicable": True,
+                    "attempted": True,
+                    "hide_status": "partial",
+                    "restore_status": "restored",
+                    "options": [],
+                    "config_file_written": False,
+                },
+                {
+                    "model_type": "assembly",
+                    "applicable": True,
+                    "attempted": True,
+                    "hide_status": "failed",
+                    "restore_status": "not_attempted",
+                    "options": [],
+                    "config_file_written": False,
+                },
+                None,
+            ):
+                with self.subTest(status=status, datums=datums is not None):
+                    preview = self.native(status=status, datum_display=datums)
+                    if status != "written":
+                        preview.update(failed_step="raster", failed_code=-5)
+                    block = normalize_preview(
+                        {"success": status != "not_attempted", "preview": preview},
+                        directory=self.root,
+                    )
+                    self.assertEqual(block["datum_display"], datums)
+                    if status == "written":
+                        self.assertEqual(block["status"], "written")
+                    else:
+                        self.assertNotEqual(block["status"], "written")
+
+    def test_results_without_the_block_keep_the_plain_shape(self):
+        result = {
+            "success": True,
+            "preview": {
+                "status": "written",
+                "path": str(self.image),
+                "codes": {"raster": 0},
+                "datum_display": None,
+            },
+        }
+        block = normalize_preview(result, directory=self.root)
+        self.assertIsNone(block["datum_display"])
+        self.assertEqual(block["status"], "written")
+
+
+class DriverDatumCoverage(unittest.TestCase):
+    """The driver records the occlusion evidence and enforces the contract."""
+
+    def test_the_assembly_plan_is_valid_and_labels_are_legal(self):
+        from creo_mechdog.schema import validate_operations
+
+        operations = validate_operations(driver.assembly_plan("a" * 32))
+        self.assertEqual(
+            [op["op"] for op in operations],
+            ["datum_axis", "assemble_component", "assemble_component"],
+        )
+        self.assertEqual(operations[1]["label"], "plate_a")
+        self.assertEqual(operations[2]["translation"], [100, 0, 0])
+        self.assertEqual(operations[1]["source_model_id"], "a" * 32)
+        self.assertEqual(operations[1]["placement"], "fixed")
+
+    def test_assembly_model_names_are_legal_and_unique(self):
+        name = driver.assembly_model_name("20261101T120000_ab12cd34")
+        self.assertRegex(name, r"^[a-z0-9][a-z0-9_]{0,30}$")
+        self.assertLessEqual(len(name), 31)
+        self.assertNotEqual(name, driver.assembly_model_name("20261101T130000_ff00ff00"))
+
+    def datum_block(self, **overrides) -> dict:
+        block = {
+            "model_type": "assembly",
+            "type_query_code": 0,
+            "applicable": True,
+            "attempted": True,
+            "hide_status": "hidden",
+            "restore_status": "restored",
+            "options": [],
+            "config_file_written": False,
+        }
+        block.update(overrides)
+        return block
+
+    def acceptance(self, root: Path) -> driver.Acceptance:
+        return driver.Acceptance(
+            client=None, output=root / "report.json", images=root / "images", run_id="r1"
+        )
+
+    def terminal(self, datum_display: dict | None) -> dict:
+        image = self.image if hasattr(self, "image") else None
+        return {
+            "job_id": "j" * 32,
+            "model_id": "m" * 32,
+            "status": "succeeded",
+            "revision": 2,
+            "result": {
+                "preview_code": 0,
+                "preview": {
+                    "status": "written",
+                    "path": str(image) if image else "x.jpg",
+                    "codes": {
+                        "display": 0,
+                        "window_get": 0,
+                        "window_model_get": 0,
+                        "current_set": 0,
+                        "current_get": 0,
+                        "activate": 0,
+                        "view_matrix_set": 0,
+                        "view_matrix_get": 0,
+                        "refit": 0,
+                        "refresh": 0,
+                        "repaint": 0,
+                        "raster": 0,
+                    },
+                    "failed_step": None,
+                    "failed_code": None,
+                    "file_verified": True,
+                    "datum_display": datum_display,
+                },
+            },
+        }
+
+    def test_the_driver_records_the_block_and_requires_the_restore(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_asm_")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "output").mkdir()
+        self.image = root / "output" / "preview.jpg"
+        self.image.write_bytes(b"\xff\xd8\xff assembly capture bytes")
+        acceptance = self.acceptance(root)
+        record = acceptance.check_preview(
+            "assembly_components",
+            self.terminal(self.datum_block()),
+            expect_datums=True,
+        )
+        self.assertEqual(record["datum_display"]["hide_status"], "hidden")
+        self.assertEqual(record["datum_display"]["restore_status"], "restored")
+
+    def test_a_hidden_display_must_be_restored(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_asm_")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "output").mkdir()
+        self.image = root / "output" / "preview.jpg"
+        self.image.write_bytes(b"\xff\xd8\xff assembly capture bytes")
+        acceptance = self.acceptance(root)
+        with self.assertRaises(AssertionError):
+            acceptance.check_preview(
+                "assembly_components",
+                self.terminal(self.datum_block(hide_status="hidden", restore_status="failed")),
+                expect_datums=True,
+            )
+
+    def test_the_assembly_case_needs_applicable_and_attempted(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_asm_")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "output").mkdir()
+        self.image = root / "output" / "preview.jpg"
+        self.image.write_bytes(b"\xff\xd8\xff assembly capture bytes")
+        acceptance = self.acceptance(root)
+        for block in (
+            None,
+            self.datum_block(applicable=False),
+            self.datum_block(attempted=False),
+            self.datum_block(hide_status="failed", restore_status="not_attempted"),
+        ):
+            with self.subTest(block=block):
+                with self.assertRaises(AssertionError):
+                    acceptance.check_preview(
+                        "assembly_components",
+                        self.terminal(block),
+                        expect_datums=True,
+                    )
+
+    def test_other_cases_keep_recording_the_block_without_the_assembly_rule(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_asm_")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "output").mkdir()
+        self.image = root / "output" / "preview.jpg"
+        self.image.write_bytes(b"\xff\xd8\xff assembly capture bytes")
+        acceptance = self.acceptance(root)
+        # A part capture reports not_applicable and passes the usual checks.
+        record = acceptance.check_preview(
+            "disk",
+            self.terminal(
+                self.datum_block(
+                    model_type="part",
+                    applicable=False,
+                    attempted=False,
+                    hide_status="not_applicable",
+                    restore_status="not_applicable",
+                )
+            ),
+        )
+        self.assertEqual(record["datum_display"]["model_type"], "part")
+        self.assertEqual(record["status"], "written")
+
+
+class AssemblyFixture(unittest.TestCase):
+    """The assembly case drives the public entry points and records evidence.
+
+    A scripted client stands in for the MCP server; nothing connects to Creo.
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="t07_asmfix_")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.image = self.root / "output" / "preview.jpg"
+        self.image.parent.mkdir(parents=True)
+        self.image.write_bytes(b"\xff\xd8\xff assembly preview bytes")
+        self.client = FakeAssemblyClient(self.image)
+        self.acceptance = driver.Acceptance(
+            client=self.client,
+            output=self.root / "report.json",
+            images=self.root / "images",
+            run_id="20261101T120000_ab12cd34",
+        )
+
+    def test_the_assembly_case_uses_the_assembly_entry_point(self):
+        import asyncio
+
+        created = asyncio.run(self.acceptance.assembly_case())
+        self.assertEqual(created["status"], "succeeded")
+        self.assertEqual(created["model_id"], "m" * 32)
+        names = [name for name, _ in self.client.calls]
+        self.assertEqual(names[0], "creo_new_assembly")
+        self.assertEqual(
+            self.acceptance.report["assembly_model"]["created_with"], "creo_new_assembly"
+        )
+
+    def test_the_assembly_preview_carries_the_occlusion_evidence(self):
+        import asyncio
+
+        terminal = asyncio.run(self.acceptance.plan(driver.assembly_plan("a" * 32), "m" * 32, 1))
+        record = self.acceptance.check_preview("assembly_components", terminal, expect_datums=True)
+        self.assertEqual(record["datum_display"]["model_type"], "assembly")
+        self.assertEqual(record["datum_display"]["restore_status"], "restored")
+        self.assertFalse(record["datum_display"]["config_file_written"])
+
+
+class FakeAssemblyClient(FakeClient):
+    """FakeClient plus the assembly entry point and a datum_display receipt."""
+
+    def datum_display(self) -> dict:
+        return {
+            "model_type": "assembly",
+            "type_query_code": 0,
+            "applicable": True,
+            "attempted": True,
+            "hide_status": "hidden",
+            "restore_status": "restored",
+            "options": [
+                {
+                    "name": "DATUM_DISPLAY",
+                    "get_code": 0,
+                    "hide_code": 0,
+                    "restore_code": 0,
+                    "previous_value": "yes",
+                    "hidden": True,
+                    "restored": True,
+                }
+            ],
+            "config_file_written": False,
+        }
+
+    async def call_tool(self, name: str, args: dict):
+        if name == "creo_new_assembly":
+            self.calls.append((name, args))
+            return FakeToolResult({"job_id": "j" * 32, "model_id": "m" * 32, "revision": 1})
+        result = await super().call_tool(name, args)
+        if name == "creo_get_job":
+            preview = result.structured_content["result"]["preview"]
+            preview["datum_display"] = self.datum_display()
+        return result
+
+
 if __name__ == "__main__":
     unittest.main()

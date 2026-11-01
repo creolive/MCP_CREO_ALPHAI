@@ -18,6 +18,7 @@ from typing import Any
 EXECUTION_STATUSES = ("succeeded", "failed", "not_executed", "unknown")
 EFFECT_STATUSES = ("committed", "rolled_back", "no_effect", "unknown")
 
+<<<<<<< HEAD
 #: BUG-097 L2: the native executor caps the element/section error samples; the
 #: projection re-applies the same bound defensively and keeps totals visible.
 FEATURE_ERROR_SAMPLE_LIMIT = 20
@@ -143,6 +144,171 @@ def annotate_feature_errors(result: dict[str, Any]) -> dict[str, Any]:
                     operation.get("feature_errors")
                 )
     return result
+=======
+# ---------------------------------------------------------------------------
+# FEAT-008 / BUG-088 (Q13): one bounded-summary contract for compact results.
+# ---------------------------------------------------------------------------
+
+#: Sample cap shared with the existing diagnostics contract (Q02
+#: ``geometry_deviation`` and Q06 ``feature_errors`` both cap samples at 20).
+SAMPLE_LIMIT = 20
+
+#: Status fields kept on every compact operation record. The budget trim in
+#: ``enforce_compact_budget`` never removes them, so a failure keeps its
+#: reason beside the terminal state.
+PROTECTED_OPERATION_KEYS = (
+    "op",
+    "index",
+    "label",
+    "succeeded",
+    "execution_status",
+    "effect_status",
+    "unchanged",
+    "message",
+)
+
+#: Failure diagnostics kept in full on the failed record itself.
+FAILED_EVIDENCE_KEYS = ("feature_errors", "failed_stage", "failed_toolkit_call")
+
+
+def bounded_entries(items: list, *, limit: int = SAMPLE_LIMIT) -> dict[str, Any]:
+    """Project a list as the unified ``{total, truncated, sample}`` summary."""
+    return {
+        "total": len(items),
+        "truncated": len(items) > limit,
+        "sample": list(items[:limit]),
+    }
+
+
+def _bounded_block(block: dict[str, Any], limit: int) -> dict[str, Any]:
+    """Re-cap an existing diagnostics block without inventing missing facts.
+
+    The producer's ``total`` is preserved; ``truncated`` only ever turns true,
+    and a missing total stays missing when the producer never reported one.
+    """
+    out = dict(block)
+    raw = block.get("sample")
+    if isinstance(raw, list) and len(raw) > limit:
+        out["sample"] = list(raw[:limit])
+        out["truncated"] = True
+    return out
+
+
+def bounded_summary(value: Any, *, limit: int = SAMPLE_LIMIT) -> Any:
+    """Project any compact value through the shared bounded-summary contract.
+
+    - lists longer than ``limit`` become ``{total, truncated, sample}`` blocks;
+    - dicts already carrying a ``sample`` list (``geometry_deviation``,
+      ``feature_errors``, ``failed_model_cleanup`` detail and future
+      color/surface receipts) keep their shape and are only re-capped
+      defensively;
+    - other containers get the same treatment for nested lists;
+    - scalars and lists at or below the limit pass through unchanged, so
+      existing compact shapes stay byte-identical until a sample overflows.
+
+    Failure reasons, revision, rollback and save/reload evidence are scalars
+    and are never touched here.
+    """
+    if isinstance(value, list):
+        return bounded_entries(value, limit=limit) if len(value) > limit else list(value)
+    if isinstance(value, dict):
+        if isinstance(value.get("sample"), list):
+            return _bounded_block(value, limit)
+        return {key: bounded_summary(item, limit=limit) for key, item in value.items()}
+    return value
+
+
+def _execution_counts(operations: list) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for operation in operations:
+        status = (
+            str(operation.get("execution_status")) if isinstance(operation, dict) else "unknown"
+        )
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _status_core(record: dict[str, Any], *, failed: bool) -> dict[str, Any]:
+    keys = PROTECTED_OPERATION_KEYS + (FAILED_EVIDENCE_KEYS if failed else ())
+    core = {key: record[key] for key in keys if key in record}
+    core["detail_truncated"] = True
+    return core
+
+
+def enforce_compact_budget(summary: dict[str, Any], *, budget: int | None = None) -> dict[str, Any]:
+    """Bound one compact job summary to the shared response budget.
+
+    A summary that already fits is returned untouched. Over budget the
+    optional detail is removed in stages and every cut carries its markers:
+
+    1. the operation records are capped at ``SAMPLE_LIMIT`` plus the failed
+       record (``operations_total`` / ``operations_truncated`` /
+       ``operations_status_counts`` record the population);
+    2. optional detail fields are dropped from the kept records, the failed
+       record last (``detail_truncated`` marks each stripped record).
+
+    Failure reasons, revision, rollback and save/reload evidence are never
+    cut. If that evidence alone still exceeds the budget the summary reports
+    the real sizes in ``result_budget`` instead of hiding it.
+    """
+    from creo_mechdog.model_queries import RESPONSE_BUDGET, serialized_size
+
+    limit = RESPONSE_BUDGET if budget is None else budget
+    if serialized_size(summary) <= limit:
+        return summary
+    result = summary.get("result")
+    operations = result.get("operations") if isinstance(result, dict) else None
+    if not isinstance(operations, list) or not operations:
+        # Everything list-shaped is already sample-bounded; whatever is left
+        # is protected evidence or a single oversized block. Report honestly.
+        if isinstance(result, dict):
+            result["result_budget"] = {
+                "budget_bytes": limit,
+                "serialized_bytes": serialized_size(summary),
+                "exceeded": True,
+                "note": (
+                    "protected failure/rollback/save evidence or one oversized block "
+                    "kept in full; use detail=full sections for the rest"
+                ),
+            }
+        return summary
+    failed_index = result.get("failed_operation_index")
+    failed_index = failed_index if isinstance(failed_index, int) else None
+    if failed_index is not None and not 0 <= failed_index < len(operations):
+        failed_index = None
+    # Stage 1: cap the detailed records at SAMPLE_LIMIT plus the failed record.
+    keep = list(operations[:SAMPLE_LIMIT])
+    if failed_index is not None and failed_index >= SAMPLE_LIMIT:
+        keep.append(operations[failed_index])
+    result["operations_total"] = len(operations)
+    result["operations_truncated"] = len(keep) < len(operations)
+    result["operations_status_counts"] = _execution_counts(operations)
+    result["operations"] = keep
+    if serialized_size(summary) <= limit:
+        return summary
+    # Stage 2: drop optional detail from the kept records, failed record last.
+    for position in range(len(keep) - 1, -1, -1):
+        record = keep[position]
+        if not isinstance(record, dict):
+            continue
+        if all(key in PROTECTED_OPERATION_KEYS for key in record):
+            continue
+        is_failed = failed_index is not None and operations[failed_index] is record
+        keep[position] = _status_core(record, failed=is_failed)
+        if serialized_size(summary) <= limit:
+            return summary
+    # Stage 3: protected evidence alone exceeds the budget. Keep it whole.
+    result["result_budget"] = {
+        "budget_bytes": limit,
+        "serialized_bytes": serialized_size(summary),
+        "exceeded": True,
+        "note": (
+            "protected failure/rollback/save evidence kept in full; "
+            "use detail=full sections for the rest"
+        ),
+    }
+    return summary
+>>>>>>> codex/q13-result-budget
 
 
 def _execution_status(op: dict[str, Any], job_status: str, failed_index: int | None) -> str:
