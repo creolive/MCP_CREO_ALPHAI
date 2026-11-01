@@ -1,0 +1,34 @@
+{
+  "description": "FEAT-052：给 MCP 受管的单层装配按零件族上色。本例使用显式族表 families 与色板 palette：families 的键是族名（沿用项目标签规范，小写字母开头、仅小写字母/数字/下划线、最多 28 字符），值是该族的组件标签或特征 ID 列表；palette 的键与族名一一对应，值是 [r,g,b] 三个 0..1 的有限数值（拒绝布尔值），写入时色板必须完整匹配所有族，族表必须无重复并完整覆盖组件。省略 families 时按组件绑定中唯一的 source_model_id 自动分族，此时 palette 的键改为该来源 ID。预览（dry_run=true）可省略色板，只返回分组、计数与未匹配项，不连接 Toolkit、不创建作业、不推进 revision；执行走现有作业通道，始终保存，成功后 revision 加一。颜色写在装配组件层，源零件文件字节不变。计划通道另提供 recolor_assembly 操作供 creo_execute_plan 使用，只选择操作前已存在的组件且不接受预览参数。",
+  "preview_request": {
+    "model_id": "<受管单层装配 model_id>",
+    "expected_revision": "<当前装配 revision>",
+    "dry_run": true,
+    "families": {
+      "housing_family": ["housing_base", "housing_cover"],
+      "gear_family": ["gear_a", "gear_b"],
+      "shaft_family": ["shaft_main"]
+    }
+  },
+  "execute_request": {
+    "model_id": "<受管单层装配 model_id>",
+    "expected_revision": "<当前装配 revision>",
+    "families": {
+      "housing_family": ["housing_base", "housing_cover"],
+      "gear_family": ["gear_a", "gear_b"],
+      "shaft_family": ["shaft_main"]
+    },
+    "palette": {
+      "housing_family": [0.7, 0.7, 0.75],
+      "gear_family": [0.9, 0.6, 0.1],
+      "shaft_family": [0.2, 0.4, 0.8]
+    }
+  },
+  "expect": {
+    "preview": "返回各族的组件分组、每族计数与未匹配项；无 Toolkit 调用、无作业创建、revision 不变；分页单页不超过 32 KiB，模型或请求内容变更后旧游标失效",
+    "job": "返回 job_id/model_id，用 creo_get_job 轮询到终态；status succeeded 且 result.saved_file_reloaded_and_verified 为 true；revision 增加一次",
+    "readback": "设置后逐组件读回颜色，保存并擦除重载后再次读回，RGB 绝对误差不超过 1e-6；组件身份、位置、约束与几何不变；源零件文件字节不变",
+    "failure": "族表重复、遗漏组件、非法 RGB、过期 revision、非装配或缺件模型被拒绝；写入中途失败沿用检查点回滚并核对恢复后的外观；通道忙时立即拒绝，不排队不重试",
+    "scope": "仅 MCP 受管单层装配；独立零件、面级、嵌套装配与外部装配不在此版"
+  }
+}

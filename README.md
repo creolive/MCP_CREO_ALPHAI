@@ -4,7 +4,7 @@
 
 本地 Windows MCP 服务，按需启动或连接 Creo Parametric 9 / 10 / 12，通过官方 C/C++ Toolkit 创建、查询和修改**原生参数化特征**。当前开发与发布按本机 Creo 12.4.0.0 的改动范围验收；Creo 10 不再要求独立复测。Creo 9 与 Toolkit 9 已纳入支持／要求范围，编译探测修复已实现，但本机无 Creo 9 SDK，实机编译与建模运行时均未验收。各环境已测和未测范围见[兼容矩阵](docs/COMPATIBILITY.md)。典型建模流程为：新建零件 → 草图 → 拉伸／旋转 → 切除／孔 → 后续特征；底板接口保留为快捷工具。
 
-当前注册 **94 个工具**，实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
+当前开发分支登记 **95 个工具**（含 FEAT-052 新增的 `creo_recolor_assembly`，该工具随本条目的实现落地；已发布的 0.10.1 仍为 94 个），实际可见清单以 `creo_capabilities` 为准。接口覆盖常见实体特征、磁盘模型打开、受管副本接管、会话枚举、**装配只读检查与回放规划**、**装配按零件族上色**、受控恢复、**显式世代回收**及直接混合，**尚未完成所有 Creo 操作和参数组合的覆盖**。禁用操作从工具列表隐藏，并在提交前拒绝。服务使用官方 Python MCP SDK 2.3.0、stdio 传输，采用 [MIT 许可证](LICENSE)。使用者在自己的 Windows 电脑上安装依赖并编译 Toolkit 执行器，由本地 AI 客户端调用。
 
 当前正式版 **0.10.1**（PATCH，[DEV-053](docs/work-items/DEV-053.md) 0.9.0 反馈对账批）：基准面非法参数不再静默丢参——`angle` 携带非零 `offset`、缺 `kind`、非法 angle 轴类型均在入队前明确拒绝（原生兜底），`angle=0` 属显式角度模式；`creo_capabilities` 概览的深度/方向枚举拆分为 `extrude_depth_types`/`extrude_directions`/`extrude_through_all_modes` 三键并移除旧 `extrude_depths` 键（旧键内容与 `depth_type` 契约不符）；stdio 服务在客户端消失后有界退出（宽限 1.5 s、兜底 2 s），不杀已受理任务；种子安装与源码打包新增受信摘要双重闸门（`tools/package.py` 必填 `--seed-archive`）。本机 Creo 12.4.0.0 实机（run `post0100_20261031T234309_rel0101`）：五非法编辑反例（4 例 schema 拒绝无作业、1 例原生失败回滚，拒绝后同源体积与 revision 逐位不变）、恢复编辑、基准面 ±54°/偏移/独立工具与 plan 双入口正反例、圆角/倒角/拔模九例（含批中途失败回滚）、装配回放与 T12 官方示例回归全部通过；公开工具仍为 **94 个**。升级请使用 0.10.1 种子包，并阅读[0.10.1 版本说明](docs/RELEASE_NOTES_0.10.1.md)。上一版 **0.10.0**：`creo_round` / `creo_chamfer` / `creo_draft` 结果新增逐操作体积差（`volume_before_mm3`/`volume_after_mm3`/`material_delta_mm3`/`material_measurement`）与 `draft_geometry`/`reference_application` 回报；草图结果发布 `entity_ids`，`revolve_axis` 回显可与所画中心线对账；折边附着边端部邻接既有折弯时创建前拒绝（`failure_reason=adjacent_bend_ends`，四壁仍不支持）；盲孔 `depth` 改为钻尖（tip）口径——旧版同输入建出的 custom 盲孔更深（到肩 + 钻尖超出），升级后重放同请求结果不再相同，详见[版本说明](docs/RELEASE_NOTES_0.10.0.md)。公开工具仍为 **94 个**。本机 Creo 12.4.0.0 实机：圆角/倒角/拔模七夹具、沉孔/沉头与盲孔六例、组件身份、中心线计数、邻接拒绝边界与预览图像复核均通过；Creo 9/10 未验，WorkBuddy 未执行。升级请使用 0.10.0 种子包，并阅读[0.10.0 版本说明](docs/RELEASE_NOTES_0.10.0.md)及[发布记录](docs/validation/RELEASE-0.10.0.md)。0.8.5 及更早的折边方向、钣金 add 边界与历史证据见 [0.8.5 版本说明](docs/RELEASE_NOTES_0.8.5.md)及[发布记录](docs/validation/RELEASE-0.8.5.md)。
 
@@ -83,6 +83,7 @@ MCP 不会代为注册、加载 DLL 或修改 Creo 安全策略。完整流程�
 | 镜像、扫掠、拔模 | `creo_mirror`：整体/几何镜像；`creo_sweep`：恒定截面及命名截面尺寸；`creo_draft`：恒角、不分割拔模 |
 | 钣金 | `creo_new_sheetmetal`、`creo_sheetmetal_wall`、`creo_sheetmetal_flange`、`creo_sheetmetal_unbend`、`creo_sheetmetal_bend_back`、`creo_sheetmetal_flat_pattern`：首壁参数建模前校验、可选 `relief`（默认 `none`）、折边、展开、折弯回去和平展；钣金建模先用 `creo_new_sheetmetal` 并等其终态，`creo_execute_plan` 无 `model_id` 默认新建普通 part、不隐式转换钣金；unbend/bend_back/flat_pattern 的 `fixed_surface` 是裸面引用（如 `{"kind":"surface","id":N}`，取自巡检），能否固定由原生执行判定；首壁五组已在 0.8.4 实机通过；0.8.5 两道折边几何与方向通过；0.10.0 起附着边端部邻接既有折弯时创建前拒绝（`failure_reason=adjacent_bend_ends`，revision 不变）；四壁仍不支持、relief 去料未证实；钣金体并入式实体 add 明确拒绝。**0.9.0 起新增** `creo_sheetmetal_flange` 的可选 `end_trim_mm`：模型单位的正数（`>0`，上限 100000，布尔值拒绝），把两侧链端各缩短该长度，缺省时元素树与旧行为完全一致；**两轮实机实测均为 `trim_ignored`（修剪未生效），链端 setback／截面起算两种读法都未成立，语义未定，属诊断用途**，先用自由壁探针实测再依赖修剪几何 |
 | 装配 | `creo_new_assembly`、`creo_assemble_component`、`creo_component_placement`、`creo_component_constraints`、`creo_remove_component`、`creo_list_components`：组件版本快照、定位（XYZ Euler 按 X→Y→Z 逐次应用，或互斥的嵌套 3×3 `rotation_matrix`；行向量与毫米平移约定见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)）、约束、删除和查询；含组件操作的作业附 `component_changes` 有界变更摘要（committed/rolled_back/unknown_outcome），`list_components` 约束保留数字 `type` 并附 `type_name` 符号；单作业插入多个组件与官方重建管线见 [ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)；矩阵放置子项已在本机 Creo 12.4 实机通过（0.6.0 交付，38 父作业含故意失败回滚），显式源件更新与嵌套装配仍开放，见 [FEAT-012](docs/work-items/FEAT-012.md)。`creo_list_components` 的每条组件记录另带业务身份字段 `identity`/`labels`/`label`/`label_state`/`source_model_id`/`source_revision`/`bindings`，顶层带 `deleted_identities` 与 `identity_key`；关联键是**模型身份 + feature_id**，label 只是业务名，删除重插后旧标签不误指新组件 |
+| 装配上色 | `creo_recolor_assembly`：给 **MCP 受管的单层装配**按零件族上色。省略 `families` 时按组件绑定中唯一的 `source_model_id` 自动分族，也支持显式族表 `families={族名:[组件标签或特征ID]}`；`palette` 给出各族 RGB（三个 `0..1` 有限数值，拒绝布尔值），写入时须完整匹配所有族。`dry_run=true` 为分组预览：不连接 Toolkit、不创建作业、不推进 revision，分页返回分组、计数与未匹配项且单页不超过 32 KiB；执行走现有作业通道（`creo_get_job` 轮询），始终保存，成功后 revision 加一。颜色写在**装配组件层**，源零件文件字节不变。同步提供 `recolor_assembly` 计划操作供 `creo_execute_plan` 使用（只选择操作前已存在的组件，不接受预览参数）。**边界**：仅 MCP 受管单层装配；独立零件、面级、嵌套装配与外部装配不在此版；**实机验收未做**，见 [FEAT-052](docs/work-items/FEAT-052.md) |
 | 新增曲面与实体 | `creo_surface_fill`、`creo_thicken`、`creo_solidify`、`creo_boolean_bodies`、`creo_rib` |
 | 新增基准 | `creo_datum_csys`、`creo_datum_points` |
 | 原生工程图 | `creo_new_drawing`；图纸、一般/投影视图、尺寸显示、注释、表格及编辑/删除；原生 DRW 与 PDF 输出 |
@@ -153,7 +154,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 
 随后 `creo_set_sketch_dimensions` 使用 `sketch:"profile", values:{"diameter":24}` 修改直径；拉伸实体随之更新。`creo_set_dimensions` 接收查询结果中的模型尺寸 ID，例如 `values:[{"id":18,"value":40}]`；实际 ID 由 Creo 生成。
 
-完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划；装配重建管线与单作业多组件示例见 `examples/assembly_rebuild_pipeline.json` 与 `examples/assembly_multicomponent_plan.json`（说明见 [docs/ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)）。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
+完整案例在 `examples/`；0.21 新增镜像、扫掠、拔模和钣金首壁计划；装配重建管线与单作业多组件示例见 `examples/assembly_rebuild_pipeline.json` 与 `examples/assembly_multicomponent_plan.json`（说明见 [docs/ASSEMBLY_REBUILD.md](docs/ASSEMBLY_REBUILD.md)）；装配按零件族上色的显式族表与色板示例见 `examples/assembly_recolor_families.json`（说明见 [FEAT-052](docs/work-items/FEAT-052.md)）。装配调用步骤见 [docs/MODELING_0.21.md](docs/MODELING_0.21.md)。尺寸阵列先建立引导孔，再查询其定位尺寸 ID，调用 `creo_dimension_pattern`，指定包含引导成员的总数量和每次增量。
 
 ### 能力发现示例
 
@@ -307,6 +308,7 @@ Toolkit 操作共用一个通道，提交时忙碌会立即拒绝；响应保持
 - 普通混合支持平行 XY 截面的种子复用及直接创建/追加。随包九个种子覆盖 2/3/4/6 截面的直线和平滑，以及 5 截面平滑；其他数量需显式兼容种子或直接创建并本机验证。直接混合仅支持受管草图、Z 严格递增和默认实体增材。不支持自动增减种子截面、转换连接模式、非平行截面或端点相切/曲率控制。数量上限不代表每种数量都已实测。新零件整体可用原生定位特征移动或旋转。
 - 钣金首壁 T03 五组已在本机验证；0.8.5 在真正的 1 mm 板上，两道折边为真实 90° 折弯（各 +18 025.29 mm³、Z 增长 79 mm、保存重载通过，`flip=false` 默认从选中面向外），但**四壁仍只完成 2/4**：第三道 `f_ny` 创建后回滚、第四道未执行，`relief` 目前只确认「请求被接受并回显」，尚无可观测几何去料。板厚同步、释放有效场景与第三壁对照已在开发分支离线交付但**未实机验收**。其他钣金能力及历史验证范围见版本说明和能力文档。镜像、扫掠、拔模、装配、筋和工程图各自具有明确范围；复杂自由曲面及专业模块仍未完整封装。
 - 装配插入源模型的版本快照，源模型后续修改不更新组件；子装配复制尚未开放。
+- 装配按零件族上色（`creo_recolor_assembly`）首版仅覆盖 **MCP 受管的单层装配**：独立零件、面级、嵌套装配与外部装配不在此版；颜色写在装配组件层，源零件文件字节不变；该能力在开发分支离线开发中，**实机验收未做**，见 [FEAT-052](docs/work-items/FEAT-052.md)。
 - `creo_create_feature_tree` 可扩展符合本机 SDK 的特征结构，但无法保证所有 PTC 特征类型和选项均可创建。
 - 不承诺任意文字描述都自动成功。AI 需要规划有效的轮廓、基准、尺寸和特征顺序；无效几何由 Creo 返回错误。
 
