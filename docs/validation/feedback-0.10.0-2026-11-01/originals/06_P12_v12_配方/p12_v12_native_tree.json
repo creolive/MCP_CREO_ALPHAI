@@ -1,0 +1,6040 @@
+{
+ "meta": {
+  "source": "TXT v1.2",
+  "route": "per-strip triangle prisms (A01 allowed)",
+  "total_thickness": 9.87008714331235,
+  "strips": 48
+ },
+ "features": [
+  {
+   "seq": 1,
+   "op": "sketch",
+   "label": "hubsk",
+   "plane": "YZ",
+   "offset": -75,
+   "entities": [
+    {
+     "type": "circle",
+     "name": "hub",
+     "center": [
+      0,
+      0
+     ],
+     "radius": 50
+    }
+   ]
+  },
+  {
+   "seq": 2,
+   "op": "extrude",
+   "label": "ex_hub",
+   "sketch": "hubsk",
+   "depth": 150,
+   "direction": "positive"
+  },
+  {
+   "seq": 3,
+   "op": "datum_points",
+   "label": "dp00a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -95.191114,
+      40.0,
+      -88.395141
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      95.191114,
+      40.0,
+      88.395141
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      94.701973,
+      50.416667,
+      89.27114
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 4,
+   "op": "datum_plane",
+   "label": "pl00a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 5,
+   "op": "sketch",
+   "label": "sk00a",
+   "plane": {
+    "datum_plane_label": "pl00a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 6,
+   "op": "extrude",
+   "label": "ex00a",
+   "sketch": "sk00a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 7,
+   "op": "datum_points",
+   "label": "dp00b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -95.191114,
+      40.0,
+      -88.395141
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      94.701973,
+      50.416667,
+      89.27114
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -94.701973,
+      50.416667,
+      -89.27114
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 8,
+   "op": "datum_plane",
+   "label": "pl00b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 9,
+   "op": "sketch",
+   "label": "sk00b",
+   "plane": {
+    "datum_plane_label": "pl00b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 10,
+   "op": "extrude",
+   "label": "ex00b",
+   "sketch": "sk00b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 11,
+   "op": "datum_points",
+   "label": "dp01a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -94.701973,
+      50.416667,
+      -89.27114
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      94.701973,
+      50.416667,
+      89.27114
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      94.207719,
+      60.833333,
+      90.150937
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 12,
+   "op": "datum_plane",
+   "label": "pl01a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 13,
+   "op": "sketch",
+   "label": "sk01a",
+   "plane": {
+    "datum_plane_label": "pl01a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 14,
+   "op": "extrude",
+   "label": "ex01a",
+   "sketch": "sk01a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 15,
+   "op": "datum_points",
+   "label": "dp01b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -94.701973,
+      50.416667,
+      -89.27114
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      94.207719,
+      60.833333,
+      90.150937
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -94.207719,
+      60.833333,
+      -90.150937
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 16,
+   "op": "datum_plane",
+   "label": "pl01b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 17,
+   "op": "sketch",
+   "label": "sk01b",
+   "plane": {
+    "datum_plane_label": "pl01b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 18,
+   "op": "extrude",
+   "label": "ex01b",
+   "sketch": "sk01b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 19,
+   "op": "datum_points",
+   "label": "dp02a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -94.207719,
+      60.833333,
+      -90.150937
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      94.207719,
+      60.833333,
+      90.150937
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      93.70835,
+      71.25,
+      91.034532
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 20,
+   "op": "datum_plane",
+   "label": "pl02a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 21,
+   "op": "sketch",
+   "label": "sk02a",
+   "plane": {
+    "datum_plane_label": "pl02a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 22,
+   "op": "extrude",
+   "label": "ex02a",
+   "sketch": "sk02a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 23,
+   "op": "datum_points",
+   "label": "dp02b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -94.207719,
+      60.833333,
+      -90.150937
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      93.70835,
+      71.25,
+      91.034532
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -93.70835,
+      71.25,
+      -91.034532
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 24,
+   "op": "datum_plane",
+   "label": "pl02b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 25,
+   "op": "sketch",
+   "label": "sk02b",
+   "plane": {
+    "datum_plane_label": "pl02b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 26,
+   "op": "extrude",
+   "label": "ex02b",
+   "sketch": "sk02b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 27,
+   "op": "datum_points",
+   "label": "dp03a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -93.70835,
+      71.25,
+      -91.034532
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      93.70835,
+      71.25,
+      91.034532
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      93.203867,
+      81.666667,
+      91.921925
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 28,
+   "op": "datum_plane",
+   "label": "pl03a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 29,
+   "op": "sketch",
+   "label": "sk03a",
+   "plane": {
+    "datum_plane_label": "pl03a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 30,
+   "op": "extrude",
+   "label": "ex03a",
+   "sketch": "sk03a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 31,
+   "op": "datum_points",
+   "label": "dp03b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -93.70835,
+      71.25,
+      -91.034532
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      93.203867,
+      81.666667,
+      91.921925
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -93.203867,
+      81.666667,
+      -91.921925
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 32,
+   "op": "datum_plane",
+   "label": "pl03b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 33,
+   "op": "sketch",
+   "label": "sk03b",
+   "plane": {
+    "datum_plane_label": "pl03b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 34,
+   "op": "extrude",
+   "label": "ex03b",
+   "sketch": "sk03b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 35,
+   "op": "datum_points",
+   "label": "dp04a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -93.203867,
+      81.666667,
+      -91.921925
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      93.203867,
+      81.666667,
+      91.921925
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      92.694271,
+      92.083333,
+      92.813116
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 36,
+   "op": "datum_plane",
+   "label": "pl04a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 37,
+   "op": "sketch",
+   "label": "sk04a",
+   "plane": {
+    "datum_plane_label": "pl04a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 38,
+   "op": "extrude",
+   "label": "ex04a",
+   "sketch": "sk04a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 39,
+   "op": "datum_points",
+   "label": "dp04b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -93.203867,
+      81.666667,
+      -91.921925
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      92.694271,
+      92.083333,
+      92.813116
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -92.694271,
+      92.083333,
+      -92.813116
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 40,
+   "op": "datum_plane",
+   "label": "pl04b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 41,
+   "op": "sketch",
+   "label": "sk04b",
+   "plane": {
+    "datum_plane_label": "pl04b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 42,
+   "op": "extrude",
+   "label": "ex04b",
+   "sketch": "sk04b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 43,
+   "op": "datum_points",
+   "label": "dp05a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -92.694271,
+      92.083333,
+      -92.813116
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      92.694271,
+      92.083333,
+      92.813116
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      92.179561,
+      102.5,
+      93.708104
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 44,
+   "op": "datum_plane",
+   "label": "pl05a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 45,
+   "op": "sketch",
+   "label": "sk05a",
+   "plane": {
+    "datum_plane_label": "pl05a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 46,
+   "op": "extrude",
+   "label": "ex05a",
+   "sketch": "sk05a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 47,
+   "op": "datum_points",
+   "label": "dp05b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -92.694271,
+      92.083333,
+      -92.813116
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      92.179561,
+      102.5,
+      93.708104
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -92.179561,
+      102.5,
+      -93.708104
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 48,
+   "op": "datum_plane",
+   "label": "pl05b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 49,
+   "op": "sketch",
+   "label": "sk05b",
+   "plane": {
+    "datum_plane_label": "pl05b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 50,
+   "op": "extrude",
+   "label": "ex05b",
+   "sketch": "sk05b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 51,
+   "op": "datum_points",
+   "label": "dp06a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -92.179561,
+      102.5,
+      -93.708104
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      92.179561,
+      102.5,
+      93.708104
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      91.659736,
+      112.916667,
+      94.606891
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 52,
+   "op": "datum_plane",
+   "label": "pl06a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 53,
+   "op": "sketch",
+   "label": "sk06a",
+   "plane": {
+    "datum_plane_label": "pl06a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 54,
+   "op": "extrude",
+   "label": "ex06a",
+   "sketch": "sk06a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 55,
+   "op": "datum_points",
+   "label": "dp06b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -92.179561,
+      102.5,
+      -93.708104
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      91.659736,
+      112.916667,
+      94.606891
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -91.659736,
+      112.916667,
+      -94.606891
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 56,
+   "op": "datum_plane",
+   "label": "pl06b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 57,
+   "op": "sketch",
+   "label": "sk06b",
+   "plane": {
+    "datum_plane_label": "pl06b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 58,
+   "op": "extrude",
+   "label": "ex06b",
+   "sketch": "sk06b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 59,
+   "op": "datum_points",
+   "label": "dp07a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -91.659736,
+      112.916667,
+      -94.606891
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      91.659736,
+      112.916667,
+      94.606891
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      91.134798,
+      123.333333,
+      95.509475
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 60,
+   "op": "datum_plane",
+   "label": "pl07a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 61,
+   "op": "sketch",
+   "label": "sk07a",
+   "plane": {
+    "datum_plane_label": "pl07a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 62,
+   "op": "extrude",
+   "label": "ex07a",
+   "sketch": "sk07a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 63,
+   "op": "datum_points",
+   "label": "dp07b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -91.659736,
+      112.916667,
+      -94.606891
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      91.134798,
+      123.333333,
+      95.509475
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -91.134798,
+      123.333333,
+      -95.509475
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 64,
+   "op": "datum_plane",
+   "label": "pl07b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 65,
+   "op": "sketch",
+   "label": "sk07b",
+   "plane": {
+    "datum_plane_label": "pl07b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 66,
+   "op": "extrude",
+   "label": "ex07b",
+   "sketch": "sk07b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 67,
+   "op": "datum_points",
+   "label": "dp08a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -91.134798,
+      123.333333,
+      -95.509475
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      91.134798,
+      123.333333,
+      95.509475
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      90.604746,
+      133.75,
+      96.415858
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 68,
+   "op": "datum_plane",
+   "label": "pl08a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 69,
+   "op": "sketch",
+   "label": "sk08a",
+   "plane": {
+    "datum_plane_label": "pl08a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 70,
+   "op": "extrude",
+   "label": "ex08a",
+   "sketch": "sk08a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 71,
+   "op": "datum_points",
+   "label": "dp08b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -91.134798,
+      123.333333,
+      -95.509475
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      90.604746,
+      133.75,
+      96.415858
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -90.604746,
+      133.75,
+      -96.415858
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 72,
+   "op": "datum_plane",
+   "label": "pl08b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 73,
+   "op": "sketch",
+   "label": "sk08b",
+   "plane": {
+    "datum_plane_label": "pl08b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 74,
+   "op": "extrude",
+   "label": "ex08b",
+   "sketch": "sk08b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 75,
+   "op": "datum_points",
+   "label": "dp09a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -90.604746,
+      133.75,
+      -96.415858
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      90.604746,
+      133.75,
+      96.415858
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      90.06958,
+      144.166667,
+      97.326038
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 76,
+   "op": "datum_plane",
+   "label": "pl09a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 77,
+   "op": "sketch",
+   "label": "sk09a",
+   "plane": {
+    "datum_plane_label": "pl09a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 78,
+   "op": "extrude",
+   "label": "ex09a",
+   "sketch": "sk09a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 79,
+   "op": "datum_points",
+   "label": "dp09b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -90.604746,
+      133.75,
+      -96.415858
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      90.06958,
+      144.166667,
+      97.326038
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -90.06958,
+      144.166667,
+      -97.326038
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 80,
+   "op": "datum_plane",
+   "label": "pl09b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 81,
+   "op": "sketch",
+   "label": "sk09b",
+   "plane": {
+    "datum_plane_label": "pl09b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 82,
+   "op": "extrude",
+   "label": "ex09b",
+   "sketch": "sk09b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 83,
+   "op": "datum_points",
+   "label": "dp10a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -90.06958,
+      144.166667,
+      -97.326038
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      90.06958,
+      144.166667,
+      97.326038
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      89.5293,
+      154.583333,
+      98.240017
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 84,
+   "op": "datum_plane",
+   "label": "pl10a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 85,
+   "op": "sketch",
+   "label": "sk10a",
+   "plane": {
+    "datum_plane_label": "pl10a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 86,
+   "op": "extrude",
+   "label": "ex10a",
+   "sketch": "sk10a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 87,
+   "op": "datum_points",
+   "label": "dp10b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -90.06958,
+      144.166667,
+      -97.326038
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      89.5293,
+      154.583333,
+      98.240017
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -89.5293,
+      154.583333,
+      -98.240017
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 88,
+   "op": "datum_plane",
+   "label": "pl10b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 89,
+   "op": "sketch",
+   "label": "sk10b",
+   "plane": {
+    "datum_plane_label": "pl10b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 90,
+   "op": "extrude",
+   "label": "ex10b",
+   "sketch": "sk10b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 91,
+   "op": "datum_points",
+   "label": "dp11a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -89.5293,
+      154.583333,
+      -98.240017
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      89.5293,
+      154.583333,
+      98.240017
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      88.983906,
+      165.0,
+      99.157793
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 92,
+   "op": "datum_plane",
+   "label": "pl11a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 93,
+   "op": "sketch",
+   "label": "sk11a",
+   "plane": {
+    "datum_plane_label": "pl11a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 94,
+   "op": "extrude",
+   "label": "ex11a",
+   "sketch": "sk11a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 95,
+   "op": "datum_points",
+   "label": "dp11b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -89.5293,
+      154.583333,
+      -98.240017
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      88.983906,
+      165.0,
+      99.157793
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -88.983906,
+      165.0,
+      -99.157793
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 96,
+   "op": "datum_plane",
+   "label": "pl11b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 97,
+   "op": "sketch",
+   "label": "sk11b",
+   "plane": {
+    "datum_plane_label": "pl11b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 98,
+   "op": "extrude",
+   "label": "ex11b",
+   "sketch": "sk11b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 99,
+   "op": "datum_points",
+   "label": "dp12a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -88.983906,
+      165.0,
+      -99.157793
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      88.983906,
+      165.0,
+      99.157793
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      88.433398,
+      175.416667,
+      100.079367
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 100,
+   "op": "datum_plane",
+   "label": "pl12a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 101,
+   "op": "sketch",
+   "label": "sk12a",
+   "plane": {
+    "datum_plane_label": "pl12a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 102,
+   "op": "extrude",
+   "label": "ex12a",
+   "sketch": "sk12a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 103,
+   "op": "datum_points",
+   "label": "dp12b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -88.983906,
+      165.0,
+      -99.157793
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      88.433398,
+      175.416667,
+      100.079367
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -88.433398,
+      175.416667,
+      -100.079367
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 104,
+   "op": "datum_plane",
+   "label": "pl12b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 105,
+   "op": "sketch",
+   "label": "sk12b",
+   "plane": {
+    "datum_plane_label": "pl12b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 106,
+   "op": "extrude",
+   "label": "ex12b",
+   "sketch": "sk12b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 107,
+   "op": "datum_points",
+   "label": "dp13a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -88.433398,
+      175.416667,
+      -100.079367
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      88.433398,
+      175.416667,
+      100.079367
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      87.877776,
+      185.833333,
+      101.004739
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 108,
+   "op": "datum_plane",
+   "label": "pl13a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 109,
+   "op": "sketch",
+   "label": "sk13a",
+   "plane": {
+    "datum_plane_label": "pl13a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 110,
+   "op": "extrude",
+   "label": "ex13a",
+   "sketch": "sk13a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 111,
+   "op": "datum_points",
+   "label": "dp13b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -88.433398,
+      175.416667,
+      -100.079367
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      87.877776,
+      185.833333,
+      101.004739
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -87.877776,
+      185.833333,
+      -101.004739
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 112,
+   "op": "datum_plane",
+   "label": "pl13b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 113,
+   "op": "sketch",
+   "label": "sk13b",
+   "plane": {
+    "datum_plane_label": "pl13b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 114,
+   "op": "extrude",
+   "label": "ex13b",
+   "sketch": "sk13b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 115,
+   "op": "datum_points",
+   "label": "dp14a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -87.877776,
+      185.833333,
+      -101.004739
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      87.877776,
+      185.833333,
+      101.004739
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      87.31704,
+      196.25,
+      101.933909
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 116,
+   "op": "datum_plane",
+   "label": "pl14a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 117,
+   "op": "sketch",
+   "label": "sk14a",
+   "plane": {
+    "datum_plane_label": "pl14a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 118,
+   "op": "extrude",
+   "label": "ex14a",
+   "sketch": "sk14a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 119,
+   "op": "datum_points",
+   "label": "dp14b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -87.877776,
+      185.833333,
+      -101.004739
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      87.31704,
+      196.25,
+      101.933909
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -87.31704,
+      196.25,
+      -101.933909
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 120,
+   "op": "datum_plane",
+   "label": "pl14b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 121,
+   "op": "sketch",
+   "label": "sk14b",
+   "plane": {
+    "datum_plane_label": "pl14b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 122,
+   "op": "extrude",
+   "label": "ex14b",
+   "sketch": "sk14b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 123,
+   "op": "datum_points",
+   "label": "dp15a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -87.31704,
+      196.25,
+      -101.933909
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      87.31704,
+      196.25,
+      101.933909
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      86.751191,
+      206.666667,
+      102.866877
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 124,
+   "op": "datum_plane",
+   "label": "pl15a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 125,
+   "op": "sketch",
+   "label": "sk15a",
+   "plane": {
+    "datum_plane_label": "pl15a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 126,
+   "op": "extrude",
+   "label": "ex15a",
+   "sketch": "sk15a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 127,
+   "op": "datum_points",
+   "label": "dp15b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -87.31704,
+      196.25,
+      -101.933909
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      86.751191,
+      206.666667,
+      102.866877
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -86.751191,
+      206.666667,
+      -102.866877
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 128,
+   "op": "datum_plane",
+   "label": "pl15b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 129,
+   "op": "sketch",
+   "label": "sk15b",
+   "plane": {
+    "datum_plane_label": "pl15b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 130,
+   "op": "extrude",
+   "label": "ex15b",
+   "sketch": "sk15b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 131,
+   "op": "datum_points",
+   "label": "dp16a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -86.751191,
+      206.666667,
+      -102.866877
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      86.751191,
+      206.666667,
+      102.866877
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      86.180227,
+      217.083333,
+      103.803643
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 132,
+   "op": "datum_plane",
+   "label": "pl16a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 133,
+   "op": "sketch",
+   "label": "sk16a",
+   "plane": {
+    "datum_plane_label": "pl16a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 134,
+   "op": "extrude",
+   "label": "ex16a",
+   "sketch": "sk16a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 135,
+   "op": "datum_points",
+   "label": "dp16b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -86.751191,
+      206.666667,
+      -102.866877
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      86.180227,
+      217.083333,
+      103.803643
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -86.180227,
+      217.083333,
+      -103.803643
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 136,
+   "op": "datum_plane",
+   "label": "pl16b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 137,
+   "op": "sketch",
+   "label": "sk16b",
+   "plane": {
+    "datum_plane_label": "pl16b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 138,
+   "op": "extrude",
+   "label": "ex16b",
+   "sketch": "sk16b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 139,
+   "op": "datum_points",
+   "label": "dp17a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -86.180227,
+      217.083333,
+      -103.803643
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      86.180227,
+      217.083333,
+      103.803643
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      85.60415,
+      227.5,
+      104.744207
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 140,
+   "op": "datum_plane",
+   "label": "pl17a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 141,
+   "op": "sketch",
+   "label": "sk17a",
+   "plane": {
+    "datum_plane_label": "pl17a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 142,
+   "op": "extrude",
+   "label": "ex17a",
+   "sketch": "sk17a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 143,
+   "op": "datum_points",
+   "label": "dp17b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -86.180227,
+      217.083333,
+      -103.803643
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      85.60415,
+      227.5,
+      104.744207
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -85.60415,
+      227.5,
+      -104.744207
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 144,
+   "op": "datum_plane",
+   "label": "pl17b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 145,
+   "op": "sketch",
+   "label": "sk17b",
+   "plane": {
+    "datum_plane_label": "pl17b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 146,
+   "op": "extrude",
+   "label": "ex17b",
+   "sketch": "sk17b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 147,
+   "op": "datum_points",
+   "label": "dp18a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -85.60415,
+      227.5,
+      -104.744207
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      85.60415,
+      227.5,
+      104.744207
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      85.022958,
+      237.916667,
+      105.688569
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 148,
+   "op": "datum_plane",
+   "label": "pl18a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 149,
+   "op": "sketch",
+   "label": "sk18a",
+   "plane": {
+    "datum_plane_label": "pl18a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 150,
+   "op": "extrude",
+   "label": "ex18a",
+   "sketch": "sk18a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 151,
+   "op": "datum_points",
+   "label": "dp18b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -85.60415,
+      227.5,
+      -104.744207
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      85.022958,
+      237.916667,
+      105.688569
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -85.022958,
+      237.916667,
+      -105.688569
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 152,
+   "op": "datum_plane",
+   "label": "pl18b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 153,
+   "op": "sketch",
+   "label": "sk18b",
+   "plane": {
+    "datum_plane_label": "pl18b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 154,
+   "op": "extrude",
+   "label": "ex18b",
+   "sketch": "sk18b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 155,
+   "op": "datum_points",
+   "label": "dp19a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -85.022958,
+      237.916667,
+      -105.688569
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      85.022958,
+      237.916667,
+      105.688569
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      84.436653,
+      248.333333,
+      106.636729
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 156,
+   "op": "datum_plane",
+   "label": "pl19a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 157,
+   "op": "sketch",
+   "label": "sk19a",
+   "plane": {
+    "datum_plane_label": "pl19a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 158,
+   "op": "extrude",
+   "label": "ex19a",
+   "sketch": "sk19a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 159,
+   "op": "datum_points",
+   "label": "dp19b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -85.022958,
+      237.916667,
+      -105.688569
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      84.436653,
+      248.333333,
+      106.636729
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -84.436653,
+      248.333333,
+      -106.636729
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 160,
+   "op": "datum_plane",
+   "label": "pl19b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 161,
+   "op": "sketch",
+   "label": "sk19b",
+   "plane": {
+    "datum_plane_label": "pl19b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 162,
+   "op": "extrude",
+   "label": "ex19b",
+   "sketch": "sk19b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 163,
+   "op": "datum_points",
+   "label": "dp20a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -84.436653,
+      248.333333,
+      -106.636729
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      84.436653,
+      248.333333,
+      106.636729
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      83.845234,
+      258.75,
+      107.588687
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 164,
+   "op": "datum_plane",
+   "label": "pl20a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 165,
+   "op": "sketch",
+   "label": "sk20a",
+   "plane": {
+    "datum_plane_label": "pl20a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 166,
+   "op": "extrude",
+   "label": "ex20a",
+   "sketch": "sk20a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 167,
+   "op": "datum_points",
+   "label": "dp20b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -84.436653,
+      248.333333,
+      -106.636729
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      83.845234,
+      258.75,
+      107.588687
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -83.845234,
+      258.75,
+      -107.588687
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 168,
+   "op": "datum_plane",
+   "label": "pl20b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 169,
+   "op": "sketch",
+   "label": "sk20b",
+   "plane": {
+    "datum_plane_label": "pl20b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 170,
+   "op": "extrude",
+   "label": "ex20b",
+   "sketch": "sk20b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 171,
+   "op": "datum_points",
+   "label": "dp21a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -83.845234,
+      258.75,
+      -107.588687
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      83.845234,
+      258.75,
+      107.588687
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      83.2487,
+      269.166667,
+      108.544442
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 172,
+   "op": "datum_plane",
+   "label": "pl21a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 173,
+   "op": "sketch",
+   "label": "sk21a",
+   "plane": {
+    "datum_plane_label": "pl21a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 174,
+   "op": "extrude",
+   "label": "ex21a",
+   "sketch": "sk21a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 175,
+   "op": "datum_points",
+   "label": "dp21b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -83.845234,
+      258.75,
+      -107.588687
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      83.2487,
+      269.166667,
+      108.544442
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -83.2487,
+      269.166667,
+      -108.544442
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 176,
+   "op": "datum_plane",
+   "label": "pl21b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 177,
+   "op": "sketch",
+   "label": "sk21b",
+   "plane": {
+    "datum_plane_label": "pl21b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 178,
+   "op": "extrude",
+   "label": "ex21b",
+   "sketch": "sk21b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 179,
+   "op": "datum_points",
+   "label": "dp22a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -83.2487,
+      269.166667,
+      -108.544442
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      83.2487,
+      269.166667,
+      108.544442
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      82.647053,
+      279.583333,
+      109.503996
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 180,
+   "op": "datum_plane",
+   "label": "pl22a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 181,
+   "op": "sketch",
+   "label": "sk22a",
+   "plane": {
+    "datum_plane_label": "pl22a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 182,
+   "op": "extrude",
+   "label": "ex22a",
+   "sketch": "sk22a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 183,
+   "op": "datum_points",
+   "label": "dp22b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -83.2487,
+      269.166667,
+      -108.544442
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      82.647053,
+      279.583333,
+      109.503996
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -82.647053,
+      279.583333,
+      -109.503996
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 184,
+   "op": "datum_plane",
+   "label": "pl22b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 185,
+   "op": "sketch",
+   "label": "sk22b",
+   "plane": {
+    "datum_plane_label": "pl22b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 186,
+   "op": "extrude",
+   "label": "ex22b",
+   "sketch": "sk22b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 187,
+   "op": "datum_points",
+   "label": "dp23a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -82.647053,
+      279.583333,
+      -109.503996
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      82.647053,
+      279.583333,
+      109.503996
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      82.040292,
+      290.0,
+      110.467347
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 188,
+   "op": "datum_plane",
+   "label": "pl23a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 189,
+   "op": "sketch",
+   "label": "sk23a",
+   "plane": {
+    "datum_plane_label": "pl23a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 190,
+   "op": "extrude",
+   "label": "ex23a",
+   "sketch": "sk23a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 191,
+   "op": "datum_points",
+   "label": "dp23b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -82.647053,
+      279.583333,
+      -109.503996
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      82.040292,
+      290.0,
+      110.467347
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -82.040292,
+      290.0,
+      -110.467347
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 192,
+   "op": "datum_plane",
+   "label": "pl23b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 193,
+   "op": "sketch",
+   "label": "sk23b",
+   "plane": {
+    "datum_plane_label": "pl23b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 194,
+   "op": "extrude",
+   "label": "ex23b",
+   "sketch": "sk23b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 195,
+   "op": "datum_points",
+   "label": "dp24a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -82.040292,
+      290.0,
+      -110.467347
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      82.040292,
+      290.0,
+      110.467347
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      81.428417,
+      300.416667,
+      111.434497
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 196,
+   "op": "datum_plane",
+   "label": "pl24a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 197,
+   "op": "sketch",
+   "label": "sk24a",
+   "plane": {
+    "datum_plane_label": "pl24a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 198,
+   "op": "extrude",
+   "label": "ex24a",
+   "sketch": "sk24a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 199,
+   "op": "datum_points",
+   "label": "dp24b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -82.040292,
+      290.0,
+      -110.467347
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      81.428417,
+      300.416667,
+      111.434497
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -81.428417,
+      300.416667,
+      -111.434497
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 200,
+   "op": "datum_plane",
+   "label": "pl24b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 201,
+   "op": "sketch",
+   "label": "sk24b",
+   "plane": {
+    "datum_plane_label": "pl24b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 202,
+   "op": "extrude",
+   "label": "ex24b",
+   "sketch": "sk24b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 203,
+   "op": "datum_points",
+   "label": "dp25a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -81.428417,
+      300.416667,
+      -111.434497
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      81.428417,
+      300.416667,
+      111.434497
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      80.811428,
+      310.833333,
+      112.405444
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 204,
+   "op": "datum_plane",
+   "label": "pl25a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 205,
+   "op": "sketch",
+   "label": "sk25a",
+   "plane": {
+    "datum_plane_label": "pl25a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 206,
+   "op": "extrude",
+   "label": "ex25a",
+   "sketch": "sk25a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 207,
+   "op": "datum_points",
+   "label": "dp25b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -81.428417,
+      300.416667,
+      -111.434497
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      80.811428,
+      310.833333,
+      112.405444
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -80.811428,
+      310.833333,
+      -112.405444
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 208,
+   "op": "datum_plane",
+   "label": "pl25b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 209,
+   "op": "sketch",
+   "label": "sk25b",
+   "plane": {
+    "datum_plane_label": "pl25b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 210,
+   "op": "extrude",
+   "label": "ex25b",
+   "sketch": "sk25b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 211,
+   "op": "datum_points",
+   "label": "dp26a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -80.811428,
+      310.833333,
+      -112.405444
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      80.811428,
+      310.833333,
+      112.405444
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      80.189326,
+      321.25,
+      113.380189
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 212,
+   "op": "datum_plane",
+   "label": "pl26a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 213,
+   "op": "sketch",
+   "label": "sk26a",
+   "plane": {
+    "datum_plane_label": "pl26a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 214,
+   "op": "extrude",
+   "label": "ex26a",
+   "sketch": "sk26a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 215,
+   "op": "datum_points",
+   "label": "dp26b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -80.811428,
+      310.833333,
+      -112.405444
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      80.189326,
+      321.25,
+      113.380189
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -80.189326,
+      321.25,
+      -113.380189
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 216,
+   "op": "datum_plane",
+   "label": "pl26b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 217,
+   "op": "sketch",
+   "label": "sk26b",
+   "plane": {
+    "datum_plane_label": "pl26b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 218,
+   "op": "extrude",
+   "label": "ex26b",
+   "sketch": "sk26b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 219,
+   "op": "datum_points",
+   "label": "dp27a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -80.189326,
+      321.25,
+      -113.380189
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      80.189326,
+      321.25,
+      113.380189
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      79.562109,
+      331.666667,
+      114.358733
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 220,
+   "op": "datum_plane",
+   "label": "pl27a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 221,
+   "op": "sketch",
+   "label": "sk27a",
+   "plane": {
+    "datum_plane_label": "pl27a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 222,
+   "op": "extrude",
+   "label": "ex27a",
+   "sketch": "sk27a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 223,
+   "op": "datum_points",
+   "label": "dp27b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -80.189326,
+      321.25,
+      -113.380189
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      79.562109,
+      331.666667,
+      114.358733
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -79.562109,
+      331.666667,
+      -114.358733
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 224,
+   "op": "datum_plane",
+   "label": "pl27b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 225,
+   "op": "sketch",
+   "label": "sk27b",
+   "plane": {
+    "datum_plane_label": "pl27b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 226,
+   "op": "extrude",
+   "label": "ex27b",
+   "sketch": "sk27b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 227,
+   "op": "datum_points",
+   "label": "dp28a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -79.562109,
+      331.666667,
+      -114.358733
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      79.562109,
+      331.666667,
+      114.358733
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      78.929778,
+      342.083333,
+      115.341074
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 228,
+   "op": "datum_plane",
+   "label": "pl28a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 229,
+   "op": "sketch",
+   "label": "sk28a",
+   "plane": {
+    "datum_plane_label": "pl28a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 230,
+   "op": "extrude",
+   "label": "ex28a",
+   "sketch": "sk28a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 231,
+   "op": "datum_points",
+   "label": "dp28b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -79.562109,
+      331.666667,
+      -114.358733
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      78.929778,
+      342.083333,
+      115.341074
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -78.929778,
+      342.083333,
+      -115.341074
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 232,
+   "op": "datum_plane",
+   "label": "pl28b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 233,
+   "op": "sketch",
+   "label": "sk28b",
+   "plane": {
+    "datum_plane_label": "pl28b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 234,
+   "op": "extrude",
+   "label": "ex28b",
+   "sketch": "sk28b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 235,
+   "op": "datum_points",
+   "label": "dp29a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -78.929778,
+      342.083333,
+      -115.341074
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      78.929778,
+      342.083333,
+      115.341074
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      78.292334,
+      352.5,
+      116.327213
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 236,
+   "op": "datum_plane",
+   "label": "pl29a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 237,
+   "op": "sketch",
+   "label": "sk29a",
+   "plane": {
+    "datum_plane_label": "pl29a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 238,
+   "op": "extrude",
+   "label": "ex29a",
+   "sketch": "sk29a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 239,
+   "op": "datum_points",
+   "label": "dp29b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -78.929778,
+      342.083333,
+      -115.341074
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      78.292334,
+      352.5,
+      116.327213
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -78.292334,
+      352.5,
+      -116.327213
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 240,
+   "op": "datum_plane",
+   "label": "pl29b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 241,
+   "op": "sketch",
+   "label": "sk29b",
+   "plane": {
+    "datum_plane_label": "pl29b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 242,
+   "op": "extrude",
+   "label": "ex29b",
+   "sketch": "sk29b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 243,
+   "op": "datum_points",
+   "label": "dp30a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -78.292334,
+      352.5,
+      -116.327213
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      78.292334,
+      352.5,
+      116.327213
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      77.649775,
+      362.916667,
+      117.31715
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 244,
+   "op": "datum_plane",
+   "label": "pl30a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 245,
+   "op": "sketch",
+   "label": "sk30a",
+   "plane": {
+    "datum_plane_label": "pl30a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 246,
+   "op": "extrude",
+   "label": "ex30a",
+   "sketch": "sk30a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 247,
+   "op": "datum_points",
+   "label": "dp30b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -78.292334,
+      352.5,
+      -116.327213
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      77.649775,
+      362.916667,
+      117.31715
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -77.649775,
+      362.916667,
+      -117.31715
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 248,
+   "op": "datum_plane",
+   "label": "pl30b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 249,
+   "op": "sketch",
+   "label": "sk30b",
+   "plane": {
+    "datum_plane_label": "pl30b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 250,
+   "op": "extrude",
+   "label": "ex30b",
+   "sketch": "sk30b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 251,
+   "op": "datum_points",
+   "label": "dp31a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -77.649775,
+      362.916667,
+      -117.31715
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      77.649775,
+      362.916667,
+      117.31715
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      77.002103,
+      373.333333,
+      118.310885
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 252,
+   "op": "datum_plane",
+   "label": "pl31a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 253,
+   "op": "sketch",
+   "label": "sk31a",
+   "plane": {
+    "datum_plane_label": "pl31a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 254,
+   "op": "extrude",
+   "label": "ex31a",
+   "sketch": "sk31a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 255,
+   "op": "datum_points",
+   "label": "dp31b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -77.649775,
+      362.916667,
+      -117.31715
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      77.002103,
+      373.333333,
+      118.310885
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -77.002103,
+      373.333333,
+      -118.310885
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 256,
+   "op": "datum_plane",
+   "label": "pl31b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 257,
+   "op": "sketch",
+   "label": "sk31b",
+   "plane": {
+    "datum_plane_label": "pl31b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 258,
+   "op": "extrude",
+   "label": "ex31b",
+   "sketch": "sk31b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 259,
+   "op": "datum_points",
+   "label": "dp32a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -77.002103,
+      373.333333,
+      -118.310885
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      77.002103,
+      373.333333,
+      118.310885
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      76.349316,
+      383.75,
+      119.308418
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 260,
+   "op": "datum_plane",
+   "label": "pl32a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 261,
+   "op": "sketch",
+   "label": "sk32a",
+   "plane": {
+    "datum_plane_label": "pl32a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 262,
+   "op": "extrude",
+   "label": "ex32a",
+   "sketch": "sk32a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 263,
+   "op": "datum_points",
+   "label": "dp32b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -77.002103,
+      373.333333,
+      -118.310885
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      76.349316,
+      383.75,
+      119.308418
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -76.349316,
+      383.75,
+      -119.308418
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 264,
+   "op": "datum_plane",
+   "label": "pl32b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 265,
+   "op": "sketch",
+   "label": "sk32b",
+   "plane": {
+    "datum_plane_label": "pl32b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 266,
+   "op": "extrude",
+   "label": "ex32b",
+   "sketch": "sk32b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 267,
+   "op": "datum_points",
+   "label": "dp33a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -76.349316,
+      383.75,
+      -119.308418
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      76.349316,
+      383.75,
+      119.308418
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      75.691416,
+      394.166667,
+      120.309749
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 268,
+   "op": "datum_plane",
+   "label": "pl33a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 269,
+   "op": "sketch",
+   "label": "sk33a",
+   "plane": {
+    "datum_plane_label": "pl33a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 270,
+   "op": "extrude",
+   "label": "ex33a",
+   "sketch": "sk33a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 271,
+   "op": "datum_points",
+   "label": "dp33b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -76.349316,
+      383.75,
+      -119.308418
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      75.691416,
+      394.166667,
+      120.309749
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -75.691416,
+      394.166667,
+      -120.309749
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 272,
+   "op": "datum_plane",
+   "label": "pl33b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 273,
+   "op": "sketch",
+   "label": "sk33b",
+   "plane": {
+    "datum_plane_label": "pl33b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 274,
+   "op": "extrude",
+   "label": "ex33b",
+   "sketch": "sk33b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 275,
+   "op": "datum_points",
+   "label": "dp34a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -75.691416,
+      394.166667,
+      -120.309749
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      75.691416,
+      394.166667,
+      120.309749
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      75.028402,
+      404.583333,
+      121.314877
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 276,
+   "op": "datum_plane",
+   "label": "pl34a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 277,
+   "op": "sketch",
+   "label": "sk34a",
+   "plane": {
+    "datum_plane_label": "pl34a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 278,
+   "op": "extrude",
+   "label": "ex34a",
+   "sketch": "sk34a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 279,
+   "op": "datum_points",
+   "label": "dp34b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -75.691416,
+      394.166667,
+      -120.309749
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      75.028402,
+      404.583333,
+      121.314877
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -75.028402,
+      404.583333,
+      -121.314877
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 280,
+   "op": "datum_plane",
+   "label": "pl34b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 281,
+   "op": "sketch",
+   "label": "sk34b",
+   "plane": {
+    "datum_plane_label": "pl34b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 282,
+   "op": "extrude",
+   "label": "ex34b",
+   "sketch": "sk34b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 283,
+   "op": "datum_points",
+   "label": "dp35a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -75.028402,
+      404.583333,
+      -121.314877
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      75.028402,
+      404.583333,
+      121.314877
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      74.360274,
+      415.0,
+      122.323804
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 284,
+   "op": "datum_plane",
+   "label": "pl35a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 285,
+   "op": "sketch",
+   "label": "sk35a",
+   "plane": {
+    "datum_plane_label": "pl35a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 286,
+   "op": "extrude",
+   "label": "ex35a",
+   "sketch": "sk35a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 287,
+   "op": "datum_points",
+   "label": "dp35b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -75.028402,
+      404.583333,
+      -121.314877
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      74.360274,
+      415.0,
+      122.323804
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -74.360274,
+      415.0,
+      -122.323804
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 288,
+   "op": "datum_plane",
+   "label": "pl35b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 289,
+   "op": "sketch",
+   "label": "sk35b",
+   "plane": {
+    "datum_plane_label": "pl35b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 290,
+   "op": "extrude",
+   "label": "ex35b",
+   "sketch": "sk35b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 291,
+   "op": "datum_points",
+   "label": "dp36a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -74.360274,
+      415.0,
+      -122.323804
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      74.360274,
+      415.0,
+      122.323804
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      73.687032,
+      425.416667,
+      123.336529
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 292,
+   "op": "datum_plane",
+   "label": "pl36a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 293,
+   "op": "sketch",
+   "label": "sk36a",
+   "plane": {
+    "datum_plane_label": "pl36a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 294,
+   "op": "extrude",
+   "label": "ex36a",
+   "sketch": "sk36a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 295,
+   "op": "datum_points",
+   "label": "dp36b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -74.360274,
+      415.0,
+      -122.323804
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      73.687032,
+      425.416667,
+      123.336529
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -73.687032,
+      425.416667,
+      -123.336529
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 296,
+   "op": "datum_plane",
+   "label": "pl36b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 297,
+   "op": "sketch",
+   "label": "sk36b",
+   "plane": {
+    "datum_plane_label": "pl36b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 298,
+   "op": "extrude",
+   "label": "ex36b",
+   "sketch": "sk36b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 299,
+   "op": "datum_points",
+   "label": "dp37a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -73.687032,
+      425.416667,
+      -123.336529
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      73.687032,
+      425.416667,
+      123.336529
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      73.008676,
+      435.833333,
+      124.353051
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 300,
+   "op": "datum_plane",
+   "label": "pl37a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 301,
+   "op": "sketch",
+   "label": "sk37a",
+   "plane": {
+    "datum_plane_label": "pl37a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 302,
+   "op": "extrude",
+   "label": "ex37a",
+   "sketch": "sk37a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 303,
+   "op": "datum_points",
+   "label": "dp37b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -73.687032,
+      425.416667,
+      -123.336529
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      73.008676,
+      435.833333,
+      124.353051
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -73.008676,
+      435.833333,
+      -124.353051
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 304,
+   "op": "datum_plane",
+   "label": "pl37b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 305,
+   "op": "sketch",
+   "label": "sk37b",
+   "plane": {
+    "datum_plane_label": "pl37b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 306,
+   "op": "extrude",
+   "label": "ex37b",
+   "sketch": "sk37b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 307,
+   "op": "datum_points",
+   "label": "dp38a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -73.008676,
+      435.833333,
+      -124.353051
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      73.008676,
+      435.833333,
+      124.353051
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      72.325206,
+      446.25,
+      125.373372
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 308,
+   "op": "datum_plane",
+   "label": "pl38a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 309,
+   "op": "sketch",
+   "label": "sk38a",
+   "plane": {
+    "datum_plane_label": "pl38a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 310,
+   "op": "extrude",
+   "label": "ex38a",
+   "sketch": "sk38a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 311,
+   "op": "datum_points",
+   "label": "dp38b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -73.008676,
+      435.833333,
+      -124.353051
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      72.325206,
+      446.25,
+      125.373372
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -72.325206,
+      446.25,
+      -125.373372
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 312,
+   "op": "datum_plane",
+   "label": "pl38b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 313,
+   "op": "sketch",
+   "label": "sk38b",
+   "plane": {
+    "datum_plane_label": "pl38b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 314,
+   "op": "extrude",
+   "label": "ex38b",
+   "sketch": "sk38b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 315,
+   "op": "datum_points",
+   "label": "dp39a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -72.325206,
+      446.25,
+      -125.373372
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      72.325206,
+      446.25,
+      125.373372
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      71.636622,
+      456.666667,
+      126.39749
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 316,
+   "op": "datum_plane",
+   "label": "pl39a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 317,
+   "op": "sketch",
+   "label": "sk39a",
+   "plane": {
+    "datum_plane_label": "pl39a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 318,
+   "op": "extrude",
+   "label": "ex39a",
+   "sketch": "sk39a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 319,
+   "op": "datum_points",
+   "label": "dp39b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -72.325206,
+      446.25,
+      -125.373372
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      71.636622,
+      456.666667,
+      126.39749
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -71.636622,
+      456.666667,
+      -126.39749
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 320,
+   "op": "datum_plane",
+   "label": "pl39b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 321,
+   "op": "sketch",
+   "label": "sk39b",
+   "plane": {
+    "datum_plane_label": "pl39b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 322,
+   "op": "extrude",
+   "label": "ex39b",
+   "sketch": "sk39b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 323,
+   "op": "datum_points",
+   "label": "dp40a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -71.636622,
+      456.666667,
+      -126.39749
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      71.636622,
+      456.666667,
+      126.39749
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      70.942925,
+      467.083333,
+      127.425407
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 324,
+   "op": "datum_plane",
+   "label": "pl40a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 325,
+   "op": "sketch",
+   "label": "sk40a",
+   "plane": {
+    "datum_plane_label": "pl40a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 326,
+   "op": "extrude",
+   "label": "ex40a",
+   "sketch": "sk40a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 327,
+   "op": "datum_points",
+   "label": "dp40b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -71.636622,
+      456.666667,
+      -126.39749
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      70.942925,
+      467.083333,
+      127.425407
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -70.942925,
+      467.083333,
+      -127.425407
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 328,
+   "op": "datum_plane",
+   "label": "pl40b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 329,
+   "op": "sketch",
+   "label": "sk40b",
+   "plane": {
+    "datum_plane_label": "pl40b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 330,
+   "op": "extrude",
+   "label": "ex40b",
+   "sketch": "sk40b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 331,
+   "op": "datum_points",
+   "label": "dp41a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -70.942925,
+      467.083333,
+      -127.425407
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      70.942925,
+      467.083333,
+      127.425407
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      70.244113,
+      477.5,
+      128.457121
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 332,
+   "op": "datum_plane",
+   "label": "pl41a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 333,
+   "op": "sketch",
+   "label": "sk41a",
+   "plane": {
+    "datum_plane_label": "pl41a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 334,
+   "op": "extrude",
+   "label": "ex41a",
+   "sketch": "sk41a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 335,
+   "op": "datum_points",
+   "label": "dp41b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -70.942925,
+      467.083333,
+      -127.425407
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      70.244113,
+      477.5,
+      128.457121
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -70.244113,
+      477.5,
+      -128.457121
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 336,
+   "op": "datum_plane",
+   "label": "pl41b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 337,
+   "op": "sketch",
+   "label": "sk41b",
+   "plane": {
+    "datum_plane_label": "pl41b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 338,
+   "op": "extrude",
+   "label": "ex41b",
+   "sketch": "sk41b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 339,
+   "op": "datum_points",
+   "label": "dp42a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -70.244113,
+      477.5,
+      -128.457121
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      70.244113,
+      477.5,
+      128.457121
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      69.540187,
+      487.916667,
+      129.492633
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 340,
+   "op": "datum_plane",
+   "label": "pl42a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 341,
+   "op": "sketch",
+   "label": "sk42a",
+   "plane": {
+    "datum_plane_label": "pl42a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 342,
+   "op": "extrude",
+   "label": "ex42a",
+   "sketch": "sk42a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 343,
+   "op": "datum_points",
+   "label": "dp42b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -70.244113,
+      477.5,
+      -128.457121
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      69.540187,
+      487.916667,
+      129.492633
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -69.540187,
+      487.916667,
+      -129.492633
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 344,
+   "op": "datum_plane",
+   "label": "pl42b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 345,
+   "op": "sketch",
+   "label": "sk42b",
+   "plane": {
+    "datum_plane_label": "pl42b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 346,
+   "op": "extrude",
+   "label": "ex42b",
+   "sketch": "sk42b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 347,
+   "op": "datum_points",
+   "label": "dp43a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -69.540187,
+      487.916667,
+      -129.492633
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      69.540187,
+      487.916667,
+      129.492633
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      68.831148,
+      498.333333,
+      130.531943
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 348,
+   "op": "datum_plane",
+   "label": "pl43a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 349,
+   "op": "sketch",
+   "label": "sk43a",
+   "plane": {
+    "datum_plane_label": "pl43a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 350,
+   "op": "extrude",
+   "label": "ex43a",
+   "sketch": "sk43a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 351,
+   "op": "datum_points",
+   "label": "dp43b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -69.540187,
+      487.916667,
+      -129.492633
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      68.831148,
+      498.333333,
+      130.531943
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -68.831148,
+      498.333333,
+      -130.531943
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 352,
+   "op": "datum_plane",
+   "label": "pl43b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 353,
+   "op": "sketch",
+   "label": "sk43b",
+   "plane": {
+    "datum_plane_label": "pl43b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 354,
+   "op": "extrude",
+   "label": "ex43b",
+   "sketch": "sk43b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 355,
+   "op": "datum_points",
+   "label": "dp44a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -68.831148,
+      498.333333,
+      -130.531943
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      68.831148,
+      498.333333,
+      130.531943
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      68.116995,
+      508.75,
+      131.575051
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 356,
+   "op": "datum_plane",
+   "label": "pl44a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 357,
+   "op": "sketch",
+   "label": "sk44a",
+   "plane": {
+    "datum_plane_label": "pl44a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 358,
+   "op": "extrude",
+   "label": "ex44a",
+   "sketch": "sk44a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 359,
+   "op": "datum_points",
+   "label": "dp44b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -68.831148,
+      498.333333,
+      -130.531943
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      68.116995,
+      508.75,
+      131.575051
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -68.116995,
+      508.75,
+      -131.575051
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 360,
+   "op": "datum_plane",
+   "label": "pl44b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 361,
+   "op": "sketch",
+   "label": "sk44b",
+   "plane": {
+    "datum_plane_label": "pl44b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 362,
+   "op": "extrude",
+   "label": "ex44b",
+   "sketch": "sk44b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 363,
+   "op": "datum_points",
+   "label": "dp45a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -68.116995,
+      508.75,
+      -131.575051
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      68.116995,
+      508.75,
+      131.575051
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      67.397727,
+      519.166667,
+      132.621957
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 364,
+   "op": "datum_plane",
+   "label": "pl45a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 365,
+   "op": "sketch",
+   "label": "sk45a",
+   "plane": {
+    "datum_plane_label": "pl45a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 366,
+   "op": "extrude",
+   "label": "ex45a",
+   "sketch": "sk45a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 367,
+   "op": "datum_points",
+   "label": "dp45b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -68.116995,
+      508.75,
+      -131.575051
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      67.397727,
+      519.166667,
+      132.621957
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -67.397727,
+      519.166667,
+      -132.621957
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 368,
+   "op": "datum_plane",
+   "label": "pl45b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 369,
+   "op": "sketch",
+   "label": "sk45b",
+   "plane": {
+    "datum_plane_label": "pl45b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 370,
+   "op": "extrude",
+   "label": "ex45b",
+   "sketch": "sk45b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 371,
+   "op": "datum_points",
+   "label": "dp46a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -67.397727,
+      519.166667,
+      -132.621957
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      67.397727,
+      519.166667,
+      132.621957
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      66.673346,
+      529.583333,
+      133.672661
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 372,
+   "op": "datum_plane",
+   "label": "pl46a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 373,
+   "op": "sketch",
+   "label": "sk46a",
+   "plane": {
+    "datum_plane_label": "pl46a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 374,
+   "op": "extrude",
+   "label": "ex46a",
+   "sketch": "sk46a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 375,
+   "op": "datum_points",
+   "label": "dp46b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -67.397727,
+      519.166667,
+      -132.621957
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      66.673346,
+      529.583333,
+      133.672661
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -66.673346,
+      529.583333,
+      -133.672661
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 376,
+   "op": "datum_plane",
+   "label": "pl46b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 377,
+   "op": "sketch",
+   "label": "sk46b",
+   "plane": {
+    "datum_plane_label": "pl46b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 378,
+   "op": "extrude",
+   "label": "ex46b",
+   "sketch": "sk46b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 379,
+   "op": "datum_points",
+   "label": "dp47a",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -66.673346,
+      529.583333,
+      -133.672661
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      66.673346,
+      529.583333,
+      133.672661
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      65.943851,
+      540.0,
+      134.727163
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 380,
+   "op": "datum_plane",
+   "label": "pl47a",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 381,
+   "op": "sketch",
+   "label": "sk47a",
+   "plane": {
+    "datum_plane_label": "pl47a"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 382,
+   "op": "extrude",
+   "label": "ex47a",
+   "sketch": "sk47a",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 383,
+   "op": "datum_points",
+   "label": "dp47b",
+   "points": [
+    {
+     "name": "p_a",
+     "position": [
+      -66.673346,
+      529.583333,
+      -133.672661
+     ]
+    },
+    {
+     "name": "p_b",
+     "position": [
+      65.943851,
+      540.0,
+      134.727163
+     ]
+    },
+    {
+     "name": "p_c",
+     "position": [
+      -65.943851,
+      540.0,
+      -134.727163
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 384,
+   "op": "datum_plane",
+   "label": "pl47b",
+   "thru_points": [
+    "p_a",
+    "p_b",
+    "p_c"
+   ],
+   "note": "PRO_DTMPLN_THRU x3, unique plane through 3 points"
+  },
+  {
+   "seq": 385,
+   "op": "sketch",
+   "label": "sk47b",
+   "plane": {
+    "datum_plane_label": "pl47b"
+   },
+   "entities": {
+    "triangle_uv": "project p_b,p_c onto plane frame (u=A->B, v=n)"
+   }
+  },
+  {
+   "seq": 386,
+   "op": "extrude",
+   "label": "ex47b",
+   "sketch": "sk47b",
+   "depth": 9.87008714331235,
+   "direction": "symmetric",
+   "new_body": true
+  },
+  {
+   "seq": 387,
+   "op": "axis_pattern",
+   "label": "blades8",
+   "leader": "ex000a",
+   "axis": "X",
+   "count": 8,
+   "increment_deg": 45,
+   "note": "applies to unioned blade body after merge"
+  },
+  {
+   "seq": 388,
+   "op": "merge_all_bodies"
+  },
+  {
+   "seq": 389,
+   "op": "round",
+   "label": "rim_r20",
+   "radius": 20,
+   "edge_anchor": [
+    75,
+    0,
+    50
+   ]
+  },
+  {
+   "seq": 390,
+   "op": "sketch",
+   "label": "boresk",
+   "plane": "YZ",
+   "offset": -75,
+   "entities": [
+    {
+     "type": "circle",
+     "name": "bore",
+     "center": [
+      0,
+      0
+     ],
+     "radius": 25
+    }
+   ]
+  },
+  {
+   "seq": 391,
+   "op": "extrude",
+   "label": "cut_bore",
+   "sketch": "boresk",
+   "depth": 130,
+   "direction": "positive",
+   "mode": "cut"
+  }
+ ]
+}

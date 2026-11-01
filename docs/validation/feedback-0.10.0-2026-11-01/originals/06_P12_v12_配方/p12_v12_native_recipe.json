@@ -1,0 +1,13 @@
+{
+ "route": "per-strip triangle prisms",
+ "features_per_strip": [
+  "datum_points(4)",
+  "datum_plane(3xTHRU)",
+  "sketch(triangle)",
+  "extrude(sym 9.87)"
+ ],
+ "strips": 48,
+ "total_features": 196,
+ "patch_needed": "execute_plan datum_plane op: accept thru_points:[labels] (PRO_DTMPLN_THRU x3)",
+ "why_not_mcp_now": "sketch plane frame form requires an existing planar support; datum_plane op supports only OFFS/ANG; no surface loft/project/trim (G5)"
+}

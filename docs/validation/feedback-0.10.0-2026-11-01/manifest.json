@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-053",
+  "task": "Q00",
+  "archived_at": "2026-11-01",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Ten originals copied byte for byte into originals/. The recolor_assembly zip is archived as an unmodified package: it was never extracted, never executed and never merged into the codebase. No locally generated file is listed here.",
+  "source_baseline": {
+    "version": "0.11.0",
+    "public_tools": 95,
+    "upstream": "main@2f6aab7",
+    "commit": "eb913de",
+    "branch": "codex/q00-feedback-archive",
+    "dirty": true,
+    "dirty_note": "Pre-existing unrelated untracked/modified files in the checkout (session_erase/, .codebuddy/, .workbuddy/, .zcode/, session_activity.json) are preserved and not part of this archive."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31",
+  "archive_root": "docs/validation/feedback-0.10.0-2026-11-01/originals",
+  "file_count": 10,
+  "verification": {
+    "method": "per-file byte length + SHA256 + full byte comparison against the source",
+    "length_match": "10/10",
+    "sha256_match": "10/10",
+    "byte_identical": "10/10"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/00_README_反馈包.md",
+      "source_relative_path": "00_README_反馈包.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\00_README_反馈包.md",
+      "bytes": 2819,
+      "sha256": "a944edb0cf6a6984f4cac16039c60493bed4efcdfa7b071a81f18c1f8ef892af",
+      "content_note": "包内清单、关系说明、一页速览与复现环境"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/01_验收报告_0.10.0.md",
+      "source_relative_path": "01_验收报告_0.10.0.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\01_验收报告_0.10.0.md",
+      "bytes": 11656,
+      "sha256": "cc832dc43374cd1c45a946907e588a82d3122f2eb8c5faa4e1d2987c5461573b",
+      "content_note": "0.10.0 定点复测：A/D/E、N1/N2/N3 与正面观察"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/02_G5曲面能力方案.md",
+      "source_relative_path": "02_G5曲面能力方案.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\02_G5曲面能力方案.md",
+      "bytes": 9373,
+      "sha256": "dbf16b25ae02008a5f9c0088eac28e7bed3d075e03a52086f77176b0e54a576a",
+      "content_note": "G5 曲面三 op 路线与三点定面方案"
+    },
+    {
+      "id": "F04",
+      "relative_path": "originals/03_BUG094报告.md",
+      "source_relative_path": "03_BUG094报告.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\03_BUG094报告.md",
+      "bytes": 6510,
+      "sha256": "fcc63d18454bf56de808934cc87d639e3258fff5dd720a7ab294204fa60ced22",
+      "content_note": "L1/L2 两层缺陷定位与三点定面实测"
+    },
+    {
+      "id": "F05",
+      "relative_path": "originals/04_generic_cpp_patches.md",
+      "source_relative_path": "04_generic_cpp_patches.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\04_generic_cpp_patches.md",
+      "bytes": 4918,
+      "sha256": "8c43f5b7f6be18ea13ad6eb05bebd782d59fb0aee5874a4902f02d0276e9018c",
+      "content_note": "三点定面与 UV 基回退两处补丁源码"
+    },
+    {
+      "id": "F06",
+      "relative_path": "originals/05_上色能力建议包_recolor_assembly.zip",
+      "source_relative_path": "05_上色能力建议包_recolor_assembly.zip",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\05_上色能力建议包_recolor_assembly.zip",
+      "bytes": 11451,
+      "sha256": "f3990bc86fa88ae8910d15f03b317f8f0c2d8a747b812717b70f7841b494aca8",
+      "content_note": "上色建议包原包（不解包、不执行、不并入代码）"
+    },
+    {
+      "id": "F07",
+      "relative_path": "originals/06_P12_v12_配方/family_table.json",
+      "source_relative_path": "06_P12_v12_配方/family_table.json",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\06_P12_v12_配方\\family_table.json",
+      "bytes": 253,
+      "sha256": "21b054daf2a375908e6d88fc317b946f7763dd1b449226ca81d9893df753180b",
+      "content_note": "80 项族表索引"
+    },
+    {
+      "id": "F08",
+      "relative_path": "originals/06_P12_v12_配方/p12_v12_native_recipe.json",
+      "source_relative_path": "06_P12_v12_配方/p12_v12_native_recipe.json",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\06_P12_v12_配方\\p12_v12_native_recipe.json",
+      "bytes": 466,
+      "sha256": "d93951d3843d93fb200ea0d7b45172fbb23cbc26ddac46e550ba0f948088bf02",
+      "content_note": "逐站三角棱柱路线配方说明"
+    },
+    {
+      "id": "F09",
+      "relative_path": "originals/06_P12_v12_配方/p12_v12_native_tree.json",
+      "source_relative_path": "06_P12_v12_配方/p12_v12_native_tree.json",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\06_P12_v12_配方\\p12_v12_native_tree.json",
+      "bytes": 101487,
+      "sha256": "891ac8369877d628448ad2e85a294daf2880ae6dd70127085874388c678f2f28",
+      "content_note": "391 项特征树配方"
+    },
+    {
+      "id": "F10",
+      "relative_path": "originals/06_P12_v12_配方/smoke_3pt_min_repro.json",
+      "source_relative_path": "06_P12_v12_配方/smoke_3pt_min_repro.json",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\G6优先\\CREO_MechDog_feedback_2026-10-31\\06_P12_v12_配方\\smoke_3pt_min_repro.json",
+      "bytes": 833,
+      "sha256": "3a3f90ee8492acca57fc72e2482f816879099e38a5081f491e695bd77547cc8d",
+      "content_note": "三点定面最小复现载荷"
+    }
+  ]
+}

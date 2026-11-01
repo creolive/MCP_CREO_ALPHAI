@@ -69,3 +69,6 @@ docs/validation/feedback-0.7.2-2026-10-28/2026*.md -text
 
 # DEV-052 N00: preserve only the seven 0.8.x feedback originals byte for byte.
 docs/validation/feedback-0.8.x-2026-10-30/2026*.md -text
+
+# DEV-054 Q00: preserve the ten 0.10.0 feedback originals byte for byte.
+docs/validation/feedback-0.10.0-2026-11-01/originals/** -text

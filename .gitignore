@@ -14,6 +14,8 @@ client-config.json
 native/constants.inc
 *.zip
 *.sha256
+# DEV-054 Q00: the 0.10.0 feedback archive keeps the recolor_assembly zip byte for byte.
+!docs/validation/feedback-0.10.0-2026-11-01/originals/*.zip
 .pytest_cache/
 .ruff_cache/
 open_file/
