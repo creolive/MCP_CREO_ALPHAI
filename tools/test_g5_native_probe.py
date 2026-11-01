@@ -1,0 +1,714 @@
+"""Q07 G5 native feasibility probe driver: offline contract/oracle checks.
+
+Evidence boundaries fixed by this task:
+
+* Default is strictly offline. No MCP client is created, no Toolkit call is
+  made, no native build is triggered, no Creo session is touched. The offline
+  stage validates the frozen G5 contract (field names, reference rules, oracle
+  definitions) against the repository sources and computes the three minimal
+  geometry oracles independently.
+* A live run requires BOTH --live and --confirm-session-usable. The live stage
+  is NOT implemented by this task: the three native probes still need the
+  FEAT-009 / FEAT-039 implementations that consume this contract. This driver
+  therefore refuses a live run with a clear message instead of pretending to
+  have executed native probes.
+* The three native probe steps (goal, what to create, what tree to extract,
+  what to compare) are defined here as data so the integrator runs exactly the
+  same probes the contract freezes, and records "feasible / route not
+  established / unverified" for each.
+* Element and enum identifiers are never hardcoded numerically: they are
+  resolved by SDK symbol name through the tools/generate_constants.py
+  mechanism. The offline stage verifies which symbols the current HEADERS
+  list already exports, without reading or copying native/constants.inc.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import platform
+import re
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+from typing import Any
+
+_SOURCE_ROOT = Path(__file__).resolve().parents[1]
+if str(_SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SOURCE_ROOT))
+
+from creo_mechdog.paths import SOURCE_PATHS  # noqa: E402
+
+ROOT = SOURCE_PATHS.resource_root
+
+CONTRACT = ROOT / "docs" / "development" / "G5-NATIVE-CONTRACT.md"
+
+# --- frozen contract surface ------------------------------------------------
+
+# Element / enum symbols the three ops need. Values are never written down:
+# every name is resolved by symbol through tools/generate_constants.py.
+REQUIRED_SDK_SYMBOLS: dict[str, list[str]] = {
+    "surface_loft": [
+        "PRO_E_FEATURE_TREE",
+        "PRO_E_FEATURE_TYPE",
+        "PRO_E_FEATURE_FORM",
+        "PRO_E_DTM_SRF_TYPE",
+        "PRO_E_DTM_SRF_TYPE_BND_BLEND",
+        "PRO_E_BNBLN_CURVES",
+        "PRO_E_BNBLN_1DIR",
+        "PRO_E_BNBLN_DIR_CURVES",
+        "PRO_E_STD_CHAIN_HOLDER",
+        "PRO_E_STD_CURVE_COLLECTION_APPL",
+        "PRO_E_CTRL_PTS",
+        "PRO_E_BLEND_TYPE",
+        "PRO_FEAT_DATUM_SURF",
+        "PRO_USE_SURFS",
+    ],
+    "project_curve": [
+        "PRO_E_COPYTRIM_QUILT",
+        "PRO_E_COPYTRIM_CURVES",
+        "PRO_E_COPYTRIM_CURVE_TBL",
+        "PRO_E_COPYTRIM_CURVE_DATA",
+        "PRO_E_COPYTRIM_CURVE",
+        "PRO_E_FEATURE_TYPE",
+        "PRO_FEAT_CURVE",
+    ],
+    "surface_trim": [
+        "PRO_E_FEATURE_TYPE",
+        "PRO_E_FEATURE_FORM",
+        "PRO_E_SRF_TRIM_TYPE",
+        "PRO_E_SURF_TRIM_TYPE",
+        "PRO_E_TRIM_QUILT",
+        "PRO_E_STD_USEQLT_QLT",
+        "PRO_E_MATERIAL_SIDE",
+        "PRO_E_PRIMARY_QLTSIDE",
+        "PRO_E_KEEP_TRIM_SURF_OPT",
+        "PRO_SURF_TRIM_USE_QLT",
+        "PRO_TRIM_MATL_SIDE_ONE",
+        "PRO_TRIM_PRIM_QLT_SIDE_ONE",
+        "PRO_TRIM_PRIM_QLT_SIDE_TWO",
+        "PRO_KEEP_TRIM_SURF_OPT_NO",
+        "PRO_FEAT_CUT",
+        "PRO_USE_SURFS",
+    ],
+}
+
+# Headers that declare the symbols the current HEADERS list does not export.
+# Adding them is a shared change collected by the integrator.
+MISSING_HEADER_SOURCES: dict[str, str] = {
+    "PRO_E_DTM_SRF_TYPE_BND_BLEND": "Probbl.h",
+    "PRO_SURF_TRIM_USE_QLT": "ProTrim.h",
+    "PRO_TRIM_MATL_SIDE_ONE": "ProTrim.h",
+    "PRO_TRIM_PRIM_QLT_SIDE_ONE": "ProTrim.h",
+    "PRO_TRIM_PRIM_QLT_SIDE_TWO": "ProTrim.h",
+    "PRO_KEEP_TRIM_SURF_OPT_NO": "ProTrim.h",
+    "PRO_SEC_SKETCH": "ProStdSection.h",
+    "PRO_SEC_SELECT": "ProStdSection.h",
+    "PRO_SRF_MRG_JOIN": "ProMerge.h",
+}
+
+MEASUREMENT_APIS: dict[str, str] = {
+    "surface_area": "ProSurfaceAreaEval(ProSurface, double*) - ProSurface.h",
+    "region_area": "ProContourAreaEval(ProSurface, ProContour, double*) - ProContour.h",
+    "quilt_volume_closed_only": "ProQuiltVolumeEval(ProQuilt, double*) - ProQuilt.h",
+    "curve_length": "ProCurveLengthEval(ProCurve, double*) - ProCurve.h",
+    "curve_endpoints": "ProCurveXyzdataEval(ProCurve, param, xyz, d1, d2) - ProCurve.h",
+}
+
+# Symbols the 0.10.0 feedback proposal used that this machine's SDK does not
+# have. They must never appear in code, examples or documentation.
+REJECTED_PROPOSAL_SYMBOLS: list[str] = [
+    "PRO_E_BLEND_SECTIONS",
+    "PRO_E_BLEND_ATTRIBUTES",
+    "PRO_BLEND_SURF",
+    "PRO_STD_BLEND",
+    "ProSurfaceEval",
+    "ProMeasurable",
+]
+
+# --- frozen oracles ---------------------------------------------------------
+
+ORACLES: list[dict[str, Any]] = [
+    {
+        "id": "O1",
+        "op": "surface_loft",
+        "description": "Two parallel straight sections -> rectangular surface",
+        "sections_mm": {"length": 40.0, "separation": 20.0},
+        "expected_area_mm2": 800.0,
+        "tolerance_mm2": 0.5,
+        "extra_assertions": [
+            "feature type is a datum surface (not a solid)",
+            "the echoed sections keep the submitted order",
+            "exactly one quilt geometry item exists on the produced feature",
+        ],
+    },
+    {
+        "id": "O2",
+        "op": "project_curve",
+        "description": "Line projected radially onto a cylindrical surface",
+        "cylinder": {"radius_mm": 10.0, "height_mm": 20.0},
+        "source_line_mm": {"length": 30.0, "radial_offset_mm": 15.0},
+        "expected_curve_length_mm": 30.0,
+        "expected_endpoint_z_span_mm": 30.0,
+        "expected_endpoint_radius_mm": 10.0,
+        "tolerance_mm": 0.5,
+        "extra_assertions": [
+            "the projected endpoints lie on the cylinder radius, not at the source radius",
+            "positive and negative side produce different endpoints",
+        ],
+    },
+    {
+        "id": "O3",
+        "op": "surface_trim",
+        "description": "Rectangular surface bisected by a datum plane",
+        "rectangle_mm": {"width": 40.0, "height": 20.0},
+        "expected_area_before_mm2": 800.0,
+        "expected_area_after_mm2": 400.0,
+        "tolerance_mm2": 0.5,
+        "conservation_tolerance_mm2": 1.0,
+        "extra_assertions": [
+            "the two keep_side runs keep different quilt geometry items",
+            "the signed offsets of the two runs have opposite signs",
+        ],
+    },
+]
+
+# --- frozen native probes ----------------------------------------------------
+
+PROBES: list[dict[str, Any]] = [
+    {
+        "id": "P1",
+        "op": "surface_loft",
+        "goal": "Decide whether the Probbl.h boundary-blend tree can be created "
+        "in the executor from two straight sections and yields a measurable area.",
+        "create": [
+            "new part with default datums",
+            "two independent open straight-line sketches, 40 mm long, parallel, "
+            "separated by 20 mm (oracle O1)",
+            "PRO_E_FEATURE_TYPE=PRO_FEAT_DATUM_SURF, "
+            "PRO_E_FEATURE_FORM=PRO_USE_SURFS, "
+            "PRO_E_DTM_SRF_TYPE=PRO_E_DTM_SRF_TYPE_BND_BLEND",
+            "PRO_E_BNBLN_CURVES/PRO_E_BNBLN_1DIR/PRO_E_BNBLN_DIR_CURVES holding two "
+            "chain holders, each with PRO_E_STD_CHAIN_HOLDER/"
+            "PRO_E_STD_CURVE_COLLECTION_APPL for one curve",
+        ],
+        "extract": [
+            "ProFeatureElemtreeExtract of the produced feature (symbol names only)",
+            "ProFeatureTypeGet feature type",
+            "ProFeatureGeomitemVisit quilt geometry item count",
+            "ProContourAreaEval / ProSurfaceAreaEval area",
+        ],
+        "compare": [
+            "area == 800.0 mm2 (+/- 0.5)",
+            "feature type == PRO_FEAT_DATUM_SURF, exactly one quilt item",
+            "extracted tree versus the contract skeleton, item by item",
+            "actual PRO_E_BLEND_TYPE value",
+        ],
+        "verdicts": ["feasible", "route not established", "unverified"],
+        "blocks_on_failure": ["Q08 surface_loft"],
+    },
+    {
+        "id": "P2",
+        "op": "project_curve",
+        "goal": "Decide whether the PRO_E_COPYTRIM_* family forms a creatable "
+        "feature tree and fix the physical meaning of side=positive/negative.",
+        "create": [
+            "new part",
+            "cylindrical surface quilt via extrude mode=surface of a circle, "
+            "radius 10 mm, height 20 mm, axis along Z (oracle O2)",
+            "one straight source line parallel to Z, 30 mm long, at radius 15 mm",
+            "PRO_E_FEATURE_TYPE=PRO_FEAT_CURVE with PRO_E_COPYTRIM_CURVE_DATA "
+            "holding PRO_E_COPYTRIM_QUILT and PRO_E_COPYTRIM_CURVE_TBL/"
+            "PRO_E_COPYTRIM_CURVE",
+            "on failure, record the raw ProError and every ProErrorlist entry, "
+            "then try the ProDtmCrv.h PRO_CURVE_TYPE_INTSRF / PRO_CURVE_TYPE_TWO_PROJ "
+            "variants and state explicitly that their semantics differ",
+        ],
+        "extract": [
+            "extracted element tree and raw error codes",
+            "produced curve geometry id, ProCurveLengthEval length, ProCurveXyzdataEval endpoints",
+            "endpoint difference between side=positive and side=negative",
+        ],
+        "compare": [
+            "curve length == 30.0 mm (+/- 0.5)",
+            "endpoint z span == 30.0 mm (+/- 0.5)",
+            "endpoint radius == 10.0 mm (+/- 0.5), not the source radius 15 mm",
+            "the two side values give different endpoints",
+        ],
+        "verdicts": ["feasible", "route not established", "unverified"],
+        "blocks_on_failure": ["Q09 project_curve"],
+    },
+    {
+        "id": "P3",
+        "op": "surface_trim",
+        "goal": "Decide whether the ProTrim.h use-quilt tree can be created and "
+        "fix the physical binding of keep_side one/two.",
+        "create": [
+            "new part",
+            "40 x 20 mm planar rectangle quilt via surface_fill (oracle O3)",
+            "a datum plane through x=20 with normal +X as the trimming tool",
+            "PRO_E_FEATURE_TYPE=PRO_FEAT_CUT, PRO_E_FEATURE_FORM=PRO_USE_SURFS, "
+            "PRO_E_SRF_TRIM_TYPE=PRO_E_SURF_TRIM_USE_QLT and "
+            "PRO_E_SURF_TRIM_TYPE=PRO_SURF_TRIM_USE_QLT, PRO_E_TRIM_QUILT=target, "
+            "PRO_E_STD_USEQLT_QLT=datum plane, "
+            "PRO_E_MATERIAL_SIDE=PRO_TRIM_MATL_SIDE_ONE, "
+            "PRO_E_KEEP_TRIM_SURF_OPT=PRO_KEEP_TRIM_SURF_OPT_NO",
+            "run twice, PRO_E_PRIMARY_QLTSIDE=PRO_TRIM_PRIM_QLT_SIDE_ONE then "
+            "PRO_TRIM_PRIM_QLT_SIDE_TWO",
+        ],
+        "extract": [
+            "extracted element tree and raw error codes",
+            "kept quilt geometry id, area, tool normal, target and kept centroids",
+        ],
+        "compare": [
+            "area before == 800.0 mm2 (+/- 0.5)",
+            "each area after == 400.0 mm2 (+/- 0.5)",
+            "the two area-after values sum to the area before (+/- 1.0)",
+            "the two runs keep different quilt geometry ids",
+            "the two signed offsets have opposite signs",
+        ],
+        "verdicts": ["feasible", "route not established", "unverified"],
+        "blocks_on_failure": ["Q10 surface_trim"],
+    },
+]
+
+
+# --- offline checks ---------------------------------------------------------
+
+
+def _resolve_sdk_include_dir() -> Path | None:
+    """Locate the local Toolkit include directory without touching any config.
+
+    The SDK root comes from the machine's ``config.json``. That file lives in
+    the checkout the worktree was branched from, not in the worktree itself,
+    so sibling checkouts are scanned read-only. Nothing is written and no
+    configuration is modified.
+    """
+    candidates: list[Path] = []
+    env_root = os.environ.get("MECHDOG_CREO_ROOT")
+    if env_root:
+        candidates.append(Path(env_root))
+    config_files: list[Path] = [ROOT / "config.json"]
+    for parent in (ROOT.parent,):
+        if not parent.is_dir():
+            continue
+        for child in sorted(parent.iterdir()):
+            if child.is_dir() and (child / "config.json").is_file():
+                config_files.append(child / "config.json")
+    for config in config_files:
+        try:
+            settings = json.loads(config.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        root = settings.get("creo_root")
+        if root:
+            candidates.append(Path(root))
+    for root in candidates:
+        include = root / "Common Files" / "protoolkit" / "includes"
+        if include.is_dir():
+            return include
+    return None
+
+
+def _resolve_symbols(include_dir: Path, headers: list[str]) -> set[str]:
+    """Mirror tools/generate_constants.py name extraction, read-only."""
+    found: set[str] = set()
+    for header in headers:
+        source = (include_dir / header).read_text(encoding="utf-8", errors="replace")
+        source = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.S)
+        found.update(
+            re.findall(
+                r"^\s*#define\s+(PRO_(?:E|FEAT)_[A-Z0-9_]+)\s+(?:\d+|\([^\n]+\))", source, re.M
+            )
+        )
+        for block in re.findall(r"\benum\s*\w*\s*\{([^}]+)\}", source, re.S):
+            found.update(re.findall(r"(?:^|,)\s*(PRO_[A-Z0-9_]+)\s*(?:=|,|$)", block, re.M))
+    return found
+
+
+def check_sdk_symbols() -> dict:
+    """Report which required symbols the SDK declares and which the HEADERS list exports."""
+    from tools.generate_constants import HEADERS
+
+    include_dir = _resolve_sdk_include_dir()
+    report: dict[str, Any] = {
+        "include_dir": str(include_dir) if include_dir else None,
+        "headers_listed": len(HEADERS),
+        "ops": {},
+    }
+    if include_dir is None:
+        report["status"] = "sdk_include_dir_not_found"
+        report["note"] = (
+            "The local Toolkit include directory was not found. The symbol table "
+            "was not verified on this machine; the contract's SDK conclusions stay "
+            "as recorded on the machine where Q07 ran."
+        )
+        return report
+    exported = _resolve_symbols(include_dir, sorted(set(HEADERS)))
+    # The full SDK scan answers "does this symbol exist at all", independently
+    # of whether the generate_constants HEADERS list reaches it.
+    all_sdk = _resolve_symbols(include_dir, [p.name for p in sorted(include_dir.glob("*.h"))])
+    for op, symbols in REQUIRED_SDK_SYMBOLS.items():
+        rows = []
+        for symbol in symbols:
+            if symbol in exported:
+                status = "exported_by_headers"
+                source = "HEADERS"
+                addition = None
+            elif symbol in all_sdk:
+                status = "declared_in_sdk_header_not_listed"
+                source = MISSING_HEADER_SOURCES.get(symbol, "unknown header")
+                addition = source
+            else:
+                status = "absent_from_sdk"
+                source = None
+                addition = None
+            rows.append(
+                {
+                    "symbol": symbol,
+                    "status": status,
+                    "declared_in": source,
+                    "required_header_addition": addition,
+                }
+            )
+        report["ops"][op] = rows
+    report["status"] = "checked"
+    report["summary"] = {
+        op: {
+            "exported_by_headers": sum(1 for row in rows if row["status"] == "exported_by_headers"),
+            "declared_in_sdk_header_not_listed": sum(
+                1 for row in rows if row["status"] == "declared_in_sdk_header_not_listed"
+            ),
+            "absent_from_sdk": sum(1 for row in rows if row["status"] == "absent_from_sdk"),
+        }
+        for op, rows in report["ops"].items()
+    }
+    return report
+
+
+def check_rejected_proposal_symbols() -> dict:
+    """The 0.10.0 proposal's names must not exist in this machine's SDK."""
+    include_dir = _resolve_sdk_include_dir()
+    rows = []
+    for symbol in REJECTED_PROPOSAL_SYMBOLS:
+        found = False
+        where = None
+        if include_dir is not None:
+            for header in sorted(include_dir.glob("*.h")):
+                source = header.read_text(encoding="utf-8", errors="replace")
+                if re.search(r"\b" + re.escape(symbol) + r"\b", source):
+                    found = True
+                    where = header.name
+                    break
+        rows.append(
+            {
+                "symbol": symbol,
+                "present_in_sdk": found,
+                "declared_in": where,
+                "verdict": "must not be used" if not found else "review before use",
+            }
+        )
+    return {
+        "include_dir": str(include_dir) if include_dir else None,
+        "symbols": rows,
+        "note": (
+            "Symbols absent from the SDK cannot be resolved by the "
+            "tools/generate_constants.py mechanism and must not appear in code."
+        ),
+    }
+
+
+# Every marker the frozen contract must keep. The offline stage fails when one
+# disappears, so a later edit cannot quietly unfreeze part of the surface.
+REQUIRED_CONTRACT_MARKERS: list[str] = [
+    "# G5 曲面链路原生契约",
+    "## 1. SDK 逐项核实结论表",
+    "## 2. 预期原生元素树",
+    "## 3. 第一版能力边界",
+    "## 4. 冻结的 schema 与测量契约",
+    "## 5. 最小几何 oracle",
+    "## 6. 给 Q08–Q10 的确切交接",
+    "## 7. 实机原生探针清单",
+    "## 8. 未验证范围",
+    "surface_area_mm2",
+    "curve_length_mm",
+    "endpoints_mm",
+    "area_before_mm2",
+    "area_after_mm2",
+    "kept_side",
+    "kept_side_basis",
+    "surface_area_status",
+    "curve_length_status",
+    "endpoints_status",
+    "area_before_status",
+    "area_after_status",
+    "native/surface_measure.h",
+    "PRO_E_BNBLN_CURVES",
+    "PRO_E_COPYTRIM_QUILT",
+    "PRO_E_SRF_TRIM_TYPE",
+    "PRO_SURF_TRIM_USE_QLT",
+    "PRO_TRIM_PRIM_QLT_SIDE_ONE",
+    "PRO_E_DTM_SRF_TYPE_BND_BLEND",
+    "PRO_E_TRIM_QLT_SIDE",
+    "ProSurfaceAreaEval",
+    "ProContourAreaEval",
+    "ProCurveLengthEval",
+    "ProCurveXyzdataEval",
+    "SurfaceLoftOp",
+    "ProjectCurveOp",
+    "SurfaceTrimOp",
+    "generic_surface_loft",
+    "generic_project_curve",
+    "generic_surface_trim",
+]
+
+
+def check_contract_document() -> dict:
+    """The contract must exist and keep every frozen surface the driver relies on."""
+    if not CONTRACT.is_file():
+        raise AssertionError(f"frozen contract missing: {CONTRACT}")
+    text = CONTRACT.read_text(encoding="utf-8")
+    missing = [item for item in REQUIRED_CONTRACT_MARKERS if item not in text]
+    assert not missing, {"contract_missing": missing}
+    for symbol in REJECTED_PROPOSAL_SYMBOLS:
+        # The contract must name the rejected symbols only to reject them.
+        assert symbol in text, f"contract must record the rejected symbol: {symbol}"
+    return {
+        "path": str(CONTRACT.relative_to(ROOT).as_posix()),
+        "bytes": len(text.encode("utf-8")),
+        "required_markers": len(REQUIRED_CONTRACT_MARKERS),
+        "status": "complete",
+    }
+
+
+def check_oracles() -> dict:
+    """Recompute every oracle's closed form independently of any native run."""
+    rows = []
+    for oracle in ORACLES:
+        if oracle["id"] == "O1":
+            length = oracle["sections_mm"]["length"]
+            separation = oracle["sections_mm"]["separation"]
+            area = length * separation
+            assert abs(area - oracle["expected_area_mm2"]) < 1e-9, oracle
+        elif oracle["id"] == "O2":
+            radius = oracle["cylinder"]["radius_mm"]
+            length = oracle["source_line_mm"]["length"]
+            assert oracle["expected_curve_length_mm"] == length, oracle
+            assert oracle["expected_endpoint_radius_mm"] == radius, oracle
+            assert oracle["source_line_mm"]["radial_offset_mm"] != radius, oracle
+        else:
+            width = oracle["rectangle_mm"]["width"]
+            height = oracle["rectangle_mm"]["height"]
+            area = width * height
+            assert abs(area - oracle["expected_area_before_mm2"]) < 1e-9, oracle
+            half = width / 2.0 * height
+            assert abs(half - oracle["expected_area_after_mm2"]) < 1e-9, oracle
+            assert (
+                abs(2 * half - oracle["expected_area_before_mm2"])
+                <= oracle["conservation_tolerance_mm2"]
+            ), oracle
+        rows.append(oracle)
+    return {"count": len(rows), "oracles": rows}
+
+
+def check_reference_rules() -> dict:
+    """The reference kinds the three ops allow must exist in the shared schema."""
+    allowed = {"quilt_feature", "curve", "datum_plane", "datum_axis_feature", "edge"}
+    source = (ROOT / "src" / "creo_mechdog" / "schema.py").read_text(encoding="utf-8")
+    for kind in allowed:
+        assert f'"{kind}"' in source, f"reference kind not registered in schema.py: {kind}"
+    # A quilt reference must resolve to exactly one quilt geometry item; the
+    # native resolver enforces that and the contract freezes the rule.
+    native = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
+    assert "quilt_feature" in native
+    assert "Feature reference must identify exactly one geometry item" in native
+    return {
+        "allowed_reference_kinds": sorted(allowed),
+        "uniqueness_rule": "exactly one geometry item per reference; zero or many is rejected",
+        "body_boolean_not_allowed": True,
+    }
+
+
+def check_measurement_apis() -> dict:
+    """The measurement APIs the contract names must exist in the local SDK."""
+    include_dir = _resolve_sdk_include_dir()
+    rows = []
+    for name, description in MEASUREMENT_APIS.items():
+        symbol = description.split("(")[0].strip()
+        declared = False
+        where = None
+        if include_dir is not None:
+            for header in sorted(include_dir.glob("*.h")):
+                source = header.read_text(encoding="utf-8", errors="replace")
+                if re.search(r"\b" + re.escape(symbol) + r"\s*\(", source):
+                    declared = True
+                    where = header.name
+                    break
+        rows.append(
+            {
+                "api": symbol,
+                "description": description,
+                "declared_in_sdk": declared,
+                "header": where,
+            }
+        )
+    return {"apis": rows, "include_dir": str(include_dir) if include_dir else None}
+
+
+def check_probe_plan() -> dict:
+    """The three native probes must be complete and mutually exclusive in blocking."""
+    ids = [probe["id"] for probe in PROBES]
+    assert ids == ["P1", "P2", "P3"], ids
+    blocked = [probe["blocks_on_failure"] for probe in PROBES]
+    assert blocked == [["Q08 surface_loft"], ["Q09 project_curve"], ["Q10 surface_trim"]], blocked
+    for probe in PROBES:
+        for key in ("goal", "create", "extract", "compare", "verdicts"):
+            assert probe.get(key), (probe["id"], key)
+        assert probe["verdicts"] == ["feasible", "route not established", "unverified"]
+    return {"probes": PROBES}
+
+
+# --- report plumbing --------------------------------------------------------
+
+
+def new_run_id() -> str:
+    return f"{time.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+
+def resolve_output(output: Path | None, run_id: str) -> Path:
+    path = (
+        Path(output)
+        if output is not None
+        else ROOT / "build" / "g5_native_probe" / run_id / "report.json"
+    )
+    if path.exists():
+        raise ValueError(f"Refusing to overwrite an existing report: {path}")
+    return path
+
+
+def local_provenance() -> dict:
+    from version import VERSION
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        ).stdout.strip()
+
+    names = set(
+        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    )
+    names.update(
+        (
+            "docs/development/G5-NATIVE-CONTRACT.md",
+            "tools/test_g5_native_probe.py",
+            "tools/generate_constants.py",
+            "src/creo_mechdog/schema.py",
+            "native/generic.cpp",
+            "native/surfaces.cpp",
+            "native/blend_create.cpp",
+        )
+    )
+    hashes = {
+        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        for name in sorted(names)
+        if (ROOT / name).is_file()
+    }
+    return {
+        "version": VERSION,
+        "commit": git("rev-parse", "HEAD"),
+        "branch": git("branch", "--show-current"),
+        "dirty": bool(git("status", "--porcelain")),
+        "source_sha256": hashes,
+        "source_fingerprint": hashlib.sha256(
+            json.dumps(hashes, sort_keys=True).encode()
+        ).hexdigest(),
+        "environment": {
+            "system": platform.system(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
+        "creo_connected": False,
+        "native_build_triggered": False,
+    }
+
+
+def write_offline_report(output: Path, run_id: str, checks: dict) -> dict:
+    report = {
+        "task": "Q07 G5 feasibility and interface freeze (FEAT-009 / FEAT-039)",
+        "scope": "G5 native contract freeze: SDK symbol verification, frozen schema "
+        "and measurement surface, three minimal geometry oracles, three native probes",
+        "run_id": run_id,
+        "mode": "offline",
+        "live_run": False,
+        "native_acceptance": "not_run",
+        "statement": (
+            "Offline stage only: the frozen contract was checked against the "
+            "repository sources, the SDK symbol table was resolved by symbol name "
+            "through the tools/generate_constants.py mechanism, and the three "
+            "geometry oracles were recomputed analytically. No MCP client, no "
+            "Toolkit call, no native build, no Creo connection. The three native "
+            "probes are defined but not executed; they remain the integrator's "
+            "serial live-window work."
+        ),
+        "checks": checks,
+        "provenance": local_provenance(),
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--live", action="store_true")
+    parser.add_argument("--confirm-session-usable", action="store_true")
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args(argv)
+
+    if args.live and not args.confirm_session_usable:
+        print("live runs require --confirm-session-usable", file=sys.stderr)
+        return 2
+    if args.live:
+        print(
+            "LIVE NOT IMPLEMENTED by Q07: the three native probes need the "
+            "FEAT-009 / FEAT-039 implementations that consume "
+            "docs/development/G5-NATIVE-CONTRACT.md. No job was submitted, no "
+            "Creo session was contacted. Run the offline stage for the frozen "
+            "probe steps, then execute them in the approved serial live window.",
+            file=sys.stderr,
+        )
+        return 2
+
+    run_id = new_run_id()
+    output = resolve_output(args.output, run_id)
+    checks = {
+        "contract_document": check_contract_document(),
+        "sdk_symbols": check_sdk_symbols(),
+        "rejected_proposal_symbols": check_rejected_proposal_symbols(),
+        "measurement_apis": check_measurement_apis(),
+        "oracles": check_oracles(),
+        "reference_rules": check_reference_rules(),
+        "probe_plan": check_probe_plan(),
+    }
+    write_offline_report(output, run_id, checks)
+    digest = hashlib.sha256(output.read_bytes()).hexdigest()
+    output.with_name("report.sha256").write_text(f"{digest}  {output.name}\n", encoding="utf-8")
+    print(f"report: {output}")
+    print(f"report_sha256: {digest}")
+    print("sdk_symbols: " + json.dumps(checks["sdk_symbols"].get("summary", {}), sort_keys=True))
+    print("native_acceptance: not_run (offline stage only)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
