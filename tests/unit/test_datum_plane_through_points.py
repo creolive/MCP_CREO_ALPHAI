@@ -67,7 +67,7 @@ class ThroughPointsPositiveTests(unittest.TestCase):
         dumped = validate_operations([*three_points_ops(), plane_op(offset=0)])
         self.assertEqual(dumped[-1]["offset"], 0)
 
-    def test_labels_may_be_reused_across_point_names_but_stay_distinct(self):
+    def test_multi_point_producer_is_refused_in_the_positive_slot(self):
         operations = [
             points_op("shared_a", [[0, 0, 0], [1, 1, 1]]),
             points_op("shared_b", [[2, 0, 0]]),
