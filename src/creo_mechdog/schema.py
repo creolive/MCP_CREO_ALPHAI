@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from creo_mechdog.geometry_deviation import validate_tolerance_mm
 from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
@@ -275,6 +276,16 @@ class SketchOp(StrictModel):
     dimensions: list[SketchDimension] = []
     constraints: list[SketchConstraint] = []
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
+    # FEAT-010/BUG-049: optional post-solve fidelity gate. Omitted keeps the
+    # mode defaults (coordinates 1e-5 mm rejection, autodim 1e-3 mm warning);
+    # an explicit value forces the threshold. bool/NaN/Inf/0/negative rejected.
+    geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("geometry_tolerance_mm", mode="before")
+    @classmethod
+    def _tolerance_is_finite_positive(cls, value):
+        # pydantic lax mode would coerce bool to float; the contract rejects it.
+        return validate_tolerance_mm(value)
 
     @model_validator(mode="after")
     def entities_unique(self):
@@ -363,6 +374,13 @@ class SketchGeometryOp(StrictModel):
     sketch: Label
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
+    # Same fidelity contract as SketchOp; both entries share one definition.
+    geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("geometry_tolerance_mm", mode="before")
+    @classmethod
+    def _tolerance_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
 
     @model_validator(mode="after")
     def supported_entities(self):

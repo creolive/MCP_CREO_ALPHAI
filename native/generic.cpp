@@ -1697,6 +1697,14 @@ static J sketch(const J &op) {
     J coordinate_plan;
     J solving_op = op;
     solving_op["dimensioning"] = profile_dimensioning(op);
+    // FEAT-010/BUG-049: resolve the deviation policy before solving so a
+    // malformed explicit tolerance fails before any mutation.
+    const DeviationPolicy deviation_policy =
+        resolve_geometry_tolerance(op, solving_op["dimensioning"].get<std::string>());
+    const char *deviation_context =
+        std::string(deviation_policy.source) == "request" ? "geometry_tolerance_mm"
+                                                          : "Coordinate dimensioning";
+    J deviation_targets;
     if (solving_op["dimensioning"] == "coordinates") {
         if (!op.value("dimensions", J::array()).empty() ||
             !op.value("constraints", J::array()).empty())
@@ -1713,6 +1721,7 @@ static J sketch(const J &op) {
         log("COORDINATE_AXES u_to_section_x=%.9f axes=%d,%d\n", u_to_section_x, axes[0], axes[1]);
         coordinate_plan = coordinate_dimensions(section, csid, entities, axes, coordinate_anchors);
         dims = coordinate_plan["dimension_ids"];
+        deviation_targets = coordinate_plan["targets"];
     }
     for (auto d : op.value("dimensions", J::array())) {
         std::vector<int> ids;
@@ -1729,11 +1738,17 @@ static J sketch(const J &op) {
         CK(ProSecdimValueSet(section, id, d["value"]));
         dims[d["name"].get<std::string>()] = id;
     }
+    // Non-coordinates modes snapshot the pre-solve section so the solved
+    // geometry can be measured against the same named entities afterwards.
+    if (deviation_targets.is_null())
+        deviation_targets = section_target_snapshot(section, entities);
     J solver_info = solve_profile(section, solving_op);
     solver_info["requested"] = op.value("dimensioning", "auto");
+    J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
     if (!coordinate_plan.is_null())
         solver_info["coordinate_geometry"] = verify_coordinate_plan(
-            section, coordinate_plan["targets"], coordinate_plan["origin_id"]);
+            section, coordinate_plan["targets"], coordinate_plan["origin_id"],
+            deviation_policy.tolerance);
     CK(ProElementSpecialvalueSet(sk, (ProAppData)section));
     redefine(&f, root);
     CK(ProFeatureElemtreeFree(&f, root));
@@ -1743,6 +1758,7 @@ static J sketch(const J &op) {
     ProError copy_code = ProFeatureSectionCopy(&f, 0, &saved);
     J native_section = {{"available", false}, {"query_code", copy_code}};
     J arc_geometry = J::array();
+    J deviation_feature;
     if (!copy_code) {
         try {
             native_section = section_profile_summary(saved, "sketch");
@@ -1750,7 +1766,9 @@ static J sketch(const J &op) {
                                                frame.origin, frame.u, frame.v, loc, mirrored);
             if (!coordinate_plan.is_null())
                 solver_info["coordinate_geometry_after_creation"] = verify_coordinate_plan(
-                    saved, coordinate_plan["targets"], coordinate_plan["origin_id"]);
+                    saved, coordinate_plan["targets"], coordinate_plan["origin_id"],
+                    deviation_policy.tolerance);
+            deviation_feature = geometry_deviation_stage(saved, deviation_targets);
         } catch (...) {
             ProSectionFree(&saved);
             throw;
@@ -1758,12 +1776,23 @@ static J sketch(const J &op) {
         CK(ProSectionFree(&saved));
     } else if (!coordinate_plan.is_null())
         check(copy_code, "CopySketchSection");
-    else
+    else {
         log("SECTION_PROFILE_UNAVAILABLE phase=sketch copy_code=%d\n", copy_code);
+        deviation_feature = unavailable_deviation_stage(
+            "the solved feature section could not be copied (code " +
+            std::to_string((int)copy_code) + ")");
+    }
     if (arc_geometry.empty())
         arc_geometry = arc_geometry_report(nullptr, copy_code, op["entities"], entities,
                                            frame.origin, frame.u, frame.v, loc, mirrored);
     solver_info["native_section"] = native_section;
+    // FEAT-010/BUG-049: publish the two-stage fidelity report on the
+    // operation result; an enforced policy rejects before the feature ships.
+    J geometry_deviation = geometry_deviation_report(
+        deviation_regenerate, deviation_feature, deviation_policy.tolerance,
+        deviation_policy.enforce, deviation_policy.source);
+    enforce_geometry_deviation(geometry_deviation, deviation_context);
+    solver_info["geometry_deviation"] = geometry_deviation;
     J ids = J::object();
     for (auto item : entities)
         ids[item.first] = item.second;
@@ -1793,6 +1822,7 @@ static J sketch(const J &op) {
             {"v_axis", frame.v},
             {"native_section", native_section},
             {"arc_geometry", arc_geometry},
+            {"geometry_deviation", geometry_deviation},
             {"entity_ids", ids}};
 }
 // ProFeatureWithoptionsCreate reports an invalid section only as a bare code;

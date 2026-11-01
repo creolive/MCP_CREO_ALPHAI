@@ -333,6 +333,10 @@ static void generic_sketch_edit(const J &op) {
         unchanged["arc_geometry"] =
             arc_geometry_report(section, PRO_TK_NO_ERROR, geometry, named_ids, vec(meta["origin"]),
                                 vec(meta["u_axis"]), vec(meta["v_axis"]), loc, mirrored);
+        // No re-solve happened for an identical payload; the fidelity report
+        // stays explicitly unavailable instead of implying a fresh measurement.
+        unchanged["geometry_deviation"] = skipped_geometry_deviation(
+            "identical payload; no re-solve was performed (geometry verified at 1e-7 mm)");
         CK(ProFeatureElemtreeFree(&f, root));
         stage_operation_result(unchanged);
         return;
@@ -499,7 +503,16 @@ static void generic_sketch_edit(const J &op) {
         }
     }
     solving_op["dimensioning"] = mode;
+    // FEAT-010/BUG-049: resolve the deviation policy on the final mode (the
+    // autodim upgrade above may have switched this edit to coordinates) and
+    // snapshot the pre-solve section so the solved geometry is measured
+    // against the same named entities.
+    const DeviationPolicy deviation_policy = resolve_geometry_tolerance(op, mode);
+    const char *deviation_context =
+        std::string(deviation_policy.source) == "request" ? "geometry_tolerance_mm"
+                                                          : "Coordinate dimensioning";
     J coordinate_plan;
+    J deviation_targets;
     if (mode == "coordinates") {
         ProIntlist ids = nullptr;
         int n = 0, origin = -1;
@@ -534,14 +547,20 @@ static void generic_sketch_edit(const J &op) {
             fabs(u_to_section_x) >= sqrt(0.5) ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 0};
         log("COORDINATE_AXES u_to_section_x=%.9f axes=%d,%d\n", u_to_section_x, axes[0], axes[1]);
         coordinate_plan = coordinate_dimensions(section, origin, named, axes, anchors);
+        deviation_targets = coordinate_plan["targets"];
     }
+    // Non-coordinates edits snapshot the rebuilt pre-solve section by name.
+    if (deviation_targets.is_null())
+        deviation_targets = section_target_snapshot(section, named_ids);
     meta["solver"] = solve_profile(section, solving_op);
     trace_section_ids(section, "after_solve");
     trace_section_constraints(section, "after_solve");
     meta["solver"]["requested"] = op.value("dimensioning", "auto");
+    J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
     if (!coordinate_plan.is_null())
         meta["solver"]["coordinate_geometry"] = verify_coordinate_plan(
-            section, coordinate_plan["targets"], coordinate_plan["origin_id"]);
+            section, coordinate_plan["targets"], coordinate_plan["origin_id"],
+            deviation_policy.tolerance);
     CK(ProElementSpecialvalueSet(sk, (ProAppData)section));
     redefine(&f, root);
     CK(ProFeatureElemtreeFree(&f, root));
@@ -563,18 +582,41 @@ static void generic_sketch_edit(const J &op) {
             CK(ProSectionFree(&traced));
         }
     }
-    if (!coordinate_plan.is_null()) {
+    // CompleteFeature stage: measure the redefined feature's saved section.
+    // Coordinates edits keep the strict copy requirement; other modes record
+    // an explicit unavailable stage when the copy fails.
+    J deviation_feature;
+    {
         ProSection saved = nullptr;
-        CK(ProFeatureSectionCopy(&f, 0, &saved));
-        try {
-            meta["solver"]["coordinate_geometry_after_creation"] = verify_coordinate_plan(
-                saved, coordinate_plan["targets"], coordinate_plan["origin_id"]);
-        } catch (...) {
-            ProSectionFree(&saved);
-            throw;
+        ProError copy_code = ProFeatureSectionCopy(&f, 0, &saved);
+        if (copy_code != PRO_TK_NO_ERROR) {
+            if (!coordinate_plan.is_null())
+                check(copy_code, "CopySketchSection");
+            deviation_feature = unavailable_deviation_stage(
+                "the redefined feature section could not be copied (code " +
+                std::to_string((int)copy_code) + ")");
+        } else {
+            try {
+                if (!coordinate_plan.is_null())
+                    meta["solver"]["coordinate_geometry_after_creation"] =
+                        verify_coordinate_plan(saved, coordinate_plan["targets"],
+                                               coordinate_plan["origin_id"],
+                                               deviation_policy.tolerance);
+                deviation_feature = geometry_deviation_stage(saved, deviation_targets);
+            } catch (...) {
+                ProSectionFree(&saved);
+                throw;
+            }
+            CK(ProSectionFree(&saved));
         }
-        CK(ProSectionFree(&saved));
     }
+    // FEAT-010/BUG-049: publish the two-stage fidelity report on the edit
+    // result; an enforced policy rejects the edit before it ships.
+    J geometry_deviation = geometry_deviation_report(
+        deviation_regenerate, deviation_feature, deviation_policy.tolerance,
+        deviation_policy.enforce, deviation_policy.source);
+    enforce_geometry_deviation(geometry_deviation, deviation_context);
+    meta["solver"]["geometry_deviation"] = geometry_deviation;
     if (f.id != original_id)
         throw std::runtime_error("Sketch ID changed during in-place edit");
     meta["geometry"] = op["entities"];
@@ -592,6 +634,7 @@ static void generic_sketch_edit(const J &op) {
                        {"parameters", meta.value("airfoil", J::object())}};
     if (identical_payload)
         sketch_result["verification_probe"] = verification_probe_result;
+    sketch_result["geometry_deviation"] = geometry_deviation;
     sketch_result["frame"] = {{"origin", meta["origin"]},
                               {"u_axis", meta["u_axis"]},
                               {"v_axis", meta["v_axis"]},
