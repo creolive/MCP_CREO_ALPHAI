@@ -4669,6 +4669,206 @@ static void session_erase_native(const J &request, J &report) {
         report["message"] = summary["message"];
 }
 
+// BUG-096 (Q03/E): failed new-model orphan cleanup. A failed "new" job leaves
+// an unsaved session object that blocks the next same-name model ("New model
+// name already exists in the Creo session"). Cleanup erases at most the single
+// object proven to be the one this job created (ProMdlnameCopy handle + id),
+// after re-checking identity and dependencies, inside the same Toolkit lock.
+// Vetoes keep the object and the receipt says why; nothing is erased without
+// proof. Reasons mirror src/creo_mechdog/failed_model_cleanup.py and
+// tests/unit/test_failed_model_cleanup.py. This is NOT the restore-checkpoint
+// rollback (rollback_* keeps its old meaning) and never touches
+// unknown/recovery protection: no erase_all, no adoption, no retries.
+struct NewModelEvidence {
+    bool created = false; // this run performed ProMdlnameCopy
+    int id = -1;          // ProMdlIdGet captured at creation
+    bool id_known = false;
+    bool baseline_known = false; // modification probe captured at creation
+    bool baseline_modified = false;
+    bool ops_mutated = false; // a plan operation mutated the model
+};
+static NewModelEvidence new_model_evidence;
+
+static J cleanup_receipt(bool attempted, const std::string &status, const std::string &reason,
+                         J erase_code, bool absence_verified) {
+    return {{"attempted", attempted},
+            {"status", status},
+            {"reason", reason},
+            {"erase_code", erase_code},
+            {"absence_verified", absence_verified}};
+}
+
+// Two independent absence queries (the session_erase_native apply pattern):
+// a name lookup plus a session-list scan. Returns true only when both run and
+// agree the name is gone; query_ok reports whether both queries returned.
+static bool confirm_name_absent(const std::wstring &name, ProMdlType mdltype, bool &query_ok) {
+    query_ok = true;
+    ProMdl probe = nullptr;
+    ProName locate = {};
+    wcsncpy_s(locate, name.c_str(), _TRUNCATE);
+    ProError first = ProMdlInit(locate, mdltype, &probe);
+    if (first == PRO_TK_NO_ERROR)
+        return false;
+    if (first != PRO_TK_E_NOT_FOUND) {
+        query_ok = false;
+        return false;
+    }
+    ProMdl *residue = nullptr;
+    int residue_count = 0;
+    ProError listed = ProSessionMdlList(mdltype, &residue, &residue_count);
+    if (listed == PRO_TK_E_NOT_FOUND)
+        return true;
+    if (listed != PRO_TK_NO_ERROR) {
+        query_ok = false;
+        return false;
+    }
+    bool absent = true;
+    for (int i = 0; i < residue_count; ++i) {
+        ProMdlName other = {};
+        if (!ProMdlMdlnameGet(residue[i], other) && !_wcsicmp(other, name.c_str()))
+            absent = false;
+    }
+    ProArrayFree((ProArray *)&residue);
+    return absent;
+}
+
+// Inbound references from other session models. query_ok reports whether every
+// dependency enumeration returned; an error means safety cannot be proven.
+static bool referenced_by_other_model(const std::wstring &name, ProMdlType mdltype, ProMdl self,
+                                      bool &query_ok) {
+    query_ok = true;
+    std::string family = mdltype == PRO_MDL_ASSEMBLY ? "assembly" : "part";
+    std::string key = erase_key(name, family);
+    bool referenced = false;
+    for (ProMdlType type : {PRO_MDL_PART, PRO_MDL_ASSEMBLY}) {
+        ProMdl *list = nullptr;
+        int count = 0;
+        ProError listed = ProSessionMdlList(type, &list, &count);
+        if (listed == PRO_TK_E_NOT_FOUND)
+            continue;
+        if (listed != PRO_TK_NO_ERROR) {
+            query_ok = false;
+            return referenced;
+        }
+        for (int i = 0; i < count; ++i) {
+            if (list[i] == self)
+                continue;
+            ProMdlnameShortdata *names = nullptr;
+            ProMdlfileType *types = nullptr;
+            int dep_count = 0;
+            ProError code = ProMdlDependenciesDataList(list[i], &names, &types, &dep_count);
+            if (code == PRO_TK_E_NOT_FOUND)
+                continue;
+            if (code != PRO_TK_NO_ERROR) {
+                query_ok = false;
+                ProArrayFree((ProArray *)&list);
+                return referenced;
+            }
+            for (int j = 0; j < dep_count; ++j) {
+                std::string dep_family = types[j] == PRO_MDLFILE_ASSEMBLY ? "assembly" : "part";
+                if (erase_key(std::wstring(names[j].name), dep_family) == key)
+                    referenced = true;
+            }
+            ProArrayFree((ProArray *)&names);
+            ProArrayFree((ProArray *)&types);
+        }
+        ProArrayFree((ProArray *)&list);
+    }
+    return referenced;
+}
+
+static J failed_model_cleanup_receipt(const J &request, bool connected) {
+    if (!request.is_object() || !request.value("new", false))
+        return cleanup_receipt(false, "skipped", "not_new_model_job", nullptr, false);
+    if (!connected)
+        return cleanup_receipt(false, "skipped", "no_session_lookup", nullptr, false);
+    std::string model_type = "part";
+    if (request.contains("model") && request["model"].is_object())
+        model_type = request["model"].value("model_type", "part");
+    ProMdlType mdltype = model_type == "assembly" ? PRO_MDL_ASSEMBLY : PRO_MDL_PART;
+    ProName locate = {};
+    wcsncpy_s(locate, model_name.c_str(), _TRUNCATE);
+    ProMdl found = nullptr;
+    ProError code = ProMdlInit(locate, mdltype, &found);
+    if (code == PRO_TK_E_NOT_FOUND) {
+        // Nothing holds the name; the absence queries must run and agree
+        // before the receipt may claim absence_verified.
+        bool query_ok = false;
+        bool absent = confirm_name_absent(model_name, mdltype, query_ok);
+        if (!query_ok || !absent)
+            return cleanup_receipt(true, "skipped", "safety_query_failed", nullptr, false);
+        return cleanup_receipt(true, "skipped",
+                               new_model_evidence.created ? "orphan_already_absent"
+                                                          : "no_orphan_created",
+                               nullptr, true);
+    }
+    if (code != PRO_TK_NO_ERROR)
+        return cleanup_receipt(true, "skipped", "safety_query_failed", nullptr, false);
+    // Collect every probe before the veto chain so a failed query is always
+    // reported as safety_query_failed and never as a specific veto it could
+    // not prove (mirrors evaluate_candidate's precedence).
+    bool safety_query_failed = false;
+    bool identity_matches = false;
+    int found_id = -1;
+    if (ProMdlIdGet(found, &found_id) == PRO_TK_NO_ERROR)
+        identity_matches = new_model_evidence.id_known && found_id == new_model_evidence.id;
+    else
+        safety_query_failed = true;
+    bool never_saved = false;
+    ProPath origin = {};
+    ProError origin_code = ProMdlOriginGet(found, origin);
+    if (origin_code == PRO_TK_NO_ERROR)
+        never_saved = origin[0] == 0;
+    else if (origin_code != PRO_TK_E_NOT_FOUND)
+        safety_query_failed = true;
+    bool window_open = false;
+    int window_id = -1;
+    ProError window_code = ProMdlWindowGet(found, &window_id);
+    if (window_code == PRO_TK_NO_ERROR)
+        window_open = true;
+    else if (window_code != PRO_TK_E_NOT_FOUND)
+        safety_query_failed = true;
+    bool user_modified = false;
+    ProBoolean modified = PRO_B_FALSE;
+    if (ProMdlModificationVerify(found, &modified) == PRO_TK_NO_ERROR) {
+        // The job's own writes (creation copy, plan operations) are not user
+        // edits. Without that attribution a flagged model is kept.
+        if (modified == PRO_B_TRUE && !new_model_evidence.ops_mutated)
+            user_modified =
+                !(new_model_evidence.baseline_known && new_model_evidence.baseline_modified);
+    } else
+        safety_query_failed = true;
+    bool refer_ok = true;
+    bool referenced = referenced_by_other_model(model_name, mdltype, found, refer_ok);
+    if (!refer_ok)
+        safety_query_failed = true;
+    if (!new_model_evidence.created)
+        return cleanup_receipt(true, "skipped", "preexisting_same_name", nullptr, false);
+    if (safety_query_failed)
+        return cleanup_receipt(true, "skipped", "safety_query_failed", nullptr, false);
+    if (!identity_matches)
+        return cleanup_receipt(true, "skipped", "identity_changed", nullptr, false);
+    if (!never_saved)
+        return cleanup_receipt(true, "skipped", "saved_since_creation", nullptr, false);
+    if (window_open)
+        return cleanup_receipt(true, "skipped", "window_open", nullptr, false);
+    if (user_modified)
+        return cleanup_receipt(true, "skipped", "user_modified", nullptr, false);
+    if (referenced)
+        return cleanup_receipt(true, "skipped", "referenced_by_other", nullptr, false);
+    ProError erase_code = ProMdlErase(found);
+    if (erase_code != PRO_TK_NO_ERROR)
+        return cleanup_receipt(true, "failed", "erase_failed", J(erase_code), false);
+    // Identity matched the recorded creation handle: the erased object was
+    // this run's own model; nothing later in the tail reads board.
+    board = nullptr;
+    bool query_ok = false;
+    bool absent = confirm_name_absent(model_name, mdltype, query_ok);
+    if (!query_ok || !absent)
+        return cleanup_receipt(true, "unknown", "erase_unconfirmed", J(0), false);
+    return cleanup_receipt(true, "erased", "cleaned", J(0), true);
+}
+
 static int components_total = 0;
 static int components_missing = 0;
 static ProError component_probe(ProFeature *feature, ProError status, ProAppData) {
@@ -5265,6 +5465,7 @@ static int run_generic(const std::wstring &job) {
     int operation_index = -1;
     bool executing_operation = false;
     std::wstring checkpoint;
+    new_model_evidence = NewModelEvidence();
     board_log = _wfsopen((job + L"\\native.log").c_str(), L"w", _SH_DENYNO);
     if (!board_log)
         return 3;
@@ -5393,6 +5594,13 @@ static int run_generic(const std::wstring &job) {
                 }
                 CK(ProDirectoryChange(original));
                 mutated = true;
+                new_model_evidence.created = true;
+                new_model_evidence.id_known =
+                    ProMdlIdGet(board, &new_model_evidence.id) == PRO_TK_NO_ERROR;
+                ProBoolean baseline = PRO_B_FALSE;
+                new_model_evidence.baseline_known =
+                    ProMdlModificationVerify(board, &baseline) == PRO_TK_NO_ERROR;
+                new_model_evidence.baseline_modified = baseline == PRO_B_TRUE;
             } else {
                 if (found == PRO_TK_E_NOT_FOUND) {
                     if (checkpoint.empty())
@@ -5447,8 +5655,10 @@ static int run_generic(const std::wstring &job) {
                 executing_operation = true;
                 generic_stage("execute_" + op["op"].get<std::string>());
                 log("OPERATION_INDEX=%d INPUT=%s\n", operation_index, op.dump().c_str());
-                if (!request.value("readonly", false))
+                if (!request.value("readonly", false)) {
                     mutated = true;
+                    new_model_evidence.ops_mutated = true;
+                }
                 execute_operation(op);
                 executing_operation = false;
             }
@@ -5620,6 +5830,18 @@ static int run_generic(const std::wstring &job) {
             }
         } else
             report["rollback_code"] = loaded;
+    }
+    // BUG-096: failed new-model orphan cleanup runs in the same Toolkit lock,
+    // after the restore-checkpoint block (the two domains are mutually
+    // exclusive: cleanup only ever erases a never-saved job-created orphan,
+    // rollback only ever restores a saved checkpoint).
+    if (!report["success"].get<bool>()) {
+        try {
+            report["failed_model_cleanup"] = failed_model_cleanup_receipt(request, connected);
+        } catch (...) {
+            report["failed_model_cleanup"] =
+                cleanup_receipt(false, "unknown", "not_reported", nullptr, false);
+        }
     }
     if (!report["success"].get<bool>()) {
         finalize_operation_results(request, false, report.value("rollback_succeeded", false),

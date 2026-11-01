@@ -1245,6 +1245,17 @@ def get_job(job_id: str, detail: str = "full") -> dict:
             "recovery_required",
             ("Outcome is unconfirmed; preserve reservation and inspect recovery evidence"),
         )
+    # BUG-096: register an honest failed-model-cleanup receipt on terminal
+    # generic jobs. A delivered native block is validated in place; a missing
+    # one is synthesized as unknown (never as a success claim), so "the failed
+    # new model was erased" only ever comes from real absence evidence.
+    if manifest.get("kind") == "generic" and manifest["status"] in (
+        "failed",
+        "unknown_outcome",
+    ):
+        from creo_mechdog import failed_model_cleanup
+
+        failed_model_cleanup.ensure_terminal_receipt(manifest)
     if detail == "compact":
         manifest = compact_job(manifest)
     return manifest
@@ -1317,6 +1328,7 @@ def compact_job(manifest: dict) -> dict:
             "model_unchanged",
             "rollback_message",
             "rollback_code",
+            "failed_model_cleanup",
             "preview_file",
             "preview_status",
             "preview_code",
