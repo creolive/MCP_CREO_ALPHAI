@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import bridge
 import generic_bridge
-import seeds
+from creo_mechdog import seeds
 from version import VERSION
 
 

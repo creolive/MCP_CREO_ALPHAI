@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bridge
-import seeds
+from creo_mechdog import seeds
 from tools import package_seeds
 from version import VERSION
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bridge
-import seeds
+from creo_mechdog import seeds
 
 ROOT = Path(__file__).resolve().parents[1]
 
