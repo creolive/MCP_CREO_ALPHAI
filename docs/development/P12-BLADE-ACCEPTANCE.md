@@ -29,3 +29,14 @@
 先核 BUG-001/BUG-091 的会话准入，并确认 Q05/Q06 已集成及 schema 接受三点平面；当前离线任务不连接 Creo。驱动默认仅检 manifest；live 需显式 `--live --confirm-session-usable`，且每批先经当前 schema 准入。依次运行 `--stage one`、`four`、`blade`，每级使用独立新模型，检查实际扭转、厚度、bbox、体积、特征数、revision、保存重载与失败恢复。每批提交后只轮询该 job 的终态，成功才用其最新 revision 续编；拒绝、部分完成、失败或 unknown 立即停，保留原 job，不自动重提整批。全叶片之后才设计轮毂、阵列及装配阶段，须先解决上述 unresolved。正规曲面链单列 Q08–Q10→thicken 的面积/体积/编辑/保存重载证据，分别报告，不凭外形相似认定等价。
 
 本次只做离线转换与自检；无 Creo 建模、Toolkit 构建、原生几何验收或 WorkBuddy 黑盒结果。
+
+## 2026-11-02 分级实机结果（Q06 修复后）
+
+前置已满足：Q05 三点定面 live 8/8、Q06 斜面草图 L1/L2 通过（BUG-097 修复），P12 分级解除阻塞。
+
+| 级别 | 结果 | 证据 |
+| --- | --- | --- |
+| `--stage one`（一带） | **通过**：14 操作，作业 `97d5d70063d34ee396ca86790406d71d`，revision 1，保存重载 true | `build/live-0.11.1/`（见 [Q15 第三轮记录](../validation/DEV-053-Q15-live-2026-11-01.md)） |
+| `--stage four`（四带） | **阻断于 `execute_sketch`**：作业 `0fd0997a6ef3477487bee42f313b2706` 报 `Coordinate dimensioning changed the supplied geometry; maximum deviation mm=0.000291`，默认 coordinates 阈值 1e-5 被超出 29 倍，未重提 | 同上 |
+
+边界与下一步：四带截面更复杂，坐标标注对输入几何的实际改动（2.91e-4 mm）超过 coordinates 默认失败阈值，当前如实拒绝、不放宽断言。可选路线：按 Q02 的 `geometry_tolerance_mm` 在计划级显式给出有限正数上限（须评估 3e-4 量级偏差对该叶片几何是否可接受），或后续改进求解/标注策略；0.11.1 不宣称 P12 四带及全叶片验收通过，全叶片、轮毂阵列与装配仍以"集成人后续实机步骤"为准。
