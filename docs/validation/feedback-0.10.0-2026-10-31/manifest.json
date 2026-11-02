@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-060",
+  "task": "R10",
+  "archived_at": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Three originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. This archive is separate from feedback-0.10.0-2026-11-01 (another reporter's evening package) and must never be merged into it.",
+  "source_baseline": {
+    "version": "0.11.1",
+    "public_tools": 95,
+    "upstream": "main@64e28f1",
+    "branch": "codex/DEV-060-r10-followup",
+    "dirty": true,
+    "dirty_note": "Pre-existing unrelated untracked files in the checkout (session_erase/, trail.txt.*, .codebuddy/, .workbuddy/, .zcode/, examples/wb_unsaved_03.prt.1) and modified session_activity.json are preserved and are not part of this archive."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.10.0",
+  "archive_root": "docs/validation/feedback-0.10.0-2026-10-31/originals",
+  "file_count": 3,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads",
+    "length_match": "3/3",
+    "sha256_match": "3/3",
+    "byte_identical": "3/3"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-10-31_CREO_0.10.0_水平底板底边无法挂折边_R2仍未解决.md",
+      "source_relative_path": "2026-10-31_CREO_0.10.0_水平底板底边无法挂折边_R2仍未解决.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.10.0\\2026-10-31_CREO_0.10.0_水平底板底边无法挂折边_R2仍未解决.md",
+      "bytes": 5818,
+      "sha256": "c4bd9bbb55d0f07aa0b334124f37c1f0951d2e11f1bb6d8531a6dde333b2bec7",
+      "content_note": "第十轮回归：R2 水平底板 Z=0 底边 ProSmtedgeContourGet -8、S3 四壁第 3 道失败、草图诊断与 preview 保持"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/20261031_CREO_v0.10.0_端点焊接诊断已补齐但仍不可焊_draft方向取反静默失败.md",
+      "source_relative_path": "20261031_CREO_v0.10.0_端点焊接诊断已补齐但仍不可焊_draft方向取反静默失败.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.10.0\\20261031_CREO_v0.10.0_端点焊接诊断已补齐但仍不可焊_draft方向取反静默失败.md",
+      "bytes": 8853,
+      "sha256": "179741f0142ff4d3afa9750b0dd7980284cb2e8de093e54f392d90c1749e756a",
+      "content_note": "P1 近容差端点拉伸 -1、P2/P6 已修、P3 空件预览、P5 枚举、N1 draft 倒角圆角面回归与 flip 回显不一致"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/2026-10-31CREO10.0.0.0-0.10.0-BUG090获Creo10零补丁编译证据但种子摘要回填仍无闸门.md",
+      "source_relative_path": "2026-10-31CREO10.0.0.0-0.10.0-BUG090获Creo10零补丁编译证据但种子摘要回填仍无闸门.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.10.0\\2026-10-31CREO10.0.0.0-0.10.0-BUG090获Creo10零补丁编译证据但种子摘要回填仍无闸门.md",
+      "bytes": 10413,
+      "sha256": "b780b5432f85e7ea9de5b6a7bed45f25ee6a2878ccc3d420c0fe6a1a04d02a4f",
+      "content_note": "Creo 10 零补丁编译证据、种子摘要回填无闸门、盲孔 tip 口径缺机器可读标记"
+    }
+  ]
+}
