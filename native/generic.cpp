@@ -950,9 +950,15 @@ static ProFeature offset_plane(const J &reference, double offset, const std::wst
     CK(ProElementFree(&root));
     return f;
 }
+// FEAT-053/BUG-097 L2: through_points supports have no exactly perpendicular
+// datum plane on this SDK, and the kernel then parks the unfinished sketch on
+// world XY (identity section location) until CompleteFeature fails with an
+// empty ProErrorList. `orientation_exact` says whether the chosen orientation
+// reference really is perpendicular, so sketch() can build helper planes.
 struct Frame {
     V origin, u, v, n;
     int surface, orientation;
+    bool orientation_exact = false;
 };
 static Frame sketch_frame(const J &op) {
     Frame f = {};
@@ -1076,7 +1082,49 @@ static Frame sketch_frame(const J &op) {
     }
     if (f.orientation < 0)
         throw std::runtime_error("No sketch orientation reference");
+    f.orientation_exact = best < 1e-6;
     return f;
+}
+// Defined later in this translation unit; declared here so sketch() can create
+// the helper support features without moving the whole feature group.
+static void generic_points(const J &op);
+static J through_points_plane(const J &op);
+static std::string helper_label() {
+    static int sequence = 0;
+    for (;;) {
+        std::string label = "mdo" + std::to_string(++sequence);
+        if (!aliases.contains(label))
+            return label;
+    }
+}
+// BUG-097 L2: two datum planes exactly perpendicular to an oblique support
+// fully determine the sketch frame (one orientation reference, one projection
+// anchor). They are ordinary datum_point/datum_plane features so the sketch
+// keeps a native, editable support instead of a hand-built matrix.
+static int build_helper_orientation(Frame &frame) {
+    V locations[4] = {frame.origin, add(frame.origin, frame.u), add(frame.origin, frame.v),
+                      add(frame.origin, frame.n)};
+    std::string labels[4];
+    for (int i = 0; i < 4; i++) {
+        labels[i] = helper_label();
+        J op = {{"op", "datum_points"},
+                {"label", labels[i]},
+                {"reference", {{"kind", "default_csys"}}},
+                {"points", J::array({J{{"name", "p"}, {"position", xyz(locations[i].data())}}})}};
+        generic_points(op);
+    }
+    auto plane = [&](int a, int b, int c) {
+        J op = {{"op", "datum_plane"},
+                {"label", helper_label()},
+                {"reference",
+                 {{"kind", "through_points"},
+                  {"points", J::array({labels[a], labels[b], labels[c]})}}}};
+        J details = through_points_plane(op);
+        return details["plane_frame"]["surface_id"].get<int>();
+    };
+    int normal_u = plane(0, 2, 3);
+    plane(0, 1, 3);
+    return normal_u;
 }
 static ProSectionPointType point_type(const std::string &s) {
     return s == "start"    ? PRO_ENT_START
@@ -1572,6 +1620,10 @@ static J arc_geometry_report(ProSection section, ProError unavailable_code, cons
 }
 static J sketch(const J &op) {
     Frame frame = sketch_frame(op);
+    if (!frame.orientation_exact) {
+        log("SKETCH_ORIENTATION_HELPER=1 support=%d\n", frame.surface);
+        frame.orientation = build_helper_orientation(frame);
+    }
     ProSelection plane_ref = selection(frame.surface, PRO_SURFACE),
                  orient = selection(frame.orientation, PRO_SURFACE);
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
@@ -5268,9 +5320,13 @@ static J failed_model_cleanup_receipt(const J &request, bool connected) {
     bool never_saved = false;
     ProPath origin = {};
     ProError origin_code = ProMdlOriginGet(found, origin);
-    if (origin_code == PRO_TK_NO_ERROR)
-        never_saved = origin[0] == 0;
-    else if (origin_code != PRO_TK_E_NOT_FOUND)
+    if (origin_code == PRO_TK_NO_ERROR) {
+        // A model created by ProMdlnameCopy inherits the template's origin
+        // path. That is not a save of this model: only an origin whose file
+        // stem is this model's own name counts as saved_since_creation.
+        std::wstring origin_stem = std::filesystem::path(origin).stem().wstring();
+        never_saved = origin[0] == 0 || _wcsicmp(origin_stem.c_str(), model_name.c_str()) != 0;
+    } else if (origin_code != PRO_TK_E_NOT_FOUND)
         safety_query_failed = true;
     bool window_open = false;
     int window_id = -1;
