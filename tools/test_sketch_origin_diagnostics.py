@@ -514,7 +514,7 @@ async def live(output: Path, run_id: str) -> int:
             aliases_before = sorted((await runner.snapshot(model_id))["aliases"])
             rejections = []
             for label, deviation in (
-                ("rejected_2e-6", 2e-6),
+                ("rejected_2e6", 2e-6),
                 ("reported_plus", REPORTED_DEVIATION_MM),
                 ("reported_minus", -REPORTED_DEVIATION_MM),
             ):
@@ -535,7 +535,11 @@ async def live(output: Path, run_id: str) -> int:
                         ],
                     },
                 )
-                revision = terminal["revision"]
+                # A rejected job never advances the revision; the compact
+                # terminal omits it on failure, so keep the last known value.
+                # The snapshot below still asserts the revision really is
+                # unchanged.
+                revision = terminal.get("revision", revision)
                 record = runner.sketch_record(terminal, label)
                 block = check_diagnostics_block(
                     record.get("sketch_origin_diagnostics"), plane, [0.0, 0.0, deviation]

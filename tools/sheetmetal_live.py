@@ -66,8 +66,13 @@ def resolve_output(kind: str, run_id: str, output: Path | None) -> Path:
 
 
 def unique_name(tag: str) -> str:
-    """A fresh Creo model name: 1-31 chars, lowercase letters/digits/underscore."""
-    name = f"{tag}_{uuid.uuid4().hex[:6]}"
+    """A fresh Creo model name: 1-31 chars, lowercase letters/digits/underscore.
+
+    Long descriptive tags are shortened so the random suffix still fits the
+    31-character rule; the suffix alone keeps the name unique per run.
+    """
+    suffix = "_" + uuid.uuid4().hex[:6]
+    name = f"{tag[: 31 - len(suffix)]}{suffix}"
     if not NAME_PATTERN.match(name):
         raise ValueError(f"Model name {name!r} violates the 31-character name rule")
     return name

@@ -35,11 +35,22 @@ def stage_batches(manifest, strips):
 
 
 async def run_live(batches, model_name):
-    from fastmcp import Client
+    from mcp import Client
     from mcp.client.stdio import StdioServerParameters
 
     params = StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=ROOT)
     async with Client(params, read_timeout_seconds=120) as client:
+        # The worker is verified/built on the first call; without this wait the
+        # first plan is refused with "Creo is not ready (building_worker)".
+        deadline = time.monotonic() + 180
+        while True:
+            status = await client.call_tool("creo_startup_status", {})
+            state = (status.structured_content or {}).get("state")
+            if state == "ready":
+                break
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"startup not ready before submitting: {state}")
+            await asyncio.sleep(2)
         model_id = revision = None
         for index, operations in enumerate(batches, 1):
             arguments = {"operations": operations}
@@ -56,7 +67,9 @@ async def run_live(batches, model_name):
                 raise RuntimeError(f"batch {index} returned no job_id")
             deadline = time.monotonic() + 900
             while True:
-                reply = await client.call_tool("creo_get_job", {"job_id": job_id, "detail": "full"})
+                reply = await client.call_tool(
+                    "creo_get_job", {"job_id": job_id, "detail": "compact"}
+                )
                 if reply.is_error:
                     raise RuntimeError(f"job {job_id} query failed; stop")
                 terminal = reply.structured_content or {}
