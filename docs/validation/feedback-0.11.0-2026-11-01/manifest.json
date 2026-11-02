@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-062",
+  "task": "R11",
+  "archived_at": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Three originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. This archive is the 0.11.0 batch and is separate from feedback-0.10.0-2026-10-31 and feedback-0.10.0-2026-11-01; the three directories are never merged.",
+  "source_baseline": {
+    "version": "0.11.2",
+    "public_tools": 95,
+    "upstream": "main@c85aa8d",
+    "branch": "main",
+    "dirty": true,
+    "dirty_note": "Pre-existing unrelated untracked files in the checkout (session_erase/, .codebuddy/, .workbuddy/, .zcode/, examples/wb_unsaved_03.prt.1) and the modified session_activity.json are preserved and are not part of this archive.",
+    "release_note": "v0.11.2 published as GitHub Release 431347397 with its own tag and attachments; this batch does not reuse or overwrite them."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.11.0",
+  "archive_root": "docs/validation/feedback-0.11.0-2026-11-01/originals",
+  "file_count": 3,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads",
+    "length_match": "3/3",
+    "sha256_match": "3/3",
+    "byte_identical": "3/3"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-11-01_CREO_0.11.0_受管装配上色解锁链路三处断裂与装配失败恢复死路.md",
+      "source_relative_path": "2026-11-01_CREO_0.11.0_受管装配上色解锁链路三处断裂与装配失败恢复死路.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.0\\2026-11-01_CREO_0.11.0_受管装配上色解锁链路三处断裂与装配失败恢复死路.md",
+      "bytes": 8074,
+      "sha256": "435891f695b7c00d589a61d897e995a47f73954d3c7b561d65d232d3d9d2de3f",
+      "content_note": "FEAT-052 首次实测：上色本身 80/80 成功；旧检查点无 appearance 基线、同名会话残留无解锁引导、零变更失败后装配不可恢复三处断裂；取色/预览/擦除回执三项体验建议"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/2026-11-01CREO10.0.0.0-0.11.0-种子闸门完整落地并实测双向验证与FEAT052台账滞后.md",
+      "source_relative_path": "2026-11-01CREO10.0.0.0-0.11.0-种子闸门完整落地并实测双向验证与FEAT052台账滞后.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.0\\2026-11-01CREO10.0.0.0-0.11.0-种子闸门完整落地并实测双向验证与FEAT052台账滞后.md",
+      "bytes": 9455,
+      "sha256": "e29fef111ce6bae33a77e50b519cf08089194841dd7e03f2c19f28a658f40119",
+      "content_note": "Creo 10 升级验证：BUG-089 闸门双向实测通过、BUG-090 待复验、盲孔 depth_basis 缺字段、FEAT-052 台账滞后、发布检查单建议纳入 FEAT 卡状态"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/20261101_CREO_v0.11.0_N1已修复但flip方向依赖失败仍在_端点焊接连续三轮未修.md",
+      "source_relative_path": "20261101_CREO_v0.11.0_N1已修复但flip方向依赖失败仍在_端点焊接连续三轮未修.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.0\\20261101_CREO_v0.11.0_N1已修复但flip方向依赖失败仍在_端点焊接连续三轮未修.md",
+      "bytes": 6703,
+      "sha256": "135f32a4366c6a100344cb590f2818ec4d15ec63e235a33743562a6bab7d4147",
+      "content_note": "0.11.0 回归验收：R4 已修、N1 回归已修；R1 端点焊接连续第三轮 -1、R2 flip 方向依赖失败、R3 空件预览仍 failed；新增 R5 判据"
+    }
+  ]
+}

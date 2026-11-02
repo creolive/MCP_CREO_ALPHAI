@@ -19,7 +19,13 @@ from creo_mechdog.legacy_recovery import previous_boot_evidence
 from creo_mechdog.recovery import process_identity
 from creo_mechdog.windows_boot import boot_info
 
-ACTIONS = ("restore_baseline", "accept_saved", "accept_live", "abandon_new")
+ACTIONS = (
+    "restore_baseline",
+    "accept_saved",
+    "accept_live",
+    "abandon_new",
+    "ack_no_mutation",
+)
 TOKEN_SECONDS = 600
 WORKER_SECONDS = 115
 HASH_SECONDS = 8
@@ -536,7 +542,7 @@ def _actions(snapshot: dict, live: dict | None) -> dict:
         # its saved candidate (including an uncertain partially prepared copy).
         for action in ("restore_baseline", "accept_saved", "accept_live"):
             conditions[action] = False
-    return {
+    states = {
         action: {
             "available": bool(stopped and supported and ok and model.get("status") != "abandoned"),
             "reason": (
@@ -553,6 +559,35 @@ def _actions(snapshot: dict, live: dict | None) -> dict:
         }
         for action, ok in conditions.items()
     }
+    # BUG-105: a failed job that provably changed nothing may be acknowledged
+    # back to ready without native work. This is a metadata transaction only,
+    # so assembly/drawing models are eligible too: component ownership is never
+    # touched. Any contrary evidence keeps the model unrecoverable here.
+    pending = bool(model.get("pending_job") or model.get("recovery_pending"))
+    ack_ready = (
+        model.get("status") == "failed"
+        and not pending
+        and model.get("rollback_status") != "failed"
+        and baseline.get("verified") is True
+    )
+    states["ack_no_mutation"] = {
+        "available": bool(stopped and ack_ready),
+        "reason": (
+            "Previous runner/worker is active or cannot be proven stopped"
+            if not stopped
+            else "Only a failed model can acknowledge zero mutation"
+            if model.get("status") != "failed"
+            else "Model still owns a pending or recovery job"
+            if pending
+            else "Rollback of the failed job did not succeed; zero mutation cannot be proven"
+            if model.get("rollback_status") == "failed"
+            else "Checkpoint identity is unavailable or has changed; zero mutation cannot be proven"
+            if baseline.get("verified") is not True
+            else "Explicit apply with confirm_zero_mutation=true, matching evidence and an "
+            "idempotency key required"
+        ),
+    }
+    return states
 
 
 def _native_request(model: dict, choice: dict) -> dict:
@@ -705,6 +740,15 @@ def _finish(record: dict) -> dict:
     """Materialize a durable commit; never invoke Toolkit or overwrite later edits."""
     model = general.model_info(record["model_id"])
     after = record["model_after"]
+    if record.get("kind") == "ack_no_mutation":
+        # Metadata-only transaction: a later revision means someone else edited
+        # the model in between, so the acknowledgement must not overwrite it.
+        if model.get("revision") != after.get("revision"):
+            raise ValueError(
+                "Model revision changed after the zero-mutation acknowledgement; inspect again"
+            )
+        model_registry.write_model(general.model_path(record["model_id"]), after)
+        return record["job_after"]
     if model.get("recovery_pending") == record["job_id"]:
         if (
             identity(bridge.job_path(record["job_id"]) / "native_result.json")
@@ -791,6 +835,34 @@ def _validate_evidence(
     return record
 
 
+def _ack_model_after(current: dict, job_id: str, record: dict, idempotency_key: str) -> dict:
+    """Registry-only transition from failed to ready with an audit block."""
+    acknowledged_at = bridge.now()
+    prior_job = current.get("pending_job") or current.get("last_job")
+    baseline = record["snapshot"].get("baseline") or {}
+    return {
+        **current,
+        "status": "ready",
+        "pending_job": None,
+        "recovery_pending": None,
+        "updated_at": acknowledged_at,
+        "reconciliation": {
+            "recovery_id": job_id,
+            "action": "ack_no_mutation",
+            "original_job_id": prior_job,
+            "prior_status": current.get("status"),
+            "prior_rollback_status": current.get("rollback_status"),
+            "evidence_token": record.get("token"),
+            "idempotency_key": idempotency_key,
+            "checkpoint_identity": baseline.get("identity"),
+            "original_plan_completion_confirmed": False,
+            "source_identity": None,
+            "acknowledged_at": acknowledged_at,
+            "resolved_at": acknowledged_at,
+        },
+    }
+
+
 def apply(
     model_id: str,
     action: str,
@@ -798,6 +870,7 @@ def apply(
     expected_pending_job_id: str | None,
     evidence_token: str,
     idempotency_key: str,
+    confirm_zero_mutation: bool = False,
 ) -> dict:
     if (
         action not in ACTIONS
@@ -806,6 +879,11 @@ def apply(
         or expected_revision < 0
     ):
         raise ValueError("Valid action and nonnegative expected_revision are required")
+    if action == "ack_no_mutation" and confirm_zero_mutation is not True:
+        raise ValueError(
+            "ack_no_mutation records that the failed job changed nothing; inspect the failed "
+            "job and the checkpoint, then pass confirm_zero_mutation=true to acknowledge"
+        )
     if expected_pending_job_id is not None and (
         not isinstance(expected_pending_job_id, str)
         or not bridge.JOB_ID.fullmatch(expected_pending_job_id)
@@ -828,6 +906,10 @@ def apply(
         "expected_pending_job_id": expected_pending_job_id,
         "evidence_token": evidence_token,
     }
+    if action == "ack_no_mutation":
+        # Recorded so a replay with the flag omitted is recognized as the same
+        # acknowledged request instead of starting a second transaction.
+        arguments["confirm_zero_mutation"] = True
     file = _journal(model_id, idempotency_key)
     # A duplicate query does not contend for Toolkit or repeat native work.
     existing = _read(file)
@@ -896,6 +978,56 @@ def apply(
                 "revision": model["revision"],
                 "message": "Recovery accepted; poll this job_id; original plan will not be replayed",
             }
+            if action == "ack_no_mutation":
+                # Metadata transaction only: no worker, no Toolkit, no file
+                # write. The journal commit is durable before the registry is
+                # updated so polling can finish an interrupted acknowledgement.
+                current = general.model_info(model_id)
+                if (
+                    current.get("revision") != model["revision"]
+                    or current.get("status") != "failed"
+                ):
+                    raise ValueError(
+                        "Model changed while acknowledging zero mutation; inspect again"
+                    )
+                after = _ack_model_after(current, job_id, record, idempotency_key)
+                acknowledged_at = after["reconciliation"]["resolved_at"]
+                manifest.update(
+                    status="succeeded",
+                    stage="metadata_acknowledged",
+                    revision=after["revision"],
+                    finished_at=acknowledged_at,
+                    message=(
+                        "Zero-mutation acknowledgement recorded; no worker started and no model "
+                        "file was touched"
+                    ),
+                    recovery={
+                        "prior_status": current.get("status"),
+                        "prior_job_id": current.get("last_job"),
+                        "evidence_token": evidence_token,
+                        "acknowledged_at": acknowledged_at,
+                    },
+                )
+                intent = {
+                    "state": "committed",
+                    "kind": "ack_no_mutation",
+                    "model_id": model_id,
+                    "job_id": job_id,
+                    "arguments": arguments,
+                    "evidence": record,
+                    "model_after": after,
+                    "job_after": manifest,
+                    "created_at": acknowledged_at,
+                }
+                bridge.write_json(
+                    directory / "job.json",
+                    {**manifest, "status": "running", "stage": "metadata_acknowledging"},
+                    durable=True,
+                )
+                bridge.write_json(file, intent, durable=True)
+                model_registry.write_model(general.model_path(model_id), after)
+                bridge.write_json(directory / "job.json", manifest, durable=True)
+                return manifest
             request = _native_request(model, choice)
             intent = {
                 "state": "intent",
@@ -1177,6 +1309,7 @@ def reconcile(
     expected_pending_job_id: str | None = None,
     evidence_token: str | None = None,
     idempotency_key: str | None = None,
+    confirm_zero_mutation: bool = False,
 ) -> dict:
     if mode == "inspect":
         if action is not None:
@@ -1201,4 +1334,5 @@ def reconcile(
         expected_pending_job_id,
         evidence_token,
         idempotency_key,
+        confirm_zero_mutation,
     )

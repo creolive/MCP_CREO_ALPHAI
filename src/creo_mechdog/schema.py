@@ -1125,20 +1125,22 @@ def validate_recolor_shape(
     """Shape validation shared by the tool entry, the plan op and submission.
 
     Palette key identity depends on the grouping mode: automatic (families
-    omitted) keys must look like source model ids; explicit keys must name the
-    supplied families. Completeness of the palette is an execution rule and is
-    checked later against the resolved families.
+    omitted) keys must look like source model ids or component labels (the
+    registry resolves a label to its single source family); explicit keys must
+    name the supplied families. Completeness of the palette is an execution
+    rule and is checked later against the resolved families.
     """
     checked_families = validate_families(families)
     checked_palette = validate_palette(palette)
     if checked_palette is not None:
         if checked_families is None:
             for key in checked_palette:
-                if not SOURCE_MODEL_PATTERN.fullmatch(key):
-                    raise ValueError(
-                        "palette keys must be source model_ids (32 lowercase hex characters) "
-                        f"when families is omitted; got {key!r}"
-                    )
+                if SOURCE_MODEL_PATTERN.fullmatch(key) or re.fullmatch(_LABEL_PATTERN, key):
+                    continue
+                raise ValueError(
+                    "palette keys must be source model_ids (32 lowercase hex characters) or "
+                    f"component labels when families is omitted; got {key!r}"
+                )
         else:
             for key in checked_palette:
                 if key not in checked_families:
@@ -1160,6 +1162,10 @@ class RecolorAssemblyOp(StrictModel):
     op: Literal["recolor_assembly"]
     palette: dict[str, Any]
     families: dict[str, Any] | None = None
+    # BUG-104: explicit escape hatch for checkpoints saved before FEAT-052
+    # (no component ``appearance`` snapshot). It only relaxes that one gate;
+    # ``random`` is a tool-level convenience and stays refused in a plan.
+    refresh_baseline: bool = False
 
     @model_validator(mode="after")
     def recolor_request_valid(self):

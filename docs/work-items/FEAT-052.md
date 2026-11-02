@@ -144,3 +144,11 @@ creo_recolor_assembly(
 **未测范围（全部）**：自动分族与显式族表的实际分组结果、族表重复/遗漏拒绝、非法 RGB 拒绝、过期 revision 拒绝、非装配与缺件拒绝；预览的无 Toolkit 调用、无作业、无 revision 变化与 32 KiB 分页、游标失效；实机 80 组件 / 12 族夹具的写色、逐组件读回、保存擦除重载后颜色（RGB 绝对误差 ≤ `1e-6`）与源零件字节不变；再次换色与后续改位置/保存保色；原生中途失败后的颜色恢复；屏幕显示效果的目视确认；单元测试、匹配 SDK 构建、Creo 9/10 与 WorkBuddy 范围。
 
 下一步：按计划文件实施离线实现（`src/creo_mechdog/appearance.py`、`native/appearance.h`）、工具注册与计划操作接入，随后安排匹配 SDK 构建与本机实机验收。
+
+## 2026-11-02 R11 增量（0.11.0 反馈）
+
+来源：[0.11.0 反馈 F01](../validation/feedback-0.11.0-2026-11-01/MAPPING.md)（核心问题 1、次要问题 1）。
+
+- **升级摩擦**：0.10.x 检查点组件快照无 `appearance`，`creo_recolor_assembly` 只报“先 save 一次”；本批新增显式 `refresh_baseline`（[BUG-104](BUG-104.md)），在准入阶段以实读外观填基线并把 `baseline_source` 回显，dry-run 回执给 `next_action`。
+- **取色**：自动分族的 palette 键原为 `source_model_id` UUID；本批新增唯一零件名键与 `random:true` 一键随机上色（[FEAT-056](FEAT-056.md)），计划操作仍只接受显式调色板。
+- 公开工具仍 95，无新增工具；两项目标版本候选 0.11.3 PATCH，实机未执行。

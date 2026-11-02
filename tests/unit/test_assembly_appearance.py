@@ -786,6 +786,7 @@ class ResultProjection(unittest.TestCase):
                 "readback_all_within_tolerance": True,
                 "component_appearance_baseline_count": 1,
                 "rollback_appearance_verified": True,
+                "baseline_source": None,
             },
         )
         self.assertNotIn("rollback_appearance_check", summary)
@@ -797,6 +798,106 @@ class ResultProjection(unittest.TestCase):
                 "rollback_appearance_verified"
             ]
         )
+
+
+class RefreshBaselineContract(AppearanceFixture):
+    """BUG-104: explicit refresh_baseline for checkpoints without appearance."""
+
+    def test_default_refusal_names_the_refresh_option(self):
+        self.write_model(records=standard_records(with_appearance=False))
+        with self.assertRaises(ValueError) as caught:
+            appearance.submit_recolor(
+                self.model_id, 3, palette=DRIVE_PALETTE, families=DRIVE_FAMILIES
+            )
+        message = str(caught.exception)
+        self.assertIn("predates component appearance baselines", message)
+        self.assertIn("refresh_baseline=true", message)
+
+    def test_preview_reports_next_action_when_baseline_missing(self):
+        self.write_model(records=standard_records(with_appearance=False))
+        page = appearance.preview_recolor(self.model_id, 3)
+        action = page["next_action"]
+        self.assertEqual(action["tool"], "creo_recolor_assembly")
+        self.assertEqual(action["arguments"]["model_id"], self.model_id)
+        self.assertEqual(action["arguments"]["expected_revision"], 3)
+        self.assertIs(action["arguments"]["refresh_baseline"], True)
+        self.write_model()
+        self.assertIsNone(appearance.preview_recolor(self.model_id, 3)["next_action"])
+
+    def test_refresh_baseline_submits_one_job_with_the_flag(self):
+        self.write_model(records=standard_records(with_appearance=False))
+        self.write_template_config()
+        captured = {}
+
+        def fake_popen(*args, **kwargs):
+            captured["args"] = args
+            return None
+
+        with patch.object(general.subprocess, "Popen", side_effect=fake_popen):
+            manifest = appearance.submit_recolor(
+                self.model_id,
+                3,
+                palette=DRIVE_PALETTE,
+                families=DRIVE_FAMILIES,
+                refresh_baseline=True,
+            )
+        request = bridge.read_json(bridge.job_path(manifest["job_id"]) / "request.json")
+        (op,) = request["operations"]
+        self.assertIs(op["refresh_baseline"], True)
+        self.assertEqual(len(op["assignments"]), 3)
+        self.assertEqual(captured["args"][0][2], "run-job")
+
+    def test_refresh_baseline_must_be_a_boolean(self):
+        self.write_model()
+        for value in ("yes", 1, None):
+            with self.assertRaises(ValueError) as caught:
+                appearance.submit_recolor(
+                    self.model_id,
+                    3,
+                    palette=DRIVE_PALETTE,
+                    families=DRIVE_FAMILIES,
+                    refresh_baseline=value,
+                )
+            self.assertIn("refresh_baseline must be a boolean", str(caught.exception))
+
+    def test_plan_operation_accepts_refresh_baseline(self):
+        model = self.write_model(records=standard_records(with_appearance=False))
+        (validated,) = validate_operations(
+            [
+                {
+                    "op": "recolor_assembly",
+                    "palette": DRIVE_PALETTE,
+                    "families": DRIVE_FAMILIES,
+                    "refresh_baseline": True,
+                }
+            ]
+        )
+        self.assertIs(validated["refresh_baseline"], True)
+        (op,) = appearance.prepare_recolor_operations(model, [validated])
+        self.assertIs(op["refresh_baseline"], True)
+        self.assertEqual(len(op["assignments"]), 3)
+
+    def test_plan_operation_without_refresh_still_refuses(self):
+        model = self.write_model(records=standard_records(with_appearance=False))
+        with self.assertRaises(ValueError) as caught:
+            appearance.prepare_recolor_operations(
+                model,
+                [{"op": "recolor_assembly", "palette": DRIVE_PALETTE, "families": DRIVE_FAMILIES}],
+            )
+        self.assertIn("refresh_baseline=true", str(caught.exception))
+
+    def test_baseline_source_is_projected_and_compacted(self):
+        block = appearance.project_recolor({"painted": 1, "baseline_source": "adopted_live"})
+        self.assertEqual(block["baseline_source"], "adopted_live")
+        self.assertEqual(
+            appearance.project_recolor({"baseline_source": "checkpoint"})["baseline_source"],
+            "checkpoint",
+        )
+        self.assertIsNone(appearance.project_recolor({"painted": 1})["baseline_source"])
+        self.assertIsNone(
+            appearance.project_recolor({"baseline_source": "guessed"})["baseline_source"]
+        )
+        self.assertEqual(appearance.compact_recolor(block)["baseline_source"], "adopted_live")
 
 
 if __name__ == "__main__":

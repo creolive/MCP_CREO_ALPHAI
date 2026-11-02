@@ -64,7 +64,7 @@ from creo_mechdog.model_queries import (
     fingerprint,
     serialized_size,
 )
-from creo_mechdog.schema import validate_recolor_shape
+from creo_mechdog.schema import SOURCE_MODEL_PATTERN, validate_recolor_shape
 
 RECOLOR_OP = "recolor_assembly"
 PREVIEW_LIMIT_MAX = 50
@@ -74,10 +74,129 @@ READBACK_FIELDS = ("label", "family", "rgb_requested", "rgb_read", "abs_err", "q
 CHECKPOINT_GUIDANCE = (
     "run creo_save_model on the assembly to establish and verify a new checkpoint, then recolor"
 )
+REFRESH_GUIDANCE = (
+    "or pass refresh_baseline=true to adopt the current live component appearance as this "
+    "job's rollback baseline"
+)
 BASELINE_NOTE = (
     "execution requires a component appearance baseline on every checkpoint component; "
     + CHECKPOINT_GUIDANCE
+    + "; "
+    + REFRESH_GUIDANCE
 )
+BASELINE_SOURCES = ("checkpoint", "adopted_live")
+
+
+def checked_refresh_baseline(value: Any) -> bool:
+    """``refresh_baseline`` is an explicit boolean; strings and numbers are refused."""
+    if not isinstance(value, bool):
+        raise ValueError("refresh_baseline must be a boolean (true or false)")
+    return value
+
+
+def checked_random(value: Any) -> bool:
+    """``random`` is an explicit boolean; strings and numbers are refused."""
+    if not isinstance(value, bool):
+        raise ValueError("random must be a boolean (true or false)")
+    return value
+
+
+# Random palettes: golden-ratio hue stepping over the sorted family set keeps
+# the colors stable for a given family set (a replay never depends on them,
+# because the resolved palette is recorded with the job).
+_RANDOM_HUE_STEP = 0.618033988749895
+_RANDOM_HUE_OFFSET = 0.03
+_RANDOM_SATURATION = 0.55
+_RANDOM_VALUE = 0.92
+
+
+def _hsv_to_rgb(hue: float, saturation: float, value: float) -> list[float]:
+    sector = int(hue * 6.0)
+    fraction = hue * 6.0 - sector
+    p = value * (1.0 - saturation)
+    q = value * (1.0 - fraction * saturation)
+    t = value * (1.0 - (1.0 - fraction) * saturation)
+    red, green, blue = [
+        (value, t, p),
+        (q, value, p),
+        (p, value, t),
+        (p, q, value),
+        (t, p, value),
+        (value, p, q),
+    ][sector % 6]
+    return [round(channel, 6) for channel in (red, green, blue)]
+
+
+def random_family_palette(family_keys: list[str]) -> dict[str, list[float]]:
+    """Deterministic distinct colors for the given families (FEAT-056)."""
+    palette: dict[str, list[float]] = {}
+    for index, family in enumerate(sorted(family_keys)):
+        hue = (index * _RANDOM_HUE_STEP + _RANDOM_HUE_OFFSET) % 1.0
+        palette[family] = _hsv_to_rgb(hue, _RANDOM_SATURATION, _RANDOM_VALUE)
+    return palette
+
+
+def resolve_auto_palette(
+    palette: dict[str, list[float]],
+    family_keys: list[str],
+    label_sources: dict[str, set[str]],
+) -> tuple[dict[str, list[float]], str]:
+    """Map component-label palette keys onto their single source family.
+
+    A label that covers components of several source families is ambiguous and
+    refused with the conflicting families listed; nothing is guessed. Two keys
+    resolving to the same family are refused instead of silently overwriting
+    one color with the other.
+    """
+    known = set(family_keys)
+    resolved: dict[str, list[float]] = {}
+    translated = False
+    for key, value in palette.items():
+        target = key
+        if key not in known:
+            sources = label_sources.get(key)
+            if not sources:
+                raise ValueError(
+                    f"palette keys do not name any family: {[key]}; known families: {family_keys}"
+                )
+            if len(sources) > 1:
+                raise ValueError(
+                    f"palette key {key!r} names components in several families "
+                    f"({sorted(sources)}); use the source model id or an explicit families table"
+                )
+            target = next(iter(sources))
+            translated = True
+        if target in resolved:
+            raise ValueError(
+                f"palette names the same family twice: {key!r} resolves to {target}, which is "
+                "already covered; pass exactly one key per family"
+            )
+        resolved[target] = value
+    return resolved, ("family_label" if translated else "explicit")
+
+
+def require_appearance_baseline(
+    records: list[dict[str, Any]], *, allow_refresh: bool = False
+) -> list[dict[str, Any]]:
+    """Refuse components without the FEAT-052 ``appearance`` field.
+
+    ``allow_refresh`` is the explicit ``refresh_baseline`` escape hatch: the
+    native executor then adopts the live pre-job appearance as the rollback
+    baseline instead of a saved checkpoint one. Only this field is relaxed;
+    every other identity gap keeps refusing.
+    """
+    missing = [record for record in records if "appearance" not in record]
+    if missing and not allow_refresh:
+        identities = [record.get("label") or record.get("feature_id") for record in missing[:20]]
+        raise ValueError(
+            "The registered checkpoint predates component appearance baselines (its "
+            f"component snapshot has no appearance field on {len(missing)} component(s): "
+            f"{identities}); " + CHECKPOINT_GUIDANCE + "; " + REFRESH_GUIDANCE + ". "
+            "No job was created"
+        )
+    return missing
+
+
 READONLY_NOTE = (
     "dry_run preview only: reads persisted registry data (component bindings and the "
     "verified checkpoint); no Toolkit connection, no job and no revision change. "
@@ -96,12 +215,15 @@ def _load_model(model_id: str) -> dict:
     return model_registry.read_control(general.model_path(model_id))
 
 
-def checkpoint_records(model: Any, *, require_baseline: bool) -> list[dict[str, Any]]:
+def checkpoint_records(
+    model: Any, *, require_baseline: bool, allow_refresh: bool = False
+) -> list[dict[str, Any]]:
     """Gate and return the verified checkpoint's identity-decorated components.
 
     Everything is read from persisted registry data only. ``require_baseline``
     additionally refuses checkpoints whose component snapshot predates the
-    FEAT-052 ``appearance`` field (execute/plan paths).
+    FEAT-052 ``appearance`` field (execute/plan paths) unless the caller
+    explicitly allows ``refresh_baseline`` (BUG-104).
     """
     if not isinstance(model, dict) or not model.get("model_id"):
         raise ValueError(
@@ -152,16 +274,7 @@ def checkpoint_records(model: Any, *, require_baseline: bool) -> list[dict[str, 
     aliases = model_registry.aliases_of(model)
     decorated = component_identity.decorate_component_records(model, components, aliases)
     if require_baseline:
-        missing = [record for record in decorated if "appearance" not in record]
-        if missing:
-            identities = [
-                record.get("label") or record.get("feature_id") for record in missing[:20]
-            ]
-            raise ValueError(
-                "The registered checkpoint predates component appearance baselines (its "
-                f"component snapshot has no appearance field on {len(missing)} component(s): "
-                f"{identities}); " + CHECKPOINT_GUIDANCE + ". No job was created"
-            )
+        require_appearance_baseline(decorated, allow_refresh=allow_refresh)
     return decorated
 
 
@@ -213,15 +326,23 @@ def resolve_grouping(
     palette: dict[str, list[float]] | None,
     writing: bool,
     plan_created: frozenset[str] | set[str] = frozenset(),
+    random: bool = False,
 ) -> dict[str, Any]:
     """Group checkpoint components into families and build the native payload.
 
     ``families``/``palette`` must already be shape-validated. ``writing``
     enforces the complete-palette rule; a preview may omit or partially fill
     the palette. ``plan_created`` holds labels created by ``assemble_component``
-    operations of the same plan and can never be selected.
+    operations of the same plan and can never be selected. In automatic mode a
+    palette key may be a component label instead of a source model id
+    (FEAT-056); ``random`` replaces the palette with deterministic per-family
+    colors and is mutually exclusive with an explicit palette.
     """
     unmatched: list[dict[str, Any]] = []
+    palette_source = "explicit"
+    if random:
+        if palette is not None:
+            raise ValueError("random and palette are mutually exclusive; pass exactly one")
     if families is None:
         mode = "auto"
         problems = [
@@ -250,6 +371,11 @@ def resolve_grouping(
             grouped.setdefault(_unique_source(record), []).append(record)
         family_keys = sorted(grouped)
         matched_by = {record["feature_id"]: _member_label(record) for record in records}
+        label_sources: dict[str, set[str]] = {}
+        for record in records:
+            source = _unique_source(record)
+            for label in record.get("labels") or []:
+                label_sources.setdefault(label, set()).add(source)
     else:
         mode = "explicit"
         family_keys = list(families)
@@ -305,6 +431,11 @@ def resolve_grouping(
                 "cover every checkpoint component exactly once"
             )
     family_counts = {name: len(grouped[name]) for name in family_keys}
+    if random:
+        palette = random_family_palette(family_keys)
+        palette_source = "random"
+    elif palette is not None and families is None:
+        palette, palette_source = resolve_auto_palette(palette, family_keys, label_sources)
     if palette is not None:
         unknown = [key for key in palette if key not in set(family_keys)]
         if unknown:
@@ -363,6 +494,8 @@ def resolve_grouping(
         "unmatched": unmatched,
         "unmatched_count": len(unmatched),
         "assignments": assignments,
+        "palette": palette,
+        "palette_source": palette_source,
     }
 
 
@@ -378,12 +511,16 @@ def preview_recolor(
     families: dict[str, Any] | None = None,
     limit: int = 50,
     cursor: str | None = None,
+    refresh_baseline: bool = False,
+    random: bool = False,
 ) -> dict[str, Any]:
     """Read-only grouping preview over persisted registry data; no job is created."""
     if isinstance(limit, bool) or type(limit) is not int or not 1 <= limit <= PREVIEW_LIMIT_MAX:
         raise ValueError("limit must be 1-50")
     if isinstance(expected_revision, bool) or type(expected_revision) is not int:
         raise ValueError("expected_revision must be a nonnegative integer")
+    refresh_baseline = checked_refresh_baseline(refresh_baseline)
+    random = checked_random(random)
     families, palette = validate_recolor_shape(families, palette)
     page = decode_cursor(cursor)
     model = _load_model(model_id)
@@ -391,14 +528,16 @@ def preview_recolor(
     if expected_revision != revision:
         raise ValueError(f"Stale revision: current model revision is {revision}")
     records = checkpoint_records(model, require_baseline=False)
-    grouping = resolve_grouping(records, families=families, palette=palette, writing=False)
+    grouping = resolve_grouping(
+        records, families=families, palette=palette, writing=False, random=random
+    )
     rows = grouping["groups"]
     unmatched = grouping["unmatched"]
     identity = {
         "kind": "recolor_preview",
         "model_id": model_id,
         "revision": revision,
-        "request": fingerprint({"families": families, "palette": palette}),
+        "request": fingerprint({"families": families, "palette": palette, "random": random}),
         "snapshot": fingerprint(
             {
                 "rows": rows,
@@ -433,6 +572,10 @@ def preview_recolor(
         "unmatched_truncated": grouping["unmatched_count"] > UNMATCHED_LIMIT,
         "unmatched": unmatched[:UNMATCHED_LIMIT],
         "appearance_baseline": appearance_baseline_report(records),
+        "refresh_baseline": refresh_baseline,
+        "palette_source": grouping["palette_source"],
+        "palette": grouping["palette"],
+        "next_action": None,
         "groups": window,
         "limit": limit,
         "offset": offset,
@@ -442,6 +585,21 @@ def preview_recolor(
         "response_budget_bytes": RESPONSE_BUDGET,
         "readonly_note": READONLY_NOTE,
     }
+
+    if not response["appearance_baseline"]["present"]:
+        response["next_action"] = {
+            "tool": "creo_recolor_assembly",
+            "arguments": {
+                "model_id": model_id,
+                "expected_revision": revision,
+                "refresh_baseline": True,
+            },
+            "note": (
+                "re-submit with the same palette and families plus refresh_baseline=true; the "
+                "job adopts the current live appearance as its rollback baseline and paints in "
+                "one pass"
+            ),
+        }
 
     def refresh() -> None:
         more = offset + len(window) < len(rows)
@@ -476,30 +634,67 @@ def submit_recolor(
     families: dict[str, Any] | None = None,
     limit: int = 50,
     cursor: str | None = None,
+    refresh_baseline: bool = False,
+    random: bool = False,
 ) -> dict[str, Any]:
     """Submit one recolor job through the existing job channel.
 
     Pagination parameters belong to dry_run previews only and are refused
     here. The returned manifest carries job_id/model_id; poll with
     ``creo_get_job``. Busy contention rejects immediately and never queues.
+    ``refresh_baseline`` only relaxes the missing-``appearance`` checkpoint
+    gate and is passed to the native executor with the job (BUG-104).
+    ``random`` and component-label palette keys are resolved here against the
+    registry (FEAT-056); the job always records an explicit palette so a
+    replay never re-runs the random generator.
     """
     if cursor is not None:
         raise ValueError("cursor is only for dry_run previews; drop it to execute")
     if limit != 50:
         raise ValueError("limit is only for dry_run previews; drop it to execute")
+    refresh_baseline = checked_refresh_baseline(refresh_baseline)
+    random = checked_random(random)
     families, palette = validate_recolor_shape(families, palette)
-    if palette is None:
+    if random and palette is not None:
+        raise ValueError("random and palette are mutually exclusive; pass exactly one")
+    if palette is None and not random:
         raise ValueError(
             "Executing recolor_assembly requires a palette covering every family exactly; "
             "dry_run=true may omit it"
         )
+    # Palette identity is resolved here so the job records explicit colors and a
+    # replay never re-runs the generator. Plain source-id palettes skip the
+    # extra registry pass (unchanged behaviour and error precedence).
+    palette_source = "explicit"
+    needs_resolution = random or (
+        families is None
+        and palette is not None
+        and any(SOURCE_MODEL_PATTERN.fullmatch(key) is None for key in palette)
+    )
+    if needs_resolution:
+        model = _load_model(model_id)
+        resolved = resolve_grouping(
+            checkpoint_records(model, require_baseline=False),
+            families=families,
+            palette=palette,
+            writing=True,
+            random=random,
+        )
+        palette = resolved["palette"]
+        palette_source = resolved["palette_source"]
     import generic_bridge as general
 
-    return general.submit(
-        [{"op": RECOLOR_OP, "palette": palette, "families": families}],
+    operation: dict[str, Any] = {"op": RECOLOR_OP, "palette": palette, "families": families}
+    if refresh_baseline:
+        operation["refresh_baseline"] = True
+    manifest = general.submit(
+        [operation],
         model_id=model_id,
         expected_revision=expected_revision,
     )
+    manifest["palette_source"] = palette_source
+    manifest["palette"] = palette
+    return manifest
 
 
 def prepare_recolor_operations(
@@ -525,8 +720,10 @@ def prepare_recolor_operations(
         for operation in operations
         if isinstance(operation, dict) and operation.get("op") == "assemble_component"
     }
-    records = checkpoint_records(model, require_baseline=True)
+    records = checkpoint_records(model, require_baseline=False)
     for index, operation in recolor_ops:
+        refresh = checked_refresh_baseline(operation.get("refresh_baseline", False))
+        require_appearance_baseline(records, allow_refresh=refresh)
         families, palette = validate_recolor_shape(
             operation.get("families"), operation.get("palette")
         )
@@ -538,11 +735,14 @@ def prepare_recolor_operations(
         grouping = resolve_grouping(
             records, families=families, palette=palette, writing=True, plan_created=plan_created
         )
-        operations[index] = {
+        payload: dict[str, Any] = {
             "op": RECOLOR_OP,
             "assignments": grouping["assignments"],
             "families": grouping["family_keys"],
         }
+        if refresh:
+            payload["refresh_baseline"] = True
+        operations[index] = payload
     return operations
 
 
@@ -575,6 +775,7 @@ def _unknown_recolor() -> dict[str, Any]:
         "readback_tolerance": None,
         "readback_all_within_tolerance": None,
         "component_appearance_baseline": None,
+        "baseline_source": None,
         "rollback_appearance_verified": None,
         "rollback_appearance_check": None,
     }
@@ -645,6 +846,8 @@ def project_recolor(block: Any) -> dict[str, Any]:
     out["component_appearance_baseline"] = (
         [_baseline_entry(entry) for entry in baseline] if isinstance(baseline, list) else None
     )
+    source = block.get("baseline_source")
+    out["baseline_source"] = source if source in BASELINE_SOURCES else None
     verified = block.get("rollback_appearance_verified")
     out["rollback_appearance_verified"] = verified if isinstance(verified, bool) else None
     checks = block.get("rollback_appearance_check")
@@ -677,6 +880,7 @@ def compact_recolor(block: Any) -> dict[str, Any]:
     unmatched = source.get("unmatched")
     counts = source.get("family_counts")
     verified = source.get("rollback_appearance_verified")
+    baseline_source = source.get("baseline_source")
     return {
         "painted": source.get("painted"),
         "unmatched_count": len(unmatched) if isinstance(unmatched, list) else None,
@@ -686,5 +890,6 @@ def compact_recolor(block: Any) -> dict[str, Any]:
         "readback_tolerance": source.get("readback_tolerance"),
         "readback_all_within_tolerance": source.get("readback_all_within_tolerance"),
         "component_appearance_baseline_count": count("component_appearance_baseline"),
+        "baseline_source": baseline_source if baseline_source in BASELINE_SOURCES else None,
         "rollback_appearance_verified": verified if isinstance(verified, bool) else None,
     }

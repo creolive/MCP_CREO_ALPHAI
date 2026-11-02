@@ -54,9 +54,14 @@ class CallbackAdmission(unittest.TestCase):
     def test_preflight_rejection_preserves_ready_model_without_claiming_rollback(self):
         self.assertEqual(self.reject("callback_preflight", True)["status"], "ready")
 
-    def test_unverified_or_later_failure_cannot_use_preflight_exception(self):
+    def test_later_failure_without_no_dispatch_evidence_stays_failed(self):
         self.assertEqual(self.reject("callback_preflight", False)["status"], "failed")
-        self.assertEqual(self.reject("executing_operations", True)["status"], "failed")
+        self.assertEqual(self.reject("executing_operations", False)["status"], "failed")
+
+    def test_no_dispatch_marker_keeps_ready_at_any_stage(self):
+        # BUG-105: the executor publishes model_unchanged only when no
+        # operation was dispatched, so the stage no longer narrows the rule.
+        self.assertEqual(self.reject("load_model", True)["status"], "ready")
 
     def test_unknown_reservation_still_rejects_loft_without_callback_or_replay(self):
         first = self.submit()

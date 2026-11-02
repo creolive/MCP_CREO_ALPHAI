@@ -152,20 +152,54 @@ static RecolorState g_recolor;
 // only the admission registration can prove that a later rollback restored
 // the pre-job appearance.
 static J g_recolor_admission = J::object();
+// BUG-104: the admission components are kept so an explicit refresh_baseline
+// request can fill the gaps with the live pre-job appearance.
+static J g_recolor_admission_components = J::array();
+static std::string g_recolor_baseline_source;
 static bool g_recolor_readonly = false;
 
 static void recolor_reset() {
     g_recolor = RecolorState{};
     g_recolor_admission = J::object();
+    g_recolor_admission_components = J::array();
+    g_recolor_baseline_source.clear();
     g_recolor_readonly = false;
 }
 
 static void recolor_set_admission(const J &admission) {
     if (!admission.contains("components") || !admission["components"].is_array())
         return;
+    g_recolor_admission_components = admission["components"];
     for (const auto &comp : admission["components"])
         if (comp.contains("feature_id") && comp.contains("appearance"))
             g_recolor_admission[std::to_string(comp["feature_id"].get<int>())] = comp["appearance"];
+}
+
+// BUG-104: adopt the live pre-job appearance for components whose saved
+// checkpoint predates FEAT-052. This is the appearance read AFTER load but
+// BEFORE any write, so it is a real rollback baseline, not a guess. Only the
+// missing/query_failed appearance gap is relaxed; component identity gaps
+// (feature_id, binding, label) keep refusing.
+static void recolor_prime_admission_from_board() {
+    if (!g_recolor_admission_components.is_array())
+        return;
+    for (const auto &comp : g_recolor_admission_components) {
+        if (!comp.contains("feature_id") || !comp["feature_id"].is_number_integer())
+            continue;
+        const std::string key = std::to_string(comp["feature_id"].get<int>());
+        if (g_recolor_admission.contains(key) &&
+            g_recolor_admission[key].value("state", "query_failed") != "query_failed")
+            continue;
+        ProAsmcomp item;
+        ProError code = ProModelitemInit(board, comp["feature_id"].get<int>(), PRO_FEATURE, &item);
+        ProMdl child = nullptr;
+        ProError child_code = code == PRO_TK_NO_ERROR ? ProAsmcompMdlGet(&item, &child) : code;
+        g_recolor_admission[key] =
+            child_code == PRO_TK_NO_ERROR && child
+                ? component_appearance_record(&item, child)
+                : J{{"state", "query_failed"}, {"rgb", nullptr}, {"query_code", (int)child_code}};
+    }
+    g_recolor_baseline_source = "adopted_live";
 }
 
 // One readback row: what was requested vs what the SDK reports, with the raw
@@ -272,6 +306,8 @@ static void recolor_assembly(const J &op) {
              {"readback_tolerance", kAppearanceReadbackTolerance},
              {"readback_all_within_tolerance", false},
              {"component_appearance_baseline", J::array()},
+             {"baseline_source",
+              g_recolor_baseline_source.empty() ? "checkpoint" : g_recolor_baseline_source},
              {"window_refresh", nullptr}};
     try {
         if (g_recolor_readonly)
@@ -367,11 +403,13 @@ static void recolor_assembly(const J &op) {
                     "Component '" + label +
                     "' has no appearance baseline in this model's registration; save the model "
                     "with creo_save_model to establish a verified checkpoint including "
-                    "appearance, then resubmit the recolor");
+                    "appearance, or resubmit with refresh_baseline=true to adopt the current live "
+                    "appearance as the rollback baseline");
             if (g_recolor_admission[key].value("state", "query_failed") == "query_failed")
                 throw std::runtime_error(
                     "Appearance baseline query failed for component '" + label +
-                    "'; re-save the checkpoint with creo_save_model, then resubmit");
+                    "'; re-save the checkpoint with creo_save_model, or resubmit with "
+                    "refresh_baseline=true, then retry");
             g_recolor.targets.push_back(target);
         }
         if (g_recolor.targets.empty())
