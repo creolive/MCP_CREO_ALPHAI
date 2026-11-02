@@ -26,6 +26,6 @@ WorkBuddy 纯 MCP 黑盒未执行（[提示词已备](validation/WORKBUDDY-0.11.
 | 附件 | SHA256 |
 | --- | --- |
 | `MCP_CREO_MechDog-0.11.1-seed-library.zip` | `f1794794d3abed1f8c8ec4de0f3ff2a8338f5d8d9118c5323ec5fef4b075820f` |
-| `MCP_CREO_MechDog-0.11.1-source.zip` | 见[发布记录](validation/RELEASE-0.11.1.md)与 Release 正文（源码包由标签提交生成，哈希不预先写入本文件所在提交） |
+| `MCP_CREO_MechDog-0.11.1-source.zip` | `042e581395b262679ac73309eb7d1e920cac2722cb8a1db2fa06ed1ff7720c3c`（源码包由标签提交 `6f3cc0a` 生成，哈希系发布后回填） |
 
 发布状态见 [发布记录](validation/RELEASE-0.11.1.md)。
