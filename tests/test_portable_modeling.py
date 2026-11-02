@@ -25,6 +25,7 @@ class PortableModeling(unittest.TestCase):
             seeds.select_seed(5, "straight")
 
     def test_relocated_library_and_corrupt_seed_detection(self):
+        (ROOT / ".tmp").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / ".tmp") as directory:
             root = Path(directory).resolve()
             self.assertTrue(root.is_relative_to(ROOT.resolve()))
