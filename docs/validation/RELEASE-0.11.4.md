@@ -57,15 +57,23 @@
 
 | 项 | 值 |
 | --- | --- |
-| 合入提交 | `a4df690`（`Merge branch 'codex/DEV-064-r12-feedback0111'`，`--no-ff`） |
-| 主干 | `2ba1e2d..a4df690` 已推送；回填后 `refs/heads/main` = 本次回填提交 |
-| 标签 | `v0.11.4`（annotated `c4cfbe4` → `a4df690`），已推送；历史标签未移动 |
+| 合入提交 | `a4df690`（`Merge branch 'codex/DEV-064-r12-feedback0111'`，`--no-ff`）+ 补提交 `0bb3998`（原生 `sketch_coordinates.cpp`/`generic.cpp`/`sketch_edit.cpp`） |
+| 主干 | `2ba1e2d..a4df690..0bb3998` 已推送；回填后 `refs/heads/main` = 本次回填提交 |
+| 标签 | `v0.11.4`（annotated `9e5abf9` → `0bb3998`），已推送；历史标签未移动 |
 | Release | <https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.11.4>，id **431483437**，`draft=false`、`prerelease=false`、Latest |
-| 源码包 | `MCP_CREO_MechDog-0.11.4-source.zip`（7 254 546 B / 1233 files / `69e1cadd…`），由 `a4df690` 源码在仓库外 `E:\Projects\release-0.11.4\` 生成 |
-| 种子包 | `MCP_CREO_MechDog-0.11.4-seed-library.zip`（493 442 B / 24 files / 9 seeds / `666f9c80…`），重建三次同摘要 |
-| sidecar | `…-source.zip.sha256`（102 B / `acc7eef6…`）、`…-seed-library.zip.sha256`（108 B / `846a4a92…`），内容与两 ZIP 摘要逐字节一致 |
+| 源码包 | `MCP_CREO_MechDog-0.11.4-source.zip`（7 258 120 B / 1233 files / `6e9e86c0…`），由 `0bb3998` 源码在仓库外 `E:\Projects\release-0.11.4\final\` 生成 |
+| 种子包 | `MCP_CREO_MechDog-0.11.4-seed-library.zip`（493 442 B / 24 files / 9 seeds / `666f9c80…`），重建同摘要 |
+| sidecar | `…-source.zip.sha256`（102 B / `88459bf2…`）、`…-seed-library.zip.sha256`（108 B / `846a4a92…`），内容与两 ZIP 摘要逐字节一致 |
 
-核对方式：`gh release view --json` 取远端 digest → `gh release download` 回拉四件 → 本地重算 SHA256 与 sidecar 文本比对，四项全部一致；`git ls-remote` 确认 `refs/heads/main` 与 `refs/tags/v0.11.4^{}` 均指向 `a4df690`。源码包已核对不含 `build/`、`jobs/`、`models/`、`.venv/`、`trail.txt.*`、`session_activity.json` 等运行物。
+核对方式：`gh release view --json` 取远端 digest → `gh release download` 回拉四件 → 本地重算 SHA256 与 sidecar 文本比对，四项全部一致；`git ls-remote` 确认 `refs/heads/main` 与 `refs/tags/v0.11.4^{}` 均指向 `0bb3998`。
+
+### 发布更正（同日，必须记录）
+
+首次提交 `c5f2d35` 与合并 `a4df690` **遗漏了 `native/` 三个文件的改动**（提交时的暂存清单未包含 `native/`），导致第一版源码包 `69e1cadd…`（7 254 546 B）不含 `sketch_shifted`、原点钉住与两处恢复文案，而正文已声明这些能力。发现方式：源码包内 `native/sketch_coordinates.cpp` 检索 `sketch_shift_block` 为 `False`。
+
+处置：补提交 `0bb3998` → 本地与远端把**当日刚创建**的 `v0.11.4` 标注标签从 `a4df690` 移到 `0bb3998`（`c4cfbe4` → `9e5abf9`，Release 资产以 `--clobber` 覆盖）→ 重新生成源码包 `6e9e86c0…`（7 258 120 B）并核对包内含 `sketch_shift_block`、`SKETCH_ORIGIN_PIN_UNAVAILABLE` 与 `creo_erase_session_models(targets=[` 文案、无运行物。种子包内容与摘要不变。0.11.3 及更早标签未移动。
+
+源码包含 `docs/validation/feedback-0.11.1-2026-11-02/originals/` 两份原件（预期内），不含 `build/`、`jobs/`、`models/`、`.venv/`、`trail.txt.*`、`session_activity.json`。
 
 ## 回滚
 
