@@ -316,6 +316,77 @@ server.mcp.run()
         self.assertEqual(error.exception.payload["blocking_operation"], "pending_job")
         self.assertEqual(len(list(bridge.JOBS.iterdir())), 1)
 
+    def test_back_to_back_new_models_reject_instead_of_queueing(self):
+        # BUG-100: the second submission arrives after acceptance but before
+        # the first runner acquires the channel; it must be busy, never queued.
+        first = self.submit()
+        with self.assertRaises(bridge.ToolkitBusy) as error:
+            self.submit()
+        payload = error.exception.payload
+        self.assertFalse(payload["accepted"])
+        self.assertEqual(payload["blocking_job_id"], first["job_id"])
+        self.assertEqual(payload["blocking_operation"], "execute_plan")
+        self.assertEqual(len(list(bridge.JOBS.iterdir())), 1)
+        self.assertEqual(bridge.channel_claim().get("job_id"), first["job_id"])
+        # The runner releases the reservation together with its terminal state.
+        self.run_job(first)
+        self.assertEqual(bridge.channel_claim(), {})
+        second = self.submit()
+        self.assertNotEqual(second["job_id"], first["job_id"])
+
+    def test_other_existing_model_is_also_rejected_in_admission_window(self):
+        established = self.submit()
+        self.run_job(established)
+        pending = self.submit()
+        with self.assertRaises(bridge.ToolkitBusy) as error:
+            self.submit(model_id=established["model_id"], expected_revision=1)
+        self.assertEqual(error.exception.payload["blocking_job_id"], pending["job_id"])
+        self.assertEqual(len(list(bridge.JOBS.iterdir())), 2)
+
+    def test_stale_claim_with_dead_runner_frees_channel(self):
+        first = self.submit()
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], creationflags=bridge.HIDDEN)
+        dead.wait()
+        bridge.write_channel_claim(first["job_id"], runner_pid=dead.pid)
+        second = self.submit()
+        self.assertNotEqual(second["job_id"], first["job_id"])
+        self.assertEqual(bridge.channel_claim().get("job_id"), second["job_id"])
+
+    def test_terminal_job_claim_is_stale_and_does_not_block(self):
+        first = self.submit()
+        self.run_job(first)
+        # Simulate a lost runner-side release: the terminal job no longer
+        # reserves the channel, so the stale claim is dropped on admission.
+        bridge.write_channel_claim(first["job_id"])
+        second = self.submit()
+        self.assertNotEqual(second["job_id"], first["job_id"])
+
+    def test_plate_and_generic_submissions_share_one_reservation(self):
+        first = self.submit()
+        with (
+            patch.object(bridge.subprocess, "Popen"),
+            self.assertRaises(bridge.ToolkitBusy) as error,
+        ):
+            bridge.create_job({"model_name": None})
+        self.assertEqual(error.exception.payload["blocking_job_id"], first["job_id"])
+        self.run_job(first)
+        with patch.object(bridge.subprocess, "Popen"):
+            plate = bridge.create_job({"model_name": None})
+        self.assertTrue(bridge.JOBS.joinpath(plate["job_id"]).is_dir())
+        with self.assertRaises(bridge.ToolkitBusy) as error:
+            self.submit()
+        self.assertEqual(error.exception.payload["blocking_operation"], "create_plate")
+        bridge.clear_channel_claim(plate["job_id"])
+        accepted = self.submit()
+        self.assertNotEqual(accepted["job_id"], plate["job_id"])
+
+    def test_channel_wait_timeout_releases_reservation(self):
+        task = self.submit()
+        with patch.object(bridge, "toolkit_lock", side_effect=bridge.ToolkitBusy()):
+            bridge.run_job(task["job_id"])
+        self.assertEqual(bridge.get_job(task["job_id"])["status"], "failed")
+        self.assertEqual(bridge.channel_claim(), {})
+
     def test_model_finalizes_under_lock_and_terminal_publishes_after_unlock(self):
         first = self.submit()
         real_write = bridge.write_json

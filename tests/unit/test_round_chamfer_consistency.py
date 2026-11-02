@@ -133,6 +133,10 @@ class StandaloneToolMappingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.is_error, result)
         job_id = result.structured_content["job_id"]
         request = bridge.read_json(self.root / "jobs" / job_id / "request.json")
+        # The queued runner would release the channel claim on completion
+        # (BUG-100); payload comparison tests do the same before the next
+        # submission so admission stays exercised instead of stubbed.
+        bridge.clear_channel_claim(job_id)
         return result.structured_content, request["operations"]
 
     async def test_standalone_tools_and_execute_plan_queue_the_same_operation(self):

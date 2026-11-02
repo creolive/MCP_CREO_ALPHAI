@@ -342,6 +342,13 @@ def submit(
         )
         if not template.is_file():
             raise ValueError(f"Missing local model template: {templates[actual_type]}")
+        # BUG-100: acceptance releases the submit lock before the spawned
+        # runner acquires the channel; an accepted-but-unfinished job must
+        # reject here instead of letting this one queue behind it. Everything
+        # above is validation without side effects, so no partial state exists.
+        holder = bridge.admission_holder()
+        if holder:
+            raise bridge.ToolkitBusy(holder=holder)
         udf_files = {}
         for index, op in enumerate(operations):
             if op["op"] in ("udf_inspect", "udf_create"):
@@ -425,7 +432,7 @@ def submit(
         bridge.write_json(directory / "job.json", manifest)
         try:
             with (directory / "runner.log").open("ab") as log:
-                subprocess.Popen(
+                proc = subprocess.Popen(
                     [sys.executable, str(bridge.ROOT / "bridge.py"), "run-job", job_id],
                     cwd=bridge.ROOT,
                     stdin=subprocess.DEVNULL,
@@ -440,6 +447,14 @@ def submit(
             manifest.update(status="failed", message=str(exc), finished_at=bridge.now())
             bridge.write_json(directory / "job.json", manifest)
             raise
+        # Still inside the submit lock: the reservation is visible to the next
+        # admission before this call returns (BUG-100).
+        bridge.write_channel_claim(
+            job_id,
+            model_id=model_id,
+            operation="execute_plan",
+            runner_pid=getattr(proc, "pid", None),
+        )
         return {**manifest, "model_name": model["model_name"], "revision": model["revision"]}
 
 

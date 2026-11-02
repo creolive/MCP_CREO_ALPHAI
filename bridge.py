@@ -313,6 +313,111 @@ def toolkit_owner() -> dict:
     }
 
 
+CHANNEL_CLAIM_FILE = "toolkit-channel.json"
+
+
+def channel_claim() -> dict:
+    """The accepted job currently holding the channel reservation (BUG-100)."""
+    try:
+        value = read_json(ROOT / CHANNEL_CLAIM_FILE)
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _pid_alive(pid: object) -> bool:
+    """True only when pid provably names a running process.
+
+    An unverifiable identity (None, malformed, or an OS answer other than
+    "no such process") keeps the channel claim: the channel is never freed by
+    guessing from missing evidence.
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        return True
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel.OpenProcess
+    open_process.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    open_process.restype = ctypes.c_void_p
+    handle = open_process(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        # Only ERROR_INVALID_PARAMETER states the process is gone; anything
+        # else (e.g. access denied) still proves the process exists.
+        return ctypes.get_last_error() != 87
+    try:
+        get_exit_code = kernel.GetExitCodeProcess
+        get_exit_code.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        get_exit_code.restype = ctypes.c_int
+        exit_code = ctypes.c_uint32()
+        if not get_exit_code(handle, ctypes.byref(exit_code)):
+            return True  # cannot determine; keep the claim
+        return exit_code.value == 0x103  # STILL_ACTIVE
+    finally:
+        kernel.CloseHandle(ctypes.c_void_p(handle))
+
+
+def admission_holder() -> dict | None:
+    """Holder a new submission must be rejected against, or None if free.
+
+    BUG-100: submit releases the Toolkit lock before its spawned runner
+    acquires the channel, so a back-to-back submission in that window used to
+    be accepted and queued. The claim closes the window: any accepted-but-
+    unfinished job rejects new submissions immediately. A claim is stale — and
+    the channel freed — when its job already reached a terminal status or its
+    runner provably died before taking the channel; the job itself keeps its
+    own state for inspection either way. A claim that cannot be evaluated is
+    unknown ownership and keeps blocking.
+    """
+    claim = channel_claim()
+    if not claim:
+        return None
+    job_id = claim.get("job_id")
+    if not isinstance(job_id, str) or not job_id:
+        return {"operation": claim.get("operation") or "channel_reservation"}
+    try:
+        manifest = read_json(job_path(job_id) / "job.json")
+        status = manifest.get("status") if isinstance(manifest, dict) else None
+    except (OSError, ValueError):
+        status = None
+    if status not in ("queued", "running"):
+        clear_channel_claim(job_id)
+        return None
+    if not _pid_alive(claim.get("runner_pid")):
+        clear_channel_claim(job_id)
+        return None
+    return {
+        "job_id": job_id,
+        "model_id": claim.get("model_id"),
+        "operation": claim.get("operation") or "execute_plan",
+    }
+
+
+def write_channel_claim(
+    job_id: str,
+    *,
+    model_id: str | None = None,
+    operation: str = "execute_plan",
+    runner_pid: object = None,
+) -> None:
+    """Reserve the channel for an accepted job until its runner finishes."""
+    pid = runner_pid if isinstance(runner_pid, int) else None
+    write_json(
+        ROOT / CHANNEL_CLAIM_FILE,
+        {
+            "job_id": job_id,
+            "model_id": model_id,
+            "operation": operation,
+            "runner_pid": pid,
+            "since": now(),
+        },
+    )
+
+
+def clear_channel_claim(job_id: str) -> None:
+    """Free the reservation only when it still names this job."""
+    if channel_claim().get("job_id") == job_id:
+        (ROOT / CHANNEL_CLAIM_FILE).unlink(missing_ok=True)
+
+
 def _open_toolkit_lock(path: Path) -> BinaryIO:
     """Open via the shared lock-file discipline (BUG-057: OPEN_EXISTING, then
     CREATE_NEW, one shared-open fallback on the first-create race)."""
@@ -1019,6 +1124,11 @@ def callback_status() -> dict:
 
 def create_job(spec: dict) -> dict:
     with toolkit_lock(operation="submit_plate"):
+        # BUG-100: same admission rule as execute_plan — an accepted-but-
+        # unfinished job rejects this submission instead of queueing it.
+        holder = admission_holder()
+        if holder:
+            raise ToolkitBusy(holder=holder)
         JOBS.mkdir(exist_ok=True)
         job_id = uuid.uuid4().hex
         directory = job_path(job_id)
@@ -1041,7 +1151,7 @@ def create_job(spec: dict) -> dict:
         write_json(directory / "job.json", manifest)
         try:
             with (directory / "runner.log").open("ab") as log:
-                subprocess.Popen(
+                proc = subprocess.Popen(
                     [sys.executable, str(ROOT / "bridge.py"), "run-job", job_id],
                     cwd=ROOT,
                     stdin=subprocess.DEVNULL,
@@ -1054,10 +1164,20 @@ def create_job(spec: dict) -> dict:
             manifest.update(status="failed", message=str(exc), finished_at=now())
             write_json(directory / "job.json", manifest)
             raise
+        write_channel_claim(job_id, operation="create_plate", runner_pid=proc.pid)
         return manifest
 
 
 def run_job(job_id: str) -> None:
+    try:
+        _run_job_dispatch(job_id)
+    finally:
+        # The channel reservation outlives the submit lock (BUG-100); the
+        # runner owns its release whatever terminal state it records.
+        clear_channel_claim(job_id)
+
+
+def _run_job_dispatch(job_id: str) -> None:
     directory = job_path(job_id)
     manifest = read_json(directory / "job.json")
     manifest.update(runner_identity=process_identity(os.getpid()), stage="waiting_for_channel")

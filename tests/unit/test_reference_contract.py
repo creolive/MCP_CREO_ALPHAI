@@ -256,6 +256,9 @@ class ReferenceQueueTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(result.is_error, result)
             job_id = result.structured_content["job_id"]
             request = bridge.read_json(self.root / "jobs" / job_id / "request.json")
+            # Release the channel claim as the runner would (BUG-100) so the
+            # next queued comparison submits instead of hitting admission.
+            bridge.clear_channel_claim(job_id)
             self.assertEqual(
                 request["operations"][0]["axis"], {"kind": "datum_axis_feature", "label": "t82_da1"}
             )

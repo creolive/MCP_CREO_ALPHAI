@@ -196,6 +196,10 @@ class RevolveAxisQueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.is_error, result)
         job_id = result.structured_content["job_id"]
         request = bridge.read_json(self.root / "jobs" / job_id / "request.json")
+        # The queued runner would release the channel claim on completion
+        # (BUG-100); release it the same way so the next submission goes
+        # through admission instead of queueing behind a stale claim.
+        bridge.clear_channel_claim(job_id)
         return request["operations"][0]
 
     async def test_high_level_tool_and_execute_plan_queue_same_axis_semantics(self):

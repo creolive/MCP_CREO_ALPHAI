@@ -102,5 +102,8 @@ class SketchQueueTests(unittest.IsolatedAsyncioTestCase):
                         self.assertFalse(result.is_error, result)
                         job_id = result.structured_content["job_id"]
                         request = bridge.read_json(root / "jobs" / job_id / "request.json")
+                        # Release the channel claim as the runner would
+                        # (BUG-100) so the next queued comparison submits.
+                        bridge.clear_channel_claim(job_id)
                         expected = 48 if sketch in (48, "48") else "sk_rect"
                         self.assertEqual(request["operations"][0]["sketch"], expected)
