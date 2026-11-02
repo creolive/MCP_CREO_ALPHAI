@@ -615,7 +615,22 @@ static void generic_sketch_edit(const J &op) {
         deviation_regenerate, deviation_feature, deviation_policy.tolerance,
         deviation_policy.enforce, deviation_policy.source);
     enforce_geometry_deviation(geometry_deviation, deviation_context);
+    // BUG-108: same top-level verdict as sketch creation, so an edited sketch
+    // that moved as a rigid body is as visible as a freshly created one.
+    J sketch_shifted;
+    if (!coordinate_plan.is_null()) {
+        const J &verification = meta["solver"].contains("coordinate_geometry_after_creation")
+                                    ? meta["solver"]["coordinate_geometry_after_creation"]
+                                    : meta["solver"]["coordinate_geometry"];
+        sketch_shifted = sketch_shift_block(verification, deviation_policy.source);
+        geometry_deviation["shift_detected"] = sketch_shifted["detected"];
+        geometry_deviation["accepted_by_request"] = sketch_shifted["accepted_by_request"];
+    } else {
+        geometry_deviation["shift_detected"] = nullptr;
+        geometry_deviation["accepted_by_request"] = nullptr;
+    }
     meta["solver"]["geometry_deviation"] = geometry_deviation;
+    meta["solver"]["sketch_shifted"] = sketch_shifted;
     if (f.id != original_id)
         throw std::runtime_error("Sketch ID changed during in-place edit");
     meta["geometry"] = op["entities"];
@@ -634,6 +649,8 @@ static void generic_sketch_edit(const J &op) {
     if (identical_payload)
         sketch_result["verification_probe"] = verification_probe_result;
     sketch_result["geometry_deviation"] = geometry_deviation;
+    if (!sketch_shifted.is_null())
+        sketch_result["sketch_shifted"] = sketch_shifted;
     sketch_result["frame"] = {{"origin", meta["origin"]},
                               {"u_axis", meta["u_axis"]},
                               {"v_axis", meta["v_axis"]},

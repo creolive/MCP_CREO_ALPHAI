@@ -2024,7 +2024,24 @@ static J sketch(const J &op) {
         deviation_regenerate, deviation_feature, deviation_policy.tolerance,
         deviation_policy.enforce, deviation_policy.source);
     enforce_geometry_deviation(geometry_deviation, deviation_context);
+    // BUG-108: publish the shift verdict next to geometry_deviation. A sketch
+    // that moved as a rigid body stays rejected by the same 1e-5 gate; the
+    // block only makes the move visible (and names a request tolerance as the
+    // reason a moved sketch was accepted).
+    J sketch_shifted;
+    if (!coordinate_plan.is_null()) {
+        const J &verification = solver_info.contains("coordinate_geometry_after_creation")
+                                    ? solver_info["coordinate_geometry_after_creation"]
+                                    : solver_info["coordinate_geometry"];
+        sketch_shifted = sketch_shift_block(verification, deviation_policy.source);
+        geometry_deviation["shift_detected"] = sketch_shifted["detected"];
+        geometry_deviation["accepted_by_request"] = sketch_shifted["accepted_by_request"];
+    } else {
+        geometry_deviation["shift_detected"] = nullptr;
+        geometry_deviation["accepted_by_request"] = nullptr;
+    }
     solver_info["geometry_deviation"] = geometry_deviation;
+    solver_info["sketch_shifted"] = sketch_shifted;
     J ids = J::object();
     for (auto item : entities)
         ids[item.first] = item.second;
@@ -2048,16 +2065,19 @@ static J sketch(const J &op) {
     // FEAT-008/T09B: publish the section entity ids on the operation record so
     // the reported revolve_axis.id for an internal centerline is verifiable
     // from the client-visible result (same id space, no guessing).
-    return {{"surface_id", frame.surface},
-            {"origin", frame.origin},
-            {"normal", frame.n},
-            {"u_axis", frame.u},
-            {"v_axis", frame.v},
-            {"native_section", native_section},
-            {"arc_geometry", arc_geometry},
-            {"geometry_deviation", geometry_deviation},
-            {"section_location", section_location},
-            {"entity_ids", ids}};
+    J sketch_result = {{"surface_id", frame.surface},
+                       {"origin", frame.origin},
+                       {"normal", frame.n},
+                       {"u_axis", frame.u},
+                       {"v_axis", frame.v},
+                       {"native_section", native_section},
+                       {"arc_geometry", arc_geometry},
+                       {"geometry_deviation", geometry_deviation},
+                       {"section_location", section_location},
+                       {"entity_ids", ids}};
+    if (!sketch_shifted.is_null())
+        sketch_result["sketch_shifted"] = sketch_shifted;
+    return sketch_result;
 }
 // ProFeatureWithoptionsCreate reports an invalid section only as a bare code;
 // Toolkit validation stays authoritative. Report the native section counts
@@ -5006,9 +5026,16 @@ static void session_erase_native(const J &request, J &report) {
                                      "The model has no saved origin; explicit erase covers "
                                      "saved session objects only"}};
             else if (model->modified)
-                entry["blocked"] = {{"reason", "modified"},
-                                    {"message", "The model has unsaved changes; save or "
-                                                "discard them in Creo first"}};
+                // BUG-106: the refusal is only half the story. Saving in the
+                // GUI clears the dirty flag, but the inspect/apply cycle then
+                // has to be repeated, or the same block comes back.
+                entry["blocked"] = {
+                    {"reason", "modified"},
+                    {"message",
+                     "The model has unsaved changes; save it in Creo (File > Save) or "
+                     "discard the changes there, then call "
+                     "creo_erase_session_models(action='inspect') again and apply the same "
+                     "targets. Erasing does not save or discard for you"}};
             else if (is_managed(*model))
                 entry["blocked"] = {{"reason", "managed"},
                                     {"message",
@@ -6179,8 +6206,16 @@ static int run_generic(const std::wstring &job) {
                 CK(ProMdlOriginGet(board, origin));
                 std::wstring actual = origin, prefix = folder + L"\\";
                 if (_wcsnicmp(actual.c_str(), prefix.c_str(), prefix.size()))
+                    // BUG-106: name the unlock path. A same-name copy saved by
+                    // another program, the GUI or a previous session has to be
+                    // erased first; the refusal never erases it for the caller.
                     throw std::runtime_error(
-                        "Loaded model origin does not match this MCP model's output directory");
+                        "Loaded model origin does not match this MCP model's output directory. "
+                        "The session holds a same-name model saved elsewhere: read "
+                        "creo_erase_session_models(action='inspect'), then call "
+                        "creo_erase_session_models(targets=[{name: 'MODEL_NAME', "
+                        "model_type: 'part'}]) with that target and retry creo_save_model. "
+                        "The session copy is never erased automatically.");
                 if ((model.contains("inspection") || model.contains("inspection_ref")) &&
                     !request.value("readonly", false)) {
                     try {

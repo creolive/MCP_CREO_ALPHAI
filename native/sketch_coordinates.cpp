@@ -30,6 +30,65 @@ static std::string profile_dimensioning(const J &op) {
     }
     return count >= 10 || extent > 1000 ? "coordinates" : "autodim";
 }
+// BUG-108: the coordinate-system entity carries no position constraint of its
+// own, so a solve may translate it, and the whole profile with it. Pin it
+// against the projected reference lines when both section axes are covered; a
+// partial or unavailable frame is reported and the previous behaviour is kept.
+static void pin_coordinate_origin(ProSection section, int origin, const std::vector<int> &anchors,
+                                  J &dimensions) {
+    Pro2dEntdef *entity = nullptr;
+    if (ProSectionEntityGet(section, origin, &entity) != PRO_TK_NO_ERROR || !entity) {
+        log("SKETCH_ORIGIN_PIN_UNAVAILABLE reason=origin_not_readable\n");
+        return;
+    }
+    auto cs = (Pro2dCoordSysdef *)entity;
+    struct Candidate {
+        int axis;
+        int anchor;
+        double value;
+    };
+    std::vector<Candidate> candidates;
+    bool covered[2] = {false, false};
+    for (int anchor : anchors) {
+        if (covered[0] && covered[1])
+            break;
+        Pro2dEntdef *def = nullptr;
+        if (ProSectionEntityGet(section, anchor, &def) != PRO_TK_NO_ERROR || !def)
+            continue;
+        if (def->type != PRO_2D_LINE && def->type != PRO_2D_CENTER_LINE)
+            continue;
+        auto line = (Pro2dLinedef *)def;
+        for (int axis = 0; axis < 2; axis++) {
+            // Only an axis-aligned projection defines one section axis; an
+            // oblique reference cannot pin anything without a second dimension.
+            if (covered[axis] || fabs(line->end1[axis] - line->end2[axis]) > 1e-8)
+                continue;
+            candidates.push_back({axis, anchor, fabs(cs->pnt[axis] - line->end1[axis])});
+            covered[axis] = true;
+        }
+    }
+    if (candidates.size() < 2) {
+        log("SKETCH_ORIGIN_PIN_UNAVAILABLE u=%d v=%d anchors=%d\n", (int)covered[0],
+            (int)covered[1], (int)anchors.size());
+        return;
+    }
+    for (auto &candidate : candidates) {
+        ProSectionPointType senses[] = {PRO_ENT_WHOLE, PRO_ENT_CENTER};
+        int ids[] = {candidate.anchor, origin};
+        Pro2dPnt place = {cs->pnt[0], cs->pnt[1]};
+        int dim;
+        ProError code =
+            ProSecdimCreate(section, ids, senses, 2, PRO_TK_DIM_LINE_POINT, place, &dim);
+        if (code == PRO_TK_NO_ERROR)
+            code = ProSecdimValueSet(section, dim, candidate.value);
+        if (code != PRO_TK_NO_ERROR) {
+            log("SKETCH_ORIGIN_PIN_FAILED axis=%d code=%d\n", candidate.axis, (int)code);
+            continue;
+        }
+        dimensions[candidate.axis ? "coord_origin_v" : "coord_origin_u"] = dim;
+        log("SKETCH_ORIGIN_PIN axis=%d value=%.12f\n", candidate.axis, candidate.value);
+    }
+}
 static J coordinate_dimensions(ProSection section, int origin,
                                const std::map<std::string, int> &entities,
                                const std::array<int, 2> &axes, const std::vector<int> &anchors) {
@@ -69,6 +128,7 @@ static J coordinate_dimensions(ProSection section, int origin,
     // pin only its offset from a projected datum line. Shared polyline vertices
     // are dimensioned once so adjacent segments cannot over-constrain them.
     std::vector<std::array<double, 2>> placed;
+    pin_coordinate_origin(section, origin, anchors, dimensions);
     for (auto row : snapshot) {
         int entity = row["id"];
         std::string prefix = "coord_" + row["name"].get<std::string>();
@@ -197,6 +257,10 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
                                 double tolerance_mm = 0.00001) {
     double deviation = 0;
     int points = 0;
+    // BUG-108: per-point (du,dv) offsets feed the rigid/common-mode verdict.
+    std::vector<std::array<double, 2>> offsets;
+    J shift_sample = J::array();
+    bool shift_truncated = false;
     Pro2dEntdef *coordinate = nullptr;
     CK(ProSectionEntityGet(section, origin, &coordinate));
     auto cs = (Pro2dCoordSysdef *)coordinate;
@@ -238,13 +302,23 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
             else
                 actual = point["sense"].get<int>() == PRO_ENT_START ? ((Pro2dLinedef *)def)->end1
                                                                     : ((Pro2dLinedef *)def)->end2;
+            offsets.push_back({actual[0] - point["xy"][0].get<double>(),
+                               actual[1] - point["xy"][1].get<double>()});
             for (int axis = 0; axis < 2; axis++) {
                 double moved = fabs(actual[axis] - point["xy"][axis].get<double>());
                 deviation = std::max(deviation, moved);
-                if (moved > 1e-9)
+                if (moved > 1e-9) {
                     log("COORDINATE_DEVIATION entity=%s point=%s axis=%d moved=%.12f\n",
                         row["name"].get<std::string>().c_str(),
                         point["key"].get<std::string>().c_str(), axis, moved);
+                    if ((int)shift_sample.size() < 20)
+                        shift_sample.push_back({{"entity", row["name"]},
+                                                {"point", point["key"]},
+                                                {"axis", axis},
+                                                {"moved_mm", moved}});
+                    else
+                        shift_truncated = true;
+                }
             }
             points++;
         }
@@ -263,12 +337,76 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
                                                         2 * acos(-1.0))));
         }
     }
-    if (deviation > tolerance_mm)
-        throw std::runtime_error(
+    // BUG-108: separate a whole-profile translation from a deformation. The
+    // 0.11.1 Creo 10 report showed every entity moving by the same 0.004 mm in
+    // u: the supplied shape was moved as a rigid body, not re-solved.
+    double max_point = 0, sum_u = 0, sum_v = 0;
+    for (auto &offset : offsets) {
+        max_point = std::max(max_point, hypot(offset[0], offset[1]));
+        sum_u += offset[0];
+        sum_v += offset[1];
+    }
+    const double mean_u = offsets.empty() ? 0.0 : sum_u / (double)offsets.size();
+    const double mean_v = offsets.empty() ? 0.0 : sum_v / (double)offsets.size();
+    double residual = 0;
+    for (auto &offset : offsets)
+        residual = std::max(residual, hypot(offset[0] - mean_u, offset[1] - mean_v));
+    const bool shifted = max_point > 1e-9;
+    const bool rigid = shifted && residual <= 1e-9;
+    if (rigid)
+        log("SKETCH_SHIFT_RIGID u=%.12f v=%.12f points=%d\n", mean_u, mean_v, points);
+    else if (shifted)
+        log("SKETCH_SHIFT_DEFORMED max=%.12f residual=%.12f\n", max_point, residual);
+    J shift = {{"detected", shifted},
+               {"rigid", shifted ? J(rigid) : J(nullptr)},
+               {"translation_mm", rigid ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
+               {"max_point_mm", max_point},
+               {"point_count", points},
+               {"sample", shift_sample},
+               {"truncated", shift_truncated},
+               {"measurement_scope", "named_section_entities"}};
+    if (deviation > tolerance_mm) {
+        std::string message =
             "Coordinate dimensioning changed the supplied geometry; maximum deviation mm=" +
-            std::to_string(deviation));
-    return {
-        {"point_count", points}, {"max_deviation_mm", deviation}, {"tolerance_mm", tolerance_mm}};
+            std::to_string(deviation);
+        if (rigid)
+            message += " (the whole profile translated by u=" + std::to_string(mean_u) +
+                       " v=" + std::to_string(mean_v) + " mm; it was not re-solved)";
+        throw std::runtime_error(message);
+    }
+    return {{"point_count", points},
+            {"max_deviation_mm", deviation},
+            {"tolerance_mm", tolerance_mm},
+            {"shift", shift}};
+}
+// BUG-108: the public top-level verdict for one sketch record. Measurement stays
+// in verify_coordinate_plan; this adds only the policy context, so a caller can
+// see that an explicit request tolerance is what let a moved sketch through.
+static J sketch_shift_block(const J &verification, const char *tolerance_source) {
+    J shift = verification.is_object() && verification.contains("shift")
+                  ? verification["shift"]
+                  : J{{"detected", nullptr},       {"rigid", nullptr},
+                      {"translation_mm", nullptr}, {"max_point_mm", nullptr},
+                      {"point_count", nullptr},    {"sample", J::array()},
+                      {"truncated", false},        {"measurement_scope", nullptr}};
+    const bool detected = shift["detected"].is_boolean() && shift["detected"].get<bool>();
+    const bool rigid = shift["rigid"].is_boolean() && shift["rigid"].get<bool>();
+    const std::string source = tolerance_source ? tolerance_source : "";
+    const bool accepted = detected && rigid && source == "request";
+    shift["total"] = shift.contains("point_count") ? shift["point_count"] : J(nullptr);
+    shift["tolerance_source"] = source.empty() ? J(nullptr) : J(source);
+    shift["accepted_by_request"] = accepted;
+    if (!detected)
+        shift["note"] = "no post-solve shift was measured";
+    else if (accepted)
+        shift["note"] =
+            "the solved profile translated as a rigid body; the request tolerance accepted it, "
+            "this is not an exact solve";
+    else if (rigid)
+        shift["note"] = "the solved profile translated as a rigid body";
+    else
+        shift["note"] = "the solved profile deformed; per-point deviations differ";
+    return shift;
 }
 
 // FEAT-010/BUG-049: post-solve geometry fidelity reporting. The snapshot and
