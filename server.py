@@ -1547,6 +1547,11 @@ async def creo_draft(
     reads the created feature's own tree: actual neutral/pull references, flip,
     angle and the reference's provable direction vector (plane normal or axis
     direction; unreadable fields are null, no global taper verdict).
+    requested_flip echoes the argument you sent and effective_flip is the tree
+    readback, so a request that the kernel flipped is visible instead of
+    ambiguous; a failed create publishes draft_failure with the request, the
+    bounded element_errors sample and classification
+    (kernel_element_error / no_element_evidence) plus a next action.
     reference_application separates requested_set_count from the tree-proven
     applied_set_count.
     """

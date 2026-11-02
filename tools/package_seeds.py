@@ -10,7 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
-from creo_mechdog.release_integrity import read_version, seed_library_files
+from creo_mechdog.release_integrity import (
+    TRUSTED_RECORD,
+    assert_repo_record_matches,
+    read_version,
+    seed_library_files,
+)
 from creo_mechdog.seed_distribution import seed_file_bytes
 from version import VERSION
 
@@ -45,12 +50,20 @@ def build_seed_archive(root: Path, archive: Path) -> str:
     return hashlib.sha256(archive.read_bytes()).hexdigest()
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--output", type=Path, help="New archive path; existing files are never overwritten"
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--allow-record-mismatch",
+        action="store_true",
+        help=(
+            "Keep the built archive but skip the repository record check; only for preparing a "
+            "backfill. Never use it to publish."
+        ),
+    )
+    args = parser.parse_args(argv)
     archive = (
         args.output or ROOT.parent / f"MCP_CREO_MechDog-{VERSION}-seed-library.zip"
     ).resolve()
@@ -58,17 +71,29 @@ def main():
         raise ValueError("Archive already exists; choose a new output path")
     digest = build_seed_archive(ROOT, archive)
     manifest = json.loads((ROOT / "seed_library/seed_manifest.json").read_text(encoding="utf-8"))
-    archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
     print(
         f"Seed archive: {archive}; {len(seed_library_files(ROOT))} files; "
         f"{len(manifest['seeds'])} seeds; SHA256 {digest}"
     )
-    print(
-        "For a new release, set docs/seed_package.json seed_archive_sha256 to this archive "
-        "SHA256, rebuild the archive to confirm the same digest, then package the source with "
-        "tools/package.py --seed-archive <archive>."
-    )
+    if args.allow_record_mismatch:
+        print(
+            f"WARNING: {TRUSTED_RECORD} was not checked (--allow-record-mismatch). "
+            "Backfill the digest and rebuild before packaging."
+        )
+        return 0
+    try:
+        assert_repo_record_matches(ROOT, archive)
+    except ValueError as error:
+        print(f"ERROR: {error}")
+        print(
+            f"The archive was kept at {archive} so the digest can be backfilled into "
+            f"{TRUSTED_RECORD}; nothing was published."
+        )
+        return 2
+    archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    print(f"{TRUSTED_RECORD} matches this rebuild; safe to package the source.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

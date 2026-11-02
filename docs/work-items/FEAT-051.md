@@ -262,3 +262,12 @@ Creo、未构建、未实机。
 ### 未测范围
 
 `zero_delta`（合法零差值投影）为**离线专属**，实机不适用；单位矩阵 mm/in/混合/未知仍只由离线合成记录覆盖。外部 SDK 与其它 Creo 版本未测。本卡本节不改写 2026-10-30 的离线交付记录。
+
+## 2026-11-02 增量：`flip` 需区分请求与生效，失败需分类（外部反馈，未实现）
+
+来源：[0.10.0 第十轮反馈 F02 §五](../validation/feedback-0.10.0-2026-10-31/MAPPING.md)（N1，另见 [BUG-102](BUG-102.md)）。
+
+- **已交付部分**：`material_delta_mm3` 带符号可识别加料/去料，`draft_geometry` 读特征树实际值（`native/advanced.cpp:160-193`），N04 第二轮实机 flip=false `+17.556230`、flip=true `−15.419612` 成对成立。
+- **缺口 1（签名歧义）**：入参 `flip=false` 而回显 `draft_geometry.flip=true` 时，调用方无法判断该值是“请求被翻转后应用”还是“实际生效值”。`requested_flip`/`effective_flip` 全库 0 命中。计划：`draft_geometry` 增两个字段（保留现有 `flip` 不动以免破坏既有契约），工具描述说明差异；缺读回时 null 不补造。
+- **缺口 2（失败不可解释）**：`ProFeatureWithoptionsCreate=-1` 只有裸码，未区分“与圆角/倒角几何冲突”“引用错误”“参数越界”。计划：按 BUG-102 的 A/B 定因结论给分类诊断与下一步动作，避免只回 -1。
+- **边界**：多面拔模仍不强塞全局“内收/外扩”结论；`material_measurement` 与既有 `material_delta_mm3` 语义不改。

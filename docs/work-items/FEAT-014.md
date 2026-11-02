@@ -214,3 +214,13 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 ## 2026-11-01 Q15 离线集成状态
 
 离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。
+
+## 2026-11-02 第十轮反馈对接：壁面归属另立 BUG-103，本卡边界不变
+
+来源：[0.10.0 第十轮反馈 F01 §二](../validation/feedback-0.10.0-2026-10-31/MAPPING.md)（[原件](../validation/feedback-0.10.0-2026-10-31/originals/2026-10-31_CREO_0.10.0_水平底板底边无法挂折边_R2仍未解决.md)）。
+
+- **复述确认**：YZ 配方 185×232×1 底板体积正确，四条下边均 Z=0；`f_px`(104)/`f_nx`(105) 成功，`f_ny`(106) 报 `ProSmtedgeContourGet=-8`，`f_py` 未执行并整批回滚。与本卡 T05/N05/N06 记录的“第三道被挡”为同一现象族。
+- **本卡已交付的可用诊断**（不重复开发）：`wall_contour_status=eligible|ineligible|unknown` + `wall_contour_query_code`（每边一次查询、256 边预算、按 revision 标注，`native/generic.cpp:419-431` / `src/creo_mechdog/sheetmetal.py:177-260`）、`wall_contract.wall_face_ids`、`parameter_hint`（`thickness >= depth` 时触发，`native/advanced.cpp:624-683`）。`eligible` 不解除 `adjacent_bend_ends` 创建前拒绝。
+- **口径矛盾（新增待核对项）**：`advanced.cpp:1396-1412` 的折边失败文案推荐“YZ 平面单线 + depth=板长 + thickness=板厚”，而该反馈正是用此配方失败。文案与 `examples/sheetmetal_base_yz.json` 的指引必须与本卡实测一致，否则会继续误导。
+- **分工**：**“为何只有 X=±92.5 短边进入壁面轮廓”的归属定因、人工 UI 对照与配方/准入口径归 [BUG-103](BUG-103.md)**；本卡继续负责四壁/corner relief/材料端释放几何能力，`four_walls_complete` 在第三、四壁真实建成并全链路通过前保持 false。
+- A 层矩阵（A1 `ny_first`、A2 `order_ny_second`、A3 trim 读数组、A4 自由端 relief 扩展）与 B 层受限诊断门槛沿用 [交接记录](../development/FEAT014-CORNER-INVESTIGATION-2026-10-31.md)，本轮未执行、未连接 Creo。

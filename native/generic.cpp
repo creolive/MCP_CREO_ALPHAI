@@ -2089,6 +2089,23 @@ static std::string section_create_failure(const J &op, bool revolve, ProError er
                 m += " Max open endpoint gap " + std::string(gap_text) +
                      " mm (diagnostic sampling, not a kernel welding tolerance).";
             }
+        } else if (section.contains("max_cluster_spread_mm") &&
+                   section["max_cluster_spread_mm"].is_number() &&
+                   section["max_cluster_spread_mm"].get<double>() > 0.0) {
+            // BUG-101: a section can close only through the diagnostic
+            // clustering tolerance. Its counts then look perfect while the
+            // kernel refuses to weld the endpoints, so name that evidence
+            // instead of leaving the cause undetermined.
+            char spread_text[64];
+            snprintf(spread_text, sizeof(spread_text), "%.9g",
+                     section["max_cluster_spread_mm"].get<double>());
+            m += std::string(" The section has no open ends, but its endpoint clusters spread up "
+                             "to ") +
+                 spread_text +
+                 " mm at the diagnostic clustering tolerance: endpoints joined only by that "
+                 "tolerance are not necessarily welded by the kernel, so a closed-looking count "
+                 "can still be rejected. Snap the near-tolerance endpoints (see the sketch "
+                 "profile's weldability block) and retry.";
         } else
             m += " These counts do not identify the cause; the cause is not determined.";
     } else
@@ -2539,6 +2556,36 @@ static void seed_hole_edge_selections(ProSelection &face, ProSelection &first,
         CK(ProSelectionPoint3dSet(pick, selections[i]));
     }
 }
+// Declared before use: the non-throwing tree walker is defined further down,
+// after the round/chamfer/draft readbacks that share it.
+static ProElement get_optional(ProElement root, std::initializer_list<int> ids, ProError *code);
+// FEAT-035 increment: since 0.10.0 a custom blind hole dimensions its depth to
+// the drill tip (PRO_HLE_DEP_TIP_DIM_SCHEME), but that basis only lived in the
+// release notes, so a stored plan replayed on an older build silently becomes
+// shallower. Read the scheme back from the created feature tree; a plain
+// straight hole uses a different element path, so it legitimately reports
+// null rather than a guessed basis.
+static J hole_depth_basis_json(ProFeature &f) {
+    J block = {{"depth_basis", nullptr},
+               {"depth_scheme_code", nullptr},
+               {"depth_scheme_query", "PRO_E_HLE_DEPTH_DIM_TYPE"},
+               {"query_code", nullptr}};
+    ProElement tree = nullptr;
+    ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
+    block["query_code"] = (int)code;
+    if (code != PRO_TK_NO_ERROR)
+        return block;
+    ProElement scheme = get_optional(tree, {PRO_E_HLE_COM, PRO_E_HLE_DEPTH_DIM_TYPE}, &code);
+    if (code == PRO_TK_NO_ERROR && scheme) {
+        int value = 0;
+        if (!ProElementIntegerGet(scheme, nullptr, &value)) {
+            block["depth_scheme_code"] = value;
+            block["depth_basis"] = value == PRO_HLE_DEP_TIP_DIM_SCHEME ? "tip" : "not_tip";
+        }
+    }
+    ProFeatureElemtreeFree(&f, tree);
+    return block;
+}
 static J generic_hole(const J &op) {
     double before_volume = volume();
     bool counterbore = op.contains("counterbore");
@@ -2641,7 +2688,13 @@ static J generic_hole(const J &op) {
         ProSelectionFree(&r1);
         ProSelectionFree(&r2);
         remember(op, f);
-        return {{"feature_id", f.id}, {"material_removed_mm3", removed}, {"axes", geometry}};
+        J basis = hole_depth_basis_json(f);
+        return {{"feature_id", f.id},
+                {"material_removed_mm3", removed},
+                {"axes", geometry},
+                {"depth_basis", basis["depth_basis"]},
+                {"depth_scheme_code", basis["depth_scheme_code"]},
+                {"depth_scheme_query", basis["depth_scheme_query"]}};
     } catch (...) {
         if (face)
             ProSelectionFree(&face);

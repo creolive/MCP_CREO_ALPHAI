@@ -67,3 +67,12 @@
 - 全部成功例 `saved_file_reloaded_and_verified=true`、`missing_dimensions=[]`，面数增量与 oracle 一致（直孔 +3、沉孔 +7、沉头 +6）。
 
 未测范围不变：通孔口径、出口沉头与双端沉孔、螺纹/标准孔、Creo 9/10、WorkBuddy 黑盒。本条在"沉孔/沉头孔参数化 + 盲孔/方向/尺寸编辑"范围内实机已通过，仍不据此关闭本卡整项（通孔与其它孔型未验）。
+
+## 2026-11-02 增量：tip 口径需机器可读标记（外部反馈，未实现）
+
+来源：[0.10.0 第十轮反馈 F03 §3](../validation/feedback-0.10.0-2026-10-31/MAPPING.md)（[原件](../validation/feedback-0.10.0-2026-10-31/originals/2026-10-31CREO10.0.0.0-0.10.0-BUG090获Creo10零补丁编译证据但种子摘要回填仍无闸门.md)）。
+
+- **现象**：0.10.0 起 custom 盲孔 `depth` 为钻尖口径（`PRO_HLE_DEP_TIP_DIM_SCHEME`，对齐冻结契约 overall），但该口径**只出现在版本说明**：全库检索 `depth_basis`/`tip_depth` 为 0 命中，响应里没有任何字段说明“本次用了哪种口径”。按存储 JSON 计划重放的自动化客户端在 0.9.0/0.10.0 上提交同一 hole 请求会得到不同深度/体积，且**无法自证**。
+- **与既有验收的关系**：本卡 2026-10-31 N10 六例已用 `contract_tip_overall`/`depth_evidence` 记录口径（`depth_evidence.cone_depth_max`、`total_depth`、`bore_depth_max`），但那是**验收驱动**的判据字段，不是稳定公开回执；`matched_variant` 属离线驱动判定，不是工具返回契约。
+- **计划增量（2026-11-02 已离线交付）**：`native/generic.cpp` 新增 `hole_depth_basis_json()`，从**创建后特征树**实读 `PRO_E_HLE_COM/PRO_E_HLE_DEPTH_DIM_TYPE`，孔结果输出 `depth_basis`（`tip`/`not_tip`/null）、`depth_scheme_code`、`depth_scheme_query="PRO_E_HLE_DEPTH_DIM_TYPE"`；`bridge.compact_job` 白名单同步。`tip` 仅在读到 `PRO_HLE_DEP_TIP_DIM_SCHEME` 时给出，普通直孔走另一元素树故为 null，**不猜 `"shoulder"`**。README 接口表 hole 行已注明“0.10.0 起 custom 盲孔为钻尖口径”。单元 `tests/unit/test_hole_depth_basis.py` 6 项通过（含 compact 保留与不默认）。
+- **边界**：只加字段，不改既有 `depth` 数值语义；不重新解释历史作业记录（缺字段保持缺省）。通孔口径与其它孔型仍不在本卡已验范围。**实机未验**：普通直孔是否也返回非 null 取决于 Creo 是否把该元素写进树，未连会话确认。

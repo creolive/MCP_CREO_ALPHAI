@@ -239,6 +239,48 @@ def validate_seed_archive(root: Path, seed_archive: Path) -> dict[str, object]:
     }
 
 
+def assert_repo_record_matches(
+    root: Path, seed_archive: Path, *, record_path: Path | None = None
+) -> dict[str, object]:
+    """Check a freshly built archive against this tree's own release record.
+
+    DEV-061: the packer already refuses a mismatching archive, but nothing
+    compared the checked-in ``docs/seed_package.json`` with a rebuild of the
+    current tree, so a forgotten backfill only surfaced at packaging time.
+    Only the digest and the declared version are compared here; member-level
+    checks stay in :func:`validate_seed_archive`.
+    """
+    root = Path(root)
+    archive_path = Path(seed_archive)
+    if not archive_path.is_file():
+        raise ValueError(f"Seed archive does not exist: {archive_path}")
+    path = Path(record_path) if record_path is not None else root / TRUSTED_RECORD
+    if not path.is_file():
+        raise ValueError(f"Cannot read {path}: the trusted seed package record is missing")
+    record = _read_json(path)
+    version = read_version(root)
+    declared = record.get("compatible_server_version")
+    if declared != version:
+        raise ValueError(
+            f"version.py declares {version} but {TRUSTED_RECORD} declares {declared}; "
+            "backfill docs/seed_package.json before packaging this release"
+        )
+    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    expected = record.get("seed_archive_sha256")
+    if digest != expected:
+        raise ValueError(
+            f"Seed archive SHA256 {digest} differs from {TRUSTED_RECORD} "
+            f"seed_archive_sha256 {expected}; backfill docs/seed_package.json with the rebuilt "
+            "digest, rebuild once to confirm it is stable, then package the source"
+        )
+    return {
+        "seed_archive": str(archive_path),
+        "seed_archive_sha256": digest,
+        "compatible_server_version": version,
+        "record": str(path),
+    }
+
+
 def validate_release_inputs(root: Path, seed_archive: Path) -> dict[str, object]:
     """Check the release inputs before the public source package is written.
 
