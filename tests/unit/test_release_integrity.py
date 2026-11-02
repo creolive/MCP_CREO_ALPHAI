@@ -17,8 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bridge
-import seeds
-from creo_mechdog import release_integrity
+from creo_mechdog import release_integrity, seeds
 from tools import package, package_seeds
 
 ROOT = Path(__file__).resolve().parents[2]

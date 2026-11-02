@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import seeds
+from creo_mechdog import seeds
 from version import VERSION
 
 
@@ -52,6 +52,8 @@ def main():
         "server.py",
         "schema.py",
         "seeds.py",
+        "src/creo_mechdog/seeds.py",
+        "src/creo_mechdog/capabilities.py",
         "airfoil.py",
         "src/creo_mechdog/schema.py",
         "src/creo_mechdog/airfoil.py",

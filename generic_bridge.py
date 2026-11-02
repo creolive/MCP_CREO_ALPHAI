@@ -11,8 +11,8 @@ import uuid
 from pathlib import Path
 
 import bridge
-from capabilities import require_available
 from creo_mechdog import component_changes, feature_state, model_registry, operation_results
+from creo_mechdog.capabilities import require_available
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -149,7 +149,7 @@ def new_loft_part(
             "Supply both seed_file and seed_feature_id, or omit both for automatic selection"
         )
     if seed_file is None:
-        import seeds
+        from creo_mechdog import seeds
 
         selected = seeds.select_seed(len(sections), interpolation)
         seed_file, seed_feature_id = selected["seed_file"], selected["seed_feature_id"]
@@ -379,7 +379,7 @@ def submit(
             # can name the seed and its bytes (FEAT-030/BUG-034).
             entry = None
             try:
-                import seeds
+                from creo_mechdog import seeds
 
                 entry = seeds.manifest_entry_by_digest(digest)
             except (OSError, ValueError):

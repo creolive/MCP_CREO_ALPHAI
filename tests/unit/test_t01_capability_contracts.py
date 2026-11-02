@@ -5,9 +5,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-import capabilities
 import server
-from creo_mechdog import capability_pages
+from creo_mechdog import capabilities, capability_pages
 
 
 class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):

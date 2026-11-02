@@ -2,8 +2,8 @@
 
 import unittest
 
-import capabilities
 import server
+from creo_mechdog import capabilities
 from creo_mechdog.schema import validate_operations
 
 DICTIONARY_PLANE = {

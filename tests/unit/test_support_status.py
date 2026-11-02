@@ -2,8 +2,8 @@
 
 import unittest
 
-import capabilities
 import server
+from creo_mechdog import capabilities
 
 
 class SupportStatusAssemblyChecks(unittest.TestCase):
