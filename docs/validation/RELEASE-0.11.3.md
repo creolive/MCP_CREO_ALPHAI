@@ -30,7 +30,7 @@
 
 | 附件 | 大小 | SHA256 |
 | --- | --- | --- |
-| `MCP_CREO_MechDog-0.11.3-source.zip` | （打包后回填） | （打包后回填） |
+| `MCP_CREO_MechDog-0.11.3-source.zip` | 1217 files / 7 191 126 B | `0268d276800ba1f540232b74ed0edfd72071635bf41321caa85aebf7c16a00e2` |
 | `MCP_CREO_MechDog-0.11.3-seed-library.zip` | 24 files / 9 seeds | `926c5a4f37d76f1c33923ed9aa182e457a9d06fe16f97e0fb458b9eb16b1375c` |
 
 种子包摘要已回填 `docs/seed_package.json` 并二次重建一致；源码包由本记录所属提交源码生成，`tools/package.py --seed-archive` 受信摘要闸门通过。源码包哈希无法写进它自身（自引用），故两项在打包后回填；回填提交只改文档，不替换已发布附件。
@@ -50,8 +50,9 @@
 
 ## 发布动作回填
 
-- 合入提交：（发布后回填）。
-- 标签：（发布后回填）。
-- Release：（发布后回填）。
-- 远端附件哈希核对：（发布后回填）。
-- 本地生成物（正文与附件）保留在 `E:\Projects\release-0.11.3\`（仓库外，不入库）。
+- 合入提交：`7b80a4a`（`main` 上 `--no-ff` 合并 `codex/DEV-062-r11-followup`，含 `363cfe7` 交付提交与 `d3f20ed` 归档字节保持规则；已推送 `c85aa8d..7b80a4a`）。本记录与本节回填提交只改文档，不涉及 `v0.11.3` 附件内容。
+- 标签：`v0.11.3`（annotated，指向 `7b80a4a`，已推送 `* [new tag] v0.11.3`）。
+- Release：<https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.11.3>（Release id **431414809**；`draft=false`、`prerelease=false`、已标记 Latest；tag `v0.11.3`；创建于 2026-11-02T12:05:36Z）。正文列出两个 ZIP 的文件名与完整 SHA256，并附验收摘要、环境、未测范围与升级说明。
+- 远端附件哈希核对：四附件均 `state=uploaded`，`gh release download` 拉回后本地重算与正文/远端记录逐项一致 —— `MCP_CREO_MechDog-0.11.3-source.zip` `sha256:0268d276…`（7 191 126 B / 1217 files）、`MCP_CREO_MechDog-0.11.3-seed-library.zip` `sha256:926c5a4f…`（493 442 B / 24 files / 9 seeds）；两份 `.sha256` sidecar 远端记录 `a8175720…`（种子）与 `5b040e40…`（源码），与本地 sidecar 逐字节一致。
+- 附件来源：由 `7b80a4a` 源码在仓库外目录 `E:\Projects\release-0.11.3\` 生成；种子包从该提交重建两次摘要一致，`docs/seed_package.json` 受信摘要闸门通过；未重建、未移动任何历史标签或历史附件。
+- 本地生成物（Release 正文、四附件、拉回校验副本）保留在 `E:\Projects\release-0.11.3\`（仓库外，不入库）。
