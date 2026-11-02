@@ -6188,6 +6188,17 @@ static int run_generic(const std::wstring &job) {
                         // recolor op refuses components without this baseline.
                         const J admission = choice_inspection(model, "inspection");
                         recolor_set_admission(admission);
+                        // BUG-104: refresh_baseline is an explicit per-op request;
+                        // only then may the admission appearance come from the
+                        // live pre-job read instead of the saved checkpoint.
+                        bool refresh_baseline = false;
+                        if (request.contains("operations") && request["operations"].is_array())
+                            for (const auto &op : request["operations"])
+                                if (op.value("op", "") == "recolor_assembly" &&
+                                    op.value("refresh_baseline", false))
+                                    refresh_baseline = true;
+                        if (refresh_baseline)
+                            recolor_prime_admission_from_board();
                         verify_saved(admission, inspection());
                     } catch (const std::exception &error) {
                         throw std::runtime_error(std::string("model_reconciliation_required: ") +
@@ -6340,7 +6351,11 @@ static int run_generic(const std::wstring &job) {
         log("BUILD_FAILED=%s\n", error.what());
     }
     if (!report["success"].get<bool>()) {
-        if (generic_phase == "callback_preflight" && !mutated)
+        // BUG-105: "mutated" means an operation was dispatched (or a new model
+        // was created). A failure with no dispatch left the registered model
+        // exactly as it was, whatever the stage, so publish that evidence for
+        // the registry to keep the model ready instead of unrecoverable.
+        if (!mutated)
             report["model_unchanged"] = true;
         report["failed_stage"] = generic_phase;
         report["failed_toolkit_call"] =

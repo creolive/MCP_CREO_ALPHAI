@@ -458,6 +458,26 @@ def submit(
         return {**manifest, "model_name": model["model_name"], "revision": model["revision"]}
 
 
+def failed_model_status(request: dict, result: dict, model: dict) -> str:
+    """Registry status after a failed native job (BUG-105).
+
+    Only positive evidence keeps the model ready: a read-only job, a verified
+    rollback, or the native executor's "no operation was dispatched" marker.
+    Every other failure (partially dispatched plan, missing rollback evidence)
+    stays ``failed`` and must be resolved through ``creo_reconcile_model``. A
+    model without a checkpoint has nothing to fall back to and also fails.
+    """
+    if not model.get("part_file"):
+        return "failed"
+    if (
+        request.get("readonly")
+        or result.get("rollback_succeeded")
+        or result.get("model_unchanged") is True
+    ):
+        return "ready"
+    return "failed"
+
+
 def run_generic_job(job_id: str, manifest: dict):
     directory = bridge.job_path(job_id)
     request = bridge.read_json(directory / "request.json")
@@ -639,19 +659,7 @@ def run_generic_job(job_id: str, manifest: dict):
                             revision=model["revision"],
                         )
                     else:
-                        model["status"] = (
-                            "ready"
-                            if (
-                                request["readonly"]
-                                or result.get("rollback_succeeded")
-                                or (
-                                    result.get("model_unchanged") is True
-                                    and result.get("failed_stage") == "callback_preflight"
-                                )
-                            )
-                            and model.get("part_file")
-                            else "failed"
-                        )
+                        model["status"] = failed_model_status(request, result, model)
                         manifest.update(
                             status="failed",
                             message=result.get(

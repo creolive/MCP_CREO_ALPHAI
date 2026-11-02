@@ -106,8 +106,20 @@ def families() -> dict:
         "model_reconciliation": {
             "enabled": True,
             "tool": "creo_reconcile_model",
-            "actions": ["restore_baseline", "accept_saved", "accept_live", "abandon_new"],
-            "scope": "Owned part/sheetmetal models; explicit evidence-bound recovery; assembly/drawing rejected",
+            "actions": [
+                "restore_baseline",
+                "accept_saved",
+                "accept_live",
+                "abandon_new",
+                "ack_no_mutation",
+            ],
+            "scope": (
+                "Owned part/sheetmetal models for native recovery; assembly/drawing rejected "
+                "there. ack_no_mutation (confirm_zero_mutation=true) is a registry-only "
+                "transition from failed to ready when the failed job provably changed nothing "
+                "(verified checkpoint, nothing pending, no failed rollback); it applies to "
+                "assemblies and drawings too because it never touches component ownership"
+            ),
             "original_plan_replay": False,
             "inspect_requires_creo": False,
         },
@@ -522,11 +534,12 @@ def families() -> dict:
             "scope": (
                 "Paint managed single-level assembly components by part family at the "
                 "component level (source part bytes unchanged): automatic grouping by the "
-                "component binding's unique source_model_id, or an explicit family table of "
-                "component labels/feature IDs; RGB colors are finite 0..1 triples, booleans "
-                "refused; dry_run previews grouping, family counts and unmatched entries "
-                "from persisted registry data in 32 KiB pages without Toolkit, jobs or "
-                "revision changes"
+                "component binding's unique source_model_id (palette keys may be those ids or "
+                "a unique component label), an explicit family table of component "
+                "labels/feature IDs, or random=true for deterministic per-family colors; RGB "
+                "colors are finite 0..1 triples, booleans refused; dry_run previews grouping, "
+                "family counts, unmatched entries and the resolved palette from persisted "
+                "registry data in 32 KiB pages without Toolkit, jobs or revision changes"
             ),
             "guarantees": (
                 "one validation path for the tool and the execute_plan recolor_assembly "
@@ -534,20 +547,26 @@ def families() -> dict:
                 "plan-created component references; writes require a complete palette and "
                 "always save once with the revision advancing exactly one; job results "
                 "report painted/unmatched/family counts, both per-component readbacks "
-                "(write and save/erase/reload) and the component appearance baseline"
+                "(write and save/erase/reload), the component appearance baseline and its "
+                "source (checkpoint or adopted_live); explicit refresh_baseline adopts the "
+                "live pre-job appearance as the rollback baseline for checkpoints saved "
+                "before the appearance field existed, and dry_run returns next_action with "
+                "that call"
             ),
             "limits": (
                 "managed single-level assemblies with a verified checkpoint of at least one "
                 "component only; non-assembly models, assemblies without components, stale "
-                "expected_revision, ambiguous labels and old checkpoints without a component "
-                "appearance baseline are refused (run creo_save_model first); automatic "
-                "grouping refuses missing or conflicting sources and demands an explicit "
-                "family table; entries matching no component stay unmatched instead of being "
-                "guessed; face-level painting, standalone parts, nested/external assemblies, "
-                "non-RGB appearance properties and queueing/scheduling beyond the single "
-                "busy-rejecting Toolkit channel are out of scope; component readback values "
-                "and on-screen display are verified separately; live Creo acceptance has NOT "
-                "been performed for this feature yet"
+                "expected_revision and ambiguous labels are refused; old checkpoints without "
+                "a component appearance baseline are refused unless refresh_baseline=true is "
+                "passed explicitly (that flag relaxes only the missing appearance field, "
+                "never component identity); automatic grouping refuses missing or conflicting "
+                "sources and demands an explicit family table; entries matching no component "
+                "stay unmatched instead of being guessed; face-level painting, standalone "
+                "parts, nested/external assemblies, non-RGB appearance properties and "
+                "queueing/scheduling beyond the single busy-rejecting Toolkit channel are out "
+                "of scope; component readback values and on-screen display are verified "
+                "separately; live Creo acceptance has NOT been performed for refresh_baseline "
+                "yet"
             ),
         },
     }

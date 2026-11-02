@@ -376,7 +376,10 @@ async def creo_reconcile_model(
     model_id: str,
     mode: Literal["inspect", "apply"] = "inspect",
     live: bool = False,
-    action: Literal["restore_baseline", "accept_saved", "accept_live", "abandon_new"] | None = None,
+    action: Literal[
+        "restore_baseline", "accept_saved", "accept_live", "abandon_new", "ack_no_mutation"
+    ]
+    | None = None,
     expected_revision: int | None = Field(
         default=None, description="Apply only: the revision returned by this inspect."
     ),
@@ -395,8 +398,16 @@ async def creo_reconcile_model(
         default=None,
         description="Apply only: unique 8-80 letters, digits, underscores or hyphens.",
     ),
+    confirm_zero_mutation: bool = Field(
+        default=False,
+        description=(
+            "Apply only, action=ack_no_mutation: set true after confirming the failed job "
+            "changed nothing. Only a failed model with a verified checkpoint, no pending or "
+            "recovery job, and no failed rollback qualifies."
+        ),
+    ),
 ) -> dict[str, Any]:
-    """Inspect uncertain owned models without requiring Creo. live=true performs a bounded read-only session preflight. Apply an explicitly selected available action with the returned token, revision, pending_job (null when absent) and a unique 8–80 character idempotency_key. Poll its independent recovery job; never replay the original plan. Execution failures expose reason and failure_phase: before_native refusals release only their own recovery reservation under the channel lock; native_worker_started means dispatch may have begun and unknown_outcome protection remains. restore_baseline keeps revision; accept_saved/live increments once; abandon_new preserves files and archives the model. accept_live requires live preflight. Unsupported/unproven ownership is rejected; no Creo restart or user file deletion."""
+    """Inspect uncertain owned models without requiring Creo. live=true performs a bounded read-only session preflight. Apply an explicitly selected available action with the returned token, revision, pending_job (null when absent) and a unique 8–80 character idempotency_key. Poll its independent recovery job; never replay the original plan. Execution failures expose reason and failure_phase: before_native refusals release only their own recovery reservation under the channel lock; native_worker_started means dispatch may have begun and unknown_outcome protection remains. restore_baseline keeps revision; accept_saved/live increments once; abandon_new preserves files and archives the model. ack_no_mutation (confirm_zero_mutation=true) records that a failed job changed nothing and returns the model to ready as a metadata transaction: no worker, no Toolkit connection, no file writes, revision unchanged, an audit block under reconciliation and no need to edit model.json by hand. It qualifies for parts, sheetmetal, assemblies and drawings when status=failed, nothing is pending, the checkpoint identity still matches and the failed job's rollback did not fail; it never re-scopes component ownership. accept_live requires live preflight. Unsupported/unproven ownership is rejected; no Creo restart or user file deletion."""
     return await invoke(
         reconcile,
         model_id,
@@ -407,6 +418,7 @@ async def creo_reconcile_model(
         expected_pending_job_id,
         evidence_token,
         idempotency_key,
+        confirm_zero_mutation,
     )
 
 
@@ -1936,17 +1948,35 @@ async def creo_recolor_assembly(
     expected_revision: int,
     palette: dict[str, Any] | None = None,
     families: dict[str, Any] | None = None,
+    refresh_baseline: bool = False,
+    random: bool = False,
     dry_run: bool = False,
     limit: int = Field(default=50, ge=1, le=50),
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Paint the components of an MCP-managed single-level assembly by part family (FEAT-052); colors are written at the assembly component level and source part files keep their exact bytes. Omit families for automatic grouping by the component binding's unique source_model_id (palette keys are those source model ids); pass families={family: [component labels or feature IDs]} for explicit families whose names follow the project label rule (lowercase start, [a-z0-9_], at most 28 characters). The family table must assign every checkpoint component exactly once: duplicated or omitted components are refused with their identities listed, an entry matching no component is reported as unmatched (never invented or guessed), an ambiguous label that matches several components is refused (select those by feature ID), and in execute_plan an entry naming a component created by the same plan's assemble_component is refused - only components that already exist before the plan runs may be painted. Automatic grouping refuses components with missing or conflicting sources (multi-bound or unlabeled) and asks for an explicit family table instead. RGB colors are three finite numbers in 0..1; booleans are refused even nested in lists. dry_run=true previews the grouping, per-family counts, unmatched entries and appearance-baseline readiness from persisted registry data only (component bindings plus the verified checkpoint): no Toolkit connection, no job, no revision change and no channel lock; the palette may be omitted or partial there, limit (1-50, default 50) pages the groups within 32 KiB, and next_cursor is bound to the revision and request content so registry, revision or request changes invalidate old cursors (restart without cursor). dry_run=false submits one job on the single Toolkit channel (busy rejects immediately with blocking_job_id and retry guidance; nothing queues) and requires a palette covering every family exactly (extra, missing and unknown keys refuse); pagination parameters are preview-only and refused here. Poll creo_get_job: full detail reports painted count, unmatched items, per-family counts and both per-component readbacks (after the write and again after save/erase/reload) plus the component appearance baseline; compact keeps counts and verification status only. Success always saves and advances the revision by exactly one. Only MCP-managed assemblies with a verified checkpoint of at least one component are accepted; a stale expected_revision, a non-assembly model, an assembly without components, or a checkpoint whose component snapshot predates the appearance baseline (run creo_save_model to establish and verify a new checkpoint first) are refused before any job exists. Component readback values and the on-screen display are verified separately; face-level painting, standalone parts, nested/external assemblies and non-RGB appearance properties are out of scope."""
+    """Paint the components of an MCP-managed single-level assembly by part family (FEAT-052); colors are written at the assembly component level and source part files keep their exact bytes. Omit families for automatic grouping by the component binding's unique source_model_id (palette keys may be those source model ids or a unique component label, which resolves to its single source family; a label covering several families is refused with the conflicting ids); pass families={family: [component labels or feature IDs]} for explicit families whose names follow the project label rule (lowercase start, [a-z0-9_], at most 28 characters). The family table must assign every checkpoint component exactly once: duplicated or omitted components are refused with their identities listed, an entry matching no component is reported as unmatched (never invented or guessed), an ambiguous label that matches several components is refused (select those by feature ID), and in execute_plan an entry naming a component created by the same plan's assemble_component is refused - only components that already exist before the plan runs may be painted. Automatic grouping refuses components with missing or conflicting sources (multi-bound or unlabeled) and asks for an explicit family table instead. RGB colors are three finite numbers in 0..1; booleans are refused even nested in lists. random=true replaces the palette with deterministic per-family colors (golden-ratio hue stepping over the sorted family set) and is mutually exclusive with palette; both dry_run and execute echo palette_source (explicit, family_label or random) and the resolved palette, and the job always records explicit colors so a replay never re-runs the generator. The execute_plan recolor_assembly operation keeps accepting an explicit palette only. dry_run=true previews the grouping, per-family counts, unmatched entries and appearance-baseline readiness from persisted registry data only (component bindings plus the verified checkpoint): no Toolkit connection, no job, no revision change and no channel lock; the palette may be omitted or partial there, limit (1-50, default 50) pages the groups within 32 KiB, and next_cursor is bound to the revision and request content so registry, revision or request changes invalidate old cursors (restart without cursor). dry_run=false submits one job on the single Toolkit channel (busy rejects immediately with blocking_job_id and retry guidance; nothing queues) and requires a palette covering every family exactly (extra, missing and unknown keys refuse); pagination parameters are preview-only and refused here. Poll creo_get_job: full detail reports painted count, unmatched items, per-family counts and both per-component readbacks (after the write and again after save/erase/reload) plus the component appearance baseline; compact keeps counts and verification status only. Success always saves and advances the revision by exactly one. Only MCP-managed assemblies with a verified checkpoint of at least one component are accepted; a stale expected_revision, a non-assembly model, an assembly without components, or a checkpoint whose component snapshot predates the appearance baseline are refused before any job exists: establish a new checkpoint with creo_save_model, or pass refresh_baseline=true to adopt the current live pre-job appearance as this job's rollback baseline (reported as baseline_source=adopted_live; only that missing-appearance gap is relaxed, component identity gaps still refuse). dry_run reports the same baseline readiness and returns next_action with the refresh call when the baseline is missing. Component readback values and the on-screen display are verified separately; face-level painting, standalone parts, nested/external assemblies and non-RGB appearance properties are out of scope."""
     if dry_run:
         return await invoke(
-            preview_recolor, model_id, expected_revision, palette, families, limit, cursor
+            preview_recolor,
+            model_id,
+            expected_revision,
+            palette,
+            families,
+            limit,
+            cursor,
+            refresh_baseline,
+            random,
         )
     return await invoke(
-        submit_recolor, model_id, expected_revision, palette, families, limit, cursor
+        submit_recolor,
+        model_id,
+        expected_revision,
+        palette,
+        families,
+        limit,
+        cursor,
+        refresh_baseline,
+        random,
     )
 
 
