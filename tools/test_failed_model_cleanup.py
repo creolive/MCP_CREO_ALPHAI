@@ -297,6 +297,17 @@ class LiveRun:
         listing = await self.call("creo_list_session_models", {"limit": 50})
         return [entry.get("name") for entry in listing.get("models", [])]
 
+    def tag(self, prefix: str) -> str:
+        """Per-run model name so the live driver can run again in one session.
+
+        The session keeps every model a run created, so a fixed name turns the
+        next run's S1 into a name conflict - that is S2's case, not S1's. The
+        same-run retry still reuses the identical name, which is what
+        "reusable" means here.
+        """
+        suffix = self.report["run_id"].rsplit("_", 1)[-1]
+        return f"{prefix}_{suffix}"
+
     async def run(self) -> None:
         from tools.mcp_readiness import wait_for_startup
 
@@ -315,7 +326,7 @@ class LiveRun:
         self.save()
 
     async def scenario_main_path(self) -> None:
-        tag = "q03s1"
+        tag = self.tag("q03s1")
         scenario: dict = {"id": "S1_main_path", "model_name": tag}
         self.report["scenarios"].append(scenario)
         self.save()
@@ -325,6 +336,7 @@ class LiveRun:
             "model_id": failed["accepted"].get("model_id"),
             "status": failed["job"].get("status"),
             "message": failed["job"].get("message"),
+            "rollback_status": failed["job"].get("result", {}).get("rollback_status"),
             "failed_model_cleanup": failed["job"].get("result", {}).get("failed_model_cleanup"),
         }
         receipt = scenario["failing_job"]["failed_model_cleanup"] or {}
@@ -347,7 +359,7 @@ class LiveRun:
         self.save()
 
     async def scenario_preexisting_same_name(self) -> None:
-        tag = "q03s2"
+        tag = self.tag("q03s2")
         scenario: dict = {"id": "S2_preexisting_same_name", "model_name": tag}
         self.report["scenarios"].append(scenario)
         self.save()
@@ -411,6 +423,7 @@ class LiveRun:
                 "job_id": failed["accepted"]["job_id"],
                 "status": failed["job"].get("status"),
                 "rollback_succeeded": failed["job"].get("result", {}).get("rollback_succeeded"),
+                "rollback_status": failed["job"].get("result", {}).get("rollback_status"),
                 "failed_model_cleanup": receipt,
             },
             revision_after=after.get("revision"),
@@ -419,6 +432,11 @@ class LiveRun:
             "job_failed": failed["job"].get("status") == "failed",
             "rollback_kept_old_semantics": failed["job"].get("result", {}).get("rollback_succeeded")
             is True,
+            # BUG-096 tail note: the explicit field must say "succeeded" for a
+            # restore that really was verified, so "not attempted" never hides
+            # behind the old boolean again.
+            "rollback_status_explicit": failed["job"].get("result", {}).get("rollback_status")
+            == "succeeded",
             "revision_unchanged": after.get("revision") == before.get("revision"),
             "cleanup_reports_not_applicable": receipt.get("reason") == "not_new_model_job",
         }

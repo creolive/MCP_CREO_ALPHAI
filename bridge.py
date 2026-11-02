@@ -1279,6 +1279,17 @@ def get_job(
         from creo_mechdog import failed_model_cleanup
 
         failed_model_cleanup.ensure_terminal_receipt(manifest)
+    # BUG-096 tail note: name the rollback outcome explicitly. "not attempted"
+    # (no checkpoint) and "attempted and failed" used to share
+    # rollback_succeeded=false; the new field separates them without changing
+    # the old field's meaning (BUG-012 stays closed).
+    if manifest.get("kind") == "generic" and manifest["status"] in (
+        "failed",
+        "unknown_outcome",
+    ):
+        from creo_mechdog import rollback_status
+
+        rollback_status.ensure_rollback_status(manifest)
     if detail == "compact":
         manifest = compact_job(manifest)
         return manifest
@@ -1365,6 +1376,7 @@ def compact_job(manifest: dict) -> dict:
             "sha256",
             "saved_file_reloaded_and_verified",
             "rollback_succeeded",
+            "rollback_status",
             "model_unchanged",
             "rollback_message",
             "rollback_code",
