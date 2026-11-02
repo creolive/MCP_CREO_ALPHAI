@@ -1,6 +1,6 @@
 # FEAT-053：`datum_plane` 三点定面（`thru_points`）
 
-日期：2026-11-01。类型：功能。优先级：P2。状态：**本机实机通过（2026-11-01；Q05 8/8；被 [BUG-098](BUG-098.md) 阻断后修复）**。目标版本：0.11.1 候选。
+日期：2026-11-01。类型：功能。优先级：P2。状态：**已交付（0.11.1；本机实机通过 2026-11-01 Q05 8/8；被 [BUG-098](BUG-098.md) 阻断后修复）**。目标版本：0.11.1。
 
 来源：[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §4、[03_BUG094报告](../validation/feedback-0.10.0-2026-11-01/originals/03_BUG094报告.md) §二/§六 与 [04_generic_cpp_patches](../validation/feedback-0.10.0-2026-11-01/originals/04_generic_cpp_patches.md) §补丁 1；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-008](FEAT-008.md)、[BUG-097](BUG-097.md)、[BUG-094](BUG-094.md)、[FEAT-009](FEAT-009.md)、[FEAT-039](FEAT-039.md)。
 
