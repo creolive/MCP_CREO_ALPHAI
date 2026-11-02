@@ -1603,6 +1603,16 @@ def compact_job(manifest: dict) -> dict:
                         "geometry_deviation",
                         "feature_errors",
                         "failed_model_cleanup",
+                        # FEAT-035 increment: which depth basis the created
+                        # hole actually used, and the tree element it came from.
+                        "depth_basis",
+                        "depth_scheme_code",
+                        "depth_scheme_query",
+                        # BUG-102: request vs applied draft flip plus the
+                        # failure classification when the create is rejected.
+                        "requested_flip",
+                        "effective_flip",
+                        "draft_failure",
                     )
                     if key in op
                 }

@@ -431,6 +431,7 @@ def annotate_feature_state(result: dict[str, Any], inputs: list[dict[str, Any]])
 
 def _profile_summary(entities: list[dict[str, Any]]) -> dict[str, Any]:
     from creo_mechdog.profile_diagnostics import analyze_profile
+    from creo_mechdog.weldability import weldability_from_report
 
     report = analyze_profile(entities)
     near = report["categories"]["near_tolerance"]
@@ -459,6 +460,10 @@ def _profile_summary(entities: list[dict[str, Any]]) -> dict[str, Any]:
                 {"entities": item["entities"], "gap_mm": item["gap_mm"]} for item in near["items"]
             ],
         },
+        # BUG-101: closure at 1e-4 mm is not weldability. Report the measured
+        # endpoint-welding verdict (and the bounded pairs behind it) at sketch
+        # time so a caller is not surprised by a later extrude -1.
+        "weldability": weldability_from_report(report),
     }
 
 

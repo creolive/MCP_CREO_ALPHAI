@@ -157,10 +157,16 @@ static J draft_pull_vector_json(ProElement element, ProError code) {
     }
     return block;
 }
-static J draft_geometry_json(ProFeature &f) {
-    J block = {{"source", "unknown"},       {"query_code", nullptr}, {"neutral_plane", nullptr},
-               {"pull_direction", nullptr}, {"flip", nullptr},       {"angle_deg", nullptr},
-               {"pull_vector", nullptr}};
+// BUG-102: `flip` is the value the feature tree ended up with, so echoing only
+// that left a caller unable to tell a requested false from an applied true.
+// `requested_flip` is the caller's own value and `effective_flip` is the tree
+// readback; neither is derived from the other and an unreadable tree keeps null.
+static J draft_geometry_json(ProFeature &f, bool requested_flip) {
+    J block = {{"source", "unknown"},      {"query_code", nullptr},
+               {"neutral_plane", nullptr}, {"pull_direction", nullptr},
+               {"flip", nullptr},          {"angle_deg", nullptr},
+               {"pull_vector", nullptr},   {"requested_flip", requested_flip},
+               {"effective_flip", nullptr}};
     ProElement tree = nullptr;
     ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
     block["query_code"] = (int)code;
@@ -179,8 +185,10 @@ static J draft_geometry_json(ProFeature &f) {
         get_optional(tree, {PRO_E_DIRECTION_COMPOUND, PRO_E_DIRECTION_FLIP}, &path_code);
     if (path_code == PRO_TK_NO_ERROR && flip) {
         int value = 0;
-        if (!ProElementIntegerGet(flip, nullptr, &value))
+        if (!ProElementIntegerGet(flip, nullptr, &value)) {
             block["flip"] = value != 0;
+            block["effective_flip"] = value != 0;
+        }
     }
     ProElement angle = get_optional(tree, {PRO_E_DRAFT_SIDE_1, PRO_E_DRAFT_ANGLE_1}, &path_code);
     if (path_code == PRO_TK_NO_ERROR && angle) {
@@ -244,13 +252,45 @@ static J generic_draft(const J &op) {
     ProSelectionFree(&neutral);
     integer(side, PRO_E_DRAFT_DEPENDENT_1, PRO_DRAFT_UI_INDEPENDENT);
     real(side, PRO_E_DRAFT_ANGLE_1, op["angle"]);
-    ProFeature f = create(root);
+    ProFeature f = {};
+    try {
+        f = create(root);
+    } catch (...) {
+        // BUG-102: a bare ProFeatureWithoptionsCreate=-1 gives the caller
+        // nothing to act on. Publish the request beside the kernel's own
+        // element diagnostics and let the caller see which case it is; the
+        // original Toolkit error is rethrown unchanged.
+        J failure = J::object();
+        failure["api"] = "ProFeatureWithoptionsCreate";
+        failure["requested_flip"] = op.value("flip", false);
+        failure["angle_deg"] = op["angle"];
+        failure["surface_count"] = (int)op["surfaces"].size();
+        J sample = J::array();
+        for (const auto &entry : feature_error_entries)
+            sample.push_back(
+                {{"element", entry.element}, {"type", entry.type}, {"error", entry.error}});
+        failure["element_errors"] = {{"total", feature_error_total},
+                                     {"truncated", feature_error_total > (int)sample.size()},
+                                     {"sample", sample}};
+        failure["classification"] = sample.empty() ? "no_element_evidence" : "kernel_element_error";
+        failure["note"] =
+            sample.empty()
+                ? "The kernel returned no element diagnostics. On a face bounded by rounds or "
+                  "chamfers this usually means the requested angle cannot be built there; try a "
+                  "smaller angle, remove the adjacent round/chamfer first, or re-read the surface "
+                  "ids with creo_inspect_model before retrying."
+                : "The kernel rejected the listed element(s); re-read the neutral/pull references "
+                  "and the surface ids with creo_inspect_model before retrying.";
+        stage_operation_result({{"draft_failure", failure}});
+        ProElementFree(&root);
+        throw;
+    }
     ProElementFree(&root);
     remember(op, f);
     // FEAT-051: report the tree-proven reference application and the actual
     // draft parameters/direction evidence beside the unchanged request.
     J details = J::object();
-    details["draft_geometry"] = draft_geometry_json(f);
+    details["draft_geometry"] = draft_geometry_json(f, op.value("flip", false));
     details["reference_application"] = draft_reference_application(f, (int)op["surfaces"].size());
     return details;
 }
