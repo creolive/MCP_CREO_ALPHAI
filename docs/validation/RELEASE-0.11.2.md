@@ -57,11 +57,13 @@
 ## 交付核对
 
 - 分支：`codex/DEV-060-r10-followup`；本记录随合入提交进入主干。
-- 合入提交、标签 `v0.11.2`、Release 链接与远端附件逐件哈希核对结果在发布动作完成后回填本文件末尾。
+- 合入提交、标签 `v0.11.2`、Release 链接与远端附件逐件哈希核对结果见下节“发布动作回填”。
 
 ## 发布动作回填
 
-- 合入提交：`76ddb83`（`main` 上 `--no-ff` 合并 `codex/DEV-060-r10-followup`，已推送 `64e28f1..76ddb83`）
-- 标签：`v0.11.2`（指向 `76ddb83`，已推送 `* [new tag] v0.11.2`）
-- Release：**未创建**。`gh` 已安装（2.103.3）但未登录，本机也无 `GH_TOKEN`；git 只能推提交与标签，Release 对象需 API/网页创建，故本次按“未完成交付”记录，补齐后回填链接。
-- 远端附件哈希核对：待 Release 创建后逐件核对并回填
+- 合入提交：`76ddb83`（`main` 上 `--no-ff` 合并 `codex/DEV-060-r10-followup`，已推送 `64e28f1..76ddb83`）；本记录与本节回填提交（`0b6fbca` 及后续发布回填）只改文档，不涉及 `v0.11.2` 附件内容。
+- 标签：`v0.11.2`（指向 `76ddb83`，已推送 `* [new tag] v0.11.2`）。
+- Release：<https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.11.2>（Release id **431347397**；`draft=false`、`prerelease=false`；tag `v0.11.2`；创建于 2026-11-02T10:30:19Z）。正文列出两个 ZIP 的文件名与完整 SHA256，并附实机验收摘要、环境、未测范围与升级说明。
+- 远端附件哈希核对（正文记载与远端附件逐项一致）：四附件均 `state=uploaded` —— `MCP_CREO_MechDog-0.11.2-source.zip` `sha256:942fcf0b…`（7 122 125 字节 / 1200 files）、`MCP_CREO_MechDog-0.11.2-seed-library.zip` `sha256:e8f68aaa…`（493 442 字节 / 24 files / 9 seeds），另有两份 `.sha256` sidecar（`2831b538…` / `1159c00a…`），sidecar 本地哈希与远端记录一致。
+- 前置故障与恢复：2026-11-02 `gh auth login --web` 首次因 device-code 端点 TCP 超时失败（`wsarecv`，代理直连探测均 200），重试后登录成功（账号 `118119019`，scopes `gist, read:org, repo, workflow`，对仓库 `WRITE`）；随后以 `gh release create --verify-tag` 创建，未重建标签、未改动已推送提交与正文之外的历史发布。
+- 本地生成物（Release 正文、四附件）保留在 `E:\Projects\release-0.11.2\`（仓库外，不入库）。
