@@ -66,6 +66,7 @@
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
 | [DEV-054](work-items/DEV-054.md) | P2 | 已完成（本地整理，未提交/未发布） | 后续核号 | 0.11.0 后计划对账；删除2个已合并本地分支，94.6 MiB旧环境/重复包可恢复归档（不释放磁盘）；保留模型及发布证据。 |
+| DEV-055 | P2 | 待主控复核 | 未排期 | `tools/generate_constants.py` 的 HEADERS 已包含 `Probbl.h`、`ProTrim.h`、`ProStdSection.h`、`ProMerge.h`，供后续三曲面操作探测使用；本离线环境未核 SDK 头文件存在性，需主控按目标 SDK 复核。 |
 | [FEAT-052](work-items/FEAT-052.md) | P2 | 已交付（0.11.0：实机验收 28/28；WorkBuddy/Creo 9/10/busy 并发开放） | 0.11.0 | 装配按零件族上色：新增公开工具 `creo_recolor_assembly`，默认按组件绑定中唯一的 `source_model_id` 自动分族，也支持显式族表 `families={族名:[组件标签或特征ID]}` 与色板 `palette`（各族 RGB，三个 `0..1` 有限数值）；`dry_run` 预览分组（不连接 Toolkit、不创建作业、不推进 revision，分页 ≤32 KiB），执行走现有作业通道、始终保存、成功后 revision 加一；颜色写在装配组件层，源零件文件字节不变；另增计划操作 `recolor_assembly` 供 `creo_execute_plan` 使用。首版仅覆盖 MCP 受管单层装配，独立零件、面级、嵌套装配与外部装配不在此版。公开工具 94→95。已随 0.11.0 发布，本机实机 28/28，未测范围保持开放，见[工作卡](work-items/FEAT-052.md)与[计划](superpowers/plans/2026-10-31-assembly-recolor-plan.md)。 |
 | [DEV-053](work-items/DEV-053.md) | P1 | 0.10.1 已交付（PATCH 部分：P00–P06、P09 一阶段、P10/P12 登记、P14 离线+实机）；P07/P08/P11 MINOR、P13/P16 与缺件补证开放 | 分批确定 | 五份反馈归档与 P01—P16 总计划；[0.10.1 版本说明](RELEASE_NOTES_0.10.1.md)；[映射及缺件](validation/feedback-0.9.0-2026-10-31/MAPPING.md)。 |
 | [DEV-052](work-items/DEV-052.md) | P1 | 已交付（0.10.0 本批：N00—N13 集成交付） | 0.10.0 | 0.9.0 之后的反馈接续与分窗交付汇总条目。N00 七份 0.8.x 原件归档（7/7 SHA256）与 N01—N12 实现/两轮实机复测随 0.10.0 交付；**N13 发布流程（打包/标签/Release）由 Phase B 收尾**。仍开放：四壁/relief 材料几何、T05/T06/T08C 缺件、BUG-049 原案、BUG-088 I/O 根因、BUG-090 Creo 10 定向编译、BUG-091 根因、BUG-092/BUG-093。固定 ID ↔ N 编号映射见工作卡。 |
