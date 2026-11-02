@@ -607,7 +607,7 @@ class NativeContract(unittest.TestCase):
         self.assertIn("Saved feature status does not match the requested feature_state", generic)
 
     def test_python_module_is_part_of_the_public_capability_surface(self):
-        from capabilities import REGISTERED_OPERATIONS, families
+        from creo_mechdog.capabilities import REGISTERED_OPERATIONS, families
 
         self.assertIn("feature_state", REGISTERED_OPERATIONS)
         self.assertEqual(

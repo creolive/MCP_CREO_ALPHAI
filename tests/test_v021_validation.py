@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from capabilities import require_available
+from creo_mechdog.capabilities import require_available
 from generic_bridge import component_graph, submit
 
 
@@ -37,7 +37,7 @@ class AdvancedValidation(unittest.TestCase):
         op = {"op": "loft", "label": "transition", "sections": ["first", "second"]}
         with (
             patch.dict(
-                "capabilities.UNAVAILABLE_OPERATIONS",
+                "creo_mechdog.capabilities.UNAVAILABLE_OPERATIONS",
                 {"loft": "Temporarily disabled for this gate test"},
             ),
             patch("generic_bridge.bridge.toolkit_lock") as lock,
