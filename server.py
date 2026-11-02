@@ -886,7 +886,7 @@ async def creo_update_sketch_geometry(
     geometry_tolerance_mm: float | None = None,
 ) -> dict[str, Any]:
     """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On any valid sketch plane, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone stays on its native route, where a failed edit rolls back cleanly.
-    geometry_deviation reports the post-solve fidelity at both verification points (SectionRegenerate and CompleteFeature): unavailable values are null with a reason, never zero. Omitting geometry_tolerance_mm keeps the mode default (coordinates rejects above 1e-5 mm, autodim warns above 1e-3 mm); an explicit positive value enforces that cap and rejects unmeasurable geometry."""
+    geometry_deviation reports the post-solve fidelity at both verification points (SectionRegenerate and CompleteFeature): unavailable values are null with a reason, never zero. Omitting geometry_tolerance_mm keeps the mode default (coordinates rejects above 1e-5 mm, autodim warns above 1e-3 mm); an explicit positive value enforces that cap and rejects unmeasurable geometry. sketch_shifted states the post-solve movement at the top level (detected, rigid, translation_mm, max_point_mm, bounded sample); geometry_tolerance_mm is an acceptance threshold, not a solve precision, so accepted_by_request=true means an explicit tolerance let a moved sketch through and the solve was not exact."""
     return await invoke(
         general.submit,
         [
@@ -1089,6 +1089,10 @@ async def creo_create_sketch(
     never zero. Omitting geometry_tolerance_mm keeps the mode default (coordinates
     rejects above 1e-5 mm, autodim warns above 1e-3 mm); an explicit positive value
     enforces that cap and rejects unmeasurable geometry.
+    sketch_shifted states the post-solve movement at the top level (detected, rigid,
+    translation_mm, max_point_mm, bounded sample); geometry_tolerance_mm is an
+    acceptance threshold, not a solve precision, so accepted_by_request=true means an
+    explicit tolerance let a moved sketch through and the solve was not exact.
     solid extrude/revolve rejects only profiles proven open, branched, self-intersecting,
     intersecting, tangent or zero-area from the supplied coordinates.
     """

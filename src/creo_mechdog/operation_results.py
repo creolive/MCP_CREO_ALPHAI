@@ -398,6 +398,7 @@ def annotate_native_result(
     )
     annotate_revolve_axis(result)
     annotate_sketch_origin_diagnostics(result)
+    annotate_sketch_shifted(result)
     if inputs is not None:
         annotate_profiles(result, inputs)
         annotate_arc_geometry(result, inputs)
@@ -778,6 +779,29 @@ def annotate_sketch_origin_diagnostics(result: dict[str, Any]) -> dict[str, Any]
         operation["sketch_origin_diagnostics"] = normalize_sketch_origin_diagnostics(
             operation.get("sketch_origin_diagnostics")
         )
+    return result
+
+
+def annotate_sketch_shifted(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the top-level post-solve shift block on sketch records (BUG-108).
+
+    A record without the block stays without it (legacy jobs are never
+    fabricated), and a malformed block degrades to an explicit unmeasured state.
+    """
+    from creo_mechdog.geometry_deviation import normalize_sketch_shifted
+
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in (
+            "sketch",
+            "update_sketch_geometry",
+        ):
+            continue
+        if "sketch_shifted" not in operation:
+            continue
+        operation["sketch_shifted"] = normalize_sketch_shifted(operation.get("sketch_shifted"))
     return result
 
 

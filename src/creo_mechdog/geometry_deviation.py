@@ -133,7 +133,149 @@ def unavailable_geometry_deviation(reason: str) -> dict[str, Any]:
         "truncated": False,
         "enforced": None,
         "tolerance_source": None,
+        "shift_detected": None,
+        "accepted_by_request": None,
         "stages": {},
+    }
+
+
+def _finite_signed(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _unavailable_sketch_shift(note: str) -> dict[str, Any]:
+    """An explicitly unmeasured shift report; no number is ever invented."""
+    return {
+        "detected": None,
+        "rigid": None,
+        "translation_mm": None,
+        "max_point_mm": None,
+        "point_count": None,
+        "total": None,
+        "sample": [],
+        "truncated": False,
+        "tolerance_source": None,
+        "accepted_by_request": False,
+        "measurement_scope": None,
+        "note": note,
+    }
+
+
+def _normalize_shift_sample(raw: Any) -> tuple[list[dict[str, Any]], bool]:
+    entries: list[dict[str, Any]] = []
+    truncated = False
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                truncated = True
+                continue
+            moved = _finite_non_negative(item.get("moved_mm"))
+            if moved is None:
+                truncated = True
+                continue
+            entry = {
+                "entity": item.get("entity") if isinstance(item.get("entity"), str) else None,
+                "point": item.get("point") if isinstance(item.get("point"), str) else None,
+                "axis": _optional_int(item.get("axis")),
+                "moved_mm": moved,
+            }
+            if len(entries) < SAMPLE_LIMIT:
+                entries.append(entry)
+            else:
+                truncated = True
+    elif raw not in (None, []):
+        truncated = True
+    return entries, truncated
+
+
+def normalize_sketch_shifted(block: Any) -> dict[str, Any]:
+    """Validate one native ``sketch_shifted`` block (BUG-108).
+
+    The executor measures the solved section against the supplied geometry and
+    decides whether the whole profile moved as a rigid body. This projection
+    keeps that verdict, but only echoes numbers the executor actually measured:
+    a contradictory or malformed record becomes an explicit unmeasured state,
+    and ``accepted_by_request`` is never inferred — a request tolerance that let
+    a shifted sketch through is stated, not implied.
+    """
+    if not isinstance(block, dict):
+        return _unavailable_sketch_shift("malformed sketch_shifted record")
+    detected = block.get("detected")
+    if not isinstance(detected, bool):
+        return _unavailable_sketch_shift("malformed sketch_shifted record")
+    sample, sample_truncated = _normalize_shift_sample(block.get("sample"))
+    total = _optional_int(block.get("total"))
+    point_count = _optional_int(block.get("point_count"))
+    truncated = bool(block.get("truncated")) or sample_truncated
+    measurement_scope = (
+        block.get("measurement_scope") if isinstance(block.get("measurement_scope"), str) else None
+    )
+    tolerance_source = block.get("tolerance_source")
+    if tolerance_source not in _TOLERANCE_SOURCES:
+        tolerance_source = None
+    max_point = _finite_non_negative(block.get("max_point_mm"))
+    if not detected:
+        report = _unavailable_sketch_shift("no post-solve shift was measured")
+        report.update(
+            {
+                "detected": False,
+                "max_point_mm": max_point,
+                "point_count": point_count,
+                "total": total,
+                "sample": sample,
+                "truncated": truncated,
+                "tolerance_source": tolerance_source,
+                "measurement_scope": measurement_scope,
+            }
+        )
+        return report
+    if max_point is None:
+        return _unavailable_sketch_shift(
+            "native report claimed a shift without any usable measurement (contradictory record)"
+        )
+    rigid = block.get("rigid")
+    if not isinstance(rigid, bool):
+        return _unavailable_sketch_shift("malformed sketch_shifted record: rigid flag missing")
+    translation: dict[str, float] | None = None
+    if rigid:
+        raw_translation = block.get("translation_mm")
+        if not isinstance(raw_translation, dict):
+            return _unavailable_sketch_shift(
+                "malformed sketch_shifted record: translation vector missing"
+            )
+        u = _finite_signed(raw_translation.get("u"))
+        v = _finite_signed(raw_translation.get("v"))
+        if u is None or v is None:
+            return _unavailable_sketch_shift(
+                "malformed sketch_shifted record: translation vector is not finite"
+            )
+        translation = {"u": u, "v": v}
+    accepted_by_request = block.get("accepted_by_request") is True and tolerance_source == "request"
+    if accepted_by_request:
+        note = (
+            "the solved profile translated as a rigid body; the request tolerance "
+            "accepted it, this is not an exact solve"
+        )
+    elif rigid:
+        note = "the solved profile translated as a rigid body"
+    else:
+        note = "the solved profile deformed; per-point deviations differ"
+    return {
+        "detected": True,
+        "rigid": rigid,
+        "translation_mm": translation,
+        "max_point_mm": max_point,
+        "point_count": point_count,
+        "total": total,
+        "sample": sample,
+        "truncated": truncated,
+        "tolerance_source": tolerance_source,
+        "accepted_by_request": accepted_by_request,
+        "measurement_scope": measurement_scope,
+        "note": note,
     }
 
 
@@ -199,5 +341,15 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
         "truncated": bool(block.get("truncated")) or sample_truncated,
         "enforced": block.get("enforced") if isinstance(block.get("enforced"), bool) else None,
         "tolerance_source": tolerance_source,
+        # BUG-108: additive only — the shift verdict also lives in the
+        # top-level sketch_shifted block; both stay null when unmeasured.
+        "shift_detected": (
+            block.get("shift_detected") if isinstance(block.get("shift_detected"), bool) else None
+        ),
+        "accepted_by_request": (
+            block.get("accepted_by_request")
+            if isinstance(block.get("accepted_by_request"), bool)
+            else None
+        ),
         "stages": stages,
     }

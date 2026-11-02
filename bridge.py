@@ -1601,6 +1601,8 @@ def compact_job(manifest: dict) -> dict:
                         "message",
                         # FEAT-008/BUG-088: bounded new diagnostics.
                         "geometry_deviation",
+                        # BUG-108: top-level post-solve shift verdict.
+                        "sketch_shifted",
                         "feature_errors",
                         "failed_model_cleanup",
                         # FEAT-035 increment: which depth basis the created

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-064",
+  "task": "R12",
+  "archived_at": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Two originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. This archive is the 0.11.1 batch and is separate from feedback-0.10.0-2026-10-31, feedback-0.10.0-2026-11-01 and feedback-0.11.0-2026-11-01; the four directories are never merged.",
+  "source_baseline": {
+    "version": "0.11.3",
+    "public_tools": 95,
+    "upstream": "main@2ba1e2d",
+    "branch": "codex/DEV-064-r12-feedback0111",
+    "dirty": true,
+    "dirty_note": "Working tree carries only local, non-source residue: modified session_activity.json (runtime activity log tracked since 0.4.6), untracked tool workspaces (.codebuddy/, .workbuddy/, .zcode/) and Creo session byproducts (session_erase/, trail.txt.*, std.err, std.out, examples/*.prt.*) that DEV-064 added to .gitignore. None of them enter the archive or the release package.",
+    "source_fingerprint": "build/source.sha256 = 5e82d3ad15c35182d6ea07eb5530438fd9d732972fd14ab39facea6970470dd2 (0.11.3 baseline, before this batch)",
+    "release_note": "v0.11.3 published as GitHub Release 431414809 (tag v0.11.3 -> 7b80a4a, backfill commit 2ba1e2d); this batch does not reuse or overwrite it."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.11.1",
+  "archive_root": "docs/validation/feedback-0.11.1-2026-11-02/originals",
+  "file_count": 2,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads, plus full byte sequence comparison",
+    "length_match": "2/2",
+    "sha256_match": "2/2",
+    "byte_identical": "2/2"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-11-02CREO10.0.0.0-0.11.1-坐标求解微移仍拒绝批量构建P12闸门已开但卡0.004mm.md",
+      "source_relative_path": "2026-11-02CREO10.0.0.0-0.11.1-坐标求解微移仍拒绝批量构建P12闸门已开但卡0.004mm.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.1\\2026-11-02CREO10.0.0.0-0.11.1-坐标求解微移仍拒绝批量构建P12闸门已开但卡0.004mm.md",
+      "bytes": 8843,
+      "sha256": "d1a3ddc6a9a0530feeb55696ace540a6a19b1000e95eca3d6c6946f71ca562f5",
+      "content_note": "Creo 10 × 0.11.1 验收：BUG-094 斜面草图与三点定面已闭环（dev 8e-38 mm，vol 9866.313 精确）；P12 24 条带 194 ops 在第 26 op 被坐标标注刚体平移 0.004004 mm 拒绝；geometry_tolerance_mm 可放行但静默位移无顶层告警；装配恢复死路与 save origin 无 erase 引导仍在；G5 三 op 未实现"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/2026-11-02CREO10.0.0.0-0.11.1-门控未延伸到头文件清单Probblh硬崩溃与盲孔口径标记第三次未加.md",
+      "source_relative_path": "2026-11-02CREO10.0.0.0-0.11.1-门控未延伸到头文件清单Probblh硬崩溃与盲孔口径标记第三次未加.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.1\\2026-11-02CREO10.0.0.0-0.11.1-门控未延伸到头文件清单Probblh硬崩溃与盲孔口径标记第三次未加.md",
+      "bytes": 9598,
+      "sha256": "17ba22ecc41c6e4dabcf2c43edf5c5b7ff67daf7ad73d27696adf1b2f1e269be",
+      "content_note": "Creo 10 首次 bridge.py build 因 HEADERS 新增 Probbl.h（本代 SDK 缺失）整体失败；判定与 BUG-090 同族（函数有门控、头文件清单没有）；盲孔 depth_basis 第三次指出（0.11.2 已闭环）；按 BUG-090 P12 格式补两次外部 Creo 10 构建证据与本地补丁声明"
+    }
+  ]
+}
