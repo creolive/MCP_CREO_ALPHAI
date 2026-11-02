@@ -19,6 +19,16 @@
 
 逐项状态矩阵见 [DEV-051 工作卡](work-items/DEV-051.md#2026-10-30-离线批次十个提交与当前状态矩阵)。
 
+## 0.11.4（2026-11-02 开发中）：Creo 10 常量头门控与草图位移可观测
+
+本轮针对 Creo 10 外部反馈（[归档映射](validation/feedback-0.11.1-2026-11-02/MAPPING.md)）做两处跨版本修复，公开工具仍 95：
+
+- **SDK 常量生成按存在性门控**：`tools/generate_constants.py` 读取前对 `HEADERS` 做存在性过滤，缺失头**跳过读取且不生成 `#include`**，`MISSING_SDK_HEADER=<name>` 写入 `build/generate_constants.log`；枚举集合与 include 集合始终同源。Creo 10 缺 `Probbl.h` 导致的 `SDK constant generation failed` 不再出现。**Creo 10 实机未验证**（本机无该 SDK，只用离线夹具与 `tests/unit/test_gated_headers.py` 契约覆盖）。
+- **草图位移可观测**：坐标标注求解后若整截面刚体平移，结果顶层给出 `sketch_shifted`；`geometry_deviation` 只增 `shift_detected`/`accepted_by_request`。1e-5 mm 默认拒绝阈值与 autodim 1e-3 mm 告警阈值均未改动，`geometry_tolerance_mm` 仍是**验收放行阈值**而非求解精度。
+- **原点固定试点**：坐标模式在两条投影基准线都可用时给坐标原点补零值点-线尺寸；参考不足或创建失败输出 `SKETCH_ORIGIN_PIN_UNAVAILABLE`/`SKETCH_ORIGIN_PIN_FAILED` 并保持原行为。报告方 0.004 mm 平移能否由此消除，以本机 Creo 12.4 实机记录为准，未消除则记"未定因"。
+- **恢复链路文案**：`save` 的 origin 不匹配附 `creo_erase_session_models(targets=[...])` 用法，`erase` 的 `modified` 拒绝附"GUI 保存 → 重新 inspect → apply"链路；不新增自动擦除或会话副本接管。
+- **未验证范围**：Creo 10 构建与建模、报告方 24 条带 194 ops 计划（原件未提供）、WorkBuddy 黑盒、G5 三算子。
+
 ## 0.11.0（2026-11-01 发布）：装配按零件族上色（FEAT-052）
 
 FEAT-052 随 0.11.0 发布，公开工具 94→95；本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK / MSVC 实机验收通过（run `assembly_appearance_live_20261101T060336Z558b3546`，80 组件/12 族夹具 28/28 检查，另过装配 pipeline 与 T07 预览回归）：

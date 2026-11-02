@@ -1,8 +1,10 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
-from tools.generate_constants import HEADERS, PROBES, generate
+from tools.generate_constants import HEADERS, PROBES, available_headers, generate
 
 
 class GenerateConstantsTests(unittest.TestCase):
@@ -122,3 +124,58 @@ class FunctionDeclarationProbeTests(unittest.TestCase):
             self.assertIn(f"#define MECHDOG_HAS_{name} 1", content)
         macros = [line for line in content.splitlines() if line.startswith("#define")]
         self.assertEqual(macros, sorted(macros))
+
+
+class MissingHeaderGateTests(unittest.TestCase):
+    """BUG-107: a header absent from the installed SDK must never abort generation.
+
+    Creo 10 does not ship Probbl.h; the Q07 G5 probe list added it
+    unconditionally, so the first build on that SDK died with FileNotFoundError
+    before a single constant was emitted.
+    """
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        (self.root / "native").mkdir()
+        self.inc = self.root / "includes"
+        self.inc.mkdir()
+        (self.inc / "ProElemId.h").write_text("#define PRO_E_HLE_ADD_PARAMETERS 6900\n")
+        (self.inc / "ProTrim.h").write_text("enum trim { PRO_TRIM_KEEP = 1 };\n")
+        self.output = self.root / "native/constants.inc"
+
+    def test_missing_header_is_skipped_and_never_included(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            count = generate(self.root, inc_dir=self.inc)
+        content = self.output.read_text()
+        self.assertEqual(count, 2)
+        self.assertIn("#include <ProElemId.h>", content)
+        self.assertIn("#include <ProTrim.h>", content)
+        self.assertNotIn("Probbl.h", content)
+        self.assertIn('{"PRO_TRIM_KEEP"', content)
+        report = [
+            line
+            for line in stdout.getvalue().splitlines()
+            if line.startswith("MISSING_SDK_HEADER=")
+        ]
+        self.assertIn("MISSING_SDK_HEADER=Probbl.h", report)
+        self.assertEqual(len(report), len(HEADERS) - 2)
+
+    def test_available_headers_partitions_the_list(self):
+        present, missing = available_headers(self.inc)
+        self.assertEqual(present, ["ProElemId.h", "ProTrim.h"])
+        self.assertEqual(sorted(present + missing), sorted(HEADERS))
+        self.assertEqual(set(present) & set(missing), set())
+
+    def test_all_headers_present_keeps_the_previous_include_block(self):
+        for header in HEADERS:
+            (self.inc / header).write_text("// empty SDK fixture\n", encoding="utf-8")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            generate(self.root, inc_dir=self.inc)
+        content = self.output.read_text()
+        includes = [line for line in content.splitlines() if line.startswith("#include")]
+        self.assertEqual(includes, [f"#include <{header}>" for header in HEADERS])
+        self.assertNotIn("MISSING_SDK_HEADER=", stdout.getvalue())

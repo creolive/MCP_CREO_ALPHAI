@@ -50,12 +50,32 @@ PROBES = ("PRO_E_HLE_ADD_PARAMETERS", "PRO_HOLE_NO_PARAMETERS_FLAG")
 FUNCTION_PROBES = ("ProSmtPartThicknessGet", "ProSmtPartThicknessValueGet")
 
 
+def available_headers(inc_dir: Path) -> tuple[list[str], list[str]]:
+    """Split ``HEADERS`` into the ones this SDK generation ships and the rest.
+
+    SDK generations differ: Creo 10 has no ``Probbl.h``, so a listed header can
+    be absent. Returning both halves keeps the enumeration scan and the emitted
+    ``#include`` block sourced from the same set (BUG-107).
+    """
+    present: list[str] = []
+    missing: list[str] = []
+    for header in HEADERS:
+        (present if (inc_dir / header).is_file() else missing).append(header)
+    return present, missing
+
+
 def generate(root: Path, *, inc_dir: Path | None = None) -> int:
     if inc_dir is None:
         config = json.loads((root / "config.json").read_text(encoding="utf-8-sig"))
         inc_dir = Path(config["creo_root"]) / "Common Files/protoolkit/includes"
+    present, missing = available_headers(inc_dir)
+    # BUG-107: an absent header contributes neither enums nor an #include, the
+    # same "probe what exists" rule the function probes already follow. The line
+    # lands in build/generate_constants.log through the build's stdout capture.
+    for header in missing:
+        print(f"MISSING_SDK_HEADER={header}")
     names = set()
-    for header in HEADERS:
+    for header in present:
         source = (inc_dir / header).read_text(encoding="utf-8", errors="replace")
         source = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.S)
         names.update(
@@ -75,7 +95,7 @@ def generate(root: Path, *, inc_dir: Path | None = None) -> int:
     probes = sorted(names.intersection(PROBES) | functions)
     lines = [
         "// Enum names generated from the locally installed Creo Toolkit SDK.",
-        *["#include <" + h + ">" for h in HEADERS],
+        *["#include <" + h + ">" for h in present],
         *["#define MECHDOG_HAS_" + n + " 1" for n in probes],
         "static const std::map<std::string,int> tk_constants = {",
     ]

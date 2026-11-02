@@ -19,3 +19,11 @@ native/constants.inc
 .pytest_cache/
 .ruff_cache/
 open_file/
+# Local Creo session byproducts (DEV-064): erase evidence receipts, Toolkit logs
+# and unsaved test models are kept on disk for forensics but never packaged or
+# committed. Root-anchored so a future source directory cannot be swallowed.
+/session_erase/
+/trail.txt.*
+/std.err
+/std.out
+examples/*.prt.*
