@@ -19,13 +19,12 @@ from pydantic import BaseModel, ConfigDict, Field
 import bridge
 import creo_startup
 import generic_bridge as general
-import seeds
-from capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
-from creo_mechdog import update_check
+from creo_mechdog import seeds, update_check
 from creo_mechdog.adoption import adopt
 from creo_mechdog.appearance import preview_recolor, submit_recolor
 from creo_mechdog.assembly_replay import plan_assembly_rebuild
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
+from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
 from creo_mechdog.capability_pages import capabilities_response
 from creo_mechdog.capability_summary import release_status, support_status
 from creo_mechdog.file_adoption import adopt_file
@@ -84,6 +83,8 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/seed_distribution.py",
     "src/creo_mechdog/seed_compatibility.py",
     "seeds.py",
+    "src/creo_mechdog/seeds.py",
+    "src/creo_mechdog/capabilities.py",
     "src/creo_mechdog/recovery.py",
     "src/creo_mechdog/reconciliation.py",
     "src/creo_mechdog/legacy_recovery.py",

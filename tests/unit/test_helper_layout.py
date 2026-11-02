@@ -17,7 +17,7 @@ from creo_mechdog import capability_pages, schema
 from tools import package
 
 ROOT = Path(__file__).resolve().parents[2]
-HELPERS = ("schema", "profile_checks", "airfoil")
+HELPERS = ("schema", "profile_checks", "airfoil", "seeds", "capabilities")
 
 
 class HelperLayoutTests(unittest.TestCase):
@@ -55,7 +55,7 @@ def audit(event, args):
    assert Path(os.fsdecode(path)).name not in ('config.json', 'client-config.json'), path
   assert not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC), args
 sys.addaudithook(audit)
-names = ('schema', 'profile_checks', 'airfoil')
+names = ('schema', 'profile_checks', 'airfoil', 'seeds', 'capabilities')
 for name in names:
  order = (name, 'creo_mechdog.' + name)
  if sys.argv[1] == 'package_first': order = order[::-1]

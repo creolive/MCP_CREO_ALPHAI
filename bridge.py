@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, TextIO
 
-from capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
 from creo_mechdog.blend_callback import callback_setup_status, prepare_callback, unknown_readiness
 from creo_mechdog.build_fingerprints import (
     FINGERPRINT_ALGORITHM,
@@ -39,6 +38,7 @@ from creo_mechdog.build_support import (
     validate_compiler_env,
     validate_local_path,
 )
+from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
 from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.recovery import job_evidence, process_identity
 

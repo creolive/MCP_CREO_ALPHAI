@@ -23,7 +23,7 @@ async def main(create: bool, simple: bool, classic: bool):
         report["protocol_version"] = client.protocol_version
         tools = await client.list_tools()
         report["tools"] = [t.name for t in tools.tools]
-        from capabilities import UNAVAILABLE_OPERATIONS
+        from creo_mechdog.capabilities import UNAVAILABLE_OPERATIONS
 
         assert not {f"creo_{name}" for name in UNAVAILABLE_OPERATIONS} & set(report["tools"])
         assert {

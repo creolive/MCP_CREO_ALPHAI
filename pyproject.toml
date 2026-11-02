@@ -11,7 +11,7 @@ license = "MIT"
 
 [tool.setuptools]
 packages = ["creo_mechdog"]
-py-modules = ["version", "schema", "airfoil", "profile_checks"]
+py-modules = ["version", "schema", "airfoil", "profile_checks", "bridge", "seeds", "capabilities"]
 package-dir = {creo_mechdog = "src/creo_mechdog"}
 
 [tool.setuptools.dynamic]
