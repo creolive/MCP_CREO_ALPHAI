@@ -5,7 +5,7 @@
     "clang-format": "23.1.3"
   },
   "configuration": {
-    "pyproject.toml": "4b786c9741c35ba69a3e27a08b686fbf2989821d4ab8d1daf00fe9889e09d0aa",
+    "pyproject.toml": "15dec4018951449070a4e5ceb5db782aaa3e0fb8c583c816f1edcf10745bfa2b",
     ".clang-format": "b084ba4a767e8fede2f3d47e7dfb3ae120528cb76fceb113ce27e3dd7e0a77a0",
     "requirements-dev.txt": "f325c41a3f7288bd4dfb08310276c9790b1ca5fcafc9bd68704559b64ec5decc"
   },
