@@ -1,6 +1,6 @@
 # 渐进布局与模块边界
 
-以下是迁移目标。规范与检查已建立；DEV-002 前两批已完成，`src/creo_mechdog/` 已承接更新检查、输入模型及轮廓／翼型辅助实现和对应单元测试。其余 Python 根模块和 `native/*.cpp` 继续分批整理，整体迁移仍在开发中。
+以下是迁移目标。规范与检查已建立；DEV-002 前两批已完成，第三批 seeds/capabilities 已实现包化并通过本批离线验收（统一检查 2196 项、独立安装副本 64 项）；条件性实机仍待验。`src/creo_mechdog/` 已承接更新检查、输入模型、轮廓／翼型、种子与能力实现。服务、启动及桥接根模块和 `native/*.cpp` 继续分批整理，整体迁移仍在开发中。
 
 ```text
 src/creo_mechdog/     Python 包：服务、输入校验、任务调度、模型登记与建模辅助
@@ -48,4 +48,4 @@ DEV-004 在上下文明确后逐个模块转为独立编译，维护头文件依
 
 第二批将 schema、profile_checks、airfoil 的实现迁入同一包。根同名模块只转发导出，旧导入和包内导入共享模型类型；服务、桥接及测试消费者使用包内入口。源码身份清单同时覆盖包内实现与根包装，标准安装同时安装三个兼容模块。26 项纯校验/辅助回归迁入 tests/unit，涉及桥接保护和种子的混合用例继续保留原位置，完整发现数为 199（原 191 加新增 8），无漏发现或重复。代码/资源/数据位置、后台入口和 version.py 不变。
 
-第二批开发验收与 [WorkBuddy 已测场景](../validation/DEV-002-batch2-WorkBuddy-acceptance-20261015.md)的历史结果见[第二批记录](../validation/DEV-002-batch2.md)，不作为后续批次的当前验收。下一批处理 seeds、capabilities 等剩余依赖，随后迁移服务、启动和桥接；整个 DEV-002 继续为开发中，连接与并发的最新范围以[主台账](../BACKLOG.md)为准。
+第二批开发验收与 [WorkBuddy 已测场景](../validation/DEV-002-batch2-WorkBuddy-acceptance-20261015.md)的历史结果见[第二批记录](../validation/DEV-002-batch2.md)，不作为后续批次的当前验收。第三批已将 seeds、capabilities 的唯一实现迁入包内，保留根薄导出和 seeds CLI；普通消费者与测试 mock 使用包内定义。editable 安装显式包含根 bridge/seeds/capabilities，以满足仓库外导入；bridge 的实现和 ROOT/JSON I/O 职责没有迁移。这是保留的过渡依赖，不表示包已经完全独立。源码身份同时覆盖两个根包装与包内实现，资源和运行数据位置保持原安装根。详见[第三批计划](../superpowers/plans/2026-11-02-dev002-batch3-package-migration.md)和[本批证据](../validation/DEV-002-batch3.md)。后续再分批迁移服务、启动和桥接；整个 DEV-002 继续为开发中，连接与并发的最新范围以[主台账](../BACKLOG.md)为准。

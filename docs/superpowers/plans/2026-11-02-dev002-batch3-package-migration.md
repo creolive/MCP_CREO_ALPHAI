@@ -1,6 +1,6 @@
 # DEV-002 第三批：种子与能力模块包化 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 将根目录 seeds/capabilities 的唯一业务实现迁入 Python 包，保留旧导入和种子 CLI，并证明安装、路径、源码身份和 MCP 行为兼容。
 
@@ -10,9 +10,9 @@
 
 **Spec:** [DEV-002 第三批设计与边界](../../work-items/DEV-002.md#第三批任务卡种子与能力模块迁移)；[总体架构](../../development/ARCHITECTURE.md)。
 
-登记：2026-11-02。状态：已规划、待用户派工，尚未实施。沿用固定 ID **DEV-002**，不增加台账任务行。计划调查基点为 `0f6c085324c0df016e73fe1a088d5e731147ad12`，执行时重新记录 HEAD 与 dirty，不能把该提交当成未来受测源码。
+登记：2026-11-02。状态：用户后续要求本会话直接执行；实现及独立分发验证完成，最终统一检查通过（2196 项、0 失败/错误），T5 实机待验。沿用固定 ID **DEV-002**，不增加台账任务行。计划调查基点为 `0f6c085324c0df016e73fe1a088d5e731147ad12`，执行时重新记录 HEAD 与 dirty，不能把该提交当成未来受测源码。
 
-执行方法已由用户指定：用户自行指派其他 agent。本规划会话不启动实现 agent。一个 agent 可以按 T0→T6 串行完成；分给多名 agent 时，按下表分工。
+执行方法更新：用户随后要求本会话直接完成，按 executing-plans 串行实施并进行一次独立审查；以下派工提示词保留作原始计划参考。一个 agent 可以按 T0→T6 串行完成；分给多名 agent 时，按下表分工。
 
 ## Global Constraints
 
@@ -55,11 +55,11 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** 向 T1/T2 提供起点提交、dirty、工具契约及能力数据；不调用服务 lifespan 或 Toolkit。
 
-- [ ] 记录分支、HEAD、dirty 和受测源码指纹，标记已有 session_activity.json、客户端目录及其他用户改动，禁止覆盖或清理。
-- [ ] 审查本次选中的单元用例不会访问真实会话，运行当前种子/能力/路径对应回归，记录既有失败及原始错误。
-- [ ] 在 mock 启动器、更新线程、原生提交的条件下，读取服务注册的工具名及输入 schema；对比时不依赖工具顺序。
-- [ ] 保存当前 REGISTERED_OPERATIONS、UNAVAILABLE_OPERATIONS、families() 与种子公开输出的契约快照。时间、绝对根路径等环境字段单列；业务字段逐字段比较。
-- [ ] 记录 `setup.ps1` 的 seeds.py --install 调用、两处 generic_bridge 动态 import seeds、源码身份清单、安装元数据及测试 mock 路径。
+- [x] 记录分支、HEAD、dirty 和受测源码指纹，标记已有 session_activity.json、客户端目录及其他用户改动，禁止覆盖或清理。
+- [x] 审查本次选中的单元用例不会访问真实会话，运行当前种子/能力/路径对应回归，记录既有失败及原始错误。
+- [x] 在 mock 启动器、更新线程、原生提交的条件下，读取服务注册的工具名及输入 schema；对比时不依赖工具顺序。
+- [x] 保存当前 REGISTERED_OPERATIONS、UNAVAILABLE_OPERATIONS、families() 与种子公开输出的契约快照。时间、绝对根路径等环境字段单列；业务字段逐字段比较。
+- [x] 记录 `setup.ps1` 的 seeds.py --install 调用、两处 generic_bridge 动态 import seeds、源码身份清单、安装元数据及测试 mock 路径。
 
 验收：有可复核基线，且没有启动 MCP 传输、后台 Creo 或 Toolkit。既有失败不能在后续报告中被省略或称为通过。
 
@@ -69,11 +69,11 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** 保持 `REGISTERED_OPERATIONS`、`UNAVAILABLE_OPERATIONS`、`require_available(operations: list[dict]) -> None`、`families() -> dict`。根/包对象身份相同；函数以包内实现为唯一来源。
 
-- [ ] 先新增失败回归：`test_legacy_exports_share_objects` 逐一用 assertIs 核对上述常量/函数；`test_capability_contract_matches_baseline` 核对全部操作与 families 数据；`test_unavailable_operation_still_rejected_before_submission` 核对拒绝发生在锁和目录创建之前。
-- [ ] 运行 `python -m unittest discover -s tests/unit -p test_capabilities_layout.py -v`，确认失败源于包内模块尚未迁移。
-- [ ] 将现有实现迁入包内；根文件按 schema.py 的 __getattr__/__dir__/__all__ 模式薄导出。保留私有属性的既有 getattr 可访问性，不另写一套常量。
-- [ ] 消费者测试从包内导入；patch 包内定义位置，`patch.dict` 与共享字典身份语义保留。不得削弱原有拒绝断言。
-- [ ] 重跑新增回归及现有能力、分页、支持状态和 v021 校验回归，全部通过后提交 `DEV-002: migrate capabilities implementation into package`。
+- [x] 先新增失败回归：`test_legacy_exports_share_objects` 逐一用 assertIs 核对上述常量/函数；冻结的 `contract_before.json` / `contract_after.json` 核对全部操作与 families 数据；`test_unavailable_operation_still_rejected_before_submission` 核对拒绝发生在锁和目录创建之前。
+- [x] 运行 `python -m unittest discover -s tests/unit -p test_capabilities_layout.py -v`，确认失败源于包内模块尚未迁移。
+- [x] 将现有实现迁入包内；根文件按 schema.py 的 __getattr__/__dir__/__all__ 模式薄导出。保留私有属性的既有 getattr 可访问性，不另写一套常量。
+- [x] 消费者测试从包内导入；patch 包内定义位置，`patch.dict` 与共享字典身份语义保留。不得削弱原有拒绝断言。
+- [x] 重跑新增回归及现有能力、分页、支持状态和 v021 校验回归，全部通过后提交 `DEV-002: migrate capabilities implementation into package`。
 
 ## T2：迁移 seeds 并保留命令行入口
 
@@ -81,13 +81,13 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** 保持原 seeds 函数签名与返回结构：expected_archive_sha256、manifest、library_directories、manifest_entry_by_digest、list_seeds、select_seed、validate_seed、install_seed_library；私有 _checked_seed/_validate_library 仍可由旧模块访问。新增包内 `main(argv: list[str] | None = None) -> int`。
 
-- [ ] 先新增失败回归：`test_legacy_exports_share_objects` 核对函数身份；`test_cli_listing_emits_one_json_object`、`test_cli_install_directory_uses_fixture_root`、`test_cli_rejects_directory_and_archive_together` 核对现有 CLI 行为，所有安装写入使用隔离夹具，不能写本仓库 seed_registry.json。
-- [ ] 运行 `python -m unittest discover -s tests/unit -p test_seeds_layout.py -v`，确认新包入口尚不存在导致失败。
-- [ ] 迁入唯一实现；现有 argparse 和 JSON 输出放入包内 main，成功返回 0，参数错误/业务异常保持非零退出和原错误，不新增吞异常逻辑。
-- [ ] 根文件只保留薄导出和 `if __name__ == '__main__': raise SystemExit(_implementation.main())`；保留 --install、--archive-file、--directory 和默认列举行为。
-- [ ] 保留调用时使用 bridge.ROOT/read_json/write_json 的现有行为，避免新加导入时配置读取、建目录或 Creo 调用；本批不复制桥接 I/O，也不改持久化语义。
-- [ ] 将 patch.object(seeds, 'manifest', ...) 等测试的 seeds 指向包内实现；为根旧入口单独保留身份和 CLI 回归，不能靠删除原测试解决 mock 失效。
-- [ ] 重跑 `python -m unittest discover -s tests/unit -p 'test_seed*.py' -v`、release_integrity 和根 tests/test_portable_modeling.py 对应回归；覆盖篡改 ZIP、目录逃逸、许可差异、哈希失配、来源未知、缺文件和不连接 Toolkit。通过后提交 `DEV-002: migrate seeds and preserve legacy CLI`。
+- [x] 先新增失败回归：`test_legacy_exports_share_objects` 核对函数身份；`test_cli_listing_emits_one_json_object`、`test_cli_install_directory_uses_fixture_root`、`test_cli_rejects_directory_and_archive_together` 核对现有 CLI 行为，所有安装写入使用隔离夹具，不能写本仓库 seed_registry.json。
+- [x] 运行 `python -m unittest discover -s tests/unit -p test_seeds_layout.py -v`，确认新包入口尚不存在导致失败。
+- [x] 迁入唯一实现；现有 argparse 和 JSON 输出放入包内 main，成功返回 0，参数错误/业务异常保持非零退出和原错误，不新增吞异常逻辑。
+- [x] 根文件只保留薄导出和 `if __name__ == '__main__': raise SystemExit(_implementation.main())`；保留 --install、--archive-file、--directory 和默认列举行为。
+- [x] 保留调用时使用 bridge.ROOT/read_json/write_json 的现有行为，避免新加导入时配置读取、建目录或 Creo 调用；本批不复制桥接 I/O，也不改持久化语义。
+- [x] 将 patch.object(seeds, 'manifest', ...) 等测试的 seeds 指向包内实现；为根旧入口单独保留身份和 CLI 回归，不能靠删除原测试解决 mock 失效。
+- [x] 重跑 `python -m unittest discover -s tests/unit -p 'test_seed*.py' -v`、release_integrity 和根 tests/test_portable_modeling.py 对应回归；覆盖篡改 ZIP、目录逃逸、许可差异、哈希失配、来源未知、缺文件和不连接 Toolkit。通过后提交 `DEV-002: migrate seeds and preserve legacy CLI`。
 
 ## T3：接线、安装声明与源码身份
 
@@ -95,14 +95,14 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** 新代码使用 `creo_mechdog.seeds` / `creo_mechdog.capabilities`；兼容旧入口。安装声明保留原 version/schema/airfoil/profile_checks，并加入 seeds、capabilities 和现存依赖 bridge；不移动 bridge 实现。
 
-- [ ] 新增 `test_external_cwd_imports_resolve_same_checkout`，在全新独立环境和仓库外 cwd 验证包、根包装及 bridge 全部来自同一 checkout；先确认遗漏安装声明时失败。
-- [ ] 新增 `test_legacy_first_and_package_first_imports`，在新子进程覆盖两个导入顺序；禁止依赖 PYTHONPATH 或手动 sys.path。单独覆盖配置不存在时纯导入成功且不创建运行目录。
-- [ ] 调整三个根消费者及当前工具脚本导入；覆盖 generic_bridge 两处动态导入，不修改其业务流程。历史归档脚本保持不变，仍通过包装兼容。
-- [ ] `pyproject.toml` 的 py-modules 加入 bridge/seeds/capabilities。bridge 当前导入依赖已在包内或 capabilities，运行 CLI 时的数据位置继续由根 bridge.py 决定；这只是安装可见性补齐，不代表桥接已完成包化。
-- [ ] server._SOURCE_NAMES 同时保留两个根包装，并加入 src/creo_mechdog/seeds.py、src/creo_mechdog/capabilities.py；当前汇总工具的 code_paths 同步覆盖两份实现，不把历史报告当成本批证据。
-- [ ] 扩展迁移测试：`test_runtime_detects_each_new_implementation_change` 在临时源码副本逐一修改两个实现，重置 capabilities 快照，断言 source_changed_since_startup=true；根包装也在指纹集合中。
-- [ ] 更新 `docs/development/style-baseline.json` 时仅单独审查 pyproject 配置哈希；不得增加 lint/format 容许项，不运行 --write-baseline。被迁入的新路径必须符合格式要求，不能继承旧路径债务。
-- [ ] 运行 helper_layout、paths、package_migration 和现有能力/种子回归，核对 T0 工具集合、输入 schema 与业务输出一致。通过后提交 `DEV-002: wire package imports and installation identity`。
+- [x] 新增 `test_external_cwd_imports_resolve_same_checkout`，在全新独立环境和仓库外 cwd 验证包、根包装及 bridge 全部来自同一 checkout；先确认遗漏安装声明时失败。
+- [x] 新增 `test_legacy_first_and_package_first_imports`，在新子进程覆盖两个导入顺序；禁止依赖 PYTHONPATH 或手动 sys.path。单独覆盖配置不存在时纯导入成功且不创建运行目录。
+- [x] 调整三个根消费者及当前工具脚本导入；覆盖 generic_bridge 两处动态导入，不修改其业务流程。历史归档脚本保持不变，仍通过包装兼容。
+- [x] `pyproject.toml` 的 py-modules 加入 bridge/seeds/capabilities。bridge 当前导入依赖已在包内或 capabilities，运行 CLI 时的数据位置继续由根 bridge.py 决定；这只是安装可见性补齐，不代表桥接已完成包化。
+- [x] server._SOURCE_NAMES 同时保留两个根包装，并加入 src/creo_mechdog/seeds.py、src/creo_mechdog/capabilities.py；当前汇总工具的 code_paths 同步覆盖两份实现，不把历史报告当成本批证据。
+- [x] 扩展迁移测试：`test_runtime_detects_each_new_implementation_change` 在临时源码副本逐一修改两个实现，重置 capabilities 快照，断言 source_changed_since_startup=true；根包装也在指纹集合中。
+- [x] 更新 `docs/development/style-baseline.json` 时仅单独审查 pyproject 配置哈希；不得增加 lint/format 容许项，不运行 --write-baseline。被迁入的新路径必须符合格式要求，不能继承旧路径债务。
+- [x] 运行 helper_layout、paths、package_migration 和现有能力/种子回归，核对 T0 工具集合、输入 schema 与业务输出一致。通过后提交 `DEV-002: wire package imports and installation identity`。
 
 ## T4：离线完整验收与新 ZIP 安装
 
@@ -110,13 +110,13 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** 输出源码包 SHA256、独立安装记录、纯离线检查结果及全部未验范围。
 
-- [ ] 确认安装夹具复制了新包实现和根包装；禁止仅因工作区 editable 安装残留而通过。
-- [ ] 验证 package.source_files() 包含两个实现、两个包装和新增测试，排除 config.json/client-config.json、seed_registry.json、native/constants.inc、SDK、二进制和运行目录。
-- [ ] 审查全量用例的会话副作用后，运行 `.\.venv\Scripts\python.exe tools\dev_check.py --work-item DEV-002-batch3`；要求 success=true、unit_tests=passed、无新增语言问题。若环境错误/超时/失败，保留原始输出并处置，不能写入风格基线或改称“通过”。
-- [ ] 选取唯一新运行目录，先运行 `tools/package_seeds.py --output <run_dir>/seed-library.zip`，再运行 `tools/package.py --seed-archive <run_dir>/seed-library.zip --output <run_dir>/source.zip`；均以开发副本 Python 执行，不覆盖既有附件，不使用 --allow-record-mismatch 绕过闸门。
-- [ ] 解压到独立临时目录，在该副本新建虚拟环境并安装其 requirements-dev.txt；清除测试子进程 PYTHONPATH/用户站点干扰，从解压目录之外导入根 seeds/capabilities/bridge 和包内模块，核对路径全部属于副本。
-- [ ] 在副本使用模拟种子/配置验证目录注册和 CLI，输出文件只进入副本；运行对应迁移回归，核对 resource_root/data_root、源码指纹和版本入口，不启动 server.py 传输。
-- [ ] 将环境、命令、提交/dirty/源码指纹、输出 ZIP 哈希、测试数量/失败项及未验范围写入本批记录。此时可记“离线开发验收通过”，不能记“实机/整个 DEV-002 完成”。
+- [x] 确认安装夹具复制了新包实现和根包装；禁止仅因工作区 editable 安装残留而通过。
+- [x] 验证 package.source_files() 包含两个实现、两个包装和新增测试，排除 config.json/client-config.json、seed_registry.json、native/constants.inc、SDK、二进制和运行目录。
+- [x] 审查全量用例的会话副作用后，运行 `.\.venv\Scripts\python.exe tools\dev_check.py --work-item DEV-002-batch3`；要求 success=true、unit_tests=passed、无新增语言问题。若环境错误/超时/失败，保留原始输出并处置，不能写入风格基线或改称“通过”。
+- [x] 选取唯一新运行目录，先运行 `tools/package_seeds.py --output <run_dir>/seed-library.zip`，再运行 `tools/package.py --seed-archive <run_dir>/seed-library.zip --output <run_dir>/source.zip`；均以开发副本 Python 执行，不覆盖既有附件，不使用 --allow-record-mismatch 绕过闸门。
+- [x] 解压到独立临时目录，在该副本新建虚拟环境并安装其 requirements-dev.txt；清除测试子进程 PYTHONPATH/用户站点干扰，从解压目录之外导入根 seeds/capabilities/bridge 和包内模块，核对路径全部属于副本。
+- [x] 在副本使用模拟种子/配置验证目录注册和 CLI，输出文件只进入副本；运行对应迁移回归，核对 resource_root/data_root、源码指纹和版本入口，不启动 server.py 传输。
+- [x] 将环境、命令、提交/dirty/源码指纹、输出 ZIP 哈希、测试数量/失败项及未验范围写入本批记录。此时可记“离线开发验收通过”，不能记“实机/整个 DEV-002 完成”。
 
 `test_package_migration.py` 对应可执行命令：
 
@@ -132,7 +132,7 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Interfaces:** T4 的准确源码与安装身份；输出真实 job_id/model_id、终态、几何、保存重载及 revision。
 
-- [ ] 先核对当前用户授权、BUG-001 恢复记录及会话可操作状态；条件不足就写“待实机验收”，不启动服务或工具。WorkBuddy 未执行时单列未验证，不推测通过。
+- [x] 先核对当前用户授权、BUG-001 恢复记录及会话可操作状态；条件不足就写“待实机验收”，不启动服务或工具。WorkBuddy 未执行时单列未验证，不推测通过。
 - [ ] 满足条件后验证真实 MCP 工具清单、schema、capabilities compact/full 分页、种子列举和校验。现有 `tools/test_mcp.py` 即使不加 --create 也调用 creo_session_status，且启动 lifespan，因此只在本阶段使用；其固定报告名应先在本批驱动副本改为唯一输出，不能覆盖历史文件。
 - [ ] 使用执行时真实清单中的可用两截面种子，完成自动选种建模和一次参数编辑；记录所用 seed_file/feature_id/SHA256，检查原生几何与体积、revision、saved_file_reloaded_and_verified=true，并确认原种子字节不变。操作沿用 tools/test_portable_modeling.py 的已存在场景，输出到新的 --output-dir，按脚本实际支持的阶段执行，不臆造 CLI 参数。
 - [ ] 保存本轮协议和建模原始回执；失败或 unknown_outcome 时停下保留现场，不重提、不杀 Creo、不清保护。回滚仅在真实执行了相应失败场景时报告结果。
@@ -143,10 +143,10 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 
 **Files:** docs/work-items/DEV-002.md、docs/BACKLOG.md、docs/development/ARCHITECTURE.md、AGENTS.md、docs/validation/DEV-002-batch3.md。
 
-- [ ] 按实际完成范围把第三批从“已规划”推进到“开发中/离线验收通过/后置验收完成”，整个 DEV-002 仍按剩余迁移范围保留开发中。
-- [ ] 同步 AGENTS 根模块职责：seeds/capabilities 迁移实际完成后才写成薄导出；server/bridge/creo_startup 仍是实现入口；generic_bridge 仍承担计划校验、登记、revision 与结果处理，不能写成单纯 stdin/stdout 转发。
-- [ ] 更新架构当前批次与唯一台账行，不改写前两批历史验收日期；不新增 DEV-002 重复条目，不顺带重算无关统计。
-- [ ] 最终交接列出变更文件、提交、环境/源码身份、逐项结果、未验范围、剩余根模块职责和风险；提交仅在开发分支，逐提交带 DEV-002。是否 main/Release 由后续交付授权决定，不在本计划预定版本号。
+- [x] 按实际完成范围把第三批从“已规划”推进到“开发中/离线验收通过/后置验收完成”，整个 DEV-002 仍按剩余迁移范围保留开发中。
+- [x] 同步 AGENTS 根模块职责：seeds/capabilities 迁移实际完成后才写成薄导出；server/bridge/creo_startup 仍是实现入口；generic_bridge 仍承担计划校验、登记、revision 与结果处理，不能写成单纯 stdin/stdout 转发。
+- [x] 更新架构当前批次与唯一台账行，不改写前两批历史验收日期；不新增 DEV-002 重复条目，不顺带重算无关统计。
+- [x] 最终交接列出变更文件、提交、环境/源码身份、逐项结果、未验范围、剩余根模块职责和风险；提交仅在开发分支，逐提交带 DEV-002。是否 main/Release 由后续交付授权决定，不在本计划预定版本号。
 
 ## 可复制派工提示词
 
@@ -163,3 +163,10 @@ A/B 不修改共享的 server.py、bridge.py、generic_bridge.py、pyproject.tom
 ## 后续批次入口
 
 第三批完成后，另行规划服务工具注册与能力 payload 的职责提取，再处理启动协调、桥接中的构建/作业结果职责；每批分别核对包与根依赖。C++ 上下文与独立编译继续归 DEV-003/DEV-004。本计划不提前规定这些后续批次的新接口或完成状态。
+
+## 本次执行说明
+
+- T0—T4/T6 已按本批证据推进，最终统一检查通过（2196 项、0 失败/错误）。T5 入场条件核对后保留实机待验，后续三项不勾选。
+- 原两个业务模块已格式合规，无需单独格式提交；受影响的三个旧独立工具先单独格式提交，再接线。
+- 外部 cwd 回归验证了 py-modules 缺失的失败→成功；首次全新解压暴露旧测试缺 .tmp 父目录，已修复并在第二个新环境 64 项通过。
+- [本批验收记录](../../validation/DEV-002-batch3.md)记录实际结果；不因勾选实现步骤而宣称实机或整个 DEV-002 完成。
