@@ -29,9 +29,9 @@
 - **恢复链路文案**：`save` 的 origin 不匹配附 `creo_erase_session_models(targets=[...])` 用法，`erase` 的 `modified` 拒绝附"GUI 保存 → 重新 inspect → apply"链路；不新增自动擦除或会话副本接管。
 - **未验证范围**：Creo 10 构建与建模、报告方 24 条带 194 ops 计划（原件未提供）、WorkBuddy 黑盒、G5 三算子。
 
-## 0.11.5 之后（2026-11-03 开发中，R13）：稳定性与失败闭环
+## 0.11.6（2026-11-03）：稳定性与失败闭环（R13）
 
-分支 `codex/DEV-065-r13-feedback0115`，基于 `main@b3f6d43`，**未合 main、未发布、版本号待裁定**；公开工具仍 95（未新增工具）。四项改动离线完成并通过 2241 项单测与 `dev_check --work-item 0.11.5-feedback-r13`，**本机 Creo 12.4 实机未执行**（验收时本机无 Creo 会话；按 BUG-001 纪律不擅自新建 Toolkit 连接）。来源与逐章映射见 [R13 归档](validation/feedback-0.11.5-2026-11-03/MAPPING.md)。
+分支 `codex/DEV-065-r13-feedback0115`，基于 `main@b3f6d43`，PATCH 交付；公开工具仍 95（未新增工具）。四项改动通过 2241 项单测与 `dev_check --work-item 0.11.5-feedback-r13`，并完成本机 Creo 12.4.0.0 实机。来源与逐章映射见 [R13 归档](validation/feedback-0.11.5-2026-11-03/MAPPING.md)。
 
 - **`verify_model` 阶段可观测（BUG-109）**：原生把 `verify_model` 拆成 `verify_model_start/regenerate/inspect/assertions/before_save/save/erase/reload/reload_regenerate/reload_inspect/compare/after_reload/preview` 子阶段，每段写 `STAGE name= elapsed_ms= since_start_ms= ts=`（epoch ms）；成功与失败回执都带 `verify_stages`（≤32 条）。`creo_get_job` 在 `queued/running/failed/unknown_outcome` 时追加只读 `native_progress{readable,log_bytes,tail_bytes,truncated,stage,sub_stage,elapsed_ms,since_start_ms,idle_seconds,stages_seen,reason}`（只 seek 日志末尾 8 KiB）；超时文案点名最后子阶段与停滞秒数。**总预算 600 s、`unknown_outcome` 语义、无自动重试均未改变**；未做进程内子阶段强杀。卡死根因仍未定，未并入 BUG-088（预览文件缺失）/BUG-085（断连）。
 - **刚性平移判据（BUG-108）**：`verify_coordinate_plan` 与 `enforce_geometry_deviation` 改为区分"整体平移"与"形状变形"——可证刚体平移（逐点同一向量、去平移后残差 ≤1e-9 mm）且平移 ≤**1e-2 mm** 时放行并标 `accepted_rigid=true`（日志 `GEOMETRY_DEVIATION_RIGID_ACCEPTED`）；超限拒绝并写明平移量与上限。**形状闸门仍是 1e-5 mm、默认阈值未放宽**，真实变形仍拒绝。`geometry_deviation` 与 `sketch_shifted` 增 `shape_deviation_mm`/`residual_mm`/`rigid`/`translation_mm`/`translation_magnitude_mm`/`accepted_rigid`（成功与失败都填，旧字段语义不动）。
