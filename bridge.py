@@ -986,6 +986,28 @@ def note_native_outcome(manifest: dict) -> None:
         )
 
 
+def timeout_message(progress: dict | None) -> str:
+    """Name the last native sub-stage when the worker budget expired (BUG-109).
+
+    ``progress`` is the bounded projection from ``creo_mechdog.native_stage``;
+    an empty or partial report keeps today's wording rather than inventing a
+    stage. The budget, the unknown_outcome protection and the absence of
+    retries are unchanged.
+    """
+    base = (
+        "Native helper timed out and was stopped; inspect native checkpoint and Creo "
+        "before retrying."
+    )
+    sub_stage = (progress or {}).get("sub_stage")
+    if not isinstance(sub_stage, str) or not sub_stage:
+        return base
+    message = f"{base} Last sub-stage: {sub_stage}"
+    idle = (progress or {}).get("idle_seconds")
+    if isinstance(idle, (int, float)) and not isinstance(idle, bool):
+        message += f" (idle {float(idle):.1f} s)"
+    return message + "."
+
+
 def apply_terminal_stage(manifest: dict) -> None:
     """Use the native failure stage when one was actually reported."""
     if manifest.get("status") == "failed":
@@ -1302,12 +1324,22 @@ def _run_job_dispatch(job_id: str) -> None:
                         message=f"Toolkit code {result['toolkit_code']}; inspect native.log. Partial new model may remain in Creo. Do not blindly retry.",
                     )
     except subprocess.TimeoutExpired:
+        # BUG-109: name the last sub-stage and how long it has been silent instead
+        # of only reporting that the budget expired. The budget itself, the
+        # unknown_outcome protection and the absence of retries are unchanged.
+        progress = {}
+        if worker_started:
+            from creo_mechdog.native_stage import stall_report
+
+            progress = stall_report(directory)
         manifest.update(
             status="unknown_outcome" if worker_started else "failed",
-            message="Native helper timed out and was stopped; inspect native checkpoint and Creo before retrying."
+            message=timeout_message(progress)
             if worker_started
             else "Native build exceeded its subprocess budget; inspect build logs. No native modeling worker started.",
         )
+        if progress:
+            manifest["native_progress"] = progress
     except Exception as exc:
         manifest.update(status="unknown_outcome" if worker_started else "failed", message=str(exc))
     apply_terminal_stage(manifest)
@@ -1351,6 +1383,13 @@ def get_job(
             manifest["stage"] = stages[-1]
         if manifest["status"] in ("failed", "unknown_outcome"):
             manifest["native_log_tail"] = tail[-4000:]
+        if manifest["status"] in ("queued", "running", "failed", "unknown_outcome"):
+            # BUG-109: bounded read-only attribution of the last phase/sub-stage.
+            # It never replaces `stage`, never touches the worker and never
+            # infers a timing that the log does not contain.
+            from creo_mechdog.native_stage import stall_report
+
+            manifest["native_progress"] = stall_report(directory)
     apply_terminal_stage(manifest)
     if manifest["status"] in ("queued", "running"):
         age = (
@@ -1477,6 +1516,7 @@ def compact_job(manifest: dict) -> dict:
         "model_evidence_error",
         "component_changes",
         "inspection_warnings",
+        "native_progress",
     )
     summary = {key: manifest[key] for key in keys if key in manifest}
     summary["detail"] = "compact"
@@ -1530,6 +1570,8 @@ def compact_job(manifest: dict) -> dict:
             "geometry_deviation",
             "failed_model_cleanup",
             "feature_errors",
+            "verify_stages",
+            "failed_transform",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary

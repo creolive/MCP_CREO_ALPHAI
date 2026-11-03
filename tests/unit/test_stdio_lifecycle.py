@@ -417,7 +417,11 @@ class StdioLifecycleTests(unittest.TestCase):
         bounded exit (no global Python tree kill) and still record its terminal
         job state afterwards.
         """
-        with tempfile.TemporaryDirectory() as directory:
+        # Windows: the detached runner can still hold runner.log when the test
+        # body returns, and the default strict cleanup then raises WinError 32
+        # (observed 1/6 standalone runs). Ignoring the cleanup error keeps every
+        # assertion below unchanged and makes the evidence reproducible.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             tmp = Path(directory)
             runner_script = tmp / "runner.py"
             runner_script.write_text(_RUNNER_SOURCE, encoding="utf-8")

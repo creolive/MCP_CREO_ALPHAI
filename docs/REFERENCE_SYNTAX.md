@@ -60,6 +60,35 @@
 - 中心线按**直线身份核验**：比较方向与两端点到目标无限线的偏移（日志 `COORDINATE_CENTERLINE_IDENTITY`），不依赖可能被求解器滑动的端点。轴平行中心线仍用基准投影线偏移尺寸固定；斜中心线不生成已知不稳定的端点尺寸（日志 `COORDINATE_CENTERLINE_SKEW`），仅靠核验兜底。
 - 图元集合与互斥边界不变：line/centerline/rectangle/polyline/circle/arc；显式 dimensions/constraints 与 coordinates 仍互斥；ellipse/spline 仍走 autodim，本项不扩展。
 
+## 坐标容差与旋转范围（BUG-108 / BUG-111，R13）
+
+**`geometry_tolerance_mm` 的含义**：它是**验收放行阈值**（判定求解结果是否可接受），不是求解精度设置，也不会让内核"解得更好"。缺省时 `coordinates` 按 1e-5 mm 判定形状、autodim 按 1e-3 mm 只告警不拒绝。
+
+**形状与平移分开判**：坐标求解会整体挪动整个截面（外部实测 1.6e-5 ~ 4e-3 mm），这不是形状改变。现在两处闸门（`SectionRegenerate` 的 `verify_coordinate_plan` 与 `CompleteFeature` 的 `enforce_geometry_deviation`）都按"去掉共模平移后的逐点残差"判定：
+
+```json
+{"geometry_deviation": {"max_deviation_mm": 0.000016, "shape_deviation_mm": 0.0,
+                        "residual_mm": 0.0, "rigid": true,
+                        "translation_mm": {"u": 0.000016, "v": 0.0},
+                        "accepted_rigid": true},
+ "sketch_shifted": {"detected": true, "rigid": true, "accepted_rigid": true,
+                    "translation_mm": {"u": 0.000016, "v": 0.0}, "residual_mm": 0.0}}
+```
+
+- 可证刚体平移且平移量 ≤ **1e-2 mm** → 放行，`accepted_rigid=true`，日志 `GEOMETRY_DEVIATION_RIGID_ACCEPTED`；
+- 刚体平移超过 1e-2 mm → 拒绝，错误里同时给平移量与该上限；
+- **真实变形（残差 > 1e-5 mm）仍拒绝**，默认阈值没有放宽；显式 `geometry_tolerance_mm` 仍是收紧/放宽验收的唯一手段。
+
+**`rotation` 范围**：`geometry_transform` 与 `set_geometry_transform` 的每个 `rotation` 分量必须落在 **-180..180 度**。超范围在提交前拒绝并给等价值，例如：
+
+```json
+{"error": "rotation[2]=225 deg is outside the supported range of -180..180 deg; use the equivalent -135 deg"}
+```
+
+两种原生后端统一归一为 `(-180, 180]`，因此 `-135` 与 `225` 指向同一旋转（旧实现把负角 `+360`，两者走了不同路径）。失败回执带 `failed_transform`（`backend`、`rotation_deg`、`rotation_normalized_deg`、`translation_mm`、`keep_original`、`reference_count`、`reference_kinds`）。
+
+**`keep_original` 批量复制**：单个计划里对同一 body 连续复制超过 **4 个**时，第 5 个副本失败并整批回滚。本机 Creo 12.4 已两轮复现：5 op 与 7 op 批次都在 `operation_index=4` 失败，`failed_stage=execute_geometry_transform`、消息为 `Regeneration produced a failed, suppressed or incomplete feature`，前 4 个 op `effect_status=rolled_back`；与旋转角无关（−135 在范围内同样失败）、与批次长度无关。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**根因未定**。大批量复制请拆成 ≤4 个/批，并在下一批重新引用当前 body；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。
+
 ## 回转轴（revolve.axis，BUG-083）
 
 `creo_revolve.axis` 与 execute_plan 的 `revolve` 操作 `axis` 字段接受以下两种裸对象，不增加 `reference`/`entity`/`edge` 包装：

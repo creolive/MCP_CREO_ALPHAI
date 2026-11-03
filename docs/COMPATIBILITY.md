@@ -29,6 +29,17 @@
 - **恢复链路文案**：`save` 的 origin 不匹配附 `creo_erase_session_models(targets=[...])` 用法，`erase` 的 `modified` 拒绝附"GUI 保存 → 重新 inspect → apply"链路；不新增自动擦除或会话副本接管。
 - **未验证范围**：Creo 10 构建与建模、报告方 24 条带 194 ops 计划（原件未提供）、WorkBuddy 黑盒、G5 三算子。
 
+## 0.11.6（2026-11-03）：稳定性与失败闭环（R13）
+
+分支 `codex/DEV-065-r13-feedback0115`，基于 `main@b3f6d43`，PATCH 交付；公开工具仍 95（未新增工具）。四项改动通过 2241 项单测与 `dev_check --work-item 0.11.5-feedback-r13`，并完成本机 Creo 12.4.0.0 实机。来源与逐章映射见 [R13 归档](validation/feedback-0.11.5-2026-11-03/MAPPING.md)。
+
+- **`verify_model` 阶段可观测（BUG-109）**：原生把 `verify_model` 拆成 `verify_model_start/regenerate/inspect/assertions/before_save/save/erase/reload/reload_regenerate/reload_inspect/compare/after_reload/preview` 子阶段，每段写 `STAGE name= elapsed_ms= since_start_ms= ts=`（epoch ms）；成功与失败回执都带 `verify_stages`（≤32 条）。`creo_get_job` 在 `queued/running/failed/unknown_outcome` 时追加只读 `native_progress{readable,log_bytes,tail_bytes,truncated,stage,sub_stage,elapsed_ms,since_start_ms,idle_seconds,stages_seen,reason}`（只 seek 日志末尾 8 KiB）；超时文案点名最后子阶段与停滞秒数。**总预算 600 s、`unknown_outcome` 语义、无自动重试均未改变**；未做进程内子阶段强杀。卡死根因仍未定，未并入 BUG-088（预览文件缺失）/BUG-085（断连）。
+- **刚性平移判据（BUG-108）**：`verify_coordinate_plan` 与 `enforce_geometry_deviation` 改为区分"整体平移"与"形状变形"——可证刚体平移（逐点同一向量、去平移后残差 ≤1e-9 mm）且平移 ≤**1e-2 mm** 时放行并标 `accepted_rigid=true`（日志 `GEOMETRY_DEVIATION_RIGID_ACCEPTED`）；超限拒绝并写明平移量与上限。**形状闸门仍是 1e-5 mm、默认阈值未放宽**，真实变形仍拒绝。`geometry_deviation` 与 `sketch_shifted` 增 `shape_deviation_mm`/`residual_mm`/`rigid`/`translation_mm`/`translation_magnitude_mm`/`accepted_rigid`（成功与失败都填，旧字段语义不动）。
+- **装配失败恢复（BUG-110）**：`creo_reconcile_model` 新增 `action="ack_failure"`（需 `confirm_failure_ack=true`），把终态失败/`unknown_outcome` 的模型以**元数据事务**退回 `ready`：不启 worker、不连 Toolkit、不改 revision、不改模型文件、不改组件绑定；审计块记 `action/prior_status/prior_job_status/outcome_uncertain/disk_state_verified=false/component_ownership_preserved=true`。四个触碰组件所有权的动作仍只对零件/钣金可用且理由不变。
+- **旋转范围（BUG-111，行为收紧）**：`geometry_transform`/`set_geometry_transform` 的 `rotation` 分量前置限制在 **-180..180 度**，超范围在提交前拒绝并给出等价值（如 225 → -135）；两种原生后端统一归一为 `(-180, 180]`（旧实现把负角 `+360`，使 -135 与 225 走不同路径）。transform 失败回执新增 `failed_transform`（backend、请求与归一角度、平移、`keep_original`、引用数与类型），并保留 `failed_operation_index`。**第 5 个 `keep_original` 副本在 Creo 12.4 复现**（5 op 与 7 op 批次都在 `operation_index=4` 失败、与角度无关），根因未定，能力文案按"单批 ≤4 个副本并重新引用当前 body"提示，未新增 `body_pattern` 工具。
+- **本机 Creo 12.4.0.0 实机（2026-11-03，用户授权启动会话）**：四项夹具串行通过——阶段归因（3 个作业各 13 个 `verify_stages`，`jobs/<id>/native.log` 对应 13 行 `STAGE`，终态不带 `native_progress`）；坐标草图 4 例 + 挤出全部成功且新字段齐备（4 例 `rigid=false`，平移未复现，`accepted_rigid=true` 仅单测覆盖）；装配失败作业 `failed` 后模型仍 `ready`（无死路），`ack_failure` 对 `ready` 被正确拒绝（成功路径未实机发生）；225° 提交前拒绝并给 `-135`、单个 −135° 副本成功、**5 op 与 7 op 批次均在 index 4 失败**（第 5 副本现象在 12.4 复现两轮，根因未定）。
+- **未验证范围**：Creo 9/10 构建与建模；WorkBuddy 黑盒；`ack_failure` 成功路径与真实 10 分钟停滞场景；报告方 `native.log`/`request.json`/P12 计划原件（未随包）。
+
 ## 0.11.0（2026-11-01 发布）：装配按零件族上色（FEAT-052）
 
 FEAT-052 随 0.11.0 发布，公开工具 94→95；本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK / MSVC 实机验收通过（run `assembly_appearance_live_20261101T060336Z558b3546`，80 组件/12 族夹具 28/28 检查，另过装配 pipeline 与 T07 预览回归）：

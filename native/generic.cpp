@@ -13,6 +13,7 @@
 #include "inspection_sidecar.h"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -125,6 +126,38 @@ static std::string generic_phase = "loading_request";
 static void generic_stage(const std::string &phase) {
     generic_phase = phase;
     log("PHASE=%s\n", phase.c_str());
+}
+// BUG-109: verify_model used to be a single phase name covering regeneration,
+// inspection, assertions, backup save, erase, reload, comparison and preview, so
+// a stalled first build logged nothing new until the whole job budget expired.
+// Each step now publishes one bounded STAGE line carrying its own and cumulative
+// elapsed time plus the worker's wall clock; nothing here changes the job budget,
+// interrupts a Toolkit call or retries anything.
+static const auto generic_started_at = std::chrono::steady_clock::now();
+static auto generic_step_started_at = generic_started_at;
+static J verify_stages = J::array();
+static constexpr std::size_t VERIFY_STAGE_LIMIT = 32;
+static long long milliseconds_between(const std::chrono::steady_clock::time_point &from) {
+    return static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::steady_clock::now() - from)
+                                      .count());
+}
+static void generic_substage(const std::string &name) {
+    const auto step_point = std::chrono::steady_clock::now();
+    const long long elapsed = static_cast<long long>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(step_point - generic_step_started_at)
+            .count());
+    generic_step_started_at = step_point;
+    const long long since_start = milliseconds_between(generic_started_at);
+    const long long wall =
+        static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::system_clock::now().time_since_epoch())
+                                   .count());
+    log("STAGE name=%s elapsed_ms=%lld since_start_ms=%lld ts=%lld\n", name.c_str(), elapsed,
+        since_start, wall);
+    if (verify_stages.size() < VERIFY_STAGE_LIMIT)
+        verify_stages.push_back(
+            {{"name", name}, {"elapsed_ms", elapsed}, {"since_start_ms", since_start}});
 }
 static V vec(const J &j) {
     return {j.at(0).get<double>(), j.at(1).get<double>(), j.at(2).get<double>()};
@@ -2023,11 +2056,10 @@ static J sketch(const J &op) {
     J geometry_deviation = geometry_deviation_report(
         deviation_regenerate, deviation_feature, deviation_policy.tolerance,
         deviation_policy.enforce, deviation_policy.source);
-    enforce_geometry_deviation(geometry_deviation, deviation_context);
-    // BUG-108: publish the shift verdict next to geometry_deviation. A sketch
-    // that moved as a rigid body stays rejected by the same 1e-5 gate; the
-    // block only makes the move visible (and names a request tolerance as the
-    // reason a moved sketch was accepted).
+    // BUG-108: publish the shift verdict next to geometry_deviation before the
+    // policy is enforced, so the coordinates verdict is the one the shape gate
+    // sees. A deformed sketch is still rejected; a provable rigid translation
+    // inside the limit is accepted and says so.
     J sketch_shifted;
     if (!coordinate_plan.is_null()) {
         const J &verification = solver_info.contains("coordinate_geometry_after_creation")
@@ -2036,10 +2068,24 @@ static J sketch(const J &op) {
         sketch_shifted = sketch_shift_block(verification, deviation_policy.source);
         geometry_deviation["shift_detected"] = sketch_shifted["detected"];
         geometry_deviation["accepted_by_request"] = sketch_shifted["accepted_by_request"];
+        geometry_deviation["accepted_rigid"] = sketch_shifted["accepted_rigid"];
+        if (sketch_shifted["rigid"].is_boolean()) {
+            geometry_deviation["rigid"] = sketch_shifted["rigid"];
+            geometry_deviation["translation_mm"] = sketch_shifted["translation_mm"];
+            geometry_deviation["translation_magnitude_mm"] =
+                sketch_shifted["translation_magnitude_mm"];
+            if (sketch_shifted["residual_mm"].is_number()) {
+                geometry_deviation["shape_deviation_mm"] = sketch_shifted["residual_mm"];
+                geometry_deviation["residual_mm"] = sketch_shifted["residual_mm"];
+            }
+        }
     } else {
         geometry_deviation["shift_detected"] = nullptr;
         geometry_deviation["accepted_by_request"] = nullptr;
+        // Only a measured coordinates solve can prove a rigid translation.
+        geometry_deviation["accepted_rigid"] = false;
     }
+    enforce_geometry_deviation(geometry_deviation, deviation_context);
     solver_info["geometry_deviation"] = geometry_deviation;
     solver_info["sketch_shifted"] = sketch_shifted;
     J ids = J::object();
@@ -6038,6 +6084,36 @@ static void adopt_native(const J &request, J &report) {
                    {"adopted", !preparing}});
 }
 
+// BUG-111: a transform failure used to arrive as a bare Toolkit code plus the
+// phase name. Publish the operation's own shape instead: which backend ran, the
+// rotation as requested and as normalized, how many references and whether the
+// original geometry was kept. Bounded by construction (no per-face lists).
+static J transform_failure_report(const J &op) {
+    J rotation = op.value("rotation", J::array({0.0, 0.0, 0.0}));
+    J normalized = J::array();
+    for (auto value : rotation)
+        normalized.push_back(normalized_rotation_deg(value.get<double>()));
+    J kinds = J::array();
+    for (auto reference : op["references"]) {
+        std::string kind = reference.value("kind", "");
+        if (kind.empty() || std::find(kinds.begin(), kinds.end(), kind) != kinds.end())
+            continue;
+        if (kinds.size() < 6)
+            kinds.push_back(kind);
+    }
+    const bool body = !op["references"].empty() && op["references"][0]["kind"] == "body";
+    return {{"label", op.value("label", "")},
+            {"backend", body ? "flex_move" : "geometry_move"},
+            {"rotation_deg", rotation},
+            {"rotation_normalized_deg", normalized},
+            {"translation_mm", op.value("translation", J::array({0.0, 0.0, 0.0}))},
+            {"keep_original", op.value("keep_original", false)},
+            {"reference_count", (int)op["references"].size()},
+            {"reference_kinds", kinds},
+            {"note", "the kernel is usable inside -180..180 deg; equivalent angles map to the same "
+                     "rotation, and a failed copy leaves the plan rolled back"}};
+}
+
 static int run_generic(const std::wstring &job) {
     generic_job = job;
     generic_phase = "loading_request";
@@ -6051,6 +6127,7 @@ static int run_generic(const std::wstring &job) {
     bool connected = false, mutated = false;
     std::unique_ptr<RecoveryDeadline> recovery_deadline;
     int operation_index = -1;
+    J operation_in_flight;
     bool executing_operation = false;
     std::wstring checkpoint;
     new_model_evidence = NewModelEvidence();
@@ -6259,6 +6336,7 @@ static int run_generic(const std::wstring &job) {
             for (auto op : request["operations"]) {
                 ++operation_index;
                 operation_position = operation_index;
+                operation_in_flight = op;
                 executing_operation = true;
                 generic_stage("execute_" + op["op"].get<std::string>());
                 log("OPERATION_INDEX=%d INPUT=%s\n", operation_index, op.dump().c_str());
@@ -6270,40 +6348,53 @@ static int run_generic(const std::wstring &job) {
                 executing_operation = false;
             }
             generic_stage("verify_model");
+            generic_substage("verify_model_start");
             if (request.contains("loft_seed")) {
                 suppress_seed_for_profiles(request["loft_seed"]["feature_id"], false);
                 // The seed rebinding is a plan-level construction step, not a
                 // requested operation: report it beside the operations instead
                 // of appending an extra result (T02: N inputs, N results).
                 report["loft_seed_feature"] = bind_loft_seed(request["loft_seed"], seed_profiles);
+                generic_substage("verify_model_loft_seed");
             }
-            if (!request.value("readonly", false))
+            if (!request.value("readonly", false)) {
+                generic_substage("verify_model_regenerate");
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
+            }
+            generic_substage("verify_model_inspect");
             J state = inspection();
             report["inspection"] = state;
             report["aliases"] = aliases;
+            generic_substage("verify_model_assertions");
             verify_assertions(state, request.value("assertions", J::object()));
             std::wstring saved = checkpoint;
             if (!request.value("readonly", false)) {
                 generic_stage("before_save_blend_validation");
+                generic_substage("verify_model_before_save");
                 report["loft_checks"]["before_save"] = verify_loft_settings(L"before_save");
                 generic_stage("save_and_reload");
                 ProPath destination;
                 path(destination, folder);
+                generic_substage("verify_model_save");
                 CK(ProMdlnameBackup(board, destination));
                 saved = latest_model_file();
                 J before = state;
+                generic_substage("verify_model_erase");
                 CK(ProMdlErase(board));
                 board = nullptr;
                 ProPath file;
                 path(file, saved);
+                generic_substage("verify_model_reload");
                 CK(ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board));
+                generic_substage("verify_model_reload_regenerate");
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
+                generic_substage("verify_model_reload_inspect");
                 state = inspection();
                 // FEAT-052: extend the recolor block with the persisted
                 // appearance readback before the strict comparison, so the
                 // evidence exists even when the comparison throws.
                 recolor_after_reload(state, report);
+                generic_substage("verify_model_compare");
                 verify_saved(before, state, feature_state_touched);
                 verify_assertions(state, request.value("assertions", J::object()));
                 // The reloaded model must reproduce the recorded intentional
@@ -6317,6 +6408,7 @@ static int run_generic(const std::wstring &job) {
                         throw std::runtime_error(
                             "Saved model suppression set does not match the recorded registry");
                 }
+                generic_substage("verify_model_after_reload");
                 generic_stage("after_reload_blend_validation");
                 report["loft_checks"]["after_reload"] = verify_loft_settings(L"after_reload");
                 report["saved_file_reloaded_and_verified"] = true;
@@ -6324,6 +6416,7 @@ static int run_generic(const std::wstring &job) {
             state["inspection_source"] =
                 request.value("readonly", false) ? "live_query" : "saved_reloaded";
             state["inspection_available"] = true;
+            generic_substage("verify_model_preview");
             generic_stage("display_preview");
             // Shared capture (T07): target window selection, current-window and
             // identity checks, fixed view matrix, refit/refresh/repaint order and
@@ -6385,6 +6478,11 @@ static int run_generic(const std::wstring &job) {
         report["toolkit_code"] = PRO_TK_GENERAL_ERROR;
         log("BUILD_FAILED=%s\n", error.what());
     }
+    // BUG-109: the completed verify_model sub-stages ride both outcomes, so a
+    // stalled save/reload is identifiable from the receipt alone. Old receipts
+    // without this key stay valid; nothing is derived from it.
+    if (!verify_stages.empty())
+        report["verify_stages"] = verify_stages;
     if (!report["success"].get<bool>()) {
         // BUG-105: "mutated" means an operation was dispatched (or a new model
         // was created). A failure with no dispatch left the registered model
@@ -6396,6 +6494,11 @@ static int run_generic(const std::wstring &job) {
         report["failed_toolkit_call"] =
             last_toolkit_error.empty() ? J(nullptr) : J(last_toolkit_error);
         report["failed_operation_index"] = executing_operation ? J(operation_index) : J(nullptr);
+        // BUG-111: a failed transform names its own backend, angles and reference
+        // count instead of leaving only a Toolkit code and the phase name.
+        if (executing_operation && operation_in_flight.is_object() &&
+            operation_in_flight.value("op", "") == "geometry_transform")
+            report["failed_transform"] = transform_failure_report(operation_in_flight);
         // An intermediate inspection is useful diagnostic evidence but is not
         // the restored/current model. Publish it separately, never as a baseline.
         if (report.contains("inspection"))

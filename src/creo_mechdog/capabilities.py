@@ -112,13 +112,18 @@ def families() -> dict:
                 "accept_live",
                 "abandon_new",
                 "ack_no_mutation",
+                "ack_failure",
             ],
             "scope": (
                 "Owned part/sheetmetal models for native recovery; assembly/drawing rejected "
                 "there. ack_no_mutation (confirm_zero_mutation=true) is a registry-only "
                 "transition from failed to ready when the failed job provably changed nothing "
-                "(verified checkpoint, nothing pending, no failed rollback); it applies to "
-                "assemblies and drawings too because it never touches component ownership"
+                "(verified checkpoint, nothing pending, no failed rollback); ack_failure "
+                "(confirm_failure_ack=true) is the metadata-only exit for a terminal "
+                "failed/unknown_outcome job whose disk or component state cannot be proven, "
+                "returning the model to ready without touching revision, model files or "
+                "component bindings; both apply to assemblies and drawings too because they "
+                "never touch component ownership"
             ),
             "original_plan_replay": False,
             "inspect_requires_creo": False,
@@ -351,13 +356,13 @@ def families() -> dict:
             "modes": ["auto", "autodim", "coordinates"],
             "scope": "auto selects native coordinate dimensions on any valid sketch plane for supported undimensioned profiles with at least 10 expanded entities or coordinate/radius magnitude above 1000 mm; coordinates can be requested explicitly",
             "native_test": "19-line large-coordinate profile, R40000 12-gon, large capsule on XY and rotated/translated XZ, large YZ circle and explicit-coordinate rectangle; native sketch/solid IDs, named dimension edits, STL boundaries and save/erase/reload verified",
-            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on any valid sketch plane (principal string or dictionary plane), without user dimensions/constraints; input u/v components are named after their dominant native section axis; actual geometry checked to 1e-5 mm when creating/replacing; centerlines are verified as infinite lines (direction and offset) and skewed centerlines carry no endpoint dimensions; spline/ellipse use autodim; no normalization or rigid solving; solid extrude/revolve admission checks multi-loop input for open, branched, self-intersecting, intersecting, tangent, zero-area and near-tolerance contours and rejects only confirmed cases; sketch results report analytic contour/entity counts plus the solved native section counts; geometry_deviation reports post-solve fidelity at SectionRegenerate and CompleteFeature with bounded samples (unavailable measurements stay null with a reason, never zero); coordinates rejects above 1e-5 mm and autodim warns above 1e-3 mm unless geometry_tolerance_mm forces a stricter or looser cap (finite positive number; bool/NaN/Inf/zero/negative rejected; an explicit cap also rejects unmeasurable geometry); sketch_shifted publishes the post-solve movement at the top level (detected, rigid, translation_mm, max_point_mm, bounded sample) and accepted_by_request marks a moved sketch that only an explicit tolerance let through; geometry_tolerance_mm is an acceptance threshold, not a solve precision; no coordinates_lenient mode; the native solver remains authoritative; not proof of every constraint or extreme shape",
+            "limits": "coordinates supports line/centerline/rectangle/polyline/circle/arc on any valid sketch plane (principal string or dictionary plane), without user dimensions/constraints; input u/v components are named after their dominant native section axis; actual geometry checked to 1e-5 mm when creating/replacing; centerlines are verified as infinite lines (direction and offset) and skewed centerlines carry no endpoint dimensions; spline/ellipse use autodim; no normalization or rigid solving; solid extrude/revolve admission checks multi-loop input for open, branched, self-intersecting, intersecting, tangent, zero-area and near-tolerance contours and rejects only confirmed cases; sketch results report analytic contour/entity counts plus the solved native section counts; geometry_deviation reports post-solve fidelity at SectionRegenerate and CompleteFeature with bounded samples (unavailable measurements stay null with a reason, never zero); coordinates rejects shape changes above 1e-5 mm and autodim warns above 1e-3 mm unless geometry_tolerance_mm forces a stricter or looser cap (finite positive number; bool/NaN/Inf/zero/negative rejected; an explicit cap also rejects unmeasurable geometry); a measured rigid-body translation (every named point moved by the same vector, shape residual <= 1e-9 mm) is a solver artefact rather than a shape change, so it is accepted up to 1e-2 mm and reported with accepted_rigid=true, beyond which it is rejected with the measured translation and the limit; deformed profiles are still rejected at the shape gate; sketch_shifted publishes the post-solve movement at the top level (detected, rigid, translation_mm, residual_mm, shape_deviation_mm, accepted_rigid, max_point_mm, bounded sample) and accepted_by_request marks a moved sketch that only an explicit tolerance let through; geometry_tolerance_mm is an acceptance threshold, not a solve precision; no coordinates_lenient mode; the native solver remains authoritative; not proof of every constraint or extreme shape",
         },
         "sketch_geometry_edit": {
             "enabled": True,
             "scope": "in-place geometry replacement; entity names/types/counts and sketch feature ID retained; dimensions rebuilt using auto/autodim/coordinates",
             "native_test": "large 19-line and capsule replacements preserve downstream extrusion IDs, geometry, saved reload; failed dimension assertions roll back and live refresh confirms restoration",
-            "limits": "replaces prior dimensions/constraints and clears airfoil metadata; query new named dimension IDs after replacement; spline/ellipse retain the original autodim path; coordinate mode cannot be mixed with user constraints; geometry_deviation reports post-solve fidelity for edited sketches at SectionRegenerate and CompleteFeature under the same geometry_tolerance_mm contract as creation (an identical payload skips the re-solve and reports the deviation as explicitly unavailable); sketch_shifted reports the same rigid-translation verdict as creation, and accepted_by_request marks an explicit tolerance that let a moved edit through",
+            "limits": "replaces prior dimensions/constraints and clears airfoil metadata; query new named dimension IDs after replacement; spline/ellipse retain the original autodim path; coordinate mode cannot be mixed with user constraints; geometry_deviation reports post-solve fidelity for edited sketches at SectionRegenerate and CompleteFeature under the same geometry_tolerance_mm contract as creation (an identical payload skips the re-solve and reports the deviation as explicitly unavailable); sketch_shifted reports the same rigid-translation verdict as creation, accepted_rigid marks a measured rigid move inside the 1e-2 mm limit, and accepted_by_request marks an explicit tolerance that let a moved edit through",
         },
         "feature_lifecycle": {
             "enabled": True,
@@ -393,7 +398,19 @@ def families() -> dict:
             "enabled": True,
             "scope": "native body FlexMove or quilt/geometry Move, in-place translation/rotation edits, local feature groups, reorder and axis patterns",
             "native_test": "body rotate/translate/edit with true solid bounding boxes; quilt rotate/translate/thicken/edit; five-section blade group pattern and later airfoil edit; save/erase/reload",
-            "limits": "body branch can require Flexible Modeling license; copy-original, multiple bodies, custom csys, complex quilts and datum/curve combinations require local validation",
+            "limits": (
+                "rotation components are limited to -180..180 degrees and an out-of-range "
+                "request is refused before submission with its equivalent angle (225 -> -135); "
+                "both backends normalize into that same interval, so -135 and 225 address the "
+                "same rotation; a failed transform reports failed_transform with backend, "
+                "requested and normalized angles, translation, keep_original and reference "
+                "count, and the plan rolls back; the fifth keep_original copy in one batch fails "
+                "after regeneration (reproduced on Creo 12.4 at operation index 4 regardless of "
+                "angle or batch length, also reported on Creo 10; cause not identified) so copy at "
+                "most four times per batch and re-reference the current body ID in the next batch; "
+                "body branch can require Flexible Modeling license; copy-original, multiple bodies, "
+                "custom csys, complex quilts and datum/curve combinations require local validation"
+            ),
         },
         "drawing": {
             "enabled": True,

@@ -25,7 +25,12 @@ ACTIONS = (
     "accept_live",
     "abandon_new",
     "ack_no_mutation",
+    "ack_failure",
 )
+# BUG-110: actions that touch a saved model or its component ownership stay
+# limited to parts and sheetmetal; the two acknowledgements are metadata-only.
+COMPONENT_ACTIONS = ("restore_baseline", "accept_saved", "accept_live", "abandon_new")
+TERMINAL_FAILURE_STATUSES = ("failed", "unknown_outcome")
 TOKEN_SECONDS = 600
 WORKER_SECONDS = 115
 HASH_SECONDS = 8
@@ -587,6 +592,31 @@ def _actions(snapshot: dict, live: dict | None) -> dict:
             "idempotency key required"
         ),
     }
+    # BUG-110: a failed job whose model must not re-own its components had no
+    # other exit than hand-editing model.json. This acknowledgement records that
+    # the failure is accepted and puts the model back to ready; it is metadata
+    # only, so assembly/drawing models are eligible, and it never claims the disk
+    # state was verified.
+    ack_failure_ready = (
+        model.get("status") in TERMINAL_FAILURE_STATUSES
+        and not pending
+        and model.get("rollback_status") != "failed"
+    )
+    states["ack_failure"] = {
+        "available": bool(stopped and ack_failure_ready),
+        "reason": (
+            "Previous runner/worker is active or cannot be proven stopped"
+            if not stopped
+            else "Only a model whose last job ended in failure can acknowledge a failure"
+            if model.get("status") not in TERMINAL_FAILURE_STATUSES
+            else "Model still owns a pending or recovery job"
+            if pending
+            else "Rollback of the failed job did not succeed; inspect before acknowledging"
+            if model.get("rollback_status") == "failed"
+            else "Explicit apply with confirm_failure_ack=true, matching evidence and an "
+            "idempotency key required"
+        ),
+    }
     return states
 
 
@@ -740,13 +770,11 @@ def _finish(record: dict) -> dict:
     """Materialize a durable commit; never invoke Toolkit or overwrite later edits."""
     model = general.model_info(record["model_id"])
     after = record["model_after"]
-    if record.get("kind") == "ack_no_mutation":
+    if record.get("kind") in ("ack_no_mutation", "ack_failure"):
         # Metadata-only transaction: a later revision means someone else edited
         # the model in between, so the acknowledgement must not overwrite it.
         if model.get("revision") != after.get("revision"):
-            raise ValueError(
-                "Model revision changed after the zero-mutation acknowledgement; inspect again"
-            )
+            raise ValueError("Model revision changed after the acknowledgement; inspect again")
         model_registry.write_model(general.model_path(record["model_id"]), after)
         return record["job_after"]
     if model.get("recovery_pending") == record["job_id"]:
@@ -835,31 +863,50 @@ def _validate_evidence(
     return record
 
 
-def _ack_model_after(current: dict, job_id: str, record: dict, idempotency_key: str) -> dict:
+def _ack_model_after(
+    current: dict,
+    job_id: str,
+    record: dict,
+    idempotency_key: str,
+    *,
+    action: str = "ack_no_mutation",
+    prior_job_status: str | None = None,
+    outcome_uncertain: bool = False,
+) -> dict:
     """Registry-only transition from failed to ready with an audit block."""
     acknowledged_at = bridge.now()
     prior_job = current.get("pending_job") or current.get("last_job")
     baseline = record["snapshot"].get("baseline") or {}
+    audit = {
+        "recovery_id": job_id,
+        "action": action,
+        "original_job_id": prior_job,
+        "prior_status": current.get("status"),
+        "prior_rollback_status": current.get("rollback_status"),
+        "evidence_token": record.get("token"),
+        "idempotency_key": idempotency_key,
+        "checkpoint_identity": baseline.get("identity"),
+        "original_plan_completion_confirmed": False,
+        "source_identity": None,
+        "acknowledged_at": acknowledged_at,
+        "resolved_at": acknowledged_at,
+    }
+    if action == "ack_failure":
+        # BUG-110: state plainly what was and was not verified. The acknowledgement
+        # accepts the failure; it does not claim the disk or component state.
+        audit.update(
+            prior_job_status=prior_job_status,
+            outcome_uncertain=outcome_uncertain,
+            disk_state_verified=False,
+            component_ownership_preserved=True,
+        )
     return {
         **current,
         "status": "ready",
         "pending_job": None,
         "recovery_pending": None,
         "updated_at": acknowledged_at,
-        "reconciliation": {
-            "recovery_id": job_id,
-            "action": "ack_no_mutation",
-            "original_job_id": prior_job,
-            "prior_status": current.get("status"),
-            "prior_rollback_status": current.get("rollback_status"),
-            "evidence_token": record.get("token"),
-            "idempotency_key": idempotency_key,
-            "checkpoint_identity": baseline.get("identity"),
-            "original_plan_completion_confirmed": False,
-            "source_identity": None,
-            "acknowledged_at": acknowledged_at,
-            "resolved_at": acknowledged_at,
-        },
+        "reconciliation": audit,
     }
 
 
@@ -871,6 +918,7 @@ def apply(
     evidence_token: str,
     idempotency_key: str,
     confirm_zero_mutation: bool = False,
+    confirm_failure_ack: bool = False,
 ) -> dict:
     if (
         action not in ACTIONS
@@ -883,6 +931,12 @@ def apply(
         raise ValueError(
             "ack_no_mutation records that the failed job changed nothing; inspect the failed "
             "job and the checkpoint, then pass confirm_zero_mutation=true to acknowledge"
+        )
+    if action == "ack_failure" and confirm_failure_ack is not True:
+        raise ValueError(
+            "ack_failure records that the failed job is accepted as failed and makes the model "
+            "ready again without touching its revision, files or components; inspect the failed "
+            "job and the model in Creo, then pass confirm_failure_ack=true to acknowledge"
         )
     if expected_pending_job_id is not None and (
         not isinstance(expected_pending_job_id, str)
@@ -910,6 +964,8 @@ def apply(
         # Recorded so a replay with the flag omitted is recognized as the same
         # acknowledged request instead of starting a second transaction.
         arguments["confirm_zero_mutation"] = True
+    if action == "ack_failure":
+        arguments["confirm_failure_ack"] = True
     file = _journal(model_id, idempotency_key)
     # A duplicate query does not contend for Toolkit or repeat native work.
     existing = _read(file)
@@ -978,39 +1034,67 @@ def apply(
                 "revision": model["revision"],
                 "message": "Recovery accepted; poll this job_id; original plan will not be replayed",
             }
-            if action == "ack_no_mutation":
+            if action in ("ack_no_mutation", "ack_failure"):
                 # Metadata transaction only: no worker, no Toolkit, no file
                 # write. The journal commit is durable before the registry is
                 # updated so polling can finish an interrupted acknowledgement.
                 current = general.model_info(model_id)
+                expected_statuses = (
+                    ("failed",) if action == "ack_no_mutation" else TERMINAL_FAILURE_STATUSES
+                )
                 if (
                     current.get("revision") != model["revision"]
-                    or current.get("status") != "failed"
+                    or current.get("status") not in expected_statuses
                 ):
+                    raise ValueError("Model changed while acknowledging the failure; inspect again")
+                prior_job_id = current.get("pending_job") or current.get("last_job")
+                prior_job_status = None
+                if prior_job_id:
+                    try:
+                        prior_job_status = bridge.get_job(prior_job_id, "compact").get("status")
+                    except (OSError, ValueError):
+                        prior_job_status = None
+                if action == "ack_failure" and prior_job_status not in TERMINAL_FAILURE_STATUSES:
                     raise ValueError(
-                        "Model changed while acknowledging zero mutation; inspect again"
+                        "Last job is not a terminal failure; inspect the model before acknowledging"
                     )
-                after = _ack_model_after(current, job_id, record, idempotency_key)
+                after = _ack_model_after(
+                    current,
+                    job_id,
+                    record,
+                    idempotency_key,
+                    action=action,
+                    prior_job_status=prior_job_status,
+                    outcome_uncertain=prior_job_status == "unknown_outcome",
+                )
                 acknowledged_at = after["reconciliation"]["resolved_at"]
                 manifest.update(
                     status="succeeded",
-                    stage="metadata_acknowledged",
+                    stage=(
+                        "metadata_acknowledged"
+                        if action == "ack_no_mutation"
+                        else "failure_acknowledged"
+                    ),
                     revision=after["revision"],
                     finished_at=acknowledged_at,
                     message=(
                         "Zero-mutation acknowledgement recorded; no worker started and no model "
                         "file was touched"
+                        if action == "ack_no_mutation"
+                        else "Failure acknowledgement recorded; no worker started, and the "
+                        "revision, model file and component bindings were left untouched"
                     ),
                     recovery={
                         "prior_status": current.get("status"),
-                        "prior_job_id": current.get("last_job"),
+                        "prior_job_id": prior_job_id,
+                        "prior_job_status": prior_job_status,
                         "evidence_token": evidence_token,
                         "acknowledged_at": acknowledged_at,
                     },
                 )
                 intent = {
                     "state": "committed",
-                    "kind": "ack_no_mutation",
+                    "kind": action,
                     "model_id": model_id,
                     "job_id": job_id,
                     "arguments": arguments,
@@ -1310,6 +1394,7 @@ def reconcile(
     evidence_token: str | None = None,
     idempotency_key: str | None = None,
     confirm_zero_mutation: bool = False,
+    confirm_failure_ack: bool = False,
 ) -> dict:
     if mode == "inspect":
         if action is not None:
@@ -1335,4 +1420,5 @@ def reconcile(
         evidence_token,
         idempotency_key,
         confirm_zero_mutation,
+        confirm_failure_ack,
     )

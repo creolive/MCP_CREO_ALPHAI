@@ -253,6 +253,13 @@ static J coordinate_dimensions(ProSection section, int origin,
     }
     return {{"dimension_ids", dimensions}, {"targets", snapshot}, {"origin_id", origin}};
 }
+// BUG-108/R13: solver noise translates a whole solved profile by tens of microns
+// (1.6e-5 .. 4e-3 mm were measured externally), which a 1e-5 mm point gate reads as
+// "geometry changed". A provable rigid translation is not a shape change, so it is
+// accepted up to this magnitude. The shape gate itself stays at 1e-5 mm: deformed
+// profiles are still rejected, and this is a judgement fix, not a looser precision.
+static constexpr double RIGID_TRANSLATION_LIMIT_MM = 0.01;
+
 static J verify_coordinate_plan(ProSection section, const J &targets, int origin,
                                 double tolerance_mm = 0.00001) {
     double deviation = 0;
@@ -357,25 +364,43 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
         log("SKETCH_SHIFT_RIGID u=%.12f v=%.12f points=%d\n", mean_u, mean_v, points);
     else if (shifted)
         log("SKETCH_SHIFT_DEFORMED max=%.12f residual=%.12f\n", max_point, residual);
+    const double translation = rigid ? hypot(mean_u, mean_v) : 0.0;
+    const bool rigid_accepted = rigid && translation <= RIGID_TRANSLATION_LIMIT_MM;
     J shift = {{"detected", shifted},
                {"rigid", shifted ? J(rigid) : J(nullptr)},
                {"translation_mm", rigid ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
+               {"translation_magnitude_mm", rigid ? J(translation) : J(nullptr)},
+               {"residual_mm", residual},
+               {"shape_deviation_mm", residual},
+               {"accepted_rigid", rigid_accepted},
                {"max_point_mm", max_point},
                {"point_count", points},
                {"sample", shift_sample},
                {"truncated", shift_truncated},
                {"measurement_scope", "named_section_entities"}};
-    if (deviation > tolerance_mm) {
+    if (deviation > tolerance_mm && !rigid_accepted) {
         std::string message =
             "Coordinate dimensioning changed the supplied geometry; maximum deviation mm=" +
             std::to_string(deviation);
         if (rigid)
             message += " (the whole profile translated by u=" + std::to_string(mean_u) +
-                       " v=" + std::to_string(mean_v) + " mm; it was not re-solved)";
+                       " v=" + std::to_string(mean_v) +
+                       " mm, beyond the rigid translation limit of " +
+                       std::to_string(RIGID_TRANSLATION_LIMIT_MM) + " mm; it was not re-solved)";
         throw std::runtime_error(message);
     }
+    if (deviation > tolerance_mm)
+        log("GEOMETRY_DEVIATION_RIGID_ACCEPTED stage=section_regenerate translation=%.12f "
+            "residual=%.12f tolerance=%.12f\n",
+            translation, residual, tolerance_mm);
     return {{"point_count", points},
             {"max_deviation_mm", deviation},
+            {"shape_deviation_mm", residual},
+            {"residual_mm", residual},
+            {"rigid", shifted ? J(rigid) : J(nullptr)},
+            {"translation_mm", rigid ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
+            {"translation_magnitude_mm", rigid ? J(translation) : J(nullptr)},
+            {"accepted_rigid", rigid_accepted},
             {"tolerance_mm", tolerance_mm},
             {"shift", shift}};
 }
@@ -385,25 +410,43 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
 static J sketch_shift_block(const J &verification, const char *tolerance_source) {
     J shift = verification.is_object() && verification.contains("shift")
                   ? verification["shift"]
-                  : J{{"detected", nullptr},       {"rigid", nullptr},
-                      {"translation_mm", nullptr}, {"max_point_mm", nullptr},
-                      {"point_count", nullptr},    {"sample", J::array()},
-                      {"truncated", false},        {"measurement_scope", nullptr}};
+                  : J{{"detected", nullptr},           {"rigid", nullptr},
+                      {"translation_mm", nullptr},     {"residual_mm", nullptr},
+                      {"shape_deviation_mm", nullptr}, {"accepted_rigid", false},
+                      {"max_point_mm", nullptr},       {"point_count", nullptr},
+                      {"sample", J::array()},          {"truncated", false},
+                      {"measurement_scope", nullptr}};
     const bool detected = shift["detected"].is_boolean() && shift["detected"].get<bool>();
     const bool rigid = shift["rigid"].is_boolean() && shift["rigid"].get<bool>();
     const std::string source = tolerance_source ? tolerance_source : "";
     const bool accepted = detected && rigid && source == "request";
+    // BUG-108/R13: a rigid move inside the translation limit is accepted as a
+    // rigid move, independent of whether an explicit request tolerance was set.
+    double magnitude = 0;
+    if (rigid && shift["translation_mm"].is_object()) {
+        double u = shift["translation_mm"]["u"].get<double>();
+        double v = shift["translation_mm"]["v"].get<double>();
+        magnitude = hypot(u, v);
+    }
+    const bool accepted_rigid = detected && rigid && magnitude <= RIGID_TRANSLATION_LIMIT_MM;
     shift["total"] = shift.contains("point_count") ? shift["point_count"] : J(nullptr);
     shift["tolerance_source"] = source.empty() ? J(nullptr) : J(source);
     shift["accepted_by_request"] = accepted;
+    shift["accepted_rigid"] = accepted_rigid;
+    shift["translation_magnitude_mm"] = rigid ? J(magnitude) : J(nullptr);
     if (!detected)
         shift["note"] = "no post-solve shift was measured";
     else if (accepted)
         shift["note"] =
             "the solved profile translated as a rigid body; the request tolerance accepted it, "
             "this is not an exact solve";
+    else if (accepted_rigid)
+        shift["note"] =
+            "the solved profile translated as a rigid body; the move was accepted as a rigid "
+            "translation, the shape itself was not re-solved";
     else if (rigid)
-        shift["note"] = "the solved profile translated as a rigid body";
+        shift["note"] =
+            "the solved profile translated as a rigid body, beyond the rigid translation limit";
     else
         shift["note"] = "the solved profile deformed; per-point deviations differ";
     return shift;
@@ -487,8 +530,18 @@ static J section_target_snapshot(ProSection section, const std::map<std::string,
 // One verification point: compare every named target against the section.
 // Non-throwing by design; per-entity failures are recorded with a reason.
 static J unavailable_deviation_stage(const std::string &reason) {
-    return {{"available", false},   {"max_deviation_mm", nullptr}, {"total", 0},
-            {"sample", J::array()}, {"truncated", false},          {"unavailable_reason", reason}};
+    return {{"available", false},
+            {"max_deviation_mm", nullptr},
+            {"shape_deviation_mm", nullptr},
+            {"residual_mm", nullptr},
+            {"rigid", nullptr},
+            {"translation_mm", nullptr},
+            {"translation_magnitude_mm", nullptr},
+            {"point_count", nullptr},
+            {"total", 0},
+            {"sample", J::array()},
+            {"truncated", false},
+            {"unavailable_reason", reason}};
 }
 static J geometry_deviation_stage(ProSection section, const J &targets) {
     J sample = J::array();
@@ -496,6 +549,13 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
     double worst = 0;
     int total = 0;
     std::string failure;
+    // BUG-108/R13: per-point (du,dv) offsets feed the shape-versus-translation
+    // verdict. Deviations that a common translation cannot explain (radius,
+    // angles, a centerline's line identity) are tracked separately, and any
+    // target that could not be measured keeps the stage from claiming rigidity.
+    std::vector<std::array<double, 2>> offsets;
+    double non_translation = 0;
+    bool everything_measured = true;
     for (const auto &row : targets) {
         J entry = {{"entity", row["name"]},
                    {"kind", entity_kind_name(row["type"].get<int>())},
@@ -510,6 +570,7 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
         };
         if (row.contains("unmeasurable")) {
             entry["reason"] = row["unmeasurable"];
+            everything_measured = false;
             keep();
             continue;
         }
@@ -519,6 +580,7 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             entry["reason"] = "ProSectionEntityGet failed (code " + std::to_string((int)code) + ")";
             if (failure.empty())
                 failure = entry["reason"].get<std::string>();
+            everything_measured = false;
             keep();
             total++;
             continue;
@@ -526,6 +588,7 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
         int type = row["type"].get<int>();
         if ((int)def->type != type) {
             entry["reason"] = "entity type changed during the solve";
+            everything_measured = false;
             keep();
             total++;
             continue;
@@ -547,12 +610,14 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
                    stored = hypot(ux, uy);
             if (length < 1e-12 || stored < 1e-12) {
                 measured = false;
+                everything_measured = false;
                 entry["reason"] = "degenerate centerline after the solve";
             } else {
                 double turn = fabs(dx * uy - dy * ux) / (length * stored),
                        off1 = fabs(dx * (line->end1[1] - a1) - dy * (line->end1[0] - a0)) / length,
                        off2 = fabs(dx * (line->end2[1] - a1) - dy * (line->end2[0] - a0)) / length;
                 moved = std::max({turn * length, off1, off2});
+                non_translation = std::max(non_translation, moved);
                 measurement = "line_identity";
             }
         } else if (type == PRO_2D_LINE) {
@@ -560,50 +625,72 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             for (const auto &point : row["points"]) {
                 const double *actual =
                     point["sense"].get<int>() == PRO_ENT_START ? line->end1 : line->end2;
+                offsets.push_back({actual[0] - point["xy"][0].get<double>(),
+                                   actual[1] - point["xy"][1].get<double>()});
                 for (int axis = 0; axis < 2; axis++)
                     moved = std::max(moved, fabs(actual[axis] - point["xy"][axis].get<double>()));
             }
             measurement = "endpoints";
         } else if (type == PRO_2D_CIRCLE) {
             auto circle = (Pro2dCircledef *)def;
+            offsets.push_back({circle->center[0] - row["points"][0]["xy"][0].get<double>(),
+                               circle->center[1] - row["points"][0]["xy"][1].get<double>()});
             moved = std::max(fabs(circle->center[0] - row["points"][0]["xy"][0].get<double>()),
                              fabs(circle->center[1] - row["points"][0]["xy"][1].get<double>()));
-            moved = std::max(moved, fabs(circle->radius - row["radius"].get<double>()));
+            const double radius = fabs(circle->radius - row["radius"].get<double>());
+            non_translation = std::max(non_translation, radius);
+            moved = std::max(moved, radius);
             measurement = "center_radius";
         } else if (type == PRO_2D_ARC) {
             auto arc = (Pro2dArcdef *)def;
+            offsets.push_back({arc->center[0] - row["points"][0]["xy"][0].get<double>(),
+                               arc->center[1] - row["points"][0]["xy"][1].get<double>()});
             moved = std::max(fabs(arc->center[0] - row["points"][0]["xy"][0].get<double>()),
                              fabs(arc->center[1] - row["points"][0]["xy"][1].get<double>()));
-            moved = std::max(moved, fabs(arc->radius - row["radius"].get<double>()));
+            const double radius = fabs(arc->radius - row["radius"].get<double>());
+            non_translation = std::max(non_translation, radius);
+            moved = std::max(moved, radius);
             double actual[] = {arc->start_angle, arc->end_angle};
-            for (int i = 0; i < 2; i++)
-                moved =
-                    std::max(moved, row["radius"].get<double>() *
-                                        fabs(remainder(actual[i] - row["angles"][i].get<double>(),
-                                                       2 * acos(-1.0))));
+            for (int i = 0; i < 2; i++) {
+                const double swept =
+                    row["radius"].get<double>() *
+                    fabs(remainder(actual[i] - row["angles"][i].get<double>(), 2 * acos(-1.0)));
+                non_translation = std::max(non_translation, swept);
+                moved = std::max(moved, swept);
+            }
             measurement = "center_radius_angles";
         } else if (type == PRO_2D_ELLIPSE) {
             auto ellipse = (Pro2dEllipsedef *)def;
+            offsets.push_back({ellipse->origin[0] - row["points"][0]["xy"][0].get<double>(),
+                               ellipse->origin[1] - row["points"][0]["xy"][1].get<double>()});
             moved = std::max(fabs(ellipse->origin[0] - row["points"][0]["xy"][0].get<double>()),
                              fabs(ellipse->origin[1] - row["points"][0]["xy"][1].get<double>()));
-            moved = std::max(moved, fabs(ellipse->x_radius - row["radii"][0].get<double>()));
-            moved = std::max(moved, fabs(ellipse->y_radius - row["radii"][1].get<double>()));
+            const double x_radius = fabs(ellipse->x_radius - row["radii"][0].get<double>());
+            const double y_radius = fabs(ellipse->y_radius - row["radii"][1].get<double>());
+            non_translation = std::max({non_translation, x_radius, y_radius});
+            moved = std::max({moved, x_radius, y_radius});
             measurement = "origin_radii";
         } else if (type == PRO_2D_SPLINE) {
             auto spline = (Pro2dSplinedef *)def;
             if ((int)spline->n_points != row["n_points"].get<int>()) {
                 measured = false;
+                everything_measured = false;
                 entry["reason"] = "spline point count changed during the solve";
             } else {
-                for (unsigned i = 0; spline->point_arr && i < spline->n_points; i++)
+                for (unsigned i = 0; spline->point_arr && i < spline->n_points; i++) {
+                    offsets.push_back(
+                        {spline->point_arr[i][0] - row["points_xy"][i][0].get<double>(),
+                         spline->point_arr[i][1] - row["points_xy"][i][1].get<double>()});
                     moved = std::max(
                         {moved,
                          fabs(spline->point_arr[i][0] - row["points_xy"][i][0].get<double>()),
                          fabs(spline->point_arr[i][1] - row["points_xy"][i][1].get<double>())});
+                }
                 measurement = "control_points";
             }
         } else {
             measured = false;
+            everything_measured = false;
             entry["reason"] = "unsupported entity type for deviation measurement";
         }
         if (measured) {
@@ -611,19 +698,49 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
             entry["deviation_mm"] = moved;
             worst = std::max(worst, moved);
             any_measured = true;
+        } else {
+            everything_measured = false;
         }
         keep();
         total++;
     }
-    return {{"available", any_measured},
-            {"max_deviation_mm", any_measured ? J(worst) : J(nullptr)},
-            {"total", total},
-            {"sample", sample},
-            {"truncated", truncated},
-            {"unavailable_reason",
-             any_measured
-                 ? J(nullptr)
-                 : J(failure.empty() ? "no measurable entities in the target snapshot" : failure)}};
+    // Shape = what is left after removing a common translation. A rigid move
+    // leaves shape at machine noise; a re-solve that really changed the profile
+    // (or changed a radius/angle/axis) shows up immediately.
+    double max_point = 0, sum_u = 0, sum_v = 0;
+    for (const auto &offset : offsets) {
+        max_point = std::max(max_point, hypot(offset[0], offset[1]));
+        sum_u += offset[0];
+        sum_v += offset[1];
+    }
+    const double mean_u = offsets.empty() ? 0.0 : sum_u / (double)offsets.size();
+    const double mean_v = offsets.empty() ? 0.0 : sum_v / (double)offsets.size();
+    double residual = 0;
+    for (const auto &offset : offsets)
+        residual = std::max(residual, hypot(offset[0] - mean_u, offset[1] - mean_v));
+    const double shape = std::max(residual, non_translation);
+    const double translation = hypot(mean_u, mean_v);
+    const bool rigid = everything_measured && any_measured && !offsets.empty() &&
+                       translation > 1e-9 && shape <= 1e-9;
+    if (any_measured)
+        log("GEOMETRY_STAGE_SHAPE points=%d translation=%.12f shape=%.12f rigid=%d total=%d\n",
+            (int)offsets.size(), translation, shape, rigid ? 1 : 0, total);
+    return {
+        {"available", any_measured},
+        {"max_deviation_mm", any_measured ? J(worst) : J(nullptr)},
+        {"shape_deviation_mm", any_measured ? J(shape) : J(nullptr)},
+        {"residual_mm", any_measured ? J(residual) : J(nullptr)},
+        {"rigid", any_measured ? J(rigid) : J(nullptr)},
+        {"translation_mm", (any_measured && rigid) ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
+        {"translation_magnitude_mm", (any_measured && rigid) ? J(translation) : J(nullptr)},
+        {"point_count", (int)offsets.size()},
+        {"total", total},
+        {"sample", sample},
+        {"truncated", truncated},
+        {"unavailable_reason",
+         any_measured
+             ? J(nullptr)
+             : J(failure.empty() ? "no measurable entities in the target snapshot" : failure)}};
 }
 
 // Merges both verification points into the published geometry_deviation
@@ -638,6 +755,11 @@ static J skipped_geometry_deviation(const std::string &reason) {
             {"warning_threshold_mm", nullptr},
             {"max_deviation_mm", nullptr},
             {"exceeds_warning", nullptr},
+            {"shape_deviation_mm", nullptr},
+            {"residual_mm", nullptr},
+            {"rigid", nullptr},
+            {"translation_mm", nullptr},
+            {"accepted_rigid", nullptr},
             {"total", 0},
             {"sample", J::array()},
             {"truncated", false},
@@ -676,12 +798,45 @@ static J geometry_deviation_report(const J &regenerate_stage, const J &feature_s
                 reason = reason.empty() ? why : reason + "; " + why;
         }
     }
+    // BUG-108/R13: publish the shape-versus-translation verdict beside the
+    // deviation. A stage only proves rigidity when it measured every target, and
+    // two disagreeing stages resolve to "not rigid" rather than a hopeful yes.
+    const J *primary = nullptr;
+    double primary_deviation = -1;
+    bool rigid_known = false, rigid_all = true;
+    double shape = 0;
+    for (const J *stage : {&regenerate_stage, &feature_stage}) {
+        if (!stage->at("available").get<bool>())
+            continue;
+        rigid_known = true;
+        const bool stage_rigid = stage->at("rigid").is_boolean() && stage->at("rigid").get<bool>();
+        rigid_all = rigid_all && stage_rigid;
+        shape = std::max(shape, stage->at("shape_deviation_mm").get<double>());
+        const double deviation = stage->at("max_deviation_mm").get<double>();
+        if (deviation > primary_deviation) {
+            primary = stage;
+            primary_deviation = deviation;
+        }
+    }
+    const bool rigid = has && rigid_known && rigid_all;
+    double magnitude = 0;
+    J translation = J(nullptr);
+    if (rigid && primary) {
+        translation = primary->at("translation_mm");
+        magnitude = primary->at("translation_magnitude_mm").get<double>();
+    }
+    const bool accepted_rigid = rigid && magnitude <= RIGID_TRANSLATION_LIMIT_MM;
     return {{"available", available},
             {"unavailable_reason", available ? J(nullptr) : J(reason)},
             {"measurement_scope", "named_section_entities"},
             {"warning_threshold_mm", tolerance_mm},
             {"max_deviation_mm", has ? J(worst) : J(nullptr)},
             {"exceeds_warning", has ? J(worst > tolerance_mm) : J(nullptr)},
+            {"shape_deviation_mm", has ? J(shape) : J(nullptr)},
+            {"residual_mm", has ? J(shape) : J(nullptr)},
+            {"rigid", has ? J(rigid) : J(nullptr)},
+            {"translation_mm", translation},
+            {"accepted_rigid", has ? J(accepted_rigid) : J(nullptr)},
             {"total", total},
             {"sample", sample},
             {"truncated", truncated},
@@ -720,11 +875,15 @@ static DeviationPolicy resolve_geometry_tolerance(const J &op, const std::string
 
 // Applies the policy to the merged report. An enforced policy is a strict
 // guarantee: a stage that could not measure is also a rejection, never a
-// silent pass.
+// silent pass. BUG-108/R13: a provable rigid translation inside the limit is
+// the one documented exception — the profile was moved, not re-solved, so the
+// shape gate (shape deviation, not point displacement) still has to pass.
 static void enforce_geometry_deviation(const J &report, const char *context) {
     if (!report["enforced"].get<bool>())
         return;
     double tolerance = report["warning_threshold_mm"].get<double>();
+    const bool accepted_rigid =
+        report["accepted_rigid"].is_boolean() && report["accepted_rigid"].get<bool>();
     for (const char *name : {"section_regenerate", "complete_feature"}) {
         const J &stage = report["stages"][name];
         if (!stage["available"].get<bool>())
@@ -733,11 +892,28 @@ static void enforce_geometry_deviation(const J &report, const char *context) {
                 ": the requested geometry tolerance requires measurable geometry; " +
                 stage["unavailable_reason"].get<std::string>());
         if (stage["max_deviation_mm"].get<double>() > tolerance) {
+            const bool stage_rigid = stage["rigid"].is_boolean() && stage["rigid"].get<bool>();
+            const bool shape_ok = stage["shape_deviation_mm"].is_number() &&
+                                  stage["shape_deviation_mm"].get<double>() <= tolerance;
+            if (accepted_rigid && stage_rigid && shape_ok) {
+                log("GEOMETRY_DEVIATION_RIGID_ACCEPTED stage=%s max=%.12f shape=%.12f "
+                    "translation=%.12f tolerance=%.12f\n",
+                    name, stage["max_deviation_mm"].get<double>(),
+                    stage["shape_deviation_mm"].get<double>(),
+                    stage["translation_magnitude_mm"].get<double>(), tolerance);
+                continue;
+            }
             log("GEOMETRY_DEVIATION_REJECTED stage=%s max=%.12f tolerance=%.12f\n", name,
                 stage["max_deviation_mm"].get<double>(), tolerance);
-            throw std::runtime_error(std::string(context) +
-                                     " changed the supplied geometry; maximum deviation mm=" +
-                                     std::to_string(stage["max_deviation_mm"].get<double>()));
+            std::string message = std::string(context) +
+                                  " changed the supplied geometry; maximum deviation mm=" +
+                                  std::to_string(stage["max_deviation_mm"].get<double>());
+            if (stage_rigid)
+                message += " (the whole profile translated as a rigid body by " +
+                           std::to_string(stage["translation_magnitude_mm"].get<double>()) +
+                           " mm, beyond the rigid translation limit of " +
+                           std::to_string(RIGID_TRANSLATION_LIMIT_MM) + " mm)";
+            throw std::runtime_error(message);
         }
     }
 }
