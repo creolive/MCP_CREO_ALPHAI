@@ -53,3 +53,9 @@ R1 §5 P1-3延续快照无法回放请求，本卡为T09/0.7.0子项。已确认
 ### T13 实机矩阵（2026-10-26）
 
 `tools/test_t09_assembly_replay.py --live` 本机 Creo 12.4 通过：六类约束+default 完整回放、同层兄弟引用、偏移与源件编辑两条路径的真实随动、五类拒绝与源/目标不变性。实机发现并修复规划器逐约束生成 component_constraints（原生整组替换只留最后一条）缺陷，改为每组件一条操作。证据 `build/t09_assembly_replay.json`。
+
+## 2026-11-03 alphai 能力吸收：C02 约束克隆（仅规划）
+
+在现有 `assembly_replay.py` 与 T13 证据上核对缺口，再增加“一个冻结 occurrence 的约束→多个显式目标引用”的克隆计划子项；首个新增场景为 ALIGN+INSERT，保留双侧方向/偏移与源绑定，不退成 fixed，不重建第二套 planner。既有六类回放能力和历史验收不因首个克隆子集而收窄。
+
+负责人 unassigned；文件、接口、陈旧快照/歧义拒绝、真实驱动随动及保存重载矩阵见 [C02 子计划](../superpowers/plans/2026-11-03-alphai-c-editing-plan.md)，协调 [DEV-067](DEV-067.md)。本次未实现、未测试/连 Creo；原卡待规划状态与历史实现分别保留，由执行者先核当前源码，不能把历史卡头当作“没有 planner”。
