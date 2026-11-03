@@ -1652,6 +1652,9 @@ def compact_job(manifest: dict) -> dict:
                         "depth_basis",
                         "depth_scheme_code",
                         "depth_scheme_query",
+                        # FEAT-035: thread read back from the created standard
+                        # hole, never the requested values echoed back.
+                        "thread_metadata",
                         # BUG-102: request vs applied draft flip plus the
                         # failure classification when the create is rejected.
                         "requested_flip",

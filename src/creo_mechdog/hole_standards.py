@@ -20,45 +20,55 @@ TABLE_ID = "iso_metric_coarse@1"
 
 # Nominal diameter, pitch and the tap drill for ISO metric coarse threads.
 # ``thread_depth_limit_mm`` is the deepest usable thread for the size; it is a
-# table value, never derived from the requested depth.
-_ISO_METRIC_COARSE: dict[str, dict[str, float]] = {
+# table value, never derived from the requested depth. ``fastener_id`` is the
+# name the installed ISO hole chart uses for the same row: the chart keys sizes
+# by fastener id ("M6x1"), and "M6" alone is rejected by the native
+# thread-size setter with PRO_TK_INVALID_NAME.
+_ISO_METRIC_COARSE: dict[str, dict[str, float | str]] = {
     "M3": {
+        "fastener_id": "M3x.5",
         "nominal_diameter_mm": 3.0,
         "pitch_mm": 0.5,
         "tap_drill_mm": 2.5,
         "thread_depth_limit_mm": 6.0,
     },
     "M4": {
+        "fastener_id": "M4x.7",
         "nominal_diameter_mm": 4.0,
         "pitch_mm": 0.7,
         "tap_drill_mm": 3.3,
         "thread_depth_limit_mm": 8.0,
     },
     "M5": {
+        "fastener_id": "M5x.8",
         "nominal_diameter_mm": 5.0,
         "pitch_mm": 0.8,
         "tap_drill_mm": 4.2,
         "thread_depth_limit_mm": 10.0,
     },
     "M6": {
+        "fastener_id": "M6x1",
         "nominal_diameter_mm": 6.0,
         "pitch_mm": 1.0,
         "tap_drill_mm": 5.0,
         "thread_depth_limit_mm": 12.0,
     },
     "M8": {
+        "fastener_id": "M8x1.25",
         "nominal_diameter_mm": 8.0,
         "pitch_mm": 1.25,
         "tap_drill_mm": 6.8,
         "thread_depth_limit_mm": 16.0,
     },
     "M10": {
+        "fastener_id": "M10x1.5",
         "nominal_diameter_mm": 10.0,
         "pitch_mm": 1.5,
         "tap_drill_mm": 8.5,
         "thread_depth_limit_mm": 20.0,
     },
     "M12": {
+        "fastener_id": "M12x1.75",
         "nominal_diameter_mm": 12.0,
         "pitch_mm": 1.75,
         "tap_drill_mm": 10.2,
@@ -111,6 +121,7 @@ def resolve_standard_hole(series: str, size: str) -> dict:
     return {
         "series": series_name,
         "size": size_name,
+        "fastener_id": row["fastener_id"],
         "table_id": TABLE_ID,
         "table_sha256": table_digest(series_name),
         "nominal_diameter_mm": row["nominal_diameter_mm"],

@@ -41,16 +41,85 @@ PLATE_PLAN = [
     },
 ]
 
-HOLE_OP = {
+HOLE_TEMPLATE = {
     "op": "hole",
     "label": "h_m6_std",
-    "placement": {"kind": "surface", "id": 1},
-    "reference1": {"kind": "datum_plane", "id": 2},
-    "reference2": {"kind": "datum_plane", "id": 3},
     "diameter": 6.0,
-    "depth": 20.0,
-    "standard": {"series": "ISO", "size": "M6", "thread_depth": 10.0},
+    "depth": 8.0,
+    "standard": {
+        "series": "ISO",
+        "size": "M6",
+        "fastener_id": "M6x1",
+        "tap_drill_mm": 5.0,
+        "thread_depth": 6.0,
+    },
 }
+
+PLATE_TOP_Z = 10.0
+
+
+def _axis_of(normal: object) -> str | None:
+    """Name of the principal axis a plane normal runs along, else None."""
+    if not isinstance(normal, list) or len(normal) != 3:
+        return None
+    for name, index in (("x", 0), ("y", 1), ("z", 2)):
+        if abs(abs(normal[index]) - 1.0) < 1e-6 and all(
+            abs(normal[other]) < 1e-6 for other in range(3) if other != index
+        ):
+            return name
+    return None
+
+
+def pick_geometry(inspection: dict) -> dict:
+    """Real ids for the plate top face and the two locating datum planes.
+
+    Hard-coded ids are invalid in a fresh model (-23 PRO_TK_NOT_EXIST), so the
+    hole references come from the plate's own inspection artifact.
+    """
+    surfaces = [item for item in (inspection.get("surfaces") or []) if isinstance(item, dict)]
+    datum_planes = [
+        item for item in (inspection.get("datum_planes") or []) if isinstance(item, dict)
+    ]
+    top = [
+        item
+        for item in surfaces
+        if _axis_of(item.get("normal")) == "z"
+        and isinstance(item.get("origin"), list)
+        and abs(item["origin"][2] - PLATE_TOP_Z) < 1e-6
+    ]
+    datum_x = [item for item in datum_planes if _axis_of(item.get("normal")) == "x"]
+    datum_y = [item for item in datum_planes if _axis_of(item.get("normal")) == "y"]
+    return {
+        "top_face_id": top[0].get("id") if top else None,
+        "datum_x_id": datum_x[0].get("id") if datum_x else None,
+        "datum_y_id": datum_y[0].get("id") if datum_y else None,
+        "surface_count": len(surfaces),
+        "datum_plane_count": len(datum_planes),
+    }
+
+
+def hole_op(geometry: dict) -> dict:
+    """M6 standard hole centred on the plate top face, 25 mm from both datums."""
+    operation = dict(HOLE_TEMPLATE)
+    operation.update(
+        {
+            "placement": {"kind": "surface", "id": geometry["top_face_id"]},
+            "reference1": {"kind": "datum_plane", "id": geometry["datum_x_id"]},
+            "reference2": {"kind": "datum_plane", "id": geometry["datum_y_id"]},
+            "offset1": 25.0,
+            "offset2": 25.0,
+        }
+    )
+    return operation
+
+
+def load_inspection(record: dict) -> dict:
+    """Read the verified inspection artifact of a terminal job."""
+    ref = (record.get("result") or {}).get("inspection_ref") or {}
+    path = ref.get("file") if isinstance(ref, dict) else None
+    if not path:
+        raise SystemExit(f"job {record.get('job_id')} has no inspection artifact")
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -102,10 +171,37 @@ def main() -> int:
 
     model_id = plate_job["model_id"]
     revision = plate_job["revision"]
-    accepted = generic_bridge.submit([dict(HOLE_OP)], model_id=model_id, expected_revision=revision)
+    geometry = pick_geometry(load_inspection(plate_job))
+    report["plate"]["geometry"] = geometry
+    if not all(geometry[key] for key in ("top_face_id", "datum_x_id", "datum_y_id")):
+        target = ROOT / args.output
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"status": "no_geometry", "geometry": geometry}, ensure_ascii=False))
+        return 1
+
+    operation = hole_op(geometry)
+    report["hole_operation"] = operation
+    accepted = generic_bridge.submit([operation], model_id=model_id, expected_revision=revision)
     hole = wait(accepted["job_id"])
     report["hole_job_id"] = accepted["job_id"]
     report["hole"] = hole
+
+    result = hole.get("result") or {}
+    operations = result.get("operations") or [{}]
+    operation_result = operations[0] if isinstance(operations[0], dict) else {}
+    report["hole_outcome"] = {
+        "status": hole.get("status"),
+        "message": hole.get("message"),
+        "failed_stage": result.get("failed_stage"),
+        "toolkit_code": result.get("toolkit_code"),
+        "failed_operation_index": result.get("failed_operation_index"),
+        "rollback_succeeded": result.get("rollback_succeeded"),
+        "material_removed_mm3": operation_result.get("material_removed_mm3"),
+        "depth_basis": operation_result.get("depth_basis"),
+        "thread_metadata": operation_result.get("thread_metadata"),
+        "saved_file_reloaded_and_verified": result.get("saved_file_reloaded_and_verified"),
+    }
 
     target = ROOT / args.output
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -113,12 +209,12 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "status": hole.get("status"),
-                "model_id": model_id,
-                "revision": hole.get("revision"),
+                "geometry": geometry,
+                "outcome": report["hole_outcome"],
                 "report": str(target),
             },
             ensure_ascii=False,
+            indent=2,
         )
     )
     return 0 if hole.get("status") == "succeeded" else 1

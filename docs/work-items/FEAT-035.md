@@ -107,3 +107,23 @@
 结论：标准螺纹孔应当走 `PRO_E_HLE_ADD_THREAD`（孔特征内），而不是建一个 `PRO_E_THREAD` 外观螺纹特征去"看起来像螺纹"。这也解释了为什么不能用 `PRO_E_THREAD_*` 拼装：那会把结果做成交互语义不同的外观螺纹。
 
 待实机确认（必须，不能推断）：`PRO_E_HLE_ADD_THREAD` 的子元素结构与标准孔表选择（系列/规格）在抽取树里的真实路径、底孔直径由表驱动还是需显式写入、保存重载后螺纹属性是否保持。以上未确认前 `require_native_support()` 保持拒绝。
+
+## 2026-11-03 A03 步骤2：标准螺纹孔实机（Creo 12.4.0.0 / 匹配 SDK，ISO M6x1 单例）
+
+分支 `codex/FEAT-035-standard-holes`，基线 `363145a`（本轮改动未提交时的提交号）。本轮连 Creo 实机，只用 `tools/probe_standard_hole.py --confirm-session-usable` 一个探针，不改 caller 入口。
+
+**放置引用改为巡检真值**：上一轮失败是 `-23`（`PRO_TK_NOT_EXIST`），原因是脚本硬编码 `{"kind":"surface","id":1}`/`datum_plane 2,3`。现改为底板作业成功后的巡检件（`result.inspection_ref.file`）里取 z=10 顶面与 X/Y 基准面 id，本次取到 `58 / 2 / 4`，与已验收沉孔驱动的取法一致。模型名带时间戳，避免会话内同名模型复用陈旧 id。
+
+**关键否定证据（推翻上一轮实现）**：直孔树（`PRO_E_HLE_TYPE_NEW = PRO_HLE_NEW_TYPE_STRAIGHT`）里写 `PRO_E_HLE_ADD_THREAD=26`、`PRO_E_HLE_THRDDEPTH`、`PRO_E_HLE_THRD_DEPTH=33` 后，孔作业 succeeded、`saved_file_reloaded_and_verified=true`，但创建后回读为 `add_thread=26`、`thread_depth=0.0`、`thread_depth_type=0`——螺纹深度被清零，属于"看起来加了螺纹、实际没有"。因此标准孔必须走独立分支 `PRO_HLE_NEW_TYPE_STANDARD`（ProHole.h Table Hole:2 列出 `STAN_TYPE/THRDSERIS/FITTYPE/SCREWSIZE/ADD_THREAD/ADD_CBORE/ADD_CSINK/HOLEDIAM/THRDDEPTH/DRILLDEPTH/THRD_DEPTH/DEPTH` 一组必填项）。
+
+**孔表约束**：规格不是自由整数，只能走 `ProElementHoleThreadSeriesSet` / `ProElementHoleScrewSizeSet`（按名查安装 `.hol`）。系列 `ISO` 直接可用；规格名必须用表里的 `FASTENER_ID`——`"M6"` 被拒绝为 `-22`（`PRO_TK_INVALID_NAME`），`"M6x1"` 成功。本机 ISO 表（`Common Files\ORIG\text\hole\ISO.hol`）中 M6 粗牙行 `M6x1` 的 `BASIC_DIAM/THREAD/TAP_DR = 6.000/1/5.000`，与冻结表一致；已把 `fastener_id`、`tap_drill_mm` 写进 `hole_standards.py` 行并在 `schema.HoleOp` 校验（调用方给值必须与表行相等）。
+
+**本次实机结果**（`build/probe_standard_hole.json`，SHA256 `d648429707b39f4256de02fb7a2ac6e84f09301b74e8018a20dc3ff999ac2eb5`）：
+
+- 底板 `ca1f64186b994039898ac50a3cd03413`（rev 1，50×50×10，6 面）→ 孔 `a5a98052354649dca1f5e88e3ea43954`（rev 2，succeeded，`saved_file_reloaded_and_verified=true`）。
+- 创建后特征树回读：`add_thread=26`（`PRO_HLE_ADD_THREAD`）、`standard_type=14`（`PRO_HLE_TAPPED_TYPE`）、`thread_series_name="ISO"`、`screw_size_name="M6x1"`、`thread_depth=6.0`（= 请求值）、`thread_depth_type=33`（`PRO_HLE_VARIABLE_THREAD`），`verified=true`。
+- 几何独立校验：去料 `166.91119156785862 mm³`。Ø5 底孔 8 mm 盲孔 = 157.0796，加 118° 钻尖（r/tan59°=1.5022，锥体 9.8334）合计 166.913，误差 0.0016（≈1e-5 相对）；若打的是名义 Ø6 则应为 226.19/240.3，故确认实际底孔为表中 `TAP_DR=5.000`，标准孔分支真正生效。
+
+**仍未验**：其他枚举规格（M3–M12 其余行）、翻向、通孔与出口沉头、过深螺纹与非法型号的原生拒绝、旧直孔/沉孔/沉头回归、Creo 9/10。**caller 路径仍冻结**：`hole_standards.require_native_support()` 未改，`creo_hole` 未加 `standard` 参数，本轮只有探针在进程内 monkeypatch 绕过，`thread_metadata` 只在标准孔回执出现（普通孔回执不变，`bridge.compact_job` 白名单已加该字段）。
+
+**离线证据**：`tools/dev_check.py --work-item FEAT-035-standard-holes` → `success=true`、`unit_tests=passed`（含 `test_standard_holes` 11 项、`test_hole_depth_basis`、`test_native_countersink`）；`bridge.py build` 通过；`clang-format`（23.1.3）与 `ruff format` 已就地格式化，无新增风格回归。

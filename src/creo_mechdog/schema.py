@@ -561,15 +561,24 @@ class Countersink(StrictModel):
 
 
 class StandardHoleSpec(StrictModel):
-    """FEAT-035 frozen shape: a table row plus a usable thread depth."""
+    """FEAT-035 frozen shape: a table row plus a usable thread depth.
+
+    ``fastener_id`` is the installed hole chart's own name for the row
+    ("M6x1"). It is optional here because the resolver supplies it; a caller
+    value is only accepted when it matches the frozen table row.
+    """
 
     series: str
     size: str
     thread_depth: Annotated[float, Field(gt=0)]
+    fastener_id: str | None = None
+    tap_drill_mm: float | None = None
 
-    @field_validator("series", "size", mode="before")
+    @field_validator("series", "size", "fastener_id", mode="before")
     @classmethod
     def table_name(cls, value: Any) -> Any:
+        if value is None:
+            return None
         if isinstance(value, bool):
             raise ValueError("standard hole series and size are table names, not booleans")
         if not isinstance(value, str) or not value.strip():
@@ -618,6 +627,22 @@ class HoleOp(StrictModel):
                     "standard threaded holes cannot be combined with counterbore or countersink"
                 )
             row = resolve_standard_hole(self.standard.series, self.standard.size)
+            if "fastener_id" not in row:
+                raise ValueError(
+                    f"standard hole {row['series']} {row['size']} has no hole-chart fastener id"
+                )
+            if self.standard.fastener_id not in (None, row["fastener_id"]):
+                raise ValueError(
+                    f"standard hole {row['series']} {row['size']} fastener id is "
+                    f"{row['fastener_id']!r}, not {self.standard.fastener_id!r}"
+                )
+            if self.standard.tap_drill_mm is not None and (
+                abs(self.standard.tap_drill_mm - row["tap_drill_diameter_mm"]) > 1e-9
+            ):
+                raise ValueError(
+                    f"standard hole {row['series']} {row['size']} tap drill is "
+                    f"{row['tap_drill_diameter_mm']} mm, not {self.standard.tap_drill_mm} mm"
+                )
             if abs(self.diameter - row["nominal_diameter_mm"]) > 1e-9:
                 raise ValueError(
                     f"standard hole {row['series']} {row['size']} has a nominal diameter of "
