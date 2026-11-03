@@ -112,6 +112,32 @@ class Replay(unittest.TestCase):
         judged = driver.judge_ack_case(case)
         self.assertEqual(judged["verdict"], "unverified", judged)
 
+    def test_replay_mutation_fails_even_without_same_key(self):
+        case = ack_success_case()
+        case["replay"] = {"same_key": False, "second_mutation": True, "same_result": True}
+        judged = driver.judge_ack_case(case)
+        self.assertEqual(judged["verdict"], "fail", judged)
+        self.assertIn(
+            "replay_single_transaction",
+            [item["check"] for item in judged["checks"] if item["result"] == "fail"],
+        )
+
+    def test_replay_changed_result_fails_even_without_same_key(self):
+        case = ack_success_case()
+        case["replay"] = {"same_key": False, "second_mutation": False, "same_result": False}
+        judged = driver.judge_ack_case(case)
+        self.assertEqual(judged["verdict"], "fail", judged)
+        self.assertIn(
+            "replay_same_result",
+            [item["check"] for item in judged["checks"] if item["result"] == "fail"],
+        )
+
+    def test_replay_without_outcome_evidence_is_unverified(self):
+        case = ack_success_case()
+        case["replay"] = {"same_key": True}
+        judged = driver.judge_ack_case(case)
+        self.assertEqual(judged["verdict"], "unverified", judged)
+
     def test_complete_acknowledgement_passes(self):
         judged = driver.judge_ack_case(ack_success_case(), model_type="assembly")
         self.assertEqual(judged["verdict"], "pass", judged)

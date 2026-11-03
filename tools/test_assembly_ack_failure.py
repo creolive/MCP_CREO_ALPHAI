@@ -196,31 +196,30 @@ def judge_ack_case(case: dict, *, model_type: str = "assembly") -> dict:
                 "pass" if replay.get("same_key") is True else "unverified",
             )
         )
-        if replay.get("same_key") is True:
-            checks.append(
-                _check(
-                    "replay_single_transaction",
-                    replay.get("second_mutation"),
-                    False,
-                    (
-                        "pass"
-                        if replay.get("second_mutation") is False
-                        else ("fail" if replay.get("second_mutation") is True else "unverified")
-                    ),
-                )
+        # Replay outcomes are judged from the evidence itself, not from whether the
+        # key matched: a second mutation or a changed result is a failed invariant
+        # even when the request was replayed with a different key. Only absent
+        # evidence stays unverified.
+        mutation = replay.get("second_mutation")
+        checks.append(
+            _check(
+                "replay_single_transaction",
+                mutation,
+                False,
+                "pass" if mutation is False else ("fail" if mutation is True else "unverified"),
             )
-            checks.append(
-                _check(
-                    "replay_same_result",
-                    replay.get("same_result"),
-                    True,
-                    (
-                        "pass"
-                        if replay.get("same_result") is True
-                        else ("fail" if replay.get("same_result") is False else "unverified")
-                    ),
-                )
+        )
+        same_result = replay.get("same_result")
+        checks.append(
+            _check(
+                "replay_same_result",
+                same_result,
+                True,
+                "pass"
+                if same_result is True
+                else ("fail" if same_result is False else "unverified"),
             )
+        )
 
         followup = case.get("followup") if isinstance(case.get("followup"), dict) else {}
         checks.append(
