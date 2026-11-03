@@ -614,9 +614,9 @@ static void generic_sketch_edit(const J &op) {
     J geometry_deviation = geometry_deviation_report(
         deviation_regenerate, deviation_feature, deviation_policy.tolerance,
         deviation_policy.enforce, deviation_policy.source);
-    enforce_geometry_deviation(geometry_deviation, deviation_context);
-    // BUG-108: same top-level verdict as sketch creation, so an edited sketch
-    // that moved as a rigid body is as visible as a freshly created one.
+    // BUG-108: same top-level verdict as sketch creation, published before the
+    // policy is enforced so an edit that moved as a rigid body is judged by the
+    // coordinates verdict rather than by point displacement alone.
     J sketch_shifted;
     if (!coordinate_plan.is_null()) {
         const J &verification = meta["solver"].contains("coordinate_geometry_after_creation")
@@ -625,10 +625,23 @@ static void generic_sketch_edit(const J &op) {
         sketch_shifted = sketch_shift_block(verification, deviation_policy.source);
         geometry_deviation["shift_detected"] = sketch_shifted["detected"];
         geometry_deviation["accepted_by_request"] = sketch_shifted["accepted_by_request"];
+        geometry_deviation["accepted_rigid"] = sketch_shifted["accepted_rigid"];
+        if (sketch_shifted["rigid"].is_boolean()) {
+            geometry_deviation["rigid"] = sketch_shifted["rigid"];
+            geometry_deviation["translation_mm"] = sketch_shifted["translation_mm"];
+            geometry_deviation["translation_magnitude_mm"] =
+                sketch_shifted["translation_magnitude_mm"];
+            if (sketch_shifted["residual_mm"].is_number()) {
+                geometry_deviation["shape_deviation_mm"] = sketch_shifted["residual_mm"];
+                geometry_deviation["residual_mm"] = sketch_shifted["residual_mm"];
+            }
+        }
     } else {
         geometry_deviation["shift_detected"] = nullptr;
         geometry_deviation["accepted_by_request"] = nullptr;
+        geometry_deviation["accepted_rigid"] = false;
     }
+    enforce_geometry_deviation(geometry_deviation, deviation_context);
     meta["solver"]["geometry_deviation"] = geometry_deviation;
     meta["solver"]["sketch_shifted"] = sketch_shifted;
     if (f.id != original_id)

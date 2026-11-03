@@ -2056,11 +2056,10 @@ static J sketch(const J &op) {
     J geometry_deviation = geometry_deviation_report(
         deviation_regenerate, deviation_feature, deviation_policy.tolerance,
         deviation_policy.enforce, deviation_policy.source);
-    enforce_geometry_deviation(geometry_deviation, deviation_context);
-    // BUG-108: publish the shift verdict next to geometry_deviation. A sketch
-    // that moved as a rigid body stays rejected by the same 1e-5 gate; the
-    // block only makes the move visible (and names a request tolerance as the
-    // reason a moved sketch was accepted).
+    // BUG-108: publish the shift verdict next to geometry_deviation before the
+    // policy is enforced, so the coordinates verdict is the one the shape gate
+    // sees. A deformed sketch is still rejected; a provable rigid translation
+    // inside the limit is accepted and says so.
     J sketch_shifted;
     if (!coordinate_plan.is_null()) {
         const J &verification = solver_info.contains("coordinate_geometry_after_creation")
@@ -2069,10 +2068,24 @@ static J sketch(const J &op) {
         sketch_shifted = sketch_shift_block(verification, deviation_policy.source);
         geometry_deviation["shift_detected"] = sketch_shifted["detected"];
         geometry_deviation["accepted_by_request"] = sketch_shifted["accepted_by_request"];
+        geometry_deviation["accepted_rigid"] = sketch_shifted["accepted_rigid"];
+        if (sketch_shifted["rigid"].is_boolean()) {
+            geometry_deviation["rigid"] = sketch_shifted["rigid"];
+            geometry_deviation["translation_mm"] = sketch_shifted["translation_mm"];
+            geometry_deviation["translation_magnitude_mm"] =
+                sketch_shifted["translation_magnitude_mm"];
+            if (sketch_shifted["residual_mm"].is_number()) {
+                geometry_deviation["shape_deviation_mm"] = sketch_shifted["residual_mm"];
+                geometry_deviation["residual_mm"] = sketch_shifted["residual_mm"];
+            }
+        }
     } else {
         geometry_deviation["shift_detected"] = nullptr;
         geometry_deviation["accepted_by_request"] = nullptr;
+        // Only a measured coordinates solve can prove a rigid translation.
+        geometry_deviation["accepted_rigid"] = false;
     }
+    enforce_geometry_deviation(geometry_deviation, deviation_context);
     solver_info["geometry_deviation"] = geometry_deviation;
     solver_info["sketch_shifted"] = sketch_shifted;
     J ids = J::object();

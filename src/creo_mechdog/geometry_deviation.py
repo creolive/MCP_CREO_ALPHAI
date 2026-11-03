@@ -29,6 +29,10 @@ from typing import Any
 COORDINATES_DEFAULT_TOLERANCE_MM = 1e-5
 #: autodim stays creatable and warns above this deviation.
 AUTODIM_WARNING_THRESHOLD_MM = 1e-3
+#: BUG-108/R13: a *provable* rigid-body translation up to this magnitude is
+#: accepted instead of rejected. The shape gate stays at 1e-5 mm: this is a
+#: judgement fix (translation is not deformation), not a looser precision.
+RIGID_TRANSLATION_LIMIT_MM = 1e-2
 #: maximum number of per-entity sample entries in a report.
 SAMPLE_LIMIT = 20
 
@@ -70,6 +74,27 @@ def _optional_finite_positive(value: Any) -> float | None:
 
 def _optional_int(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _optional_bool(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _optional_translation(value: Any) -> dict[str, float] | None:
+    """Echo a ``{"u": .., "v": ..}`` vector only when both components are finite."""
+    if not isinstance(value, dict):
+        return None
+    u = _finite_signed(value.get("u"))
+    v = _finite_signed(value.get("v"))
+    if u is None or v is None:
+        return None
+    return {"u": u, "v": v}
+
+
+def _translation_within_limit(translation: dict[str, float] | None) -> bool:
+    if not translation:
+        return False
+    return math.hypot(translation["u"], translation["v"]) <= RIGID_TRANSLATION_LIMIT_MM
 
 
 def _normalize_sample(raw: Any) -> tuple[list[dict[str, Any]], bool]:
@@ -135,6 +160,13 @@ def unavailable_geometry_deviation(reason: str) -> dict[str, Any]:
         "tolerance_source": None,
         "shift_detected": None,
         "accepted_by_request": None,
+        # BUG-108/R13: shape-vs-translation fields stay explicit nulls here so a
+        # consumer can tell "not measured" from "measured and rejected".
+        "shape_deviation_mm": None,
+        "residual_mm": None,
+        "rigid": None,
+        "translation_mm": None,
+        "accepted_rigid": None,
         "stages": {},
     }
 
@@ -159,6 +191,9 @@ def _unavailable_sketch_shift(note: str) -> dict[str, Any]:
         "truncated": False,
         "tolerance_source": None,
         "accepted_by_request": False,
+        "accepted_rigid": False,
+        "residual_mm": None,
+        "shape_deviation_mm": None,
         "measurement_scope": None,
         "note": note,
     }
@@ -254,10 +289,23 @@ def normalize_sketch_shifted(block: Any) -> dict[str, Any]:
             )
         translation = {"u": u, "v": v}
     accepted_by_request = block.get("accepted_by_request") is True and tolerance_source == "request"
+    residual = _finite_non_negative(block.get("residual_mm"))
+    shape = _finite_non_negative(block.get("shape_deviation_mm"))
+    accepted_rigid = (
+        block.get("accepted_rigid") is True
+        and rigid
+        and translation is not None
+        and _translation_within_limit(translation)
+    )
     if accepted_by_request:
         note = (
             "the solved profile translated as a rigid body; the request tolerance "
             "accepted it, this is not an exact solve"
+        )
+    elif accepted_rigid:
+        note = (
+            "the solved profile translated as a rigid body; the move was accepted as a "
+            "rigid translation, the shape itself was not re-solved"
         )
     elif rigid:
         note = "the solved profile translated as a rigid body"
@@ -268,12 +316,15 @@ def normalize_sketch_shifted(block: Any) -> dict[str, Any]:
         "rigid": rigid,
         "translation_mm": translation,
         "max_point_mm": max_point,
+        "residual_mm": residual,
+        "shape_deviation_mm": shape if shape is not None else residual,
         "point_count": point_count,
         "total": total,
         "sample": sample,
         "truncated": truncated,
         "tolerance_source": tolerance_source,
         "accepted_by_request": accepted_by_request,
+        "accepted_rigid": accepted_rigid,
         "measurement_scope": measurement_scope,
         "note": note,
     }
@@ -304,6 +355,16 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
     tolerance_source = block.get("tolerance_source")
     if tolerance_source not in _TOLERANCE_SOURCES:
         tolerance_source = None
+    rigid = _optional_bool(block.get("rigid"))
+    translation = _optional_translation(block.get("translation_mm"))
+    if block.get("accepted_rigid") is None and rigid is None and translation is None:
+        accepted_rigid: bool | None = None
+    else:
+        accepted_rigid = (
+            block.get("accepted_rigid") is True
+            and rigid is True
+            and _translation_within_limit(translation)
+        )
     stages = {
         name: normalized
         for name in _STAGES
@@ -351,5 +412,13 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
             if isinstance(block.get("accepted_by_request"), bool)
             else None
         ),
+        # BUG-108/R13: shape-versus-translation verdict. Additive only: records
+        # written before this change keep explicit nulls, and a claimed
+        # acceptance is never trusted over the numbers the executor published.
+        "shape_deviation_mm": _finite_non_negative(block.get("shape_deviation_mm")),
+        "residual_mm": _finite_non_negative(block.get("residual_mm")),
+        "rigid": rigid,
+        "translation_mm": translation,
+        "accepted_rigid": accepted_rigid,
         "stages": stages,
     }

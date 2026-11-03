@@ -7,8 +7,12 @@ coordinate dimensioning at the default 1e-5 mm gate, plus one with an explicit
 
 The run records whatever happens. A rejection is a valid result: the point is
 to see ``sketch_shifted`` agree with the coordinate log and to learn whether the
-origin pin removed the 0.004 mm whole-profile translation. Nothing is asserted
-about the shift itself, and no model outside this run is touched.
+origin pin removed the 0.004 mm whole-profile translation. R13 adds the
+shape-versus-translation verdict (``rigid``, ``shape_deviation_mm``,
+``translation_mm``, ``accepted_rigid``) to the record, so a rigid move that the
+1e-2 mm limit accepts is visible next to its measured shape residual instead of
+being inferred from a success code. Nothing is asserted about the shift itself,
+and no model outside this run is touched.
 
 Usage (after a human confirms the session is operable):
     .venv\\Scripts\\python.exe tools\\test_sketch_shift_batch.py --confirmed-session-usable
@@ -130,6 +134,11 @@ def _deviation(result: dict):
                     for key in (
                         "available",
                         "max_deviation_mm",
+                        "shape_deviation_mm",
+                        "residual_mm",
+                        "rigid",
+                        "translation_mm",
+                        "accepted_rigid",
                         "tolerance_source",
                         "exceeds_warning",
                         "shift_detected",
