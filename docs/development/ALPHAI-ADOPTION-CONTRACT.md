@@ -150,6 +150,19 @@ E:\Projects\MCP_CREO_MechDog\.venv\Scripts\python.exe bridge.py build
 - 若 `bridge.py build` 报找不到 SDK/编译器，先核 `config.json` 的 `creo_root`、`vcvars64` 与本机一致。
 - 未设置 `PYTHONPATH` 时会导入主工作树的 editable 包，单元测试结果无效——交接里必须写明使用了哪条导入路径。
 
+### 实测修订（2026-11-03，A02/A03 执行后）
+
+只设 `PYTHONPATH` **不够**：`server.py:65-70` 有源码身份守卫，子进程测试（`unit.test_adoption` 等 22 项）按 `SOURCE_PATHS.resource_root` 判定“包属于另一个 checkout”而失败。可用做法是复制主环境（98 MB）并改指向：
+
+```powershell
+Copy-Item E:\Projects\MCP_CREO_MechDog\.venv <worktree>\.venv -Recurse -Force
+# 复制后把 .venv\Lib\site-packages\__editable___mcp_creo_mechdog_0_11_5_finder.py 的 MAPPING
+# 中 'E:\\Projects\\MCP_CREO_MechDog' 全部替换为本工作树路径（纯文本替换，勿用 pip 重装：环境内无 setuptools）
+<worktree>\.venv\Scripts\python.exe tools\dev_check.py --work-item <ID>
+```
+
+改完后 `import creo_mechdog` 与 `SOURCE_PATHS.resource_root` 均指向本工作树，`dev_check` 全量单测可通过（A02、A03 已实测 `unit_tests=passed`、`success=true`）。
+
 ## 六 本次未冻结（只允许研究）
 
 - **A04** 原生矩形平面壁：`sheetmetal_planar_wall` / `resize_sheetmetal_planar_wall` 的元素树与尺寸身份映射，需先完成离线 SDK 核验并按用户决定“仅离线”；探针结论记“未验证”，不开放工具。
