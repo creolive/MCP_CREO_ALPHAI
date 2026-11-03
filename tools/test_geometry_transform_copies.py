@@ -253,23 +253,43 @@ def judge_copy_case(case: dict, *, phase: str = "reproduce") -> dict:
             )
 
         successful = len(case.get("committed_operations") or [])
-        expected_bodies = None
+        # Live evidence (2026-11-03, C0-C6): keep_original copies stay inside the
+        # ONE body of the model (bodies stays 1; every copy is a new feature/lump
+        # in body 52), so growth shows in features, not in the body count.
+        expected_features = None
         if isinstance(before, dict) and isinstance(after, dict):
-            start = (before.get("counts") or {}).get("bodies")
-            end = (after.get("counts") or {}).get("bodies")
+            start = (before.get("counts") or {}).get("features")
+            end = (after.get("counts") or {}).get("features")
             if isinstance(start, int) and isinstance(end, int) and successful:
-                expected_bodies = start + successful
+                expected_features = start + successful
                 checks.append(
                     _check(
-                        "bodies_added_per_copy",
+                        "features_added_per_copy",
                         end,
-                        expected_bodies,
-                        "pass" if end == expected_bodies else "fail",
+                        expected_features,
+                        "pass" if end == expected_features else "fail",
                     )
                 )
-        if expected_bodies is None:
+                start_bodies = (before.get("counts") or {}).get("bodies")
+                end_bodies = (after.get("counts") or {}).get("bodies")
+                checks.append(
+                    _check(
+                        "single_body_semantics",
+                        {"bodies_before": start_bodies, "bodies_after": end_bodies},
+                        "recorded",
+                        "pass"
+                        if isinstance(start_bodies, int) and isinstance(end_bodies, int)
+                        else "unverified",
+                    )
+                )
+        if expected_features is None:
             checks.append(
-                _check("bodies_added_per_copy", None, "body counts and committed ops", "unverified")
+                _check(
+                    "features_added_per_copy",
+                    None,
+                    "feature counts and committed ops",
+                    "unverified",
+                )
             )
 
         reloaded = body.get("saved_file_reloaded_and_verified")
@@ -528,9 +548,9 @@ async def snapshot(client, model_id: str, record: dict) -> dict:
     }
 
 
-async def build_base(client, spec: dict, record: dict) -> dict:
+async def build_base(client, spec: dict, record: dict, suffix: str = "") -> dict:
     """Fresh plate for one case: new part, sketch, extrude."""
-    part = await call(client, "creo_new_part", {"model_name": spec["model_name"]})
+    part = await call(client, "creo_new_part", {"model_name": spec["model_name"] + suffix})
     model_id = part["model_id"]
     record["calls"].append(
         {
@@ -585,8 +605,8 @@ async def build_base(client, spec: dict, record: dict) -> dict:
     return {"model_id": model_id, "revision": solid["revision"]}
 
 
-async def run_case(client, spec: dict, record: dict, phase: str) -> dict:
-    base = await build_base(client, spec, record)
+async def run_case(client, spec: dict, record: dict, phase: str, suffix: str = "") -> dict:
+    base = await build_base(client, spec, record, suffix)
     model_id, revision = base["model_id"], base["revision"]
     before = await snapshot(client, model_id, record)
     case = {
@@ -705,7 +725,9 @@ async def wait_ready(client, record: dict, budget: float = 300.0) -> dict:
     raise RuntimeError(f"session did not become connected within {budget:.0f}s")
 
 
-async def scenario(record: dict, phase: str) -> None:
+async def scenario(
+    record: dict, phase: str, only: set[str] | None = None, suffix: str = ""
+) -> None:
     parameters = StdioServerParameters(
         command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT)
     )
@@ -713,8 +735,10 @@ async def scenario(record: dict, phase: str) -> None:
         status = await wait_ready(connected, record)
         record["session"] = {"connected": status.get("connected")}
         for spec in scenario_specs():
-            print(f"case {spec['case_id']} model={spec['model_name']}", flush=True)
-            record["cases"].append(await run_case(connected, spec, record, phase))
+            if only and spec["case_id"] not in only:
+                continue
+            print(f"case {spec['case_id']} model={spec['model_name'] + suffix}", flush=True)
+            record["cases"].append(await run_case(connected, spec, record, phase, suffix))
 
 
 def summarize(record: dict, phase: str) -> str:
@@ -736,6 +760,17 @@ def describe(failure: BaseException) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="BUG-111 transform rotation/copy fixture")
     parser.add_argument("--phase", choices=PHASES, default="reproduce")
+    parser.add_argument(
+        "--cases",
+        default="",
+        help="optional comma-separated subset of case ids (e.g. C2,C4); default runs all",
+    )
+    parser.add_argument(
+        "--model-suffix",
+        default="",
+        help="suffix appended to every case model name so reruns do not collide "
+        "with models left in the session",
+    )
     parser.add_argument(
         "--confirmed-session-usable",
         action="store_true",
@@ -762,7 +797,14 @@ def main(argv: list[str] | None = None) -> int:
     started = time.monotonic()
     error = None
     try:
-        asyncio.run(scenario(record, arguments.phase))
+        asyncio.run(
+            scenario(
+                record,
+                arguments.phase,
+                only={c.strip().upper() for c in arguments.cases.split(",") if c.strip()} or None,
+                suffix=arguments.model_suffix,
+            )
+        )
     except BaseException as failure:  # noqa: BLE001 - the report is the product here
         error = describe(failure)
     record["elapsed_s"] = round(time.monotonic() - started, 1)

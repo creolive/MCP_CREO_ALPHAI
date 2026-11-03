@@ -13,12 +13,12 @@ import tools.test_geometry_transform_copies as driver
 SAMPLE_POINTS = [[0, 0], [260, 0], [130, 20.9]]
 
 
-def snapshot(revision=2, volume=28800.0, bodies=1) -> dict:
+def snapshot(revision=2, volume=28800.0, bodies=1, features=3) -> dict:
     return {
         "revision": revision,
         "status": "ready",
         "volume_mm3": volume,
-        "counts": {"bodies": bodies, "features": 3, "surfaces": 6, "edges": 12},
+        "counts": {"bodies": bodies, "features": features, "surfaces": 6, "edges": 12},
     }
 
 
@@ -56,8 +56,9 @@ def succeeded_case(*, ops=4, reloaded=True, after=None) -> dict:
             "result": {"saved_file_reloaded_and_verified": reloaded},
         },
         "snapshots": {
-            "before": snapshot(1, 28800.0, 1),
-            "after": after if after is not None else snapshot(2, 30000.0, 1 + ops),
+            "before": snapshot(1, 28800.0, 1, features=3),
+            # Copies stay inside the single body; each adds one feature.
+            "after": after if after is not None else snapshot(2, 30000.0, 1, features=3 + ops),
         },
         "committed_operations": list(range(ops)),
     }
@@ -121,6 +122,13 @@ class Judgment(unittest.TestCase):
 
     def test_committed_batch_passes_verify_with_recorded_geometry(self):
         judged = driver.judge_copy_case(succeeded_case(ops=4), phase="verify")
+        self.assertEqual(judged["verdict"], "pass", judged)
+
+    def test_feature_growth_not_body_growth_is_the_semantics(self):
+        # Live C0-C6 evidence: bodies stays 1, features grow by op count.
+        case = succeeded_case()
+        case["snapshots"]["after"]["counts"]["bodies"] = 1
+        judged = driver.judge_copy_case(case, phase="verify")
         self.assertEqual(judged["verdict"], "pass", judged)
 
     def test_unknown_phase_is_rejected(self):
