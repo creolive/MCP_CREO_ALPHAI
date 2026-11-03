@@ -91,3 +91,19 @@
 - **未开放（关键）**：原生螺纹元素树与安装孔表（`.hol`）本轮没有实机核验。按子计划"A03 步骤 3 需先对照本机 SDK/表格式冻结元素树"的要求，`HoleOp` 在通过全部字段校验后**明确拒绝**（`standard threaded holes are frozen offline but not enabled…`），避免产出"看起来有螺纹、实际是普通直孔"的结果；`creo_hole` 不新增 `standard` 参数，避免死参数。本子项状态为**冻结待实机**，不算交付。
 - **离线证据**：`tests/unit/test_standard_holes.py` 11 项（表解析 4 项 + schema 7 项）通过；`tools/dev_check.py --work-item FEAT-035-standard-holes` → `success=true`、`unit_tests=passed`；本轮未改原生代码，故未新增原生构建。
 - **下一步（需会话窗口）**：核对安装 `.hol` 与 `ProHole.h`/`ProElemId.h` 的螺纹元素，创建一枚 M6 标准孔并读回系列、规格、螺纹属性与底孔去料，再把 `require_native_support()` 换成真实实现并补 `thread_metadata`/`thread_metadata_verified` 回执与实机矩阵。
+
+## 2026-11-03 A03 步骤1：SDK 螺纹元素核验（离线，已完成）
+
+本机匹配 SDK `Common Files\protoolkit\includes\ProElemId.h`（Creo 12.4 / release 44）里与本项直接相关的常量：
+
+| 常量 | 值 | 用途判断 |
+| --- | --- | --- |
+| `PRO_E_HLE_ADD_THREAD` | 1674 | **孔特征内的"加螺纹"开关**，正是标准孔需要的入口 |
+| `PRO_E_THREAD_DEPTH` | 3697 | 螺纹深度（对应 `standard.thread_depth`） |
+| `PRO_E_HOLE_STD_DEPTH` | 1684 | 既有直孔深度节点，保持不动 |
+| `PRO_E_THREAD_SURF` / `PRO_E_THREAD_CYL` / `PRO_E_THREAD` | 102 / 164 / 182 | 外观螺纹（cosmetic thread）元素，**不是**孔内螺纹，不能用错 |
+| `PRO_E_THREAD_PARAMS` / `_PITCH` / `_FORM` / `_CLASS` / `_PLACEMENT` | 546 / 547 / 550 / 551 / 552 | 独立螺纹特征参数，判定同上 |
+
+结论：标准螺纹孔应当走 `PRO_E_HLE_ADD_THREAD`（孔特征内），而不是建一个 `PRO_E_THREAD` 外观螺纹特征去"看起来像螺纹"。这也解释了为什么不能用 `PRO_E_THREAD_*` 拼装：那会把结果做成交互语义不同的外观螺纹。
+
+待实机确认（必须，不能推断）：`PRO_E_HLE_ADD_THREAD` 的子元素结构与标准孔表选择（系列/规格）在抽取树里的真实路径、底孔直径由表驱动还是需显式写入、保存重载后螺纹属性是否保持。以上未确认前 `require_native_support()` 保持拒绝。
