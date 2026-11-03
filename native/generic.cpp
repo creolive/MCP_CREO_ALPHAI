@@ -2690,6 +2690,13 @@ static J generic_hole(const J &op) {
     } else {
         integer(com, PRO_E_HLE_MAKE_LIGHTWT, PRO_HLE_REGULAR);
         real(com, PRO_E_DIAMETER, op.at("diameter"));
+        if (op.contains("standard") && !op["standard"].is_null()) {
+            // FEAT-035: thread inside the hole feature (PRO_E_HLE_ADD_THREAD),
+            // never a cosmetic PRO_E_THREAD feature that only looks threaded.
+            // The usable thread length is PRO_E_THREAD_DEPTH.
+            integer(com, PRO_E_HLE_ADD_THREAD, 1);
+            real(com, PRO_E_THREAD_DEPTH, op["standard"].at("thread_depth"));
+        }
         ProElement dep = node(com, PRO_E_HOLE_STD_DEPTH);
         ProElement to = node(dep, PRO_E_HOLE_DEPTH_TO);
         integer(to, PRO_E_HOLE_DEPTH_TO_TYPE,
