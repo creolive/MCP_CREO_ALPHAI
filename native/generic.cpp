@@ -6084,6 +6084,37 @@ static void adopt_native(const J &request, J &report) {
                    {"adopted", !preparing}});
 }
 
+// BUG-111: a transform failure used to arrive as a bare Toolkit code plus the
+// phase name. Publish the operation's own shape instead: which backend ran, the
+// rotation as requested and as normalized, how many references and whether the
+// original geometry was kept. Bounded by construction (no per-face lists).
+static J transform_failure_report(const J &op) {
+    J rotation = op.value("rotation", J::array({0.0, 0.0, 0.0}));
+    J normalized = J::array();
+    for (auto value : rotation)
+        normalized.push_back(normalized_rotation_deg(value.get<double>()));
+    J kinds = J::array();
+    for (auto reference : op["references"]) {
+        std::string kind = reference.value("kind", "");
+        if (kind.empty() || std::find(kinds.begin(), kinds.end(), kind) != kinds.end())
+            continue;
+        if (kinds.size() < 6)
+            kinds.push_back(kind);
+    }
+    const bool body = !op["references"].empty() && op["references"][0]["kind"] == "body";
+    return {{"label", op.value("label", "")},
+            {"backend", body ? "flex_move" : "geometry_move"},
+            {"rotation_deg", rotation},
+            {"rotation_normalized_deg", normalized},
+            {"translation_mm", op.value("translation", J::array({0.0, 0.0, 0.0}))},
+            {"keep_original", op.value("keep_original", false)},
+            {"reference_count", (int)op["references"].size()},
+            {"reference_kinds", kinds},
+            {"note",
+             "the kernel is usable inside -180..180 deg; equivalent angles map to the same "
+             "rotation, and a failed copy leaves the plan rolled back"}};
+}
+
 static int run_generic(const std::wstring &job) {
     generic_job = job;
     generic_phase = "loading_request";
@@ -6097,6 +6128,7 @@ static int run_generic(const std::wstring &job) {
     bool connected = false, mutated = false;
     std::unique_ptr<RecoveryDeadline> recovery_deadline;
     int operation_index = -1;
+    J operation_in_flight;
     bool executing_operation = false;
     std::wstring checkpoint;
     new_model_evidence = NewModelEvidence();
@@ -6305,6 +6337,7 @@ static int run_generic(const std::wstring &job) {
             for (auto op : request["operations"]) {
                 ++operation_index;
                 operation_position = operation_index;
+                operation_in_flight = op;
                 executing_operation = true;
                 generic_stage("execute_" + op["op"].get<std::string>());
                 log("OPERATION_INDEX=%d INPUT=%s\n", operation_index, op.dump().c_str());
@@ -6462,6 +6495,11 @@ static int run_generic(const std::wstring &job) {
         report["failed_toolkit_call"] =
             last_toolkit_error.empty() ? J(nullptr) : J(last_toolkit_error);
         report["failed_operation_index"] = executing_operation ? J(operation_index) : J(nullptr);
+        // BUG-111: a failed transform names its own backend, angles and reference
+        // count instead of leaving only a Toolkit code and the phase name.
+        if (executing_operation && operation_in_flight.is_object() &&
+            operation_in_flight.value("op", "") == "geometry_transform")
+            report["failed_transform"] = transform_failure_report(operation_in_flight);
         // An intermediate inspection is useful diagnostic evidence but is not
         // the restored/current model. Publish it separately, never as a baseline.
         if (report.contains("inspection"))

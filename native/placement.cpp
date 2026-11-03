@@ -208,6 +208,19 @@ static ProFeature axis_on_csys(const J &coordinate_system, int axis, const std::
     return result;
 }
 
+// BUG-111: the old mapping sent every negative angle as +360 (so -135 became
+// 225) and the geometry_move backend sent the raw value, which made two
+// equivalent requests hit different kernel paths. Both now share one interval,
+// (-180, 180], matching the published schema bound.
+static double normalized_rotation_deg(double value) {
+    double angle = std::fmod(value, 360.0);
+    if (angle <= -180.0)
+        angle += 360.0;
+    else if (angle > 180.0)
+        angle -= 360.0;
+    return angle;
+}
+
 static void flex_transform_values(ProElement root, const J &translation, const J &rotation) {
     ProElement sets = node(root, PRO_E_D3ELEM_SETS), set = node(sets, PRO_E_D3ELEM_SET);
     integer(set, PRO_E_D3ELEM_LOCATION, PRO_D3_LOCATION_FIXED);
@@ -218,8 +231,8 @@ static void flex_transform_values(ProElement root, const J &translation, const J
         integer(move, PRO_E_D3ELEM_MOVE_TYPE,
                 i < 3 ? PRO_D3_MOVE_TYPE_XROTATE + axis : PRO_D3_MOVE_TYPE_XMOVE + axis);
         double value = i < 3 ? rotation[axis].get<double>() : translation[axis].get<double>();
-        if (i < 3 && value < 0)
-            value += 360;
+        if (i < 3)
+            value = normalized_rotation_deg(value);
         real(move, PRO_E_D3ELEM_MOVE_VALUE, value);
     }
 }
@@ -307,10 +320,19 @@ static void generic_transform(const J &op) {
             ProSelectionFree(&selected);
             integer(direction, PRO_E_DIRECTION_FLIP, PRO_DIRECTION_FLIP_ALONG);
             real(move, PRO_E_SRF_TR_VAL_ELEM,
-                 i < 3 ? op["rotation"][axis].get<double>()
+                 i < 3 ? normalized_rotation_deg(op["rotation"][axis].get<double>())
                        : op["translation"][axis].get<double>());
         }
     }
+    log("TRANSFORM backend=%s keep_original=%d refs=%d rotation=%.6f,%.6f,%.6f "
+        "normalized=%.6f,%.6f,%.6f translation=%.6f,%.6f,%.6f\n",
+        backend.c_str(), op.value("keep_original", false) ? 1 : 0, (int)op["references"].size(),
+        op["rotation"][0].get<double>(), op["rotation"][1].get<double>(),
+        op["rotation"][2].get<double>(), normalized_rotation_deg(op["rotation"][0].get<double>()),
+        normalized_rotation_deg(op["rotation"][1].get<double>()),
+        normalized_rotation_deg(op["rotation"][2].get<double>()),
+        op["translation"][0].get<double>(), op["translation"][1].get<double>(),
+        op["translation"][2].get<double>());
     ProFeature f = create(root);
     ProElementFree(&root);
     remember(op, f,
@@ -365,8 +387,8 @@ static void generic_transform_update(const J &op) {
                        root, {{PRO_E_MOVE_GEOM_TRF_ARR, 0}, {-1, i}, {PRO_E_SRF_TR_VAL_ELEM, 0}});
         double number =
             i < 3 ? op["rotation"][axis].get<double>() : op["translation"][axis].get<double>();
-        if (flex && i < 3 && number < 0)
-            number += 360;
+        if (i < 3)
+            number = normalized_rotation_deg(number);
         CK(ProElementDoubleSet(value, number));
     }
     redefine(&f, root);

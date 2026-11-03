@@ -443,6 +443,30 @@ class AxisPatternOp(StrictModel):
         return self
 
 
+def equivalent_rotation_deg(value: float) -> float:
+    """Map an angle into (-180, 180] so a rejected request can name the usable value."""
+    angle = math.fmod(value, 360.0)
+    if angle <= -180.0:
+        angle += 360.0
+    elif angle > 180.0:
+        angle -= 360.0
+    return angle
+
+
+def _check_rotation(rotation: list[float]) -> None:
+    """BUG-111: the kernel is usable inside (-180, 180]; refuse anything else early.
+
+    The old +/-360 bound let 225 deg through to a bare ``-1``. The message names
+    the equivalent angle instead of silently rewriting the request.
+    """
+    for axis, value in enumerate(rotation):
+        if abs(value) > 180:
+            raise ValueError(
+                f"rotation[{axis}]={value:g} deg is outside the supported range of "
+                f"-180..180 deg; use the equivalent {equivalent_rotation_deg(value):g} deg"
+            )
+
+
 class GeometryTransformOp(StrictModel):
     op: Literal["geometry_transform"]
     label: Label
@@ -475,10 +499,9 @@ class GeometryTransformOp(StrictModel):
             raise ValueError("Transform accepts whole bodies or supported quilts/datums/curves")
         if self.coordinate_system.get("kind") not in {"default_csys", "csys", "datum_csys_feature"}:
             raise ValueError("Transformation frame must be a coordinate system")
-        if any(abs(v) > 100000 for v in self.translation) or any(
-            abs(v) > 360 for v in self.rotation
-        ):
-            raise ValueError("Translation/rotation is outside the supported range")
+        if any(abs(v) > 100000 for v in self.translation):
+            raise ValueError("Translation is outside the supported range")
+        _check_rotation(self.rotation)
         return self
 
 
@@ -490,10 +513,9 @@ class TransformUpdateOp(StrictModel):
 
     @model_validator(mode="after")
     def bounded_values(self):
-        if any(abs(v) > 100000 for v in self.translation) or any(
-            abs(v) > 360 for v in self.rotation
-        ):
-            raise ValueError("Translation/rotation is outside the supported range")
+        if any(abs(v) > 100000 for v in self.translation):
+            raise ValueError("Translation is outside the supported range")
+        _check_rotation(self.rotation)
         return self
 
 

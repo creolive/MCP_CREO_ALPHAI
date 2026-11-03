@@ -398,7 +398,18 @@ def families() -> dict:
             "enabled": True,
             "scope": "native body FlexMove or quilt/geometry Move, in-place translation/rotation edits, local feature groups, reorder and axis patterns",
             "native_test": "body rotate/translate/edit with true solid bounding boxes; quilt rotate/translate/thicken/edit; five-section blade group pattern and later airfoil edit; save/erase/reload",
-            "limits": "body branch can require Flexible Modeling license; copy-original, multiple bodies, custom csys, complex quilts and datum/curve combinations require local validation",
+            "limits": (
+                "rotation components are limited to -180..180 degrees and an out-of-range "
+                "request is refused before submission with its equivalent angle (225 -> -135); "
+                "both backends normalize into that same interval, so -135 and 225 address the "
+                "same rotation; a failed transform reports failed_transform with backend, "
+                "requested and normalized angles, translation, keep_original and reference "
+                "count, and the plan rolls back; keep_original copying more than four times in "
+                "one batch may fail at the fifth copy (external Creo 10 report, cause not yet "
+                "identified) so split large copy sets and re-reference current body IDs; body "
+                "branch can require Flexible Modeling license; copy-original, multiple bodies, "
+                "custom csys, complex quilts and datum/curve combinations require local validation"
+            ),
         },
         "drawing": {
             "enabled": True,

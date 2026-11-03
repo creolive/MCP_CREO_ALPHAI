@@ -1019,7 +1019,7 @@ async def creo_transform_geometry(
     coordinate_system: dict[str, Any] | None = None,
     keep_original: bool = False,
 ) -> dict[str, Any]:
-    """Create a native rigid transform of whole solid bodies or quilts/datums/curves. Rotation X,Y,Z precedes translation, about fixed supplied csys axes. Body moves use FlexMove and may require Flexible Modeling license. Does not rotate the camera."""
+    """Create a native rigid transform of whole solid bodies or quilts/datums/curves. Rotation X,Y,Z precedes translation, about fixed supplied csys axes. Each rotation component must stay inside -180..180 degrees: a larger request is refused before submission and the error names the equivalent angle (225 becomes -135), because the kernel only uses that interval. keep_original copies are native features: a plan that copies the same body more than four times in one batch may fail at the fifth copy, so split large copy sets and re-reference the current body IDs. A failure carries failed_transform with the backend, requested and normalized angles, reference count and keep_original; the whole plan rolls back. Body moves use FlexMove and may require Flexible Modeling license. Does not rotate the camera."""
     return await invoke(
         general.submit,
         [
@@ -1049,7 +1049,7 @@ async def creo_set_geometry_transform(
     translation: list[float],
     rotation: list[float],
 ) -> dict[str, Any]:
-    """Change a native transform's translation and rotation in place; preserves its feature ID and regenerates downstream geometry."""
+    """Change a native transform's translation and rotation in place; preserves its feature ID and regenerates downstream geometry. Rotation components share the -180..180 degree range and report the equivalent angle when out of range."""
     return await invoke(
         general.submit,
         [

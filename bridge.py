@@ -1571,6 +1571,7 @@ def compact_job(manifest: dict) -> dict:
             "failed_model_cleanup",
             "feature_errors",
             "verify_stages",
+            "failed_transform",
         )
         native = {key: result[key] for key in result_keys if key in result}
         from creo_mechdog.model_queries import inspection_summary
