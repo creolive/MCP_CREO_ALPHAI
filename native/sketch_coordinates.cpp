@@ -386,8 +386,7 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
             message += " (the whole profile translated by u=" + std::to_string(mean_u) +
                        " v=" + std::to_string(mean_v) +
                        " mm, beyond the rigid translation limit of " +
-                       std::to_string(RIGID_TRANSLATION_LIMIT_MM) +
-                       " mm; it was not re-solved)";
+                       std::to_string(RIGID_TRANSLATION_LIMIT_MM) + " mm; it was not re-solved)";
         throw std::runtime_error(message);
     }
     if (deviation > tolerance_mm)
@@ -411,11 +410,11 @@ static J verify_coordinate_plan(ProSection section, const J &targets, int origin
 static J sketch_shift_block(const J &verification, const char *tolerance_source) {
     J shift = verification.is_object() && verification.contains("shift")
                   ? verification["shift"]
-                  : J{{"detected", nullptr},       {"rigid", nullptr},
-                      {"translation_mm", nullptr}, {"residual_mm", nullptr},
+                  : J{{"detected", nullptr},           {"rigid", nullptr},
+                      {"translation_mm", nullptr},     {"residual_mm", nullptr},
                       {"shape_deviation_mm", nullptr}, {"accepted_rigid", false},
-                      {"max_point_mm", nullptr},   {"point_count", nullptr},
-                      {"sample", J::array()},      {"truncated", false},
+                      {"max_point_mm", nullptr},       {"point_count", nullptr},
+                      {"sample", J::array()},          {"truncated", false},
                       {"measurement_scope", nullptr}};
     const bool detected = shift["detected"].is_boolean() && shift["detected"].get<bool>();
     const bool rigid = shift["rigid"].is_boolean() && shift["rigid"].get<bool>();
@@ -726,22 +725,22 @@ static J geometry_deviation_stage(ProSection section, const J &targets) {
     if (any_measured)
         log("GEOMETRY_STAGE_SHAPE points=%d translation=%.12f shape=%.12f rigid=%d total=%d\n",
             (int)offsets.size(), translation, shape, rigid ? 1 : 0, total);
-    return {{"available", any_measured},
-            {"max_deviation_mm", any_measured ? J(worst) : J(nullptr)},
-            {"shape_deviation_mm", any_measured ? J(shape) : J(nullptr)},
-            {"residual_mm", any_measured ? J(residual) : J(nullptr)},
-            {"rigid", any_measured ? J(rigid) : J(nullptr)},
-            {"translation_mm",
-             (any_measured && rigid) ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
-            {"translation_magnitude_mm", (any_measured && rigid) ? J(translation) : J(nullptr)},
-            {"point_count", (int)offsets.size()},
-            {"total", total},
-            {"sample", sample},
-            {"truncated", truncated},
-            {"unavailable_reason",
-             any_measured
-                 ? J(nullptr)
-                 : J(failure.empty() ? "no measurable entities in the target snapshot" : failure)}};
+    return {
+        {"available", any_measured},
+        {"max_deviation_mm", any_measured ? J(worst) : J(nullptr)},
+        {"shape_deviation_mm", any_measured ? J(shape) : J(nullptr)},
+        {"residual_mm", any_measured ? J(residual) : J(nullptr)},
+        {"rigid", any_measured ? J(rigid) : J(nullptr)},
+        {"translation_mm", (any_measured && rigid) ? J{{"u", mean_u}, {"v", mean_v}} : J(nullptr)},
+        {"translation_magnitude_mm", (any_measured && rigid) ? J(translation) : J(nullptr)},
+        {"point_count", (int)offsets.size()},
+        {"total", total},
+        {"sample", sample},
+        {"truncated", truncated},
+        {"unavailable_reason",
+         any_measured
+             ? J(nullptr)
+             : J(failure.empty() ? "no measurable entities in the target snapshot" : failure)}};
 }
 
 // Merges both verification points into the published geometry_deviation
@@ -810,8 +809,7 @@ static J geometry_deviation_report(const J &regenerate_stage, const J &feature_s
         if (!stage->at("available").get<bool>())
             continue;
         rigid_known = true;
-        const bool stage_rigid =
-            stage->at("rigid").is_boolean() && stage->at("rigid").get<bool>();
+        const bool stage_rigid = stage->at("rigid").is_boolean() && stage->at("rigid").get<bool>();
         rigid_all = rigid_all && stage_rigid;
         shape = std::max(shape, stage->at("shape_deviation_mm").get<double>());
         const double deviation = stage->at("max_deviation_mm").get<double>();
@@ -894,11 +892,9 @@ static void enforce_geometry_deviation(const J &report, const char *context) {
                 ": the requested geometry tolerance requires measurable geometry; " +
                 stage["unavailable_reason"].get<std::string>());
         if (stage["max_deviation_mm"].get<double>() > tolerance) {
-            const bool stage_rigid =
-                stage["rigid"].is_boolean() && stage["rigid"].get<bool>();
-            const bool shape_ok =
-                stage["shape_deviation_mm"].is_number() &&
-                stage["shape_deviation_mm"].get<double>() <= tolerance;
+            const bool stage_rigid = stage["rigid"].is_boolean() && stage["rigid"].get<bool>();
+            const bool shape_ok = stage["shape_deviation_mm"].is_number() &&
+                                  stage["shape_deviation_mm"].get<double>() <= tolerance;
             if (accepted_rigid && stage_rigid && shape_ok) {
                 log("GEOMETRY_DEVIATION_RIGID_ACCEPTED stage=%s max=%.12f shape=%.12f "
                     "translation=%.12f tolerance=%.12f\n",

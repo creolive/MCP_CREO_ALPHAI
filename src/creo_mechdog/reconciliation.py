@@ -774,9 +774,7 @@ def _finish(record: dict) -> dict:
         # Metadata-only transaction: a later revision means someone else edited
         # the model in between, so the acknowledgement must not overwrite it.
         if model.get("revision") != after.get("revision"):
-            raise ValueError(
-                "Model revision changed after the acknowledgement; inspect again"
-            )
+            raise ValueError("Model revision changed after the acknowledgement; inspect again")
         model_registry.write_model(general.model_path(record["model_id"]), after)
         return record["job_after"]
     if model.get("recovery_pending") == record["job_id"]:
@@ -1048,9 +1046,7 @@ def apply(
                     current.get("revision") != model["revision"]
                     or current.get("status") not in expected_statuses
                 ):
-                    raise ValueError(
-                        "Model changed while acknowledging the failure; inspect again"
-                    )
+                    raise ValueError("Model changed while acknowledging the failure; inspect again")
                 prior_job_id = current.get("pending_job") or current.get("last_job")
                 prior_job_status = None
                 if prior_job_id:
@@ -1060,8 +1056,7 @@ def apply(
                         prior_job_status = None
                 if action == "ack_failure" and prior_job_status not in TERMINAL_FAILURE_STATUSES:
                     raise ValueError(
-                        "Last job is not a terminal failure; inspect the model before "
-                        "acknowledging"
+                        "Last job is not a terminal failure; inspect the model before acknowledging"
                     )
                 after = _ack_model_after(
                     current,

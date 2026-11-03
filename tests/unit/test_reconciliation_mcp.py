@@ -467,9 +467,7 @@ class ReconcileMcpContract(unittest.IsolatedAsyncioTestCase):
                 client,
                 "creo_reconcile_model",
                 {
-                    **self.apply_arguments(
-                        model_id, evidence, "r13_assembly_ack", "ack_failure"
-                    ),
+                    **self.apply_arguments(model_id, evidence, "r13_assembly_ack", "ack_failure"),
                     "confirm_failure_ack": True,
                 },
             )

@@ -55,7 +55,11 @@ def _calls(result: dict) -> list[dict]:
     if not isinstance(body, dict):
         return []
     operations = body.get("operations")
-    return [item for item in operations if isinstance(item, dict)] if isinstance(operations, list) else []
+    return (
+        [item for item in operations if isinstance(item, dict)]
+        if isinstance(operations, list)
+        else []
+    )
 
 
 def _failure(result: dict):
@@ -64,7 +68,12 @@ def _failure(result: dict):
         return None
     return {
         key: body.get(key)
-        for key in ("failed_operation_index", "failed_stage", "failed_toolkit_call", "failed_transform")
+        for key in (
+            "failed_operation_index",
+            "failed_stage",
+            "failed_toolkit_call",
+            "failed_transform",
+        )
         if key in body
     } or None
 

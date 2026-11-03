@@ -99,9 +99,9 @@ class NativeSubStageSource(unittest.TestCase):
     """The stall report is only useful if the executor keeps emitting the lines."""
 
     def setUp(self):
-        self.source = (
-            Path(__file__).resolve().parents[2] / "native" / "generic.cpp"
-        ).read_text(encoding="utf-8")
+        self.source = (Path(__file__).resolve().parents[2] / "native" / "generic.cpp").read_text(
+            encoding="utf-8"
+        )
 
     def test_stage_line_keeps_its_field_contract(self):
         self.assertIn(

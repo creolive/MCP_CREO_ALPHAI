@@ -138,9 +138,9 @@ static auto generic_step_started_at = generic_started_at;
 static J verify_stages = J::array();
 static constexpr std::size_t VERIFY_STAGE_LIMIT = 32;
 static long long milliseconds_between(const std::chrono::steady_clock::time_point &from) {
-    return static_cast<long long>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - from)
-            .count());
+    return static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::steady_clock::now() - from)
+                                      .count());
 }
 static void generic_substage(const std::string &name) {
     const auto step_point = std::chrono::steady_clock::now();
@@ -149,10 +149,10 @@ static void generic_substage(const std::string &name) {
             .count());
     generic_step_started_at = step_point;
     const long long since_start = milliseconds_between(generic_started_at);
-    const long long wall = static_cast<long long>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count());
+    const long long wall =
+        static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::system_clock::now().time_since_epoch())
+                                   .count());
     log("STAGE name=%s elapsed_ms=%lld since_start_ms=%lld ts=%lld\n", name.c_str(), elapsed,
         since_start, wall);
     if (verify_stages.size() < VERIFY_STAGE_LIMIT)
@@ -6110,9 +6110,8 @@ static J transform_failure_report(const J &op) {
             {"keep_original", op.value("keep_original", false)},
             {"reference_count", (int)op["references"].size()},
             {"reference_kinds", kinds},
-            {"note",
-             "the kernel is usable inside -180..180 deg; equivalent angles map to the same "
-             "rotation, and a failed copy leaves the plan rolled back"}};
+            {"note", "the kernel is usable inside -180..180 deg; equivalent angles map to the same "
+                     "rotation, and a failed copy leaves the plan rolled back"}};
 }
 
 static int run_generic(const std::wstring &job) {
