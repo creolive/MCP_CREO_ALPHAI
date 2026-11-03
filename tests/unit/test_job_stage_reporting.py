@@ -66,6 +66,61 @@ class JobStageReporting(unittest.TestCase):
         (bridge.job_path(job_id) / "native.log").write_bytes(b"noise PHASE=discon")
         self.assert_stage_both(job_id, "building_worker")
 
+    def test_running_job_reports_substage_progress(self):
+        job_id = self.job(
+            "running",
+            "verify_model",
+            log=(
+                b"PHASE=verify_model\n"
+                b"STAGE name=verify_model_save elapsed_ms=40 since_start_ms=900 "
+                b"ts=1700000000000\n"
+            ),
+        )
+        full = bridge.get_job(job_id, "full")
+        self.assertEqual(full["native_progress"]["stage"], "verify_model")
+        self.assertEqual(full["native_progress"]["sub_stage"], "verify_model_save")
+        self.assertEqual(full["native_progress"]["elapsed_ms"], 40)
+        self.assertEqual(full["native_progress"]["since_start_ms"], 900)
+        compact = bridge.get_job(job_id, "compact")
+        self.assertEqual(compact["native_progress"]["sub_stage"], "verify_model_save")
+
+    def test_failed_job_without_stage_lines_states_the_reason(self):
+        job_id = self.job(
+            "failed",
+            "verify_model",
+            {"failed_stage": "verify_model"},
+            log=b"PHASE=verify_model\n",
+        )
+        full = bridge.get_job(job_id, "full")
+        self.assertEqual(full["stage"], "verify_model")
+        self.assertEqual(full["native_progress"]["reason"], "no_stage_timing")
+        self.assertIsNone(full["native_progress"]["sub_stage"])
+
+    def test_finished_jobs_keep_the_polling_payload_small(self):
+        job_id = self.job(
+            "succeeded",
+            "verified",
+            {"success": True},
+            b"PHASE=verify_model\nPHASE=disconnect\n",
+        )
+        self.assertNotIn("native_progress", bridge.get_job(job_id, "full"))
+
+    def test_timeout_message_names_the_stalled_substage(self):
+        message = bridge.timeout_message(
+            {"sub_stage": "verify_model_erase", "idle_seconds": 431.25}
+        )
+        self.assertIn("Last sub-stage: verify_model_erase", message)
+        self.assertIn("idle 431.2 s", message)
+
+    def test_timeout_message_without_progress_keeps_original_wording(self):
+        expected = (
+            "Native helper timed out and was stopped; inspect native checkpoint and Creo "
+            "before retrying."
+        )
+        self.assertEqual(bridge.timeout_message({}), expected)
+        self.assertEqual(bridge.timeout_message(None), expected)
+        self.assertEqual(bridge.timeout_message({"sub_stage": None, "idle_seconds": 5}), expected)
+
 
 if __name__ == "__main__":
     unittest.main()
