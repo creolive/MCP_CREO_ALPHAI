@@ -57,8 +57,8 @@
 **schema 冻结**：`DimensionValue` 保留 `id: int, value: float`，新增三个**可选**字段：
 
 ```python
-expected_value: float | None = None   # 观测旧值
-expected_symbol: str | None = None    # 观测符号名
+expected_value: float | None = None  # 观测旧值
+expected_symbol: str | None = None  # 观测符号名
 expected_owner: str | int | None = None  # 观测归属（特征标签或 ID）
 ```
 
@@ -80,8 +80,8 @@ expected_owner: str | int | None = None  # 观测归属（特征标签或 ID）
 
 ```python
 class StandardHoleSpec(StrictModel):
-    series: str          # 表族，如 "ISO"；仅在已安装表中匹配
-    size: str            # 规格，如 "M6"
+    series: str  # 表族，如 "ISO"；仅在已安装表中匹配
+    size: str  # 规格，如 "M6"
     thread_depth: float  # > 0，且必须严格小于 tip 深度
 ```
 
