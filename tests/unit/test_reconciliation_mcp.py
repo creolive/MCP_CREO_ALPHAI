@@ -40,6 +40,9 @@ DEPLOYMENT_FIXTURE = "dev034-protocol-fixture-deployment"
 DEAD_RUNNER = {"pid": 2147483647, "created": 12}
 DEAD_WORKER = {"pid": 2147483646, "created": 13}
 INSPECTION = {"healthy": True, "features": [], "bodies": [], "parameters": {}, "volume_mm3": 10}
+#: BUG-110 fixtures: 32-hex model ids that no other case uses.
+ACK_ASSEMBLY = "a1" + "0" * 30
+ACK_ASSEMBLY_CONFIRM = "b1" + "0" * 30
 
 
 def _write(file: Path, value: dict) -> None:
@@ -62,6 +65,7 @@ def _model(
     baseline=False,
     pending=False,
     candidate=False,
+    model_type="part",
 ) -> None:
     """Register one fixture model plus its stopped original job directory."""
     output = directory / "models" / model_id / "output"
@@ -71,7 +75,7 @@ def _model(
         "model_id": model_id,
         "model_name": name,
         "revision": revision,
-        "model_type": "part",
+        "model_type": model_type,
         "status": status,
         "aliases": {},
         "inspection": INSPECTION,
@@ -101,6 +105,8 @@ def _model(
     )
     _write(original / "request.json", {"model": model, "operations": []})
     _write(original / "native_owner.json", DEAD_WORKER)
+    if model_type != "part":
+        model["components"] = [{"name": "blade_1", "status": "resolved"}]
     if candidate:
         saved = output / f"{name}.prt.3"
         saved.write_bytes(f"saved-but-unregistered {name}".encode())
@@ -351,6 +357,19 @@ class ReconcileMcpContract(unittest.IsolatedAsyncioTestCase):
                 baseline=True,
                 pending=True,
             )
+        # R13: failed assemblies whose components must never be re-owned.
+        for model_id, name in (
+            (ACK_ASSEMBLY, "r13_failed_assembly"),
+            (ACK_ASSEMBLY_CONFIRM, "r13_failed_assembly_confirm"),
+        ):
+            _model(
+                cls.directory,
+                model_id,
+                name,
+                revision=1,
+                status="failed",
+                model_type="assembly",
+            )
 
     @classmethod
     def tearDownClass(cls):
@@ -431,6 +450,56 @@ class ReconcileMcpContract(unittest.IsolatedAsyncioTestCase):
         property_schema = schema["properties"]["expected_pending_job_id"]
         self.assertIn({"type": "null"}, property_schema["anyOf"])
         self.assertIsNone(property_schema["default"])
+        # BUG-110: the published action list and confirmation flag must match the
+        # business layer, or a client cannot select the assembly exit at all.
+        action_schema = json.dumps(schema["properties"]["action"])
+        self.assertIn("ack_failure", action_schema)
+        self.assertEqual(schema["properties"]["confirm_failure_ack"]["type"], "boolean")
+
+    async def test_r13_ack_failure_is_the_exit_for_a_failed_assembly(self):
+        model_id = ACK_ASSEMBLY
+        async with self.client() as client:
+            evidence = await self.inspect_model(client, model_id)
+            self.assertTrue(evidence["actions"]["ack_failure"]["available"], evidence["actions"])
+            for action in ("restore_baseline", "accept_saved", "accept_live", "abandon_new"):
+                self.assertFalse(evidence["actions"][action]["available"], action)
+            created = await self.call(
+                client,
+                "creo_reconcile_model",
+                {
+                    **self.apply_arguments(
+                        model_id, evidence, "r13_assembly_ack", "ack_failure"
+                    ),
+                    "confirm_failure_ack": True,
+                },
+            )
+            result = await self.poll(client, created["job_id"])
+            self.assertEqual(result["status"], "succeeded", result)
+            after = await self.inspect_model(client, model_id)
+            self.assertEqual(after["status"], "ready")
+            self.assertEqual(after["revision"], evidence["revision"])
+            record = json.loads(
+                (self.directory / "models" / model_id / "model.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(record["reconciliation"]["action"], "ack_failure")
+            self.assertTrue(record["reconciliation"]["component_ownership_preserved"])
+            self.assertEqual(record["components"], [{"name": "blade_1", "status": "resolved"}])
+            self.assertFalse(
+                (self.directory / "jobs" / created["job_id"] / "native_result.json").exists()
+            )
+
+    async def test_r13_ack_failure_requires_the_confirmation_flag(self):
+        model_id = ACK_ASSEMBLY_CONFIRM
+        async with self.client() as client:
+            evidence = await self.inspect_model(client, model_id)
+            text = await self.error_text(
+                client,
+                self.apply_arguments(model_id, evidence, "r13_assembly_ack_flag", "ack_failure"),
+            )
+            self.assertIn("confirm_failure_ack=true", text)
+            after = await self.inspect_model(client, model_id)
+            self.assertEqual(after["status"], "failed")
+            self.assertEqual(after["revision"], evidence["revision"])
 
     async def test_t01_t02_null_and_omission_apply_and_complete(self):
         async with self.client() as client:

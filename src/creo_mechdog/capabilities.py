@@ -112,13 +112,18 @@ def families() -> dict:
                 "accept_live",
                 "abandon_new",
                 "ack_no_mutation",
+                "ack_failure",
             ],
             "scope": (
                 "Owned part/sheetmetal models for native recovery; assembly/drawing rejected "
                 "there. ack_no_mutation (confirm_zero_mutation=true) is a registry-only "
                 "transition from failed to ready when the failed job provably changed nothing "
-                "(verified checkpoint, nothing pending, no failed rollback); it applies to "
-                "assemblies and drawings too because it never touches component ownership"
+                "(verified checkpoint, nothing pending, no failed rollback); ack_failure "
+                "(confirm_failure_ack=true) is the metadata-only exit for a terminal "
+                "failed/unknown_outcome job whose disk or component state cannot be proven, "
+                "returning the model to ready without touching revision, model files or "
+                "component bindings; both apply to assemblies and drawings too because they "
+                "never touch component ownership"
             ),
             "original_plan_replay": False,
             "inspect_requires_creo": False,

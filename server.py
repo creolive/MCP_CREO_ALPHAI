@@ -378,7 +378,12 @@ async def creo_reconcile_model(
     mode: Literal["inspect", "apply"] = "inspect",
     live: bool = False,
     action: Literal[
-        "restore_baseline", "accept_saved", "accept_live", "abandon_new", "ack_no_mutation"
+        "restore_baseline",
+        "accept_saved",
+        "accept_live",
+        "abandon_new",
+        "ack_no_mutation",
+        "ack_failure",
     ]
     | None = None,
     expected_revision: int | None = Field(
@@ -407,8 +412,17 @@ async def creo_reconcile_model(
             "recovery job, and no failed rollback qualifies."
         ),
     ),
+    confirm_failure_ack: bool = Field(
+        default=False,
+        description=(
+            "Apply only, action=ack_failure: set true after accepting the failure. Returns the "
+            "model to ready as a metadata transaction; revision, model file and component "
+            "bindings are left untouched. Requires a terminal failed/unknown_outcome job, no "
+            "pending or recovery job, and no failed rollback. Available for assemblies too."
+        ),
+    ),
 ) -> dict[str, Any]:
-    """Inspect uncertain owned models without requiring Creo. live=true performs a bounded read-only session preflight. Apply an explicitly selected available action with the returned token, revision, pending_job (null when absent) and a unique 8–80 character idempotency_key. Poll its independent recovery job; never replay the original plan. Execution failures expose reason and failure_phase: before_native refusals release only their own recovery reservation under the channel lock; native_worker_started means dispatch may have begun and unknown_outcome protection remains. restore_baseline keeps revision; accept_saved/live increments once; abandon_new preserves files and archives the model. ack_no_mutation (confirm_zero_mutation=true) records that a failed job changed nothing and returns the model to ready as a metadata transaction: no worker, no Toolkit connection, no file writes, revision unchanged, an audit block under reconciliation and no need to edit model.json by hand. It qualifies for parts, sheetmetal, assemblies and drawings when status=failed, nothing is pending, the checkpoint identity still matches and the failed job's rollback did not fail; it never re-scopes component ownership. accept_live requires live preflight. Unsupported/unproven ownership is rejected; no Creo restart or user file deletion."""
+    """Inspect uncertain owned models without requiring Creo. live=true performs a bounded read-only session preflight. Apply an explicitly selected available action with the returned token, revision, pending_job (null when absent) and a unique 8–80 character idempotency_key. Poll its independent recovery job; never replay the original plan. Execution failures expose reason and failure_phase: before_native refusals release only their own recovery reservation under the channel lock; native_worker_started means dispatch may have begun and unknown_outcome protection remains. restore_baseline keeps revision; accept_saved/live increments once; abandon_new preserves files and archives the model. ack_no_mutation (confirm_zero_mutation=true) records that a failed job changed nothing and returns the model to ready as a metadata transaction: no worker, no Toolkit connection, no file writes, revision unchanged, an audit block under reconciliation and no need to edit model.json by hand. It qualifies for parts, sheetmetal, assemblies and drawings when status=failed, nothing is pending, the checkpoint identity still matches and the failed job's rollback did not fail; it never re-scopes component ownership. ack_failure (confirm_failure_ack=true) is the exit for a terminal failure whose disk or component state cannot be proven: it accepts the failure and returns the model to ready without a worker, without Toolkit, without touching revision, model files or component bindings, and records prior_job_status plus outcome_uncertain (true when the last job ended as unknown_outcome) and disk_state_verified=false under reconciliation. It is available for assemblies and drawings too; when a zero-mutation acknowledgement is also provable, prefer ack_no_mutation. accept_live requires live preflight. Unsupported/unproven ownership is rejected; no Creo restart or user file deletion."""
     return await invoke(
         reconcile,
         model_id,
@@ -420,6 +434,7 @@ async def creo_reconcile_model(
         evidence_token,
         idempotency_key,
         confirm_zero_mutation,
+        confirm_failure_ack,
     )
 
 

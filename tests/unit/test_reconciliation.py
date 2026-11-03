@@ -728,5 +728,149 @@ print(json.dumps(bridge.get_job(sys.argv[2])))
         self.assertFalse(any(action["available"] for action in result["actions"].values()))
 
 
+class AssemblyFailureAck(unittest.TestCase):
+    """BUG-110: a failed assembly leaves through a metadata-only acknowledgement.
+
+    The fixture is borrowed from ``Reconciliation`` as plain functions (not by
+    subclassing) so this class runs only its own scenarios.
+    """
+
+    save_model = Reconciliation.save_model
+    native = Reconciliation.native
+
+    def setUp(self):
+        Reconciliation.setUp(self)
+        self.component = {"name": "blade_1", "file": str(self.part), "status": "resolved"}
+        self.model.update(
+            model_type="assembly",
+            status="failed",
+            pending_job=None,
+            rollback_status="succeeded",
+            components=[self.component],
+        )
+        self.save_model()
+        self.failed_job()
+
+    def failed_job(self, status="failed"):
+        bridge.write_json(
+            bridge.job_path(self.original) / "job.json",
+            {
+                "job_id": self.original,
+                "model_id": self.mid,
+                "kind": "generic",
+                "status": status,
+                "created_at": bridge.now(),
+                "runner_identity": {"pid": 2147483647, "created": 12},
+            },
+        )
+
+    def ack(self, key="failure_ack_1", confirm=True, action="ack_failure"):
+        evidence = rec.inspect(self.mid)
+        with patch.object(bridge.subprocess, "Popen") as popen:
+            created = rec.apply(
+                self.mid,
+                action,
+                self.model["revision"],
+                None,
+                evidence["evidence_token"],
+                key,
+                confirm_failure_ack=confirm,
+            )
+        popen.assert_not_called()
+        return created
+
+    def test_assembly_failure_exposes_only_the_metadata_acknowledgement(self):
+        actions = rec.inspect(self.mid)["actions"]
+        self.assertTrue(actions["ack_failure"]["available"])
+        for action in ("restore_baseline", "accept_saved", "accept_live", "abandon_new"):
+            self.assertFalse(actions[action]["available"], action)
+            self.assertIn("preserve component ownership", actions[action]["reason"])
+
+    def test_acknowledgement_requires_an_explicit_confirmation(self):
+        with self.assertRaisesRegex(ValueError, "confirm_failure_ack"):
+            self.ack(confirm=False)
+
+    def test_acknowledgement_returns_the_assembly_ready_without_touching_its_content(self):
+        before = general.model_info(self.mid)
+        created = self.ack()
+        with patch.object(rec, "_native") as worker:
+            bridge.run_job(created["job_id"])
+        worker.assert_not_called()
+        result = bridge.get_job(created["job_id"])
+        model = general.model_info(self.mid)
+        self.assertEqual((result["status"], model["status"]), ("succeeded", "ready"))
+        self.assertEqual(model["revision"], before["revision"])
+        self.assertEqual(model["part_file"], before["part_file"])
+        self.assertEqual(model["part_sha256"], before["part_sha256"])
+        self.assertEqual(model["components"], before["components"])
+        audit = model["reconciliation"]
+        self.assertEqual(audit["action"], "ack_failure")
+        self.assertEqual(audit["prior_status"], "failed")
+        self.assertEqual(audit["prior_job_status"], "failed")
+        self.assertFalse(audit["outcome_uncertain"])
+        self.assertTrue(audit["component_ownership_preserved"])
+        self.assertFalse(audit["disk_state_verified"])
+        self.assertEqual(Path(model["part_file"]).read_bytes(), self.part.read_bytes())
+
+    def test_an_uncertain_outcome_is_acknowledged_as_uncertain(self):
+        self.failed_job("unknown_outcome")
+        self.model["status"] = "unknown_outcome"
+        self.save_model()
+        created = self.ack(key="failure_ack_uncertain")
+        audit = general.model_info(self.mid)["reconciliation"]
+        self.assertTrue(audit["outcome_uncertain"])
+        self.assertEqual(audit["prior_job_status"], "unknown_outcome")
+        self.assertEqual(
+            bridge.get_job(created["job_id"])["recovery"]["prior_status"], "unknown_outcome"
+        )
+
+    def test_pending_job_or_failed_rollback_keeps_the_assembly_stuck(self):
+        self.model["pending_job"] = self.original
+        self.save_model()
+        self.assertFalse(rec.inspect(self.mid)["actions"]["ack_failure"]["available"])
+        self.model["pending_job"] = None
+        self.model["rollback_status"] = "failed"
+        self.save_model()
+        state = rec.inspect(self.mid)["actions"]["ack_failure"]
+        self.assertFalse(state["available"])
+        self.assertIn("Rollback", state["reason"])
+
+    def test_a_job_that_did_not_fail_cannot_be_acknowledged(self):
+        self.failed_job("succeeded")
+        with self.assertRaisesRegex(ValueError, "terminal failure"):
+            self.ack(key="failure_ack_success")
+
+    def test_replaying_the_same_key_does_not_open_a_second_transaction(self):
+        evidence = rec.inspect(self.mid)
+        with patch.object(bridge.subprocess, "Popen") as popen:
+            created = rec.apply(
+                self.mid,
+                "ack_failure",
+                self.model["revision"],
+                None,
+                evidence["evidence_token"],
+                "failure_ack_replay",
+                confirm_failure_ack=True,
+            )
+            duplicate = rec.apply(
+                self.mid,
+                "ack_failure",
+                self.model["revision"],
+                None,
+                evidence["evidence_token"],
+                "failure_ack_replay",
+                confirm_failure_ack=True,
+            )
+        popen.assert_not_called()
+        self.assertEqual(duplicate["job_id"], created["job_id"])
+
+    def test_a_parts_model_keeps_both_acknowledgements_available(self):
+        self.model.update(model_type="part", status="failed", model_unchanged=True)
+        self.save_model()
+        actions = rec.inspect(self.mid)["actions"]
+        self.assertTrue(actions["ack_no_mutation"]["available"])
+        self.assertTrue(actions["ack_failure"]["available"])
+
+
 if __name__ == "__main__":
     unittest.main()
