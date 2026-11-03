@@ -6087,7 +6087,10 @@ static void adopt_native(const J &request, J &report) {
 // BUG-111: a transform failure used to arrive as a bare Toolkit code plus the
 // phase name. Publish the operation's own shape instead: which backend ran, the
 // rotation as requested and as normalized, how many references and whether the
-// original geometry was kept. Bounded by construction (no per-face lists).
+// original geometry was kept. Bounded by construction (no per-face lists); the
+// flex_move path also publishes what the copy actually selected (BUG-111 T2:
+// requested body ids, selected surface count and the model counts at op start)
+// because keep_original copies accumulate inside the single body.
 static J transform_failure_report(const J &op) {
     J rotation = op.value("rotation", J::array({0.0, 0.0, 0.0}));
     J normalized = J::array();
@@ -6102,16 +6105,19 @@ static J transform_failure_report(const J &op) {
             kinds.push_back(kind);
     }
     const bool body = !op["references"].empty() && op["references"][0]["kind"] == "body";
-    return {{"label", op.value("label", "")},
-            {"backend", body ? "flex_move" : "geometry_move"},
-            {"rotation_deg", rotation},
-            {"rotation_normalized_deg", normalized},
-            {"translation_mm", op.value("translation", J::array({0.0, 0.0, 0.0}))},
-            {"keep_original", op.value("keep_original", false)},
-            {"reference_count", (int)op["references"].size()},
-            {"reference_kinds", kinds},
-            {"note", "the kernel is usable inside -180..180 deg; equivalent angles map to the same "
-                     "rotation, and a failed copy leaves the plan rolled back"}};
+    J report = {{"label", op.value("label", "")},
+                {"backend", body ? "flex_move" : "geometry_move"},
+                {"rotation_deg", rotation},
+                {"rotation_normalized_deg", normalized},
+                {"translation_mm", op.value("translation", J::array({0.0, 0.0, 0.0}))},
+                {"keep_original", op.value("keep_original", false)},
+                {"reference_count", (int)op["references"].size()},
+                {"reference_kinds", kinds},
+                {"note", "the kernel is usable inside -180..180 deg; equivalent angles map to the "
+                         "same rotation, and a failed copy leaves the plan rolled back"}};
+    if (transform_selection.is_object())
+        report["selection"] = transform_selection;
+    return report;
 }
 
 static int run_generic(const std::wstring &job) {

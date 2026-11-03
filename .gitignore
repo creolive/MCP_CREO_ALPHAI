@@ -27,3 +27,9 @@ open_file/
 /std.err
 /std.out
 examples/*.prt.*
+# Local agent/IDE working data (plan snapshots, transcripts, caches). Not source,
+# never packaged or committed, and kept out of style discovery so a regenerated
+# snapshot cannot look like a source regression (DEV-059).
+.codebuddy/
+.workbuddy/
+.zcode/

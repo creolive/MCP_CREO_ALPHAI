@@ -237,7 +237,13 @@ static void flex_transform_values(ProElement root, const J &translation, const J
     }
 }
 
+// BUG-111 T2: bounded selection evidence for transform failures. The flex_move
+// path copies the whole current body, so a failure report must show how much
+// geometry the copy actually took. Counts only, never a per-face list.
+static J transform_selection = nullptr;
+
 static void generic_transform(const J &op) {
+    transform_selection = nullptr;
     bool body = op["references"][0]["kind"] == "body";
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
@@ -273,6 +279,23 @@ static void generic_transform(const J &op) {
             if (!n)
                 throw std::runtime_error("Selected body has no active solid surfaces");
         }
+        J requested_ids = J::array();
+        for (int id : requested)
+            requested_ids.push_back(id);
+        // inspection() may omit counts (or publish null); never let the evidence
+        // block turn into a second failure mode.
+        J counts =
+            state.contains("counts") && state["counts"].is_object() ? state["counts"] : J::object();
+        transform_selection = {{"requested_body_ids", requested_ids},
+                               {"selected_surface_count", (int)surfaces.size()},
+                               {"model_counts_at_start",
+                                {{"features", counts.value("features", -1)},
+                                 {"surfaces", counts.value("surfaces", -1)},
+                                 {"bodies", counts.value("bodies", -1)}}}};
+        log("TRANSFORM_SELECTION bodies=%d selected_faces=%d model_features=%d model_surfaces=%d "
+            "model_bodies=%d\n",
+            (int)requested.size(), (int)surfaces.size(), counts.value("features", -1),
+            counts.value("surfaces", -1), counts.value("bodies", -1));
         surface_collection(
             node(node(root, PRO_E_FLEXMOVE_MOVED_GEOMETRY), PRO_E_STD_SURF_COLLECTION_APPL),
             surfaces);
