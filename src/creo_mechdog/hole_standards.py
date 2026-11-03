@@ -1,19 +1,20 @@
 """FEAT-035 standard threaded holes: frozen series/size table and resolution.
 
-Offline scope. The source data is a small ISO metric coarse table, not a parser
-for the installed Creo hole charts (``.hol``): the chart format and the native
-thread element tree are not verified on this machine yet, so
-``HoleOp.standard`` validates against this table and then refuses submission
-with an actionable error instead of silently creating a plain hole.
+The source data is a small ISO metric coarse table, not a parser for the
+installed Creo hole charts (``.hol``). The table names each row by the chart's
+own fastener id, and the native side still asks the installed chart through
+``ProElementHoleScrewSizeSet``: a row the chart does not have fails there with
+``PRO_TK_INVALID_NAME`` instead of degrading to a plain hole.
 
-When the live probe lands, ``resolve_standard_hole`` keeps this signature and
-the table digest keeps identifying exactly which rows were used.
+Only the rows listed here are offered; availability on another machine is
+decided by its own chart, never assumed from this table.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 
 SERIES_ISO_METRIC_COARSE = "ISO"
 TABLE_ID = "iso_metric_coarse@1"
@@ -78,12 +79,15 @@ _ISO_METRIC_COARSE: dict[str, dict[str, float | str]] = {
 
 _TABLES = {SERIES_ISO_METRIC_COARSE: _ISO_METRIC_COARSE}
 
-NOT_VERIFIED = (
-    "standard threaded holes are frozen offline but not enabled: the native thread element "
-    "tree and the installed hole chart were not verified on a live session, so submitting "
-    "would risk a plain hole that only looks threaded; submit diameter with a tip depth for "
-    "now, or re-run after the live probe is recorded in FEAT-035"
-)
+# The native standard hole drills with this point angle (see
+# native/generic.cpp::standard_hole_elements). Validation needs the same number to
+# bound the usable thread by the real tip depth instead of the shoulder.
+DRILL_TIP_ANGLE_DEG = 118.0
+
+
+def tip_cone_height_mm(tap_drill_diameter_mm: float) -> float:
+    """Cone height below the drill shoulder for the native point angle."""
+    return (tap_drill_diameter_mm / 2.0) / math.tan(math.radians(DRILL_TIP_ANGLE_DEG / 2.0))
 
 
 def table_digest(series: str) -> str:
@@ -131,6 +135,33 @@ def resolve_standard_hole(series: str, size: str) -> dict:
     }
 
 
-def require_native_support() -> None:
-    """Raise the frozen, actionable refusal until the native probe is recorded."""
-    raise ValueError(NOT_VERIFIED)
+def prepare(operations: list[dict]) -> list[dict]:
+    """Attach the frozen row's values to every standard hole before native.
+
+    Native must not derive a fastener id or a tap drill on its own: it receives
+    exactly the row the validator already accepted, and the installed chart
+    still gets the final say through its own setter.
+    """
+    prepared: list[dict] = []
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "hole":
+            prepared.append(operation)
+            continue
+        standard = operation.get("standard")
+        if not isinstance(standard, dict):
+            prepared.append(operation)
+            continue
+        row = resolve_standard_hole(str(standard.get("series")), str(standard.get("size")))
+        prepared.append(
+            {
+                **operation,
+                "standard": {
+                    **standard,
+                    "fastener_id": row["fastener_id"],
+                    "nominal_diameter_mm": row["nominal_diameter_mm"],
+                    "tap_drill_mm": row["tap_drill_diameter_mm"],
+                    "thread_depth_limit_mm": row["thread_depth_limit_mm"],
+                },
+            }
+        )
+    return prepared

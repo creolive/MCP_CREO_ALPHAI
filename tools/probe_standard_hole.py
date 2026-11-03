@@ -19,8 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-import creo_mechdog.schema as schema  # noqa: E402
-
 PLATE_PLAN = [
     {
         "op": "sketch",
@@ -129,9 +127,6 @@ def main() -> int:
     args = parser.parse_args()
     if not args.confirm_session_usable:
         raise SystemExit("pass --confirm-session-usable after checking the live session")
-
-    # Probe-only bypass: the wheel is not opened for callers.
-    schema.require_native_support = lambda: None
 
     import generic_bridge  # noqa: E402
 

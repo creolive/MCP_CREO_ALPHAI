@@ -1,8 +1,9 @@
-"""FEAT-035 standard threaded holes: frozen table, guards and the offline gate.
+"""FEAT-035 standard threaded holes: frozen table, guards and prepared payload.
 
-The native thread element tree and the installed hole chart are not verified on
-a live session, so a standard hole must be refused with an actionable error
-instead of being created as a plain hole that only looks threaded.
+The native branch is verified live for the ISO metric coarse rows (FEAT-035
+2026-11-03). These tests keep the offline contract: only frozen rows, the thread
+depth inside the real tip depth, and the chart-bound values injected by
+``hole_standards.prepare`` rather than derived by native.
 """
 
 import unittest
@@ -10,10 +11,11 @@ import unittest
 from pydantic import ValidationError
 
 from creo_mechdog.hole_standards import (
-    NOT_VERIFIED,
     TABLE_ID,
+    prepare,
     resolve_standard_hole,
     table_digest,
+    tip_cone_height_mm,
 )
 from creo_mechdog.schema import HoleOp, StandardHoleSpec
 
@@ -109,13 +111,80 @@ class SchemaContract(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 HoleOp.model_validate(payload)
 
-    def test_valid_standard_hole_is_refused_until_the_native_probe_lands(self):
-        payload = hole(standard={"series": "ISO", "size": "M6", "thread_depth": 10})
+    def test_diameter_is_optional_for_standard_holes(self):
+        payload = hole(
+            diameter=None,
+            standard={"series": "ISO", "size": "M6", "thread_depth": 10},
+        )
+        payload.pop("diameter")
+        op = HoleOp.model_validate(payload)
+        self.assertIsNone(op.diameter)
+        self.assertEqual(op.standard.thread_depth, 10.0)
+
+    def test_diameter_is_still_required_without_standard(self):
+        payload = hole()
+        payload.pop("diameter")
         with self.assertRaises(ValidationError) as error:
             HoleOp.model_validate(payload)
-        message = str(error.exception)
-        self.assertIn("not enabled", message)
-        self.assertIn(NOT_VERIFIED.split(";")[0], message)
+        self.assertIn("requires diameter", str(error.exception))
+
+    def test_standard_hole_requires_a_blind_depth(self):
+        payload = hole(standard={"series": "ISO", "size": "M6", "thread_depth": 10})
+        payload.pop("depth")
+        with self.assertRaises(ValidationError) as error:
+            HoleOp.model_validate(payload)
+        self.assertIn("requires an explicit depth", str(error.exception))
+
+    def test_thread_depth_must_be_strictly_inside_tip_depth(self):
+        # M12 has a 24 mm table limit, so the tip rule is what decides here.
+        cone = tip_cone_height_mm(10.2)
+        payload = hole(
+            diameter=12.0,
+            depth=20.0,
+            standard={"series": "ISO", "size": "M12", "thread_depth": 20.0 + cone},
+        )
+        with self.assertRaises(ValidationError) as error:
+            HoleOp.model_validate(payload)
+        self.assertIn("strictly inside", str(error.exception))
+        inside = hole(
+            diameter=12.0,
+            depth=20.0,
+            standard={"series": "ISO", "size": "M12", "thread_depth": 20.0 + cone - 0.01},
+        )
+        self.assertAlmostEqual(
+            HoleOp.model_validate(inside).standard.thread_depth, 20.0 + cone - 0.01
+        )
+
+    def test_prepare_injects_the_frozen_row(self):
+        operations = prepare([hole(standard={"series": "ISO", "size": "M6", "thread_depth": 6.0})])
+        standard = operations[0]["standard"]
+        self.assertEqual(standard["fastener_id"], "M6x1")
+        self.assertAlmostEqual(standard["tap_drill_mm"], 5.0)
+        self.assertAlmostEqual(standard["nominal_diameter_mm"], 6.0)
+        self.assertAlmostEqual(standard["thread_depth_limit_mm"], 12.0)
+        # The prepared payload still satisfies the public schema.
+        HoleOp.model_validate(operations[0])
+
+    def test_prepared_values_must_match_the_table(self):
+        row = resolve_standard_hole("ISO", "M6")
+        payload = hole(
+            standard={
+                "series": "ISO",
+                "size": "M6",
+                "thread_depth": 6,
+                "tap_drill_mm": 6.0,
+            }
+        )
+        with self.assertRaises(ValidationError) as error:
+            HoleOp.model_validate(payload)
+        self.assertIn(f"{row['tap_drill_diameter_mm']} mm", str(error.exception))
+
+    def test_valid_standard_hole_is_accepted(self):
+        op = HoleOp.model_validate(
+            hole(standard={"series": "ISO", "size": "M6", "thread_depth": 10})
+        )
+        self.assertEqual(op.standard.series, "ISO")
+        self.assertEqual(op.standard.size, "M6")
 
 
 if __name__ == "__main__":

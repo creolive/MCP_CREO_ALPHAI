@@ -2799,10 +2799,13 @@ static J hole_thread_json(ProFeature &f, const J &op) {
 // borrowed it would only look threaded.
 static void standard_hole_elements(ProElement com, ProElement root, const J &op) {
     const J &standard = op["standard"];
-    double diameter = op.at("diameter");
-    double tap_drill = standard.contains("tap_drill_mm") && standard["tap_drill_mm"].is_number()
-                           ? standard["tap_drill_mm"].get<double>()
-                           : diameter;
+    // The prepared row carries the chart's tap drill; native never derives it
+    // from the nominal diameter, which would drill the wrong hole.
+    if (!standard.contains("tap_drill_mm") || !standard["tap_drill_mm"].is_number() ||
+        !(standard["tap_drill_mm"].get<double>() > 0.0))
+        throw std::runtime_error(
+            "Standard hole requires the resolved hole-table tap drill diameter");
+    double tap_drill = standard["tap_drill_mm"].get<double>();
     double thread_depth = standard.at("thread_depth").get<double>();
     integer(com, PRO_E_HLE_STAN_TYPE, PRO_HLE_TAPPED_TYPE);
     integer(com, PRO_E_HLE_FITTYPE, PRO_HLE_CLOSE_FIT);
@@ -2956,9 +2959,11 @@ static J generic_hole(const J &op) {
                  {"depth_scheme_code", basis["depth_scheme_code"]},
                  {"depth_scheme_query", basis["depth_scheme_query"]}};
         // Plain holes keep their old receipt; only a standard hole carries the
-        // readback of the thread Creo really stored.
+        // readback of the thread Creo really stored. The frozen receipt keys
+        // (thread_metadata/thread_metadata_verified) are composed in Python from
+        // this evidence plus the table identity.
         if (op.contains("standard") && !op["standard"].is_null())
-            out["thread_metadata"] = hole_thread_json(f, op);
+            out["thread_readback"] = hole_thread_json(f, op);
         return out;
     } catch (...) {
         if (face)

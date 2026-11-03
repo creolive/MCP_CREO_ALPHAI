@@ -329,6 +329,11 @@ def submit(
         from creo_mechdog import airfoil
 
         operations = airfoil.prepare(operations, aliases)
+        # FEAT-035: native receives the frozen hole-table row (fastener id, tap
+        # drill, nominal, limit) instead of deriving any of it itself.
+        from creo_mechdog import hole_standards
+
+        operations = hole_standards.prepare(operations)
         # Initialize from a solid template. Native first-wall conversion creates
         # the sheetmetal body; the stock empty SMT body breaks attached walls.
         templates = {

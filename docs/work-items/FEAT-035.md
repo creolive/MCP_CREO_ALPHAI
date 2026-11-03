@@ -127,3 +127,14 @@
 **仍未验**：其他枚举规格（M3–M12 其余行）、翻向、通孔与出口沉头、过深螺纹与非法型号的原生拒绝、旧直孔/沉孔/沉头回归、Creo 9/10。**caller 路径仍冻结**：`hole_standards.require_native_support()` 未改，`creo_hole` 未加 `standard` 参数，本轮只有探针在进程内 monkeypatch 绕过，`thread_metadata` 只在标准孔回执出现（普通孔回执不变，`bridge.compact_job` 白名单已加该字段）。
 
 **离线证据**：`tools/dev_check.py --work-item FEAT-035-standard-holes` → `success=true`、`unit_tests=passed`（含 `test_standard_holes` 11 项、`test_hole_depth_basis`、`test_native_countersink`）；`bridge.py build` 通过；`clang-format`（23.1.3）与 `ruff format` 已就地格式化，无新增风格回归。
+
+## 2026-11-03 A03 步骤3：开放入口并完成实机验收矩阵
+
+在步骤2 的单例基础上开放 caller 入口并按 P00 契约收口回执，用 `tools/test_adoption_standard_holes.py --live --confirm-session-usable` 一次跑完 20 例（离线 7 例 + 实机 13 例），全部通过。逐例明细、几何 oracle 与未测范围见 [A03 验收摘要](../development/ALPHAI-A03-ACCEPTANCE.md)；证据 `build/acceptance_standard_holes.json`，SHA256 `c1abf15ce44d2897868e9284b9d06fe71c1136cc3785f7efcb6b7e39a1036d9f`（最终格式化源码重建后重跑）。
+
+- **开放**：删除 `hole_standards.require_native_support()` 冻结门；`creo_hole` 新增 `standard` 形参且 `diameter` 在标准分支可省略（`placement/reference1/reference2` 前置，MCP 按名传参不受影响）。
+- **回执按契约拆分**：`thread_metadata{series,size,thread_depth_mm,table_id,table_sha256}` + `thread_metadata_verified`（只由创建后特征树回读决定）+ 附加诊断 `thread_readback`；普通孔回执不变。
+- **表值注入**：`hole_standards.prepare()` 在提交前把 `fastener_id`/`nominal_diameter_mm`/`tap_drill_mm`/`thread_depth_limit_mm` 注入操作，原生不再自行推导底孔；缺 `tap_drill_mm` 直接报错。
+- **实机覆盖**：M6x1、M8x1.25、M5x.8（基准面放置 + `flip=true`）、同位置 `flip=false` 对照（必须切不到料）、直孔/沉孔/沉头回归、4 类入口拒绝、安装孔表拒绝（`M6x9` → `-22`）、两操作计划回滚与随后继续编辑成功。
+- **两条新事实**：① 孔表是唯一权威——`M7x1` 在本机 ISO 表内可正常建孔，冻结表只决定对外提供哪些行；② `flip` 是方向开关，默认永远切进材料，翻向用例必须带"关闭翻向即无去料"的对照，不能只跑成功侧。
+- **仍未验**：Creo 9/10、M3/M4/M10/M12 实机、通孔标准孔（schema 现要求盲孔 depth）、出口沉头与双端沉孔、WorkBuddy 黑盒验收。
