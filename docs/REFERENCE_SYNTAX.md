@@ -87,7 +87,7 @@
 
 两种原生后端统一归一为 `(-180, 180]`，因此 `-135` 与 `225` 指向同一旋转（旧实现把负角 `+360`，两者走了不同路径）。失败回执带 `failed_transform`（`backend`、`rotation_deg`、`rotation_normalized_deg`、`translation_mm`、`keep_original`、`reference_count`、`reference_kinds`）。
 
-**`keep_original` 批量复制**：单个计划里对同一 body 连续复制超过 **4 个**时，第 5 个副本失败并整批回滚。本机 Creo 12.4 已两轮复现：5 op 与 7 op 批次都在 `operation_index=4` 失败，`failed_stage=execute_geometry_transform`、消息为 `Regeneration produced a failed, suppressed or incomplete feature`，前 4 个 op `effect_status=rolled_back`；与旋转角无关（−135 在范围内同样失败）、与批次长度无关。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**根因未定**。大批量复制请拆成 ≤4 个/批，并在下一批重新引用当前 body；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。
+**`keep_original` 批量复制（BUG-111，0.11.7 定因口径）**：`keep_original` 复制的是**整个当前体**，副本累积在**同一个 body** 内（特征数 +1/副本，不新增 body）。追加副本能否成功取决于"既有副本集合 × 该角度"，**不是副本数量上限**：本机 Creo 12.4 四个独立模型（C2/C3/C5 与 C6 批 B）同型失败于 `operation_index=4`（`failed_stage=execute_geometry_transform`，消息 `Regeneration produced a failed, suppressed or incomplete feature`，前序 op `effect_status=rolled_back`），而把 −135 放在首位的 C4 五个副本**全部成功**、拆成 4+3 两批的 C6 仍在批 B 首个 op 失败。**"单批 ≤4 个副本、下一批重新引用当前 body"的变通建议已作废**（拆批实测无效）：把副本集放在同一计划里提交即可；需要"固定原件"的副本时应另建模型。失败回执的 `failed_transform` 给出 `backend`、`rotation_deg`/`rotation_normalized_deg`、`keep_original`、`reference_count`，并附有界 `selection` 块（`requested_body_ids`、`selected_surface_count`、`model_counts_at_start`：`features`/`surfaces`/`bodies`/`active_bodies`，取自 op 开始时的巡检，巡检未提供的项记 `null`）；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**Creo 10/9 行为仍未验证**。
 
 ## 回转轴（revolve.axis，BUG-083）
 
