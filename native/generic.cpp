@@ -280,6 +280,14 @@ static ProError dimension_cb(ProDimension *dim, ProError status, ProAppData data
         ProDimensionTypeGet(dim, &type);
         ProBoolean relation_driven = PRO_B_FALSE;
         ProError relation_code = ProDimensionIsReldriven(dim, &relation_driven);
+        // FEAT-004: report the owning feature so a guard can pin the owner, and
+        // derive editability from the relation state instead of guessing. Both
+        // stay null when the query fails.
+        ProFeature owner = {};
+        ProError owner_code = ProDimensionOwnerfeatureGet(dim, &owner);
+        ProName owner_name = L"";
+        if (owner_code == PRO_TK_NO_ERROR)
+            ProModelitemNameGet(&owner, owner_name);
         list->push_back(
             {{"id", dim->id},
              {"value", value},
@@ -287,10 +295,147 @@ static ProError dimension_cb(ProDimension *dim, ProError status, ProAppData data
              {"type", (int)type},
              {"relation_query_code", relation_code},
              {"relation_driven",
-              relation_code == PRO_TK_NO_ERROR ? J(relation_driven == PRO_B_TRUE) : J(nullptr)}});
+              relation_code == PRO_TK_NO_ERROR ? J(relation_driven == PRO_B_TRUE) : J(nullptr)},
+             {"owner_feature_id", owner_code == PRO_TK_NO_ERROR ? J(owner.id) : J(nullptr)},
+             {"owner_feature_name",
+              owner_code == PRO_TK_NO_ERROR ? J(utf8(owner_name)) : J(nullptr)},
+             {"owner_query_code", owner_code},
+             {"editable",
+              relation_code == PRO_TK_NO_ERROR ? J(relation_driven != PRO_B_TRUE) : J(nullptr)}});
     }
     return PRO_TK_NO_ERROR;
 }
+// FEAT-004 dimension guards. The tolerance and the refusal contract mirror
+// src/creo_mechdog/dimension_guards.py; both sides must agree.
+static const double kDimensionGuardAbsolute = 1e-8;
+static const double kDimensionGuardRelative = 1e-8;
+
+static std::string guard_number(double value) {
+    char buffer[64] = {};
+    std::snprintf(buffer, sizeof(buffer), "%.10g", value);
+    return buffer;
+}
+
+static double guard_tolerance(double expected) {
+    double relative = std::fabs(expected) * kDimensionGuardRelative;
+    return relative > kDimensionGuardAbsolute ? relative : kDimensionGuardAbsolute;
+}
+
+struct DimensionTarget {
+    ProDimension dim;
+    int id;
+    double current;
+    double requested;
+    bool relation_driven;
+    bool symbol_known;
+    std::string symbol;
+    bool owner_known;
+    int owner_id;
+    std::string owner_name;
+};
+
+static DimensionTarget read_dimension_target(ProMdl board, const J &value) {
+    DimensionTarget target = {};
+    target.id = value["id"].get<int>();
+    target.requested = value["value"].get<double>();
+    CK(ProModelitemInit(board, target.id, PRO_DIMENSION, &target.dim));
+    ProBoolean relation_driven = PRO_B_FALSE;
+    CK(ProDimensionIsReldriven(&target.dim, &relation_driven));
+    target.relation_driven = relation_driven == PRO_B_TRUE;
+    CK(ProDimensionValueGet(&target.dim, &target.current));
+    ProName symbol = L"";
+    target.symbol_known = ProDimensionSymbolGet(&target.dim, symbol) == PRO_TK_NO_ERROR;
+    if (target.symbol_known)
+        target.symbol = utf8(symbol);
+    ProFeature owner = {};
+    target.owner_known = ProDimensionOwnerfeatureGet(&target.dim, &owner) == PRO_TK_NO_ERROR;
+    if (target.owner_known) {
+        target.owner_id = owner.id;
+        ProName owner_name = L"";
+        ProModelitemNameGet(&owner, owner_name);
+        target.owner_name = utf8(owner_name);
+    }
+    return target;
+}
+
+static std::string guard_owner_text(const DimensionTarget &target) {
+    if (!target.owner_known)
+        return "unknown";
+    return target.owner_name + " (id " + std::to_string(target.owner_id) + ")";
+}
+
+// Reads every target before the caller writes the first value, so a mismatch
+// leaves the model untouched instead of half-applied.
+static void check_dimension_targets(const std::vector<DimensionTarget> &targets, const J &values) {
+    for (size_t index = 0; index < targets.size(); ++index) {
+        const DimensionTarget &target = targets[index];
+        const J &value = values[index];
+        if (target.relation_driven)
+            throw std::runtime_error(
+                "Dimension " + std::to_string(target.id) +
+                " is controlled by relations; edit its driving parameter or relation instead");
+        const J *expected_value =
+            value.contains("expected_value") && !value["expected_value"].is_null()
+                ? &value["expected_value"]
+                : nullptr;
+        if (expected_value) {
+            double expected = expected_value->get<double>();
+            if (std::fabs(expected - target.current) > guard_tolerance(expected))
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) + " guard failed on value: expected " +
+                    guard_number(expected) + ", current " + guard_number(target.current) +
+                    ", owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current value");
+        }
+        const J *expected_symbol =
+            value.contains("expected_symbol") && !value["expected_symbol"].is_null()
+                ? &value["expected_symbol"]
+                : nullptr;
+        if (expected_symbol) {
+            std::string expected = expected_symbol->get<std::string>();
+            if (!target.symbol_known)
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) +
+                    " guard failed on symbol: expected \"" + expected +
+                    "\" but the dimension symbol is unknown, owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current symbol");
+            if (expected != target.symbol)
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) +
+                    " guard failed on symbol: expected \"" + expected + "\", current \"" +
+                    target.symbol + "\", owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current symbol");
+        }
+        const J *expected_owner =
+            value.contains("expected_owner") && !value["expected_owner"].is_null()
+                ? &value["expected_owner"]
+                : nullptr;
+        if (expected_owner) {
+            if (!target.owner_known)
+                throw std::runtime_error("Dimension " + std::to_string(target.id) +
+                                         " guard failed on owner: the owning feature is unknown; "
+                                         "re-read the model and resubmit with the current owner");
+            if (expected_owner->is_number_integer()) {
+                int expected = expected_owner->get<int>();
+                if (expected != target.owner_id)
+                    throw std::runtime_error(
+                        "Dimension " + std::to_string(target.id) +
+                        " guard failed on owner: expected feature id " + std::to_string(expected) +
+                        ", current " + guard_owner_text(target) +
+                        "; re-read the model and resubmit with the current owner");
+            } else {
+                std::string expected = expected_owner->get<std::string>();
+                if (expected != target.owner_name)
+                    throw std::runtime_error(
+                        "Dimension " + std::to_string(target.id) +
+                        " guard failed on owner: expected \"" + expected + "\", current " +
+                        guard_owner_text(target) +
+                        "; re-read the model and resubmit with the current owner");
+            }
+        }
+    }
+}
+
 static ProError collect_geom_ids(ProGeomitem *item, ProError status, ProAppData data) {
     if (!status)
         ((J *)data)->push_back({{"id", item->id}, {"type", (int)item->type}});
@@ -3792,17 +3937,13 @@ static void execute_operation_body(const J &op) {
         auto units = inspect_length_units(board);
         details["length_unit"] = length_unit_json(units, length_scale_to_mm(board, units));
     } else if (kind == "set_dimensions") {
-        for (auto v : op["values"]) {
-            ProDimension d;
-            CK(ProModelitemInit(board, v["id"], PRO_DIMENSION, &d));
-            ProBoolean relation_driven = PRO_B_FALSE;
-            CK(ProDimensionIsReldriven(&d, &relation_driven));
-            if (relation_driven)
-                throw std::runtime_error("Dimension " + std::to_string(v["id"].get<int>()) +
-                                         " is controlled by relations; edit its driving parameter "
-                                         "or relation instead");
-            CK(ProDimensionValueSet(&d, v["value"]));
-        }
+        std::vector<DimensionTarget> targets;
+        targets.reserve(op["values"].size());
+        for (const auto &value : op["values"])
+            targets.push_back(read_dimension_target(board, value));
+        check_dimension_targets(targets, op["values"]);
+        for (auto &target : targets)
+            CK(ProDimensionValueSet(&target.dim, target.requested));
         mark_sketch_geometry_stale();
     } else if (kind == "set_sketch_dimensions") {
         ProFeature f = feature(op["sketch"]);

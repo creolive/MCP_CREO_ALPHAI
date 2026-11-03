@@ -22,7 +22,14 @@
 
 ## 实现与证据
 
-本次仅补卡和规划，未实施新子项、未连接Creo、未运行产品测试、未合入main/发布；现有能力不因补卡变为本轮验证通过。后续记录提交、dirty、受测源码指纹、实际命令/环境与未测范围。
+### 2026-11-03 A02 实现（分支 `codex/FEAT-004-dimension-guards`，基线 `88a02dc`）
+
+- **契约**：[P00 接口冻结](../development/ALPHAI-ADOPTION-CONTRACT.md) 的 A02 段。
+- **Python**：`src/creo_mechdog/dimension_guards.py`（新）提供 `check_dimension_guard`、`has_guard`、`value_tolerance`；`schema.py::DimensionValue` 增加可选 `expected_value`/`expected_symbol`/`expected_owner`，拒绝布尔、非有限值与空归属，旧 `{id,value}` 载荷行为不变。
+- **原生**：`native/generic.cpp` 的 `set_dimensions` 改为两遍——先 `read_dimension_target` 读完每个目标的当前值、符号、关系状态与归属（`ProDimensionValueGet`/`ProDimensionSymbolGet`/`ProDimensionIsReldriven`/`ProDimensionOwnerfeatureGet`），再 `check_dimension_targets` 统一判定，最后才 `ProDimensionValueSet`；任一不符直接抛错，整计划按既有检查点回滚，不出现"批内第二项不符但第一项已写"。尺寸巡检记录新增 `owner_feature_id`/`owner_feature_name`/`owner_query_code`/`editable`（关系查询失败时 `editable=null`，不假装可编辑）。
+- **工具描述**：`server.py::creo_set_dimensions` 说明三个可选 pin 与拒绝语义。
+- **离线证据**：`tests/unit/test_dimension_guards.py` 17 项（判定 9 项 + schema 5 项 + 原生源码护栏 3 项）全通过；A02 工作树 `tools/dev_check.py --work-item FEAT-004-dimension-guards` → `success=true`、`unit_tests=passed`、无新增风格问题；`bridge.py build` 编译通过（`E:\Projects\codex-A02\build\creo_worker.exe`）。
+- **未验证**：实机 Creo 行为（本轮用户授权不连 Creo）——旧值漂移拒绝、归属不匹配拒绝、整批回滚与后续编辑、`owner_feature_*`/`editable` 的实际取值；Creo 9/10；WorkBuddy 黑盒。实机须在满足 BUG-001 条件后由会话负责人串行安排。
 
 ## 2026-11-04 跨工作树核验与后续动作
 
