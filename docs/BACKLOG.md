@@ -8,7 +8,7 @@
 
 ## 当前安排
 
-- **2026-11-03 0.11.7 发布（PATCH，R13 后续定因与实机补证批）：** 版本入口同步为 0.11.7（`version.py`、README 标题与当前版本段、两份种子清单、`docs/seed_package.json`），公开工具仍 **95 个**，接口与参数语义不变。交付内容：BUG-111 第 5 个 `keep_original` 副本失败的**定因**（选集语义 + 重合/交叠再生失败）与有界选集诊断 `failed_transform.selection`，撤销"≤4/批"变通建议；BUG-110 重放判据修正；开发者夹具判定口径与 `--cases`/`--model-suffix` 增强。BUG-108（9/9 未触发）与 BUG-110（`ack_success` 未实机发生）**保持开放**，不因本版关闭。台账 169 行与各分类状态不变。见[版本说明](RELEASE_NOTES_0.11.7.md)、[发布记录](validation/RELEASE-0.11.7.md)。
+- **2026-11-03 0.11.7 发布（PATCH，R13 后续定因与实机补证批）：** 版本入口同步为 0.11.7（`version.py`、README 标题与当前版本段、两份种子清单、`docs/seed_package.json`），公开工具仍 **95 个**，接口与参数语义不变。交付内容：BUG-111 第 5 个 `keep_original` 副本失败的**定因**（选集语义 + 重合/交叠再生失败）与有界选集诊断 `failed_transform.selection`，撤销"≤4/批"变通建议；BUG-110 重放判据修正；开发者夹具判定口径与 `--cases`/`--model-suffix` 增强。BUG-108（9/9 未触发）与 BUG-110（`ack_success` 未实机发生）**保持开放**，不因本版关闭。台账 169 行与各分类状态不变。见[版本说明](RELEASE_NOTES_0.11.7.md)、[发布记录](validation/RELEASE-0.11.7.md)、[Release v0.11.7](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.11.7)。
 
 - **2026-11-03 R13 后续开发计划（仅规划，用户接手实施）：** [BUG-111 定因、BUG-108/110 实机补证计划](superpowers/plans/2026-11-03-r13-followup-bug111-108-110.md)沿用三个既有 ID：先隔离副本场景与 body 选集，再依据证据最小修复；分别取得刚性平移放行与失败确认成功路径的真实证据。按 T0—T5 独立验收，未定因/未触发继续开放；未新增台账行、未执行测试或实机，169 行及现有分类状态保持。
 
