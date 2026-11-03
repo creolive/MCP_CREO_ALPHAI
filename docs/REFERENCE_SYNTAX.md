@@ -87,7 +87,7 @@
 
 两种原生后端统一归一为 `(-180, 180]`，因此 `-135` 与 `225` 指向同一旋转（旧实现把负角 `+360`，两者走了不同路径）。失败回执带 `failed_transform`（`backend`、`rotation_deg`、`rotation_normalized_deg`、`translation_mm`、`keep_original`、`reference_count`、`reference_kinds`）。
 
-**`keep_original` 批量复制**：单个计划里对同一 body 连续复制超过 **4 个**时，第 5 个副本可能以 `ProFeatureWithoptionsCreate = -1` 失败并整批回滚（外部 Creo 10 现象，根因未定）。大批量复制请拆成 ≤4 个/批，并在下一批重新引用当前 body；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。
+**`keep_original` 批量复制**：单个计划里对同一 body 连续复制超过 **4 个**时，第 5 个副本失败并整批回滚。本机 Creo 12.4 已两轮复现：5 op 与 7 op 批次都在 `operation_index=4` 失败，`failed_stage=execute_geometry_transform`、消息为 `Regeneration produced a failed, suppressed or incomplete feature`，前 4 个 op `effect_status=rolled_back`；与旋转角无关（−135 在范围内同样失败）、与批次长度无关。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**根因未定**。大批量复制请拆成 ≤4 个/批，并在下一批重新引用当前 body；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。
 
 ## 回转轴（revolve.axis，BUG-083）
 

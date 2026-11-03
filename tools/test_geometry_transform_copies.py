@@ -131,10 +131,10 @@ async def run_job(client, name: str, arguments: dict, record: dict) -> dict:
     return result
 
 
-def _transform(model_id: str, revision: int, label: str, angle: float) -> dict:
+def _op(label: str, angle: float) -> dict:
+    """One transform op; geometry_transform is only reachable inside a plan."""
     return {
-        "model_id": model_id,
-        "expected_revision": revision,
+        "op": "geometry_transform",
         "label": label,
         "references": [{"kind": "body"}],
         "translation": [0, 0, 0],
@@ -143,17 +143,56 @@ def _transform(model_id: str, revision: int, label: str, angle: float) -> dict:
     }
 
 
+def _plan(model_id: str, revision: int, ops: list[dict]) -> dict:
+    return {"model_id": model_id, "expected_revision": revision, "operations": ops}
+
+
+async def wait_ready(client, record: dict, budget: float = 300.0) -> dict:
+    """Wait for the service's own startup (worker verify) to settle, then report."""
+    deadline = time.monotonic() + budget
+    seen: list[dict] = []
+    while time.monotonic() < deadline:
+        status = await call(client, "creo_session_status", {})
+        if status.get("connected"):
+            record["startup_wait"] = seen
+            return status
+        state = status.get("state") or status.get("connection_state")
+        seen.append({"state": state, "message": str(status.get("message"))[:160]})
+        if state in ("disabled", "selection_required", "configuration_error"):
+            raise RuntimeError(f"session cannot become ready: {state}: {status.get('message')}")
+        await asyncio.sleep(3)
+    record["startup_wait"] = seen
+    raise RuntimeError(f"session did not become connected within {budget:.0f}s")
+
+
 async def scenario(record: dict) -> None:
     parameters = StdioServerParameters(
         command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT)
     )
     async with Client(parameters) as connected:
-        status = await call(connected, "creo_session_status", {})
+        status = await wait_ready(connected, record)
         record["session"] = {"connected": status.get("connected")}
-        assert status["connected"], status
         part = await call(connected, "creo_new_part", {})
-        model_id, revision = part["model_id"], part["revision"]
+        model_id = part["model_id"]
         record["model_id"] = model_id
+        created = part
+        for _ in range(300):
+            created = await call(connected, "creo_get_job", {"job_id": part["job_id"]})
+            if created["status"] not in ("queued", "running"):
+                break
+            await asyncio.sleep(1)
+        record["calls"].append(
+            {
+                "tool": "creo_new_part",
+                "job_id": part["job_id"],
+                "status": created["status"],
+                "stage": created.get("stage"),
+                "message": created.get("message"),
+            }
+        )
+        if created["status"] != "succeeded":
+            raise RuntimeError(f"new_part failed: {created.get('message')}")
+        revision = created["revision"]
         sketch = await run_job(
             connected,
             "creo_create_sketch",
@@ -193,53 +232,48 @@ async def scenario(record: dict) -> None:
         # 225 degrees is out of range: the refusal must happen before a job exists
         # and must name -135, so the caller never sees a bare kernel -1 for it.
         record["out_of_range_refusal"] = await rejected(
-            connected,
-            "creo_geometry_transform",
-            _transform(model_id, revision, "r13_copy_225", 225.0),
+            connected, "creo_execute_plan", _plan(model_id, revision, [_op("r13_copy_225", 225.0)])
         )
         # The same rotation inside the range.
         single = await run_job(
             connected,
-            "creo_geometry_transform",
-            _transform(model_id, revision, "r13_copy_neg135", -135.0),
+            "creo_execute_plan",
+            _plan(model_id, revision, [_op("r13_copy_neg135", -135.0)]),
             record,
         )
         if single["status"] == "succeeded":
             revision = single["revision"]
         # A five-op batch: each op is one copy, exactly as the external report ran it.
-        batch = {
-            "model_id": model_id,
-            "expected_revision": revision,
-            "operations": [
-                {
-                    "op": "geometry_transform",
-                    "label": f"r13_five_{index}",
-                    "references": [{"kind": "body"}],
-                    "rotation": [0, 0, angle],
-                    "keep_original": True,
-                }
-                for index, angle in enumerate(FIVE)
-            ],
-        }
-        five = await run_job(connected, "creo_execute_plan", batch, record)
+        five = await run_job(
+            connected,
+            "creo_execute_plan",
+            _plan(
+                model_id,
+                revision,
+                [_op(f"r13_five_{index}", angle) for index, angle in enumerate(FIVE)],
+            ),
+            record,
+        )
         if five["status"] == "succeeded":
             revision = five["revision"]
-        seven = {
-            "model_id": model_id,
-            "expected_revision": revision,
-            "operations": [
-                {
-                    "op": "geometry_transform",
-                    "label": f"r13_seven_{index}",
-                    "references": [{"kind": "body"}],
-                    "rotation": [0, 0, angle],
-                    "keep_original": True,
-                }
-                for index, angle in enumerate(SEVEN)
-            ],
-        }
+        model = await call(connected, "creo_inspect_model", {"model_id": model_id})
+        record["counts_after_five"] = model.get("counts")
+        seven = _plan(
+            model_id,
+            revision,
+            [_op(f"r13_seven_{index}", angle) for index, angle in enumerate(SEVEN)],
+        )
         result = await run_job(connected, "creo_execute_plan", seven, record)
         record["final_revision"] = result.get("revision") or revision
+        final = await call(connected, "creo_inspect_model", {"model_id": model_id})
+        record["counts_after_seven"] = final.get("counts")
+
+
+def describe(failure: BaseException) -> str:
+    """Flatten nested ExceptionGroups so the report keeps the real cause."""
+    if isinstance(failure, BaseExceptionGroup):
+        return " | ".join(describe(item) for item in failure.exceptions)
+    return f"{type(failure).__name__}: {failure}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -266,8 +300,8 @@ def main(argv: list[str] | None = None) -> int:
     error = None
     try:
         asyncio.run(scenario(record))
-    except Exception as failure:  # noqa: BLE001 - the report is the product here
-        error = f"{type(failure).__name__}: {failure}"
+    except BaseException as failure:  # noqa: BLE001 - the report is the product here
+        error = describe(failure)
     record["elapsed_s"] = round(time.monotonic() - started, 1)
     if error:
         record["error"] = error

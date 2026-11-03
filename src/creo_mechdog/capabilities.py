@@ -404,10 +404,11 @@ def families() -> dict:
                 "both backends normalize into that same interval, so -135 and 225 address the "
                 "same rotation; a failed transform reports failed_transform with backend, "
                 "requested and normalized angles, translation, keep_original and reference "
-                "count, and the plan rolls back; keep_original copying more than four times in "
-                "one batch may fail at the fifth copy (external Creo 10 report, cause not yet "
-                "identified) so split large copy sets and re-reference current body IDs; body "
-                "branch can require Flexible Modeling license; copy-original, multiple bodies, "
+                "count, and the plan rolls back; the fifth keep_original copy in one batch fails "
+                "after regeneration (reproduced on Creo 12.4 at operation index 4 regardless of "
+                "angle or batch length, also reported on Creo 10; cause not identified) so copy at "
+                "most four times per batch and re-reference the current body ID in the next batch; "
+                "body branch can require Flexible Modeling license; copy-original, multiple bodies, "
                 "custom csys, complex quilts and datum/curve combinations require local validation"
             ),
         },
