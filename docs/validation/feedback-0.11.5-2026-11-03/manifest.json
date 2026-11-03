@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "work_item": "DEV-065",
+  "task": "R13",
+  "archived_at": "2026-11-03",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "archive_policy": "Five originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. This archive is the 0.11.5 batch and is separate from feedback-0.10.0-2026-10-31, feedback-0.10.0-2026-11-01, feedback-0.11.0-2026-11-01 and feedback-0.11.1-2026-11-02; the five directories are never merged.",
+  "source_baseline": {
+    "version": "0.11.5",
+    "public_tools": 95,
+    "upstream": "main@b3f6d43",
+    "branch": "codex/DEV-065-r13-feedback0115",
+    "dirty": true,
+    "dirty_note": "Working tree carries only local, non-source residue: modified session_activity.json (runtime activity log still tracked since 0.4.6) and untracked tool workspaces (.codebuddy/, .workbuddy/, .zcode/). None of them enter the archive or the release package.",
+    "source_fingerprint": "build/source.sha256 = d89a2006c94eeff697b7b595c68cca8b62793a94442bee03a30d64e3df33ebc2 (0.11.5 baseline, before this batch)",
+    "release_note": "v0.11.5 published as tag v0.11.5 -> b3f6d43; this batch does not reuse or overwrite it."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.11.5",
+  "archive_root": "docs/validation/feedback-0.11.5-2026-11-03/originals",
+  "file_count": 5,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads, plus full byte sequence comparison",
+    "length_match": "5/5",
+    "sha256_match": "5/5",
+    "byte_identical": "5/5"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-11-02_CREO_0.11.5_离线证据工具硬依赖git且负例输出易误判.md",
+      "source_relative_path": "2026-11-02_CREO_0.11.5_离线证据工具硬依赖git且负例输出易误判.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.5\\2026-11-02_CREO_0.11.5_离线证据工具硬依赖git且负例输出易误判.md",
+      "bytes": 6539,
+      "sha256": "64a904590d8988d8ee7a74d17f8bc0b63c08b46b331baa52fecb8f8489adbcdc",
+      "content_note": "Creo 9 SDK 编译与 95 工具冒烟全过、未发现产品缺陷；37 个 tools/ 脚本硬依赖 PATH 中的 git（32 处 check=True、无兜底），无 git 时全量测试 38 errors、离线证据报告无法生成；负例测试的红字输出与真实失败视觉同形；session_activity.json 仍被 git 跟踪"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/2026-11-02CREO10.0.0.0-0.11.5-刚性平移仍被拒且G5四版未动.md",
+      "source_relative_path": "2026-11-02CREO10.0.0.0-0.11.5-刚性平移仍被拒且G5四版未动.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.5\\2026-11-02CREO10.0.0.0-0.11.5-刚性平移仍被拒且G5四版未动.md",
+      "bytes": 9691,
+      "sha256": "f5a37fbcb96eca97d93c722920589998e67a582b04849801ac2d7cd5f6ca4559",
+      "content_note": "Creo 10 实机建模：BUG-107 门控生效、盲孔 depth_basis 与 save 引导已闭环；刚性平移 1.6e-5 mm 仍按 1e-5 拒绝但诊断已达标；G5 三 op 四版逐字未变；装配恢复死路仍在 reconciliation.py:526；geometry_transform keep_original 第 5 个副本必失败且 225° 单独失败"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/2026-11-03_CREO_0.11.5_new_part首建超时卡死verify_model与作者用例精度边界.md",
+      "source_relative_path": "2026-11-03_CREO_0.11.5_new_part首建超时卡死verify_model与作者用例精度边界.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.5\\2026-11-03_CREO_0.11.5_new_part首建超时卡死verify_model与作者用例精度边界.md",
+      "bytes": 11646,
+      "sha256": "d6350cd5a03b781edfa03c82ec4bb57ac65ab82e4c67e9548cc003b70d9d81c1",
+      "content_note": "Creo 9 实机：new_part 首建在 PHASE=verify_model 后停滞约 10 分钟、服务端预算到点转 unknown_outcome、Creo 随之 hung，重发同请求 30 秒成功；BUG-082 官方套件 5/5 通过（补上作者缺的外部 Creo 9 证据）；update_sketch_geometry 端点缝隙无容差提示"
+    },
+    {
+      "id": "F04",
+      "relative_path": "originals/2026-11-03CREO10.0.0.0-0.11.5曲面修剪仅低层可达与quilt引用断链.md",
+      "source_relative_path": "2026-11-03CREO10.0.0.0-0.11.5曲面修剪仅低层可达与quilt引用断链.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.5\\2026-11-03CREO10.0.0.0-0.11.5曲面修剪仅低层可达与quilt引用断链.md",
+      "bytes": 12756,
+      "sha256": "f8a41f459dcd6c29cd2db40539d7802ed3cd54b7a0a1b456acd2d07da3696eff",
+      "content_note": "Creo 10 纯曲面法重跑：capabilities 分页与中心线草图就地改已修、feature_state delete 新增、诊断密度大幅提升、通道互斥符合契约；曲面修剪只能手写 10 元素树、inspect_model 不枚举 quilt、quilt_feature 对 trim 结果 -4、loft 无 surface 模式、缺 boundary_blend 与 quilt_offset"
+    },
+    {
+      "id": "F05",
+      "relative_path": "originals/20261102_CREO_v0.11.5_失败信息重写与draft_failure落地_preview关闭_端点焊接本身仍未修.md",
+      "source_relative_path": "20261102_CREO_v0.11.5_失败信息重写与draft_failure落地_preview关闭_端点焊接本身仍未修.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.5\\20261102_CREO_v0.11.5_失败信息重写与draft_failure落地_preview关闭_端点焊接本身仍未修.md",
+      "bytes": 5998,
+      "sha256": "f2513cff104c218340e26f92b03687f5593f7c5c195008afdb0849356770d259",
+      "content_note": "第 12 轮回归：R3 空件 preview skipped_no_geometry 已修；R1 gear10 仍 -1 但失败信息已重写（簇内间隙与 weldability 指引）；R2 draft_failure 诊断块落地但 flip=false 成功路径仍回显 true；端点焊接本身仍未实现（建议 1e-9 档吸附或前置拒绝）"
+    }
+  ]
+}

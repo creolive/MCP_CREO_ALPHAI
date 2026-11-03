@@ -79,3 +79,6 @@ docs/validation/feedback-0.11.0-2026-11-01/originals/** -text
 
 # DEV-064 R12: preserve the two 0.11.1 feedback originals byte for byte.
 docs/validation/feedback-0.11.1-2026-11-02/originals/** -text
+
+# DEV-065 R13: preserve the five 0.11.5 feedback originals byte for byte.
+docs/validation/feedback-0.11.5-2026-11-03/originals/** -text

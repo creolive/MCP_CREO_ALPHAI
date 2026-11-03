@@ -31,3 +31,11 @@
 ## 与本批关系
 
 本批（R12 / 0.11.4）**不做**实现，只归档 0.11.1 的"仍未实现"事实；P12 仍只能走 194 ops 替代路线，贴近 200 ops 上限的风险由 FEAT-054 处理。
+
+## 2026-11-03 R13 增量：0.11.5 曲面链逐字未变（Creo 10 实测）
+
+- 0.11.5 反馈 F04（Creo 10）逐项复测：`creo_check_environment` / capabilities 的 `surface_solid` 家族 scope 与 limits 与 0.3.5、0.11.1 **逐字一致**，`operations` 仍 60 项；`surface_loft` / `project_curve` / `surface_trim` 仍无高层工具。
+- 新发现（已登记在本卡待办，不在 R13 实现）：`inspect_model(section="surfaces")` 对纯曲面模型返回 `[]`（走 `ProSolidBodySurfaceVisit` 只枚举实体面）；`{"kind":"quilt_feature"}` 对 trim 结果特征在 `ProFeatureGeomitemVisit` 报 `-4`，导致"修剪 → 缝合"第二环无合法引用；`counts.surfaces/edges` 恒 0、无 quilt 面积/`closed`。
+- 曲面前提事实：低层 `creo_create_feature_tree` 已能修剪（10 元素树，job `7045d780…`，`saved_file_reloaded_and_verified=true`），漏 `PRO_E_MATERIAL_SIDE` 会再生失败且无缺口提示；`PRO_FEAT_TRIM` 在 Creo 10 SDK 不存在，须 `PRO_FEAT_CUT` + `PRO_E_SRF_TRIM_TYPE`。
+- MVR 顺序维持报告方建议：`inspect_model(section="quilts")` → `creo_surface_trim` → `creo_quilt_merge` → `creo_quilt_offset` → `creo_boundary_blend` → `loft{mode:"surface"}`。
+- R13 只登记事实与顺序，**不实现**；若后续开工，先做 quilts 查询（不解决它，后续全部卡住）。
