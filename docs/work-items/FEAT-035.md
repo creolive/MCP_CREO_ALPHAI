@@ -82,3 +82,12 @@
 沿用本 ID 的“螺纹/标准孔”余项，不重做已交付沉孔/沉头/tip 口径。拟增加受安装孔表约束的 `standard={series,size,thread_depth}`，原生核验系列/规格/底孔与保存的螺纹元数据；不是实体螺旋牙型。旧 `diameter` 仅在新标准分支可省略，其余行为兼容。
 
 负责人 unassigned；接口、文件、针对性回归、实机矩阵见 [A03 子计划](../superpowers/plans/2026-11-03-alphai-a-foundation-plan.md)，协调 [DEV-067](DEV-067.md)。本次未实现、未测试/连 Creo；本卡原状态、已交付版本和其他开放范围保持，后续仅按新证据回填本子项。
+
+## 2026-11-03 A03 标准螺纹孔离线冻结（未开放，原生未验证）
+
+分支 `codex/FEAT-035-standard-holes`，基线 `88a02dc`。本轮用户授权**不连 Creo**，只交付离线可判定的部分。
+
+- **已实现**：`src/creo_mechdog/hole_standards.py` 冻结 ISO 公制粗牙表（M3—M12 的名义直径、螺距、底孔、可用螺纹深度上限），`resolve_standard_hole(series,size)` 只接受表名（拒绝空名、`..`、路径、未知系列/规格），返回 `table_id` 与表内容 SHA256；`schema.HoleOp` 新增可选 `standard={series,size,thread_depth}`，与沉孔/沉头互斥、`thread_depth>0` 且不超表限、`diameter` 必须等于名义直径；旧 `{diameter,depth}` 载荷行为不变。
+- **未开放（关键）**：原生螺纹元素树与安装孔表（`.hol`）本轮没有实机核验。按子计划"A03 步骤 3 需先对照本机 SDK/表格式冻结元素树"的要求，`HoleOp` 在通过全部字段校验后**明确拒绝**（`standard threaded holes are frozen offline but not enabled…`），避免产出"看起来有螺纹、实际是普通直孔"的结果；`creo_hole` 不新增 `standard` 参数，避免死参数。本子项状态为**冻结待实机**，不算交付。
+- **离线证据**：`tests/unit/test_standard_holes.py` 11 项（表解析 4 项 + schema 7 项）通过；`tools/dev_check.py --work-item FEAT-035-standard-holes` → `success=true`、`unit_tests=passed`；本轮未改原生代码，故未新增原生构建。
+- **下一步（需会话窗口）**：核对安装 `.hol` 与 `ProHole.h`/`ProElemId.h` 的螺纹元素，创建一枚 M6 标准孔并读回系列、规格、螺纹属性与底孔去料，再把 `require_native_support()` 换成真实实现并补 `thread_metadata`/`thread_metadata_verified` 回执与实机矩阵。

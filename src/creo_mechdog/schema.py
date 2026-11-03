@@ -21,6 +21,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
+from creo_mechdog.hole_standards import require_native_support, resolve_standard_hole
 from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
@@ -559,6 +560,26 @@ class Countersink(StrictModel):
     angle: Annotated[float, Field(gt=0, lt=180)]
 
 
+class StandardHoleSpec(StrictModel):
+    """FEAT-035 frozen shape: a table row plus a usable thread depth."""
+
+    series: str
+    size: str
+    thread_depth: Annotated[float, Field(gt=0)]
+
+    @field_validator("series", "size", mode="before")
+    @classmethod
+    def table_name(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("standard hole series and size are table names, not booleans")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("standard hole series and size must not be empty")
+        text = value.strip()
+        if text in {".", ".."} or "/" in text or "\\" in text or ":" in text:
+            raise ValueError("standard hole series and size must be table names, not paths")
+        return text
+
+
 class HoleOp(StrictModel):
     op: Literal["hole"]
     label: Label
@@ -572,6 +593,7 @@ class HoleOp(StrictModel):
     flip: bool = False
     counterbore: Counterbore | None = None
     countersink: Countersink | None = None
+    standard: StandardHoleSpec | None = None
 
     @model_validator(mode="after")
     def hole_options_valid(self):
@@ -590,6 +612,26 @@ class HoleOp(StrictModel):
             )
             if self.depth is not None and sink_depth >= self.depth:
                 raise ValueError("countersink cone must be shallower than blind hole depth")
+        if self.standard is not None:
+            if self.counterbore is not None or self.countersink is not None:
+                raise ValueError(
+                    "standard threaded holes cannot be combined with counterbore or countersink"
+                )
+            row = resolve_standard_hole(self.standard.series, self.standard.size)
+            if abs(self.diameter - row["nominal_diameter_mm"]) > 1e-9:
+                raise ValueError(
+                    f"standard hole {row['series']} {row['size']} has a nominal diameter of "
+                    f"{row['nominal_diameter_mm']} mm, but diameter is {self.diameter} mm"
+                )
+            if self.standard.thread_depth > row["thread_depth_limit_mm"]:
+                raise ValueError(
+                    f"thread depth {self.standard.thread_depth} mm exceeds the "
+                    f"{row['series']} {row['size']} table limit of "
+                    f"{row['thread_depth_limit_mm']} mm"
+                )
+            # Frozen contract, unverified native path: refuse instead of
+            # creating a plain hole that only looks threaded.
+            require_native_support()
         return self
 
 
