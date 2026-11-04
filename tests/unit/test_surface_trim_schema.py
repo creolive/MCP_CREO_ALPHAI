@@ -113,18 +113,19 @@ class SurfaceTrimSchemaTests(unittest.TestCase):
                 ]
             )
 
-    def test_surface_trim_is_gated_until_live_evidence(self):
-        # S00 F03 evidence shows the quilt reference on a trim result failing
-        # with ProFeatureGeomitemVisit -4; the operation is registered so the
-        # removal hook and the refusal path have one home, but it is listed as
-        # unavailable: server.py removes creo_surface_trim from the MCP surface
-        # and submissions are refused before a native job is queued.
+    def test_surface_trim_is_published_after_live_evidence(self):
+        # 2026-11-04 live (Creo 12.4.0.0): both keep_side values built, saved and
+        # reloaded. The retained side is the tool plane's +normal side for "one"
+        # (700 mm2 of the 800 mm2 fill cut at x=5) and the -normal side for "two"
+        # (100 mm2), with the retained bbox on the matching side. The operation
+        # is therefore published instead of gated; the quilt reference on the
+        # result still answers ProFeatureGeomitemVisit -4 and is reported as
+        # kept_quilt_source="retrimmed_target_quilt_visit_failed".
         from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
 
         self.assertIn("surface_trim", REGISTERED_OPERATIONS)
-        self.assertIn("surface_trim", UNAVAILABLE_OPERATIONS)
+        self.assertNotIn("surface_trim", UNAVAILABLE_OPERATIONS)
         server = (ROOT / "server.py").read_text(encoding="utf-8")
-        self.assertIn('"creo_" + _unavailable', server)
         self.assertIn("async def creo_surface_trim(", server)
 
 
@@ -160,11 +161,15 @@ class SurfaceTrimNativeSourceTests(unittest.TestCase):
             "kept_quilt_id",
         ):
             self.assertIn(field, source)
-        # keep_side one/two is mapped to the SDK side enum, never to a GUI guess.
+        # keep_side one/two is mapped to the SDK side enums, never to a GUI
+        # guess. Live 2026-11-04: the primary quilt side alone did not move the
+        # retained region, the material side does, so both carry keep_side.
         self.assertIn("PRO_TRIM_PRIM_QLT_SIDE_ONE", source)
         self.assertIn("PRO_TRIM_PRIM_QLT_SIDE_TWO", source)
         self.assertIn("PRO_KEEP_TRIM_SURF_OPT_NO", source)
         self.assertIn("PRO_TRIM_MATL_SIDE_ONE", source)
+        self.assertIn("PRO_TRIM_MATL_SIDE_TWO", source)
+        self.assertIn("material_side", source)
 
     def test_driver_declares_trim_case(self):
         driver = DRIVER.read_text(encoding="utf-8")

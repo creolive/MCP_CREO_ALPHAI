@@ -99,14 +99,20 @@ static void generic_quilt_merge(const J &op) {
     // The merge owns the resulting quilt; zero or several is not a result we
     // can hand to thicken or report on.
     J ids = J::array();
-    CK(ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &ids));
+    // A trim re-trims its target and answers -4 here (live 2026-11-04); a merge
+    // owns a new quilt in this release, so a failed visit is reported instead of
+    // being raised as a raw Toolkit error.
+    ProError result_visit =
+        ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &ids);
     int result_id = -1;
-    if (ids.size() == 1)
+    if (result_visit == PRO_TK_NO_ERROR && ids.size() == 1)
         result_id = ids[0]["id"];
     MeasurementOutcome area;
     MeasurementOutcome closed;
     if (result_id < 0) {
-        area.reason = ids.size() > 1 ? "result_quilt_ambiguous" : "result_quilt_missing";
+        area.reason = result_visit != PRO_TK_NO_ERROR
+                          ? "result_quilt_visit_failed"
+                          : (ids.size() > 1 ? "result_quilt_ambiguous" : "result_quilt_missing");
         closed.reason = area.reason;
     } else {
         ProQuilt result = nullptr;
@@ -123,9 +129,17 @@ static void generic_quilt_merge(const J &op) {
     J merged = area_fields_json(area, units, scale, "area_mm2", "area_status");
     for (auto it = merged.begin(); it != merged.end(); ++it)
         details[it.key()] = it.value();
-    bool is_open = closed.reason == "quilt_is_open";
+    bool is_open = quilt_closed_is_open(closed);
     details["result_quilt_id"] = result_id < 0 ? J(nullptr) : J(result_id);
-    details["closed"] = closed.available ? J(true) : J(is_open ? false : nullptr);
+    details["result_quilt_visit_code"] = (int)result_visit;
+    // Branch-by-branch: a bool/nullptr ternary folds into nullptr on MSVC and
+    // reports null for an open quilt (live 2026-11-04 on the quilts section).
+    J closed_json = nullptr;
+    if (closed.available)
+        closed_json = true;
+    else if (is_open)
+        closed_json = false;
+    details["closed"] = closed_json;
     details["closed_status"] = measurement_status_json(closed, units, scale);
     details["merge_type"] = "join";
     details["inputs"] = {{"target_quilt_id", first_id}, {"tool_quilt_id", second_id}};

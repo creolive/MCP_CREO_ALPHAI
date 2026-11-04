@@ -40,24 +40,30 @@ static ProSelection surface_trim_tool_selection(const J &reference, ProVector no
         "variant is not part of this release");
 }
 
-// The retained region after the trim. Review focus 1 of the plan: a trim may
-// modify an existing quilt instead of owning a new PRO_QUILT geometry item, so
-// zero items are reported through the re-trimmed target, several are refused.
-static int surface_trim_kept_quilt(ProFeature feature, int target_id, const char *&source) {
+// The retained region after the trim. Review focus 1 of the plan, confirmed on
+// hardware (2026-11-04): visiting PRO_QUILT on a trim feature returns -4, the
+// same failure 0.11.7 F03 reported. A trim re-trims the target quilt instead
+// of owning a new geometry item, so a failed visit is not fatal: fall back to
+// the target quilt and record the visit code plus where the id came from.
+static int surface_trim_kept_quilt(ProFeature feature, int target_id, const char *&source,
+                                   ProError &visit_code) {
     J ids = J::array();
-    CK(ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &ids));
-    if (ids.size() == 1) {
-        source = "feature_quilt_geomitem";
-        return ids[0]["id"];
+    visit_code = ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &ids);
+    if (visit_code == PRO_TK_NO_ERROR) {
+        if (ids.size() == 1) {
+            source = "feature_quilt_geomitem";
+            return ids[0]["id"];
+        }
+        if (ids.size() > 1)
+            throw std::runtime_error("Trim feature owns " + std::to_string((int)ids.size()) +
+                                     " quilts; the retained region is ambiguous");
     }
-    if (ids.size() > 1)
-        throw std::runtime_error("Trim feature owns " + std::to_string((int)ids.size()) +
-                                 " quilts; the retained region is ambiguous");
-    // No direct geometry item: the result may be the trimmed target itself.
+    // No directly owned geometry item: the result is the re-trimmed target.
     ProQuilt requery = nullptr;
     if (ProQuiltInit((ProSolid)board, target_id, &requery))
         return -1;
-    source = "retrimmed_target_quilt";
+    source = visit_code == PRO_TK_NO_ERROR ? "retrimmed_target_quilt"
+                                           : "retrimmed_target_quilt_visit_failed";
     return target_id;
 }
 
@@ -86,7 +92,14 @@ static void generic_surface_trim(const J &op) {
     ProSelection tool_selection =
         surface_trim_tool_selection(op.at("tool"), tool_normal, tool_normal_known);
 
+    // §4.5: keep_side selects the retained region. The 2026-11-04 live probe
+    // (build/_live_trim_probe.py) measured that PRO_E_PRIMARY_QLTSIDE alone does
+    // not move the retained region: keep_side one and two both kept the same
+    // 700 mm2 side of an asymmetric plane cut through the 40x20 fill. The
+    // material side is the element that flips it, so both elements follow
+    // keep_side and can never disagree.
     int primary_side = keep_side == "one" ? PRO_TRIM_PRIM_QLT_SIDE_ONE : PRO_TRIM_PRIM_QLT_SIDE_TWO;
+    int material_side = keep_side == "one" ? PRO_TRIM_MATL_SIDE_ONE : PRO_TRIM_MATL_SIDE_TWO;
 
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_CUT);
@@ -98,9 +111,9 @@ static void generic_surface_trim(const J &op) {
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
     ref(root, PRO_E_TRIM_QUILT, target_selection);
     ref(root, PRO_E_STD_USEQLT_QLT, tool_selection);
-    // §4.5: material side and "keep trim surface" are fixed in this release;
-    // only the primary quilt side follows keep_side.
-    integer(root, PRO_E_MATERIAL_SIDE, PRO_TRIM_MATL_SIDE_ONE);
+    // "Keep trim surface" stays off in this release; only the two side
+    // elements follow keep_side.
+    integer(root, PRO_E_MATERIAL_SIDE, material_side);
     integer(root, PRO_E_PRIMARY_QLTSIDE, primary_side);
     integer(root, PRO_E_KEEP_TRIM_SURF_OPT, PRO_KEEP_TRIM_SURF_OPT_NO);
     ProFeature feature = create(root);
@@ -112,7 +125,8 @@ static void generic_surface_trim(const J &op) {
     CK(ProFeatureStatusGet(&feature, &status));
 
     const char *kept_source = nullptr;
-    int kept_id = surface_trim_kept_quilt(feature, target_id, kept_source);
+    ProError kept_visit_code = PRO_TK_NO_ERROR;
+    int kept_id = surface_trim_kept_quilt(feature, target_id, kept_source, kept_visit_code);
     MeasurementOutcome area_after;
     if (kept_id < 0) {
         area_after.reason = "kept_quilt_unresolved";
@@ -132,6 +146,9 @@ static void generic_surface_trim(const J &op) {
     details["keep_side"] = keep_side;
     details["kept_quilt_id"] = kept_id < 0 ? J(nullptr) : J(kept_id);
     details["kept_quilt_source"] = kept_source ? J(kept_source) : J(nullptr);
+    // Where the retained id came from, and what the direct visit said. F03's
+    // -4 stays visible instead of being hidden behind a fallback.
+    details["kept_quilt_visit_code"] = (int)kept_visit_code;
     // §4.5 kept_side_basis. tool_normal is a real read only for a datum-plane
     // tool; centroids have no documented quilt query here, so they stay null
     // instead of being estimated from a bounding box, and signed_offset_mm is
@@ -143,7 +160,7 @@ static void generic_surface_trim(const J &op) {
     details["kept_side_basis"] = {
         {"keep_side", keep_side},
         {"primary_quilt_side_value", primary_side},
-        {"material_side_value", PRO_TRIM_MATL_SIDE_ONE},
+        {"material_side_value", material_side},
         {"tool_normal", tool_normal_json},
         {"target_centroid", nullptr},
         {"kept_centroid", nullptr},
@@ -151,15 +168,36 @@ static void generic_surface_trim(const J &op) {
         {"centroid_status",
          {{"available", false},
           {"reason", "quilt_centroid_not_measured"},
-          {"note", "the retained-side direction is not enforced until a live serial window "
-                   "measures the one/two binding (plan S02 step 3, contract §4.5 P3)"}}},
+          {"note", "the retained side is proven by the measured area of the two independent "
+                   "keep_side runs; a quilt centroid query is still unavailable"}}},
     };
-    stage_operation_result(details);
-
-    if (status != PRO_FEAT_ACTIVE)
+    // A trim that does not regenerate is a hard failure, but the caller needs
+    // the raw reason instead of a guess: the status code, the resolved ids and
+    // whether the tool was a datum plane or a quilt. The block is staged with
+    // the measurement fields already taken, so the failed operation record
+    // carries both sides (execute_operation keeps the staged result).
+    if (status != PRO_FEAT_ACTIVE) {
+        J owned = J::array();
+        ProError owned_code =
+            ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &owned);
+        details["regeneration"] = {{"failed_stage", "surface_trim_regeneration"},
+                                   {"feature_id", feature.id},
+                                   {"feature_status", (int)status},
+                                   {"target_quilt_id", target_id},
+                                   {"tool_kind", tool_normal_known ? "datum_plane" : "quilt"},
+                                   {"primary_quilt_side_value", primary_side},
+                                   {"material_side_value", material_side},
+                                   {"owned_quilt_visit_code", (int)owned_code},
+                                   {"owned_quilt_ids", owned}};
+        stage_operation_result(details);
         throw std::runtime_error(
-            "Surface trim regeneration failed; check that the tool actually intersects the "
-            "target quilt and that keep_side names the retained region");
+            "Surface trim regeneration failed (feature_status=" + std::to_string((int)status) +
+            ", feature_id=" + std::to_string(feature.id) +
+            ", target_quilt_id=" + std::to_string(target_id) +
+            ", tool=" + (tool_normal_known ? "datum_plane" : "quilt") + ", keep_side=" + keep_side +
+            "); check that the tool actually intersects the target quilt");
+    }
+    stage_operation_result(details);
     // Honest success test: a trim that removes nothing is a failure, not a
     // success with equal areas. Unit-unknown runs keep their null areas and
     // are judged by the geometry statuses instead.

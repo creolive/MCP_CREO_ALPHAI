@@ -150,6 +150,13 @@ static MeasurementOutcome quilt_closed_native(ProQuilt quilt) {
     return out;
 }
 
+// true only when the probe explicitly reported an open quilt. Decided from the
+// query code: comparing the reason char* with a literal is a pointer compare
+// and silently returns false whenever the compiler does not pool the literals.
+static bool quilt_closed_is_open(const MeasurementOutcome &closed) {
+    return !closed.available && closed.query_code == PRO_TK_INVALID_TYPE;
+}
+
 // Curve length in native units (ProCurveLengthEval).
 static MeasurementOutcome curve_length_native(ProCurve curve) {
     MeasurementOutcome out;

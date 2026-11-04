@@ -151,9 +151,15 @@ ROUTE_HISTORY: list[dict[str, str]] = [
     {
         "route": "surface_trim: ProTrim.h use-quilt variant",
         "task": "S02 / FEAT-039",
-        "status": "unverified",
-        "evidence": "the low-level 10-element tree succeeded externally; the high "
-        "level entry has not been verified on this machine",
+        "status": "feasible",
+        "evidence": "live 2026-11-04 on this machine (Creo 12.4.0.0), two independent "
+        "models: a 40x20 fill cut at x=5 by a datum plane measured 700 mm2 for "
+        "keep_side=one and 100 mm2 for two with the retained bbox on the matching "
+        "side, a cylinder measured 314.16/942.48, both saved and reloaded. The "
+        "binding is driven by PRO_E_MATERIAL_SIDE, not PRO_E_PRIMARY_QLTSIDE alone, "
+        "and a datum-plane tool needs an axis/id reference because a label is not "
+        "honoured; both corrections are in build/_live_trim_report.json and "
+        "build/surface_chain/20261104-094447-635200/report.json",
     },
 ]
 
@@ -300,15 +306,16 @@ PROBES: list[dict[str, Any]] = [
         "create": [
             "new part",
             "40 x 20 mm planar rectangle quilt via surface_fill (oracle O3)",
-            "a datum plane through x=20 with normal +X as the trimming tool",
+            "a datum plane at x=5 (normal +X) as the trimming tool, referenced "
+            "geometrically ({kind:'datum_plane',axis:'x'}); a label on that kind is "
+            "dropped by the resolver and must not be used",
             "PRO_E_FEATURE_TYPE=PRO_FEAT_CUT, PRO_E_FEATURE_FORM=PRO_USE_SURFS, "
-            "PRO_E_SRF_TRIM_TYPE=PRO_E_SURF_TRIM_USE_QLT and "
+            "PRO_E_SRF_TRIM_TYPE=PRO_SURF_TRIM_USE_QLT and "
             "PRO_E_SURF_TRIM_TYPE=PRO_SURF_TRIM_USE_QLT, PRO_E_TRIM_QUILT=target, "
             "PRO_E_STD_USEQLT_QLT=datum plane, "
-            "PRO_E_MATERIAL_SIDE=PRO_TRIM_MATL_SIDE_ONE, "
             "PRO_E_KEEP_TRIM_SURF_OPT=PRO_KEEP_TRIM_SURF_OPT_NO",
-            "run twice, PRO_E_PRIMARY_QLTSIDE=PRO_TRIM_PRIM_QLT_SIDE_ONE then "
-            "PRO_TRIM_PRIM_QLT_SIDE_TWO",
+            "run twice: PRO_E_MATERIAL_SIDE=PRO_TRIM_MATL_SIDE_ONE with "
+            "PRO_E_PRIMARY_QLTSIDE=PRO_TRIM_PRIM_QLT_SIDE_ONE, then both TWO",
         ],
         "extract": [
             "extracted element tree and raw error codes",
@@ -316,10 +323,13 @@ PROBES: list[dict[str, Any]] = [
         ],
         "compare": [
             "area before == 800.0 mm2 (+/- 0.5)",
-            "each area after == 400.0 mm2 (+/- 0.5)",
-            "the two area-after values sum to the area before (+/- 1.0)",
-            "the two runs keep different quilt geometry ids",
-            "the two signed offsets have opposite signs",
+            "an asymmetric cut is required: sides of the x=5 cut measure 700 and 100 mm2, "
+            "a cut at x=20 leaves 400 mm2 on both sides and proves nothing",
+            "the two area-after values are 700.0 and 100.0 mm2 (+/- 0.5), summing to the "
+            "area before (+/- 1.0)",
+            "each retained bbox lies on its measured side (x 5..40 and x 0..5)",
+            "the two signed offsets have opposite signs; signed_offset_mm may be null "
+            "when no quilt centroid query exists",
         ],
         "verdicts": ["feasible", "route not established", "unverified"],
         "blocks_on_failure": ["Q10 surface_trim"],

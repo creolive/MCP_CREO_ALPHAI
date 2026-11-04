@@ -35,6 +35,15 @@
 - 未验证项保持不变：§2.3/§2.4 的树在实机再生结果、§4.4.2 的真实面积/位置、§4.5 的 `keep_side` 法向绑定（P3）、修剪/合并结果保存重载后能否被 `thicken` 消费、失败回滚表现。
 - §4.4.2 的质心字段（`target_centroid`/`kept_centroid`/`signed_offset_mm`）在本机没有可依据的 quilt 质心查询，实现**一律返回 null 并附原因**，不用外框中心估算；P3 回填前也不做"方向矛盾即失败"的强制判定。
 
+### 0.3 S02 P3 实机回填（2026-11-04）
+
+环境：本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK，单会话串行。
+
+- **`keep_side` 绑定已实测**（§4.5）：`one` 保留工具法向正侧、`two` 保留负侧；决定性元素是 `PRO_E_MATERIAL_SIDE`，`PRO_E_PRIMARY_QLTSIDE` 单独不改变保留区域。`surface_trim` 已从 `UNAVAILABLE_OPERATIONS` 移除，成为公开算子；`quilt_merge` 仍在门禁内。
+- **基准面引用写法事故（已修）**：`{kind:'datum_plane',label:'RIGHT'}` 被几何解析分支接受但**丢弃 label**，默认轴过滤（axis z、offset 0）选中 TOP，修剪平面落在别处并停在 `PRO_FEAT_UNREGENERATED`（status 6）。现在 Python 契约与原生 `resolve()` 都拒绝几何类引用上的 label，只允许 `{kind:'datum_feature',label:...}` 携带标签。
+- **修剪失败可诊断**：再生失败分支回写 `regeneration`（`feature_status`、`feature_id`、`target_quilt_id`、`tool_kind`、两侧枚举值、结果特征的 quilt 访问码），失败消息带同一组数值；`area_before/after`、`kept_quilt_*` 等测量字段在失败记录里保持可见。
+- **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询）、失败回滚的实机表现、`quilt_merge` 全套实机项。证据：`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`（jobs `247f76de…`、`7ae993e6…`）。
+
 ---
 
 ## 1. SDK 逐项核实结论表
@@ -422,10 +431,12 @@ PRO_E_FEATURE_TREE
 
 **不按 GUI 正负命名。** `keep_side` 只能是 `"one"` / `"two"`，其物理含义由**工具的取向**决定，且必须可被测量验证：
 
-- `keep_side="one"` → 对应 `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_ONE`。
-- `keep_side="two"` → 对应 `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_TWO`。
-- `PRO_E_MATERIAL_SIDE` 首版固定为 `PRO_TRIM_MATL_SIDE_ONE`（`=1`）；薄修剪与双侧不在首版。
+- `keep_side="one"` → `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_ONE` **且** `PRO_E_MATERIAL_SIDE = PRO_TRIM_MATL_SIDE_ONE`。
+- `keep_side="two"` → `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_TWO` **且** `PRO_E_MATERIAL_SIDE = PRO_TRIM_MATL_SIDE_TWO`。
+- **2026-11-04 实机修正**：仅改 `PRO_E_PRIMARY_QLTSIDE` 不改变保留区域（`one`/`two` 实测同一侧同一面积）；决定保留侧的是 `PRO_E_MATERIAL_SIDE`。两个元素现在同时跟随 `keep_side`，不允许互相矛盾。薄修剪与双侧仍不在首版。
 - `PRO_E_KEEP_TRIM_SURF_OPT` 首版固定为 `PRO_KEEP_TRIM_SURF_OPT_NO`（`=0`）。
+
+**实测绑定（2026-11-04，Creo 12.4.0.0）**：`keep_side="one"` 保留**工具法向正侧**，`keep_side="two"` 保留负侧。证据（`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`）：40×20 平面填充（800 mm²）被 x=5 基准面（法向 +X）修剪，`one` 得 700 mm²、外框 x∈[5,40]，`two` 得 100 mm²、外框 x∈[0,5]；圆柱面（1256.64 mm²）被 z=5 平面（法向 +Z）修剪，`one` 得 314.16 mm²（z>5）、`two` 得 942.48 mm²（z<5）。两次运行均 `saved_file_reloaded_and_verified=true`。
 
 **`kept_side_basis` 必须回写判定依据**，使调用方能独立判断保留的是哪一块，而不是相信一个标签：
 
@@ -447,9 +458,9 @@ PRO_E_FEATURE_TREE
 
 **一致性与失败规则**：
 
-- 若 `signed_offset_mm` 与 `keep_side` 的预期方向矛盾（例如 `keep_side="one"` 却使 `signed_offset_mm > 0` 而约定 `one` 为负侧），**该 op 必须失败并回滚**，不得回报成功。
+- 若 `signed_offset_mm` 与 `keep_side` 的预期方向矛盾（`one` 应使 `signed_offset_mm > 0`，`two` 应使 `< 0`），**该 op 必须失败并回滚**，不得回报成功。判据在质心可读时才生效。
 - 若质心读不出（`target_centroid` 或 `kept_centroid` 为 null），`kept_side_basis` 保留已知字段、`signed_offset_mm=null`，但**不得**因此判失败（质心只是佐证，不是主判据）。
-- `one`/`two` 与法向正负的绑定由探针 P3 判定并回填本节；**在回填前不得公开 `keep_side`**。
+- `one`/`two` 与法向正负的绑定已于 2026-11-04 由实机回填（见本节实测绑定段）：`one` = 工具法向正侧，`two` = 负侧。`surface_trim` 因此解除门禁；判据仍是"两次独立模型的面积 + 外框"，不跨模型比 ID（R5）。
 
 ### 4.6 错误与回滚行为（冻结）
 

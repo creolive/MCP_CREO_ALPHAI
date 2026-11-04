@@ -134,14 +134,20 @@ class QuiltMergeNativeSourceTests(unittest.TestCase):
         self.assertNotIn("PRO_E_STD_MERGE_TOLERANCE", source)
         self.assertNotIn("gap_mm", source)
 
+    def test_merge_closed_uses_the_shared_helper(self):
+        # Same live lesson as S01: never compare the reason char* to a literal.
+        source = QUILT_MERGE.read_text(encoding="utf-8")
+        self.assertIn("quilt_closed_is_open", source)
+        self.assertNotIn("closed.reason ==", source)
+
     def test_merge_does_not_claim_unknown_closed(self):
         # closed is true only for a measured closed quilt, false only when the
-        # probe says open, and null when the probe failed.
+        # probe says open, and null when the probe failed. The bool/nullptr
+        # ternary is forbidden: MSVC folds it into the null pointer constant.
         source = QUILT_MERGE.read_text(encoding="utf-8")
-        self.assertIn(
-            'details["closed"] = closed.available ? J(true) : J(is_open ? false : nullptr);',
-            source,
-        )
+        self.assertNotIn("is_open ? false : nullptr", source)
+        self.assertIn('details["closed"] = closed_json;', source)
+        self.assertIn("closed_json = false;", source)
 
     def test_driver_declares_merge_case(self):
         driver = DRIVER.read_text(encoding="utf-8")

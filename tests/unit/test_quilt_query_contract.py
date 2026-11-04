@@ -180,6 +180,19 @@ class QuiltNativeContractTests(unittest.TestCase):
         self.assertIn("ProContourTraversalGet", text)
         self.assertIn("ProCurveLengthEval", text)
 
+    def test_closed_never_compares_reason_pointers(self):
+        # Live run 2026-11-04: the open-quilt record reported closed=null. Two
+        # causes were ruled out/fixed: `reason == "quilt_is_open"` is a char*
+        # pointer comparison, and `is_open ? false : nullptr` folds into the
+        # null pointer constant on MSVC.
+        text = QUILT_QUERY.read_text(encoding="utf-8")
+        self.assertNotIn("closed.reason ==", text)
+        self.assertNotIn("is_open ? false : nullptr", text)
+        self.assertIn("quilt_closed_is_open", text)
+        self.assertIn("closed_json = false;", text)
+        measure = SURFACE_MEASURE.read_text(encoding="utf-8")
+        self.assertIn("PRO_TK_INVALID_TYPE", measure)
+
     def test_closed_uses_the_documented_quilt_probe(self):
         # S03 moved the probe into surface_measure.h so trim and merge share one
         # implementation; quilt_query.h must delegate instead of keeping a copy.

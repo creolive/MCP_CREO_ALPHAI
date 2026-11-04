@@ -860,6 +860,16 @@ static ProSelection resolve(const J &r) {
                                                : PRO_DIMENSION);
     }
     if (kind == "plane" || kind == "datum_plane") {
+        // Backstop for the Python contract: this branch resolves by id/axis/
+        // normal only. The 2026-11-04 trim probe submitted
+        // {kind:'datum_plane',label:'RIGHT'}; the label was dropped, the default
+        // axis filter picked TOP, and the trim never regenerated. Refuse the
+        // label instead of choosing a different plane than the caller named.
+        if (r.contains("label"))
+            throw std::runtime_error(
+                std::string("Kind '") + kind +
+                "' plane references resolve by id/axis/normal and do not honour a label; use "
+                "{kind:'datum_feature',label:...} for a plane feature label");
         J state = inspection(false);
         J candidates = kind == "datum_plane" ? state["datum_planes"] : state["surfaces"];
         if (r.contains("id")) {

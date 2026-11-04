@@ -107,3 +107,17 @@
 - 驱动：`--case merge`（离线校验契约/门禁/树与 join 显式写入）；`--case merge --live` 先用 `creo_capabilities` 判公开，未公开记 `gated` 不提交几何；公开后两个相邻 20×20 共面 fill 合并，校验面积 800 mm²（±0.5）、`result_quilt_id` 非空、开放 quilt 报 `closed=false`。立方体闭合用例尚未实现（等实机窗口）。
 - 验证：`bridge.py build` 编译通过；`tests/unit/test_quilt_merge_schema.py` 18 项通过；S02+S03+S01+G5 四条契约共 63 项通过；`tools/test_surface_chain.py --case merge/trim/quilts` 三条离线用例 passed。
 - **未验证**：实机 join 再生、合并面积/位置、结果 quilt 引用在保存重载后仍可被 `thicken` 消费、闭合用例、空白间隙与不连续边界的失败行为。工具继续保持 gated。
+
+## 2026-11-04 S02 P3 实机交付：keep_side 绑定与门禁解除
+
+环境：本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK；单会话串行窗口；`bridge.py build` 后执行。
+
+- **绑定结论（实测）**：`keep_side="one"` 保留**工具法向正侧**，`"two"` 保留负侧。判据是两次独立模型的面积 + 保留 quilt 外框，不跨模型比 ID（契约 R5）。
+- **几何与读数**：40×20 平面填充（800 mm²）被 x=5 基准面（RIGHT，法向 +X）修剪 → `one` 700 mm²、外框 x∈[5,40]；`two` 100 mm²、外框 x∈[0,5]。圆柱曲面（1256.64 mm²）被 z=5 平面（法向 +Z）修剪 → `one` 314.16 mm²（z>5）、`two` 942.48 mm²（z<5）。两次运行 `kept_quilt_id` 均为目标 quilt（`kept_quilt_source="retrimmed_target_quilt_visit_failed"`、访问码 `-4`），`closed=false`（开放 quilt，符合预期），`saved_file_reloaded_and_verified=true`。
+- **缺陷 1（keep_side 无效，已修）**：原实现只让 `PRO_E_PRIMARY_QLTSIDE` 跟随 `keep_side`，`PRO_E_MATERIAL_SIDE` 固定 ONE。实机对比：`one`/`two` 在非对称切削下得到**同一侧同一面积**（700/700、314.16/314.16），证明确实没有翻转。现两个元素同时跟随 `keep_side`，重跑后为 700/100 与 314.16/942.48。
+- **缺陷 2（基准面引用丢 label，已修）**：`{kind:'datum_plane',label:'RIGHT'}` 被 `resolve()` 的几何分支接受但丢弃 label，默认轴过滤（axis z、offset 0）选中 TOP，修剪平面落到别处并停在 `PRO_FEAT_UNREGENERATED`（status 6）。`references.py::validate_datum_plane_reference_kind` 现在拒绝几何类 kind（`datum_plane`/`plane`/`surface`）上的 label，指引用 `{kind:'datum_feature',label:...}`；原生 `resolve()` 有同语义 backstop；`tools/test_surface_chain.py` 驱动改用 `{kind:'datum_plane',axis:'x',offset:0}`。
+- **修剪失败可诊断**：再生失败分支现在把 `regeneration`（`failed_stage`、`feature_id`、`feature_status`、`target_quilt_id`、`tool_kind`、`primary_quilt_side_value`、`material_side_value`、结果特征 quilt 访问码与 id 列表）与已测得的面积字段一起暂存，失败消息带同一组数值。此前失败只给一句提示、无可查数值。
+- **门禁**：`surface_trim` 已从 `UNAVAILABLE_OPERATIONS` 移除（`creo_surface_trim` 重新出现在 MCP 工具面）；`quilt_merge` 仍在门禁内。
+- **证据**：`build/live_trim_report.json`（驱动 `build/_live_trim.py`，非对称几何 + 期望面积断言）；`build/surface_chain/20261104-094447-635200/report.json`（`--case trim --live --confirm-session-usable`，`native_surface_trim="verified"`，jobs `247f76de…`、`7ae993e6…`）；诊断矩阵 `build/live_trim_probe.json`（10 个配置：平面/曲面目标 × 基准面/quilt 工具 × 偏移）。
+- **验证**：`bridge.py build` 通过；`test_surface_trim_schema.py` 20 项、`test_datum_plane_contract.py` 18 项通过；`tools/test_surface_chain.py --case trim`（离线）与 `--case trim --live`（实机）均 passed。
+- **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询，`signed_offset_mm` 仍为 null）、失败回滚的实机表现、`PRO_E_PRIMARY_QLTSIDE` 在薄修剪/双侧变体下的语义。

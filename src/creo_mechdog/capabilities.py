@@ -77,11 +77,6 @@ REGISTERED_OPERATIONS = (
 # that evidence exists the operation is refused before a job is queued, so no
 # client receives a success the release cannot back up.
 UNAVAILABLE_OPERATIONS = {
-    "surface_trim": (
-        "the high-level trim is not published yet: its retained-side binding and the "
-        "trim-result quilt reference still need a live serial-window acceptance run "
-        "(0.11.7 F03 reported ProFeatureGeomitemVisit -4 on that reference)"
-    ),
     "quilt_merge": (
         "the surface merge is not published yet: the documented ProMerge.h join still "
         "needs a live serial-window run for the merged area, the result quilt reference, "

@@ -176,6 +176,26 @@ def case_quilts_offline() -> dict:
     }
 
 
+async def wait_ready(client, budget_seconds: int = 210) -> dict:
+    """Poll the startup coordinator inside this session until it is connected.
+
+    The coordinator runs on a thread of the serving process: a client that
+    submits first, or that disconnects while the build phase is running, only
+    ever sees the persisted `building_worker` snapshot. Polling here keeps the
+    session alive until the Toolkit verification actually settles.
+    """
+    deadline = time.monotonic() + budget_seconds
+    state: dict = {}
+    while time.monotonic() < deadline:
+        state = (await client.call_tool("creo_startup_status", {})).structured_content
+        if state.get("connected"):
+            return state
+        if state.get("state") in ("timeout", "failed", "error", "blocked", "unavailable"):
+            return state
+        await asyncio.sleep(2)
+    return state
+
+
 def job_runner(client, jobs: list[str]):
     """Submit through the public tool and poll only the accepted job."""
 
@@ -226,6 +246,14 @@ async def case_quilts_live() -> dict:
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
+        started = await wait_ready(client)
+        check(
+            "session_ready",
+            bool(started.get("connected")),
+            {"state": started.get("state"), "message": str(started.get("message"))[:200]},
+        )
+        if not started.get("connected"):
+            return {"mode": "live", "passed": False, "checks": checks}
         run_job = job_runner(client, jobs)
         build = await run_job(
             "creo_execute_plan", {"operations": surface_chain_plan(width, height)}
@@ -290,11 +318,19 @@ async def case_quilts_live() -> dict:
     }
 
 
-TRIM_WIDTH, TRIM_HEIGHT, TRIM_X = 40.0, 20.0, 20.0
+TRIM_WIDTH, TRIM_HEIGHT, TRIM_X = 40.0, 20.0, 5.0
+# Live 2026-11-04: keep_side one keeps the +X side of the tool plane normal
+# (700 mm2), two keeps the -X side (100 mm2). The cut is asymmetric on purpose -
+# a cut at x=20 leaves 400 mm2 on both sides, so the area cannot name the
+# retained side.
+TRIM_EXPECTED_AREA = {
+    "one": (TRIM_WIDTH - TRIM_X) * TRIM_HEIGHT,
+    "two": TRIM_X * TRIM_HEIGHT,
+}
 
 
 def trim_plan(keep_side: str) -> list[dict]:
-    """One 40x20 fill trimmed at x=20 by a datum plane (plan S02 step 4).
+    """One 40x20 fill trimmed at x=5 by a datum plane (plan S02 step 4).
 
     The retained region is judged by measured area and position, never by
     comparing quilt ids across two independent models (contract §4.5 / R5).
@@ -316,7 +352,9 @@ def trim_plan(keep_side: str) -> list[dict]:
         {
             "op": "datum_plane",
             "label": "trim_cut_plane",
-            "reference": {"kind": "datum_plane", "label": "RIGHT"},
+            # Geometric plane references resolve by axis/normal; a label here is
+            # refused (live 2026-11-04: it silently resolved to TOP).
+            "reference": {"kind": "datum_plane", "axis": "x", "offset": 0},
             "offset": TRIM_X,
         },
         {
@@ -377,13 +415,16 @@ def case_trim_offline() -> dict:
         rejects({**operation, "tool": dict(operation["target"])}, "distinct"),
     )
 
-    check("surface_trim_gated", "surface_trim" in UNAVAILABLE_OPERATIONS)
-    refused = False
+    # Live 2026-11-04: both keep_side values built, measured (700 / 100 mm2) and
+    # saved/reloaded with the retained bbox on the measured side, so the
+    # operation is published and the gate no longer refuses it.
+    check("surface_trim_published", "surface_trim" not in UNAVAILABLE_OPERATIONS)
+    allowed = True
     try:
         require_available([operation])
-    except ValueError as error:
-        refused = "no native job was queued" in str(error)
-    check("gate_refuses_before_job", refused)
+    except ValueError:
+        allowed = False
+    check("no_gate_refusal", allowed)
 
     generic = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
     native = (ROOT / "native" / "surface_trim.cpp").read_text(encoding="utf-8")
@@ -423,7 +464,7 @@ def case_trim_offline() -> dict:
 
 
 async def case_trim_live() -> dict:
-    """Two independent 40x20 trims at x=20 judged by measured area/position."""
+    """Two independent 40x20 trims at x=5 judged by measured area/position."""
     from mcp import Client
     from mcp.client.stdio import StdioServerParameters
 
@@ -436,6 +477,22 @@ async def case_trim_live() -> dict:
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
+        # A rebuilt worker makes the coordinator report building_worker; a job
+        # submitted before it settles is refused with "Creo is not ready".
+        started = await wait_ready(client)
+        check(
+            "session_ready",
+            bool(started.get("connected")),
+            {"state": started.get("state"), "message": str(started.get("message"))[:200]},
+        )
+        if not started.get("connected"):
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_surface_trim": "not_verified",
+                "note": "the session never reported connected; no geometry was submitted",
+                "checks": checks,
+            }
         capabilities = (await client.call_tool("creo_capabilities", {})).structured_content
         published = "surface_trim" in (capabilities.get("operations") or [])
         check("surface_trim_published", published)
@@ -468,7 +525,7 @@ async def case_trim_live() -> dict:
                 for record in (page.get("data", {}).get("quilts") or [])
                 if record.get("area_mm2") is not None
             ]
-            expected = TRIM_WIDTH * TRIM_HEIGHT / 2
+            expected = TRIM_EXPECTED_AREA[side]
             check(
                 f"trim_area_{side}",
                 bool(records) and abs(records[0]["area_mm2"] - expected) <= 0.5,
@@ -482,13 +539,13 @@ async def case_trim_live() -> dict:
             if side == "one":
                 check(
                     f"trim_position_{side}",
-                    low is not None and abs(low) <= 0.5 and abs(high - TRIM_X) <= 0.5,
+                    low is not None and abs(low - TRIM_X) <= 0.5 and abs(high - TRIM_WIDTH) <= 0.5,
                     {"bbox_mm": bbox},
                 )
             else:
                 check(
                     f"trim_position_{side}",
-                    low is not None and abs(low - TRIM_X) <= 0.5 and abs(high - TRIM_WIDTH) <= 0.5,
+                    low is not None and abs(low) <= 0.5 and abs(high - TRIM_X) <= 0.5,
                     {"bbox_mm": bbox},
                 )
             basis = state["result"]["operations"][-1].get("kept_side_basis")

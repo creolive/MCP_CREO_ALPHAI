@@ -97,13 +97,22 @@ static J quilt_record(ProSolid solid, int quilt_id, const J &feature_ids,
          : faces.face_count == 0 ? "quilt_has_no_surfaces"
                                  : (scale.known ? nullptr : "unit_scale_unknown")},
         units, scale);
-    bool is_open = closed.reason == "quilt_is_open";
+    // Live 2026-11-04: an open quilt must report false, not null. The decision
+    // lives in surface_measure.h so trim and merge cannot drift. The value is
+    // assigned branch by branch: `cond ? false : nullptr` made MSVC fold the
+    // bool into the null pointer constant and serialized null either way.
+    bool is_open = quilt_closed_is_open(closed);
+    J closed_json = nullptr;
+    if (closed.available)
+        closed_json = true;
+    else if (is_open)
+        closed_json = false;
     J record = {{"quilt_id", quilt_id},
                 {"feature_ids", feature_ids},
                 {"face_count", visit_code ? nullptr : J(faces.face_count)},
                 {"surface_ids", visit_code ? nullptr : J(surface_ids)},
                 {"surfaces_visit_code", visit_code},
-                {"closed", closed.available ? J(true) : J(is_open ? false : nullptr)},
+                {"closed", closed_json},
                 {"closed_status", measurement_status_json(closed, units, scale)},
                 {"bbox_mm", bbox_mm},
                 {"bbox_status", bbox_status}};
