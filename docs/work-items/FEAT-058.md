@@ -117,3 +117,5 @@
 
 未验证/边界：原生 C++ 未改动，本次无实机运行，几何与实机证据沿用 `build/planar_wall/20261104T032633Z/adoption_live.json`；默认模板路线保留；非矩形、四壁、显式支撑面 origin 仍属后续范围；`annotate_result` 只裁决首个匹配算子（多壁结果）也未在本次扩展。
 
+复核记录收口交付记录：提交 `a297b3e`（同一分支，父提交 `d333f83`，5 个文件、+188/−20，提交时工作区干净）。受测源码指纹（SHA256 前 16 位，CRLF→LF 归一）：`src/creo_mechdog/native_planar_wall.py 6deade694874d8d4`、`server.py b4c41d2aaa41d33e`、`tests/unit/test_native_planar_wall.py d77de3661e6175d4`；未改动的 `native/planar_wall.cpp 3c7c6a7674fdfb0e`、`native/planar_wall.h da6159fa0f9c622e` 与第二笔一致。验证命令与结果见上段（`tools/test_unit.py` 2286 项 OK、`dev_check.py --skip-unit` success、三文件 ruff check/format 通过）。
+
