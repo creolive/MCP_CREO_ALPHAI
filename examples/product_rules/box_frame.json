@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "template_id": "box_frame",
+  "template_version": "1.0.0",
+  "units": {"length": "mm", "angle": "deg"},
+  "recipe": "open_rectangular_box_v1",
+  "operation_allowlist": ["sketch", "extrude"],
+  "parameters": {
+    "length_mm": {"default": 100, "minimum": 10, "maximum": 1000},
+    "width_mm": {"default": 60, "minimum": 10, "maximum": 1000},
+    "height_mm": {"default": 40, "minimum": 10, "maximum": 1000},
+    "wall_mm": {"default": 2, "minimum": 0.5, "maximum": 20}
+  },
+  "validation": {"minimum_cavity_mm": 1}
+}
