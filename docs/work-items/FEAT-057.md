@@ -34,6 +34,8 @@
 - `.\.venv\Scripts\python.exe -m ruff check src/creo_mechdog/mass_properties.py tests/unit/test_mass_properties.py` 及相同文件的 `ruff format --check`：通过。
 - `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards`：失败，四个未修改测试文件的既有格式问题阻断（test_callback_admission、test_reference_contract、test_t01_capability_contracts、test_update_check），unit_tests=not_run；未改其他文件或重建基线。不得将单独单测结果等同于该检查通过。
 
-本次无原生改动/构建、无 Toolkit/Creo/MCP 连接、无 live 驱动。真实材料重心、混合单位/未知单位、同步/异步接口、主惯量与 complete 契约等其余 A01 范围仍开放，历史实机记录不构成本次证据。原始日志和详细交接保存在本机 `.superpowers/sdd/2026-11-04-a01-numeric-guards-plan/task-1-report.md`，交控制者独立审查。
+本次无原生改动/构建、无 Toolkit/Creo/MCP 连接、无 live 驱动。真实材料重心、混合单位/未知单位、同步/异步接口、主惯量与 complete 契约等其余 A01 范围仍开放，历史实机记录不构成本次证据。原始日志和详细交接保存在本机 `build/feat057_numeric_guards_20261104/task-1-report.md`，交控制者独立审查。
 
-独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（`build/unit_test_report.json`）。此结果与失败的 dev_check 分别记录。
+独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（稳定日志 `build/feat057_numeric_guards_20261104/unit-full.log`）。此结果与失败的 dev_check 分别记录。
+
+本子项稳定本机证据目录为 `build/feat057_numeric_guards_20261104/`（Git 忽略）：`task-1-report.md` 为交接报告，`red.log` / `green.log` 为专项红绿回归，`dev-check.log` 为失败的完整开发检查，`unit-full.log` 为独立全量离线单测，`unchanged-style-files.json` 为四个格式阻断文件相对基线未变的哈希证据。该目录保留证据以供计划临时目录清理后追溯。

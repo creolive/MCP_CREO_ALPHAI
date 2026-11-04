@@ -59,8 +59,10 @@
 
 - 专项命令 `.\.venv\Scripts\python.exe -m unittest tests.unit.test_mass_properties -v`：RED 为 20 例 / 48 failures / 12 errors；GREEN 为 20/20 通过。
 - 两个改动 Python 文件的 `ruff check` 与 `ruff format --check` 均通过（Ruff 0.17.0）。
-- 一次 `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards` 明确失败：四个本次未改文件的格式回归阻断，unit_tests=not_run、native_validation=not_run。对应文件与基线无 diff 且 LF 规范化哈希相同，未修改基线；详见本机交接报告及 `build/development_check.json`。
+- 一次 `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards` 明确失败：四个本次未改文件的格式回归阻断，unit_tests=not_run、native_validation=not_run。对应文件与基线无 diff 且 LF 规范化哈希相同，未修改基线；详见本机 `build/feat057_numeric_guards_20261104/task-1-report.md` 及 `build/feat057_numeric_guards_20261104/dev-check.log`。
 
 本轮没有原生修改/构建、Toolkit/Creo/MCP 连接或 live 驱动。真实材料密度与材料重心、混合/未知单位、同步/异步接口、工具数、主惯量、complete 契约和其余 A01 范围未在本子项验证/完成；Creo 9/10、WorkBuddy 仍未测。不以离线数值防护通过宣称整个 A01 完成。
 
-独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（`build/unit_test_report.json`）。此结果与失败的 dev_check 分别记录。
+独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（稳定日志 `build/feat057_numeric_guards_20261104/unit-full.log`）。此结果与失败的 dev_check 分别记录。
+
+本子项稳定本机证据目录为 `build/feat057_numeric_guards_20261104/`（Git 忽略）：`task-1-report.md` 为交接报告，`red.log` / `green.log` 为专项红绿回归，`dev-check.log` 为失败的完整开发检查，`unit-full.log` 为独立全量离线单测，`unchanged-style-files.json` 为四个格式阻断文件相对基线未变的哈希证据。该目录保留证据以供计划临时目录清理后追溯。
