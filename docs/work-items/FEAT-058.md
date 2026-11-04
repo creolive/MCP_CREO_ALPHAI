@@ -117,5 +117,14 @@
 
 未验证/边界：原生 C++ 未改动，本次无实机运行，几何与实机证据沿用 `build/planar_wall/20261104T032633Z/adoption_live.json`；默认模板路线保留；非矩形、四壁、显式支撑面 origin 仍属后续范围；`annotate_result` 只裁决首个匹配算子（多壁结果）也未在本次扩展。
 
+### 2026-11-04 发布交付（0.12.0，MINOR）
+
+- 集成分支 `codex/FEAT-058-integration`；集成分支合入最新 `main` 为 up-to-date（`origin/main@8ab0641` 已是祖先，无冲突）。
+- 版本：`0.11.7` → **0.12.0**（新增公开工具属 MINOR）；同步 `version.py`、README 标题/当前段/工具数（95→97）、`docs/DEVELOPMENT.md`、`docs/development/RELEASING.md`、两份 `seed_manifest.json`、`docs/seed_package.json`、`docs/BACKLOG.md`、[版本说明](../RELEASE_NOTES_0.12.0.md)、[发布记录](../validation/RELEASE-0.12.0.md)、`docs/COMPATIBILITY.md`。
+- 发布门槛：全量 **2286 项单测** 0 失败/0 错误、`tools/dev_check.py` `success=true`、`bridge.py build` exit 0（worker `9099e7f8…` 13 403 136 B，`build/source.sha256` `ddf4717f…`）；本机 **Creo 12.4.0.0 实机 67/67**（`build/planar_wall/20261104T042412Z/adoption_live.json`，覆盖创建/改型/负方向/XZ/YZ/方形/下游依赖/回滚/旧首壁+折边）。首轮实机 `connect_creo` `-38` 失败（未执行操作），重试通过，属会话连接问题。
+- 打包：种子包 24 文件/9 种子 `4385fa21…`（回填后重建复现一致）；源码包 1301 文件 `f18f5437…`，均由发布提交源码构建。
+- 合入与发布：合并提交 `758e87e`（`main`），标签 `v0.12.0`，Release <https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.12.0>（`draft=false`/`prerelease=false`，2026-11-04T04:36:58Z）；远端附件下载复核 SHA256 与本地一致（源码 7 590 733 B、种子 493 442 B）。
+- 发布不关闭的剩余范围：非矩形/多环截面、四壁与第二折边、显式支撑面覆写 origin、Creo 9/10 实机、WorkBuddy 黑盒。
+
 复核记录收口交付记录：提交 `a297b3e`（同一分支，父提交 `d333f83`，5 个文件、+188/−20，提交时工作区干净）。受测源码指纹（SHA256 前 16 位，CRLF→LF 归一）：`src/creo_mechdog/native_planar_wall.py 6deade694874d8d4`、`server.py b4c41d2aaa41d33e`、`tests/unit/test_native_planar_wall.py d77de3661e6175d4`；未改动的 `native/planar_wall.cpp 3c7c6a7674fdfb0e`、`native/planar_wall.h da6159fa0f9c622e` 与第二笔一致。验证命令与结果见上段（`tools/test_unit.py` 2286 项 OK、`dev_check.py --skip-unit` success、三文件 ruff check/format 通过）。
 
