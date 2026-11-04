@@ -192,7 +192,8 @@ def submit(
     if loft_seed and (model_id is not None or readonly or model_type != "part"):
         raise ValueError("Native loft seed initialization is only available for a new part")
     if readonly and any(
-        op["op"] not in ("dump_tree", "export", "udf_inspect") for op in operations
+        op["op"] not in ("dump_tree", "export", "udf_inspect", "mass_properties")
+        for op in operations
     ):
         raise ValueError("Read-only requests may only inspect/export")
     with bridge.toolkit_lock(operation="submit", model_id=model_id):

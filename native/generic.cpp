@@ -4,6 +4,7 @@
 #include "recovery_deadline.h"
 #include "adoption_source.h"
 #include "inspection_units.h"
+#include "mass_properties.h"
 #include "axis_geometry.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
@@ -536,6 +537,90 @@ static bool assembly_model() {
     ProMdlType t;
     CK(ProMdlTypeGet(board, &t));
     return t == PRO_MDL_ASSEMBLY;
+}
+// FEAT-057: real mass properties from the model itself. Volume comes from a
+// unit-density calculation. Mass prefers the density Creo reports for the
+// assigned material, then the density the caller supplies as an explicit
+// what-if input; with neither, mass stays null and the receipt says why instead
+// of inventing a material. Nothing is summed across components here: an
+// assembly is refused until its own query path is verified.
+static J mass_properties_json(const J &op) {
+    J out = {{"volume_mm3", nullptr},
+             {"mass_g", nullptr},
+             {"density_g_cm3", nullptr},
+             {"density_model_units", nullptr},
+             {"mass_model_units", nullptr},
+             {"center_of_mass_mm", nullptr},
+             {"center_of_mass_model_units", nullptr},
+             {"material_assigned", false},
+             {"mass_unit", nullptr},
+             {"volume_query_code", nullptr},
+             {"mass_query_code", nullptr},
+             {"units_query_code", nullptr},
+             {"density_source", "none"},
+             {"hint", nullptr},
+             {"source", "ProSolidMassPropertyWithDensityGet"}};
+    if (assembly_model())
+        throw std::runtime_error(
+            "Mass properties of an assembly are not implemented yet; query each part");
+    auto length_units = inspect_length_units(board);
+    out["length_unit"] = preview_utf8(std::wstring(length_units.length.name));
+    ProMassProperty unit_density{};
+    ProError volume_code = ProSolidMassPropertyWithDensityGet(
+        (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
+    out["volume_query_code"] = (int)volume_code;
+    double volume_mm3 = 0.0;
+    if (!volume_code) {
+        out["center_of_mass_model_units"] = xyz(unit_density.center_of_gravity);
+        if (auto mm3 = length_units.volume_mm3(unit_density.volume)) {
+            volume_mm3 = *mm3;
+            out["volume_mm3"] = volume_mm3;
+            out["center_of_mass_mm"] = xyz(unit_density.center_of_gravity);
+        }
+    }
+    // The model's own material first: it is the only density that describes the
+    // part rather than a hypothesis about it.
+    ProMaterial material = {};
+    ProError material_code = ProMaterialCurrentGet((ProSolid)board, &material);
+    out["material_assigned"] = material_code == PRO_TK_NO_ERROR;
+    if (material_code == PRO_TK_NO_ERROR) {
+        ProMassProperty material_density{};
+        ProError mass_code = ProSolidMassPropertyWithDensityGet(
+            (ProSolid)board, nullptr, PRO_MP_DENS_DEFAULT, 0.0, &material_density);
+        out["mass_query_code"] = (int)mass_code;
+        auto mass_unit = inspect_mass_unit(board);
+        out["units_query_code"] = (int)mass_unit.code;
+        out["mass_unit"] = preview_utf8(std::wstring(mass_unit.unit.name));
+        auto grams_per_unit = grams_per_mass_unit(mass_unit.unit.name);
+        if (!mass_code && grams_per_unit) {
+            double grams = material_density.mass * *grams_per_unit;
+            double density = volume_mm3 > 0.0 ? grams / volume_mm3 * 1000.0 : 0.0;
+            if (grams > 0.0 && density > 0.0) {
+                out["mass_g"] = grams;
+                out["density_g_cm3"] = density;
+                out["density_model_units"] = material_density.density;
+                out["mass_model_units"] = material_density.mass;
+                out["density_source"] = "model_material";
+                return out;
+            }
+        }
+    }
+    // Caller-supplied density: geometry stays measured, the density is labelled
+    // as a request so nobody mistakes a what-if for the part's material.
+    if (op.contains("density_g_cm3") && op["density_g_cm3"].is_number() &&
+        op["density_g_cm3"].get<double>() > 0.0) {
+        double density = op["density_g_cm3"].get<double>();
+        if (volume_mm3 > 0.0) {
+            out["mass_g"] = volume_mm3 * density / 1000.0;
+            out["density_g_cm3"] = density;
+            out["density_source"] = "request";
+            return out;
+        }
+        out["hint"] = "Volume is unknown, so a supplied density cannot yield a mass";
+        return out;
+    }
+    out["hint"] = "Assign a material with a density, or pass density_g_cm3, to get mass";
+    return out;
 }
 // Body state names as declared in ProSolidBody.h; the numeric value is kept
 // beside the name so a consumer never has to map the magic number itself
@@ -3756,9 +3841,12 @@ static void execute_operation_body(const J &op) {
         CK(ProElemtreeWrite(root, PRO_ELEMTREE_XML, output));
         CK(ProFeatureElemtreeFree(&f, root));
         stage_operation_result({{"op", kind}, {"file", utf8(output)}});
+    } else if (kind == "mass_properties") {
+        stage_operation_result({{"op", kind}, {"mass_properties", mass_properties_json(op)}});
     } else if (kind != "regenerate" && kind != "save")
         throw std::runtime_error("Operation is not implemented: " + kind);
-    if (kind != "export" && kind != "dump_tree" && kind != "udf_inspect")
+    if (kind != "export" && kind != "dump_tree" && kind != "udf_inspect" &&
+        kind != "mass_properties")
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
     J post_state = inspection();
     // One terminal record for this input. Branch details and the staged detail
