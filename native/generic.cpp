@@ -373,6 +373,23 @@ static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     }
     J geometry = J::array();
     ProFeatureGeomitemVisit(f, PRO_TYPE_UNUSED, collect_geom_ids, nullptr, &geometry);
+    // FEAT-039/S04: a datum curve feature (intersect, projection) reports its
+    // PRO_CURVE items only through a typed visit; PRO_TYPE_UNUSED answers an
+    // empty list for it (live 2026-11-04: feature 120 owned curves 122/123 but
+    // inspection showed zero items, so no client could reference the curve).
+    // Merge the curve visit by id instead of replacing the generic list.
+    J curves = J::array();
+    if (!ProFeatureGeomitemVisit(f, PRO_CURVE, collect_geom_ids, nullptr, &curves))
+        for (auto &entry : curves) {
+            bool seen = false;
+            for (auto &known : geometry)
+                if (known.at("id") == entry.at("id")) {
+                    seen = true;
+                    break;
+                }
+            if (!seen)
+                geometry.push_back(entry);
+        }
     item["geometry_items"] = geometry;
     // T08 dependency evidence: parent/child feature IDs come from the live
     // model, never from a guess based on feature order. Group, pattern and
@@ -3312,6 +3329,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "surfaces.cpp"
 #include "surface_trim.cpp"
 #include "quilt_merge.cpp"
+#include "project_curve.cpp"
 #include "udf.cpp"
 #include "loft_mode.cpp"
 #include "loft_seed.cpp"
@@ -3592,6 +3610,8 @@ static void execute_operation_body(const J &op) {
         generic_surface_trim(op);
     else if (kind == "quilt_merge")
         generic_quilt_merge(op);
+    else if (kind == "project_curve")
+        generic_project_curve(op);
     else if (kind == "boolean_bodies")
         generic_boolean(op);
     else if (kind == "rib")

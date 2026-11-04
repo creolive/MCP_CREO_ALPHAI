@@ -134,6 +134,7 @@ _SOURCE_NAMES = (
     "native/quilt_query.h",
     "native/surface_trim.cpp",
     "native/quilt_merge.cpp",
+    "native/project_curve.cpp",
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
@@ -2585,9 +2586,6 @@ async def creo_surface_trim(
     target is one quilt ({kind:'quilt',id:...} or {kind:'quilt_feature',label:...});
     tool is one quilt or a datum plane. keep_side is 'one' or 'two'; the physical side
     is read back through kept_side_basis instead of being named after a GUI view.
-    This release is registered but gated: the retained-side binding and the trim-result
-    quilt reference still need a live acceptance run, so submissions are refused before
-    a native job is queued.
     """
     return await invoke(
         general.submit,
@@ -2618,6 +2616,52 @@ async def creo_quilt_merge(
     return await invoke(
         general.submit,
         [dict(op="quilt_merge", label=label, target=target, tool=tool)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_project_curve(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    source: dict[str, Any],
+    direction_ref: dict[str, Any],
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Project one curve onto one quilt along an explicit direction.
+
+    target is one quilt, source is one curve id ({kind:'curve',id:...}) and
+    direction_ref must read a real vector: {kind:'datum_feature',label:...},
+    {kind:'datum_axis_feature',label:...} or a straight {kind:'curve',id:...}.
+    side flips that direction and is named after the measured basis, not a GUI
+    view. The result reports curve_id, the measured curve_length_mm and the two
+    endpoints_mm; a multi-branch or empty projection fails instead of returning
+    a partial curve.
+
+    Construction is reported, not hidden: the projection is built as a real
+    sweep of the source sketch along the direction plus the documented Creo
+    intersect curve, so the model also gains a helper surface feature whose id
+    is returned as helper_feature_id. The direction must therefore be parallel
+    to the source sketch plane normal, the target must lie on the requested
+    side, and the source curve must belong to a curve feature; each of those is
+    refused with a measured reason instead of being approximated.
+    """
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="project_curve",
+                label=label,
+                target=target,
+                source=source,
+                direction_ref=direction_ref,
+                side=side,
+            )
+        ],
         model_id,
         None,
         expected_revision,

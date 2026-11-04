@@ -1,8 +1,8 @@
 """Unified surface-chain driver (FEAT-055/S01, FEAT-039).
 
-All surface-chain cases (S01 quilts query, S02 surface_trim, later S03
-quilt_merge closure) run from this entry. Acceptance uses public MCP tools
-only (creo_execute_plan / creo_get_job / creo_inspect_model); no internal
+All surface-chain cases (S01 quilts query, S02 surface_trim, S03 quilt_merge
+closure, S04 project_curve) run from this entry. Acceptance uses public MCP
+tools only (creo_execute_plan / creo_get_job / creo_inspect_model); no internal
 Python API ever decides a case's outcome.
 
 Modes:
@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts", "trim", "merge")
+CASES = ("quilts", "trim", "merge", "project")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -904,6 +904,345 @@ async def case_merge_live() -> dict:
     }
 
 
+PROJECT_WIDTH = 40.0
+PROJECT_HEIGHT = 20.0
+PROJECT_SOURCE_Z = 10.0
+PROJECT_LINE_LENGTH = 30.0
+PROJECT_ARC_RADIUS = 8.0
+
+PROJECT_ENTITIES = {
+    "line": [{"type": "line", "name": "src", "start": [5.0, 10.0], "end": [35.0, 10.0]}],
+    "arc": [
+        {
+            "type": "arc",
+            "name": "src",
+            "center": [20.0, 10.0],
+            "radius": PROJECT_ARC_RADIUS,
+            "start_angle": 0.0,
+            "end_angle": 180.0,
+        }
+    ],
+}
+
+PROJECT_EXPECTED = {
+    "line": {
+        "length_mm": PROJECT_LINE_LENGTH,
+        "endpoints_mm": [[5.0, 10.0, 0.0], [35.0, 10.0, 0.0]],
+    },
+    "arc": {
+        "length_mm": math.pi * PROJECT_ARC_RADIUS,
+        "endpoints_mm": [
+            [20.0 - PROJECT_ARC_RADIUS, 10.0, 0.0],
+            [20.0 + PROJECT_ARC_RADIUS, 10.0, 0.0],
+        ],
+    },
+}
+
+
+def project_plan(source: str) -> list[dict]:
+    """A 40x20 fill at z=0, a source sketch at z=10 and a +Z direction plane.
+
+    The source sits 10 mm above the target, so a curve that merely echoes the
+    source (z=10) fails every position check below.
+    """
+    return [
+        {
+            "op": "sketch",
+            "label": "project_profile",
+            "plane": "XY",
+            "entities": [
+                {
+                    "type": "rectangle",
+                    "name": "rect",
+                    "min": [0.0, 0.0],
+                    "max": [PROJECT_WIDTH, PROJECT_HEIGHT],
+                }
+            ],
+        },
+        {"op": "surface_fill", "label": "project_target", "sketch": "project_profile"},
+        {
+            "op": "sketch",
+            "label": "project_src",
+            "plane": "XY",
+            "offset": PROJECT_SOURCE_Z,
+            "entities": PROJECT_ENTITIES[source],
+        },
+        {
+            "op": "datum_plane",
+            "label": "project_dir_plane",
+            "reference": {"kind": "datum_plane", "axis": "z", "offset": 0.0},
+            "offset": PROJECT_SOURCE_Z + 20.0,
+        },
+    ]
+
+
+def project_operation(curve_id: int, side: str) -> dict:
+    return {
+        "op": "project_curve",
+        "label": "project_result",
+        "target": {"kind": "quilt_feature", "label": "project_target"},
+        "source": {"kind": "curve", "id": curve_id},
+        "direction_ref": {"kind": "datum_feature", "label": "project_dir_plane"},
+        "side": side,
+    }
+
+
+def case_project_offline() -> dict:
+    """S04 schema, publication and native route. No Creo session is involved."""
+    from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
+    from creo_mechdog.schema import validate_operations
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    valid = {
+        "op": "project_curve",
+        "label": "project_main",
+        "target": {"kind": "quilt", "id": 12},
+        "source": {"kind": "curve", "id": 7},
+        "direction_ref": {"kind": "datum_feature", "label": "top"},
+    }
+    try:
+        validated = validate_operations([dict(valid)])
+        check("schema_accepts_one_quilt_one_curve", validated[0]["side"] == "positive")
+    except ValueError as error:
+        check("schema_accepts_one_quilt_one_curve", False, {"error": str(error)})
+
+    for name, patch in (
+        ("body_target", {"target": {"kind": "body", "id": 1}}),
+        ("non_curve_source", {"source": {"kind": "quilt", "id": 12}}),
+        ("raw_vector", {"direction": [0.0, 0.0, -1.0]}),
+        ("datum_plane_direction", {"direction_ref": {"kind": "datum_plane", "label": "TOP"}}),
+    ):
+        try:
+            validate_operations([{**valid, **patch}])
+        except ValueError:
+            check(f"schema_refuses_{name}", True)
+        else:
+            check(f"schema_refuses_{name}", False)
+
+    check("registered", "project_curve" in REGISTERED_OPERATIONS)
+    check("published", "project_curve" not in UNAVAILABLE_OPERATIONS)
+    native = (ROOT / "native" / "project_curve.cpp").read_text(encoding="utf-8")
+    check(
+        "native_uses_the_documented_intersect_tree",
+        "PRO_CURVE_TYPE_INTSRF" in native and "PRO_E_CRV_IP_COMP_REF1" in native,
+    )
+    check(
+        "native_does_not_guess_undocumented_trees",
+        '"PRO_E_COPYTRIM' not in native and '"PRO_E_PROJ_CRV' not in native,
+    )
+    return {
+        "mode": "offline",
+        "passed": all(item["ok"] for item in checks),
+        "native_project_curve": "not_verified",
+        "checks": checks,
+    }
+
+
+async def case_project_live() -> dict:
+    """Measured projections: one line, one arc, and one refused side."""
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    jobs: list[str] = []
+
+    async def submit(client, operations: list[dict], model_id=None, revision=None) -> dict:
+        arguments: dict = {"operations": operations}
+        if model_id:
+            arguments["model_id"] = model_id
+            arguments["expected_revision"] = revision
+        state = (await client.call_tool("creo_execute_plan", arguments)).structured_content
+        job_id = state.get("job_id")
+        if not job_id:
+            raise RuntimeError(json.dumps(state)[:500])
+        jobs.append(job_id)
+        deadline = time.monotonic() + 240
+        while time.monotonic() < deadline:
+            state = (await client.call_tool("creo_get_job", {"job_id": job_id})).structured_content
+            if state["status"] in ("succeeded", "failed", "unknown_outcome"):
+                break
+            await asyncio.sleep(1)
+        else:
+            raise TimeoutError("job did not settle; inspect it, never blindly resubmit")
+        return state
+
+    async def section(client, model_id: str, name: str) -> dict:
+        page = (
+            await client.call_tool(
+                "creo_inspect_model",
+                {"model_id": model_id, "detail": "full", "section": name},
+            )
+        ).structured_content
+        return page.get("data", {}).get(name) or []
+
+    async with Client(
+        StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
+    ) as client:
+        started = await wait_ready(client)
+        check(
+            "session_ready",
+            bool(started.get("connected")),
+            {"state": started.get("state"), "message": str(started.get("message"))[:200]},
+        )
+        if not started.get("connected"):
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_project_curve": "not_verified",
+                "note": "the session never reported connected; no geometry was submitted",
+                "checks": checks,
+            }
+        capabilities = (await client.call_tool("creo_capabilities", {})).structured_content
+        published = "project_curve" in (capabilities.get("operations") or [])
+        check("project_curve_published", published)
+        if not published:
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_project_curve": "gated",
+                "note": "project_curve is refused before any job; no geometry was submitted",
+                "checks": checks,
+            }
+
+        for source in ("line", "arc"):
+            build = await submit(client, project_plan(source))
+            check(
+                f"build_{source}",
+                build["status"] == "succeeded"
+                and build["result"]["saved_file_reloaded_and_verified"],
+                {"status": build["status"], "message": build.get("message")},
+            )
+            if build["status"] != "succeeded":
+                continue
+            model_id = build["model_id"]
+            features = await section(client, model_id, "features")
+            source_feature = next(
+                (
+                    feature
+                    for feature in features
+                    if str(feature.get("name", "")).lower() == "project_src"
+                ),
+                None,
+            )
+            geometry = await section(client, model_id, "feature_geometry")
+            curve_ids = [
+                item["id"]
+                for item in geometry
+                if item.get("feature_id") == (source_feature or {}).get("id")
+                and item.get("type") == 62
+            ]
+            check(f"source_curve_{source}", bool(curve_ids), {"curve_ids": curve_ids})
+            if not curve_ids:
+                continue
+            revision = (
+                await client.call_tool("creo_refresh_model", {"model_id": model_id})
+            ).structured_content
+            expected_revision = None
+            if revision.get("job_id"):
+                jobs.append(revision["job_id"])
+                expected_revision = (
+                    await client.call_tool("creo_get_job", {"job_id": revision["job_id"]})
+                ).structured_content.get("revision")
+            state = await submit(
+                client, [project_operation(curve_ids[0], "negative")], model_id, expected_revision
+            )
+            result = (state.get("result") or {}).get("operations", [{}])[-1]
+            expected = PROJECT_EXPECTED[source]
+            length = result.get("curve_length_mm")
+            endpoints = result.get("endpoints_mm") or []
+            check(
+                f"project_{source}_succeeded",
+                state["status"] == "succeeded" and bool(result.get("curve_id")),
+                {"status": state["status"], "message": state.get("message"), "result": result},
+            )
+            check(
+                f"project_{source}_length",
+                isinstance(length, (int, float)) and abs(length - expected["length_mm"]) <= 1e-6,
+                {"length_mm": length, "expected_mm": expected["length_mm"]},
+            )
+            check(
+                f"project_{source}_endpoints",
+                len(endpoints) == 2
+                and all(
+                    min(math.dist(point, target) for target in expected["endpoints_mm"]) <= 1e-6
+                    for point in endpoints
+                ),
+                {"endpoints_mm": endpoints, "expected_mm": expected["endpoints_mm"]},
+            )
+            check(
+                f"project_{source}_saved_and_reloaded",
+                bool((state.get("result") or {}).get("saved_file_reloaded_and_verified")),
+            )
+            check(
+                f"project_{source}_reports_construction",
+                result.get("route") == "swept_surface_intersect"
+                and isinstance(result.get("helper_feature_id"), int)
+                and result.get("direction_basis") == "datum_plane_normal",
+                {
+                    "route": result.get("route"),
+                    "helper_feature_id": result.get("helper_feature_id"),
+                    "direction_basis": result.get("direction_basis"),
+                },
+            )
+
+        # A +Z projection points away from the z=0 target: it must be refused
+        # with the measured reason instead of returning a curve on the wrong side.
+        build = await submit(client, project_plan("line"))
+        if build["status"] == "succeeded":
+            model_id = build["model_id"]
+            features = await section(client, model_id, "features")
+            source_feature = next(
+                (
+                    feature
+                    for feature in features
+                    if str(feature.get("name", "")).lower() == "project_src"
+                ),
+                None,
+            )
+            geometry = await section(client, model_id, "feature_geometry")
+            curve_ids = [
+                item["id"]
+                for item in geometry
+                if item.get("feature_id") == (source_feature or {}).get("id")
+                and item.get("type") == 62
+            ]
+            refreshed = (
+                await client.call_tool("creo_refresh_model", {"model_id": model_id})
+            ).structured_content
+            expected_revision = None
+            if refreshed.get("job_id"):
+                jobs.append(refreshed["job_id"])
+                expected_revision = (
+                    await client.call_tool("creo_get_job", {"job_id": refreshed["job_id"]})
+                ).structured_content.get("revision")
+            refused = await submit(
+                client, [project_operation(curve_ids[0], "positive")], model_id, expected_revision
+            )
+            check(
+                "wrong_side_refused",
+                refused["status"] == "failed"
+                and "behind the source curve" in str(refused.get("message")),
+                {"status": refused["status"], "message": refused.get("message")},
+            )
+
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "live",
+        "passed": passed,
+        "native_project_curve": "verified" if passed else "failed",
+        "jobs": jobs,
+        "checks": checks,
+    }
+
+
 def run_case(case: str, live: bool) -> dict:
     if case == "quilts":
         return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
@@ -911,6 +1250,8 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_trim_live()) if live else case_trim_offline()
     if case == "merge":
         return asyncio.run(case_merge_live()) if live else case_merge_offline()
+    if case == "project":
+        return asyncio.run(case_project_live()) if live else case_project_offline()
     raise SystemExit(BUSY_EXIT, f"unknown case: {case}; available: {', '.join(CASES)}\n")
 
 

@@ -172,20 +172,22 @@ static MeasurementOutcome curve_length_native(ProCurve curve) {
 }
 
 // Endpoints in native units. The curve parameter is normalized, so the ends
-// sit at 0.0 and 1.0 (ProCurveXyzdataEval contract).
+// sit at 0.0 and 1.0 (ProCurveXyzdataEval contract). The derivative outputs are
+// always NULL: ProCurveXyzdataEval answers PRO_TK_NOT_IMPLEMENTED for a
+// composite curve (a sketch's own edge loop) whenever either derivative array
+// is passed, and endpoints never need them (live 2026-11-04, S04 probe).
 static ProVector curve_endpoint_start{};
 static ProVector curve_endpoint_end{};
 static MeasurementOutcome curve_endpoints_native(ProCurve curve) {
     MeasurementOutcome out;
     ProVector start = {};
     ProVector end = {};
-    ProVector d1 = {}, d2 = {};
-    out.query_code = ProCurveXyzdataEval(curve, 0.0, start, d1, d2);
+    out.query_code = ProCurveXyzdataEval(curve, 0.0, start, nullptr, nullptr);
     if (out.query_code) {
         out.reason = "curve_endpoint_eval_failed";
         return out;
     }
-    out.query_code = ProCurveXyzdataEval(curve, 1.0, end, d1, d2);
+    out.query_code = ProCurveXyzdataEval(curve, 1.0, end, nullptr, nullptr);
     if (out.query_code) {
         out.reason = "curve_endpoint_eval_failed";
         return out;

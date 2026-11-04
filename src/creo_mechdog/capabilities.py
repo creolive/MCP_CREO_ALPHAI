@@ -58,6 +58,7 @@ REGISTERED_OPERATIONS = (
     "solidify",
     "surface_trim",
     "quilt_merge",
+    "project_curve",
     "boolean_bodies",
     "rib",
     "drawing_model",
@@ -73,18 +74,21 @@ REGISTERED_OPERATIONS = (
     "drawing_delete",
 )
 
-# FEAT-039/S02: surface_trim has its schema and native tree in place, but the
-# retained-side binding (keep_side one/two against the tool normal) and the
-# trim-result quilt reference are only proved in a live serial window. Until
-# that evidence exists the operation is refused before a job is queued, so no
-# client receives a success the release cannot back up.
+# FEAT-039: an operation whose native route is not proved on hardware stays out
+# of the published surface chain. surface_trim left this table in 0.12.1 after
+# its live retained-side evidence, and project_curve left it after the live
+# swept-surface route produced measured projections (line and arc, saved and
+# reloaded). The entries below are still waiting for a route that produces
+# measurable geometry, so no client receives a success the release cannot back
+# up.
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
     "quilt_merge": (
-        "the surface merge is not published: on this machine the documented ProMerge.h join "
-        "creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
-        "(the quilt visit answers -4 and the model keeps zero quilts), the flat legacy tree is "
-        "rejected with -1, an explicit quilt side and a forced full regenerate change nothing, "
-        "and the joined area/closure therefore cannot be measured or handed to thicken"
+        "the surface merge is not published: on this machine the documented ProMerge.h array "
+        "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
+        "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
+        "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
+        "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
+        "change nothing, so the joined area and closure cannot be measured or handed to thicken"
     ),
 }
 

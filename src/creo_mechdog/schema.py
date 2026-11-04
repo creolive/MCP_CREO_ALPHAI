@@ -1634,6 +1634,89 @@ class QuiltMergeOp(StrictModel):
         return self
 
 
+def _curve_reference_problem(reference: Any) -> str | None:
+    """FEAT-039/S04: describe why a projection source is unusable.
+
+    The source is one ``PRO_CURVE`` geometry id from
+    ``creo_inspect_model``; a feature label is not accepted because a sketch
+    feature may own several curves and the projection would have to pick one.
+    """
+    if not isinstance(reference, dict):
+        return "must be a single {kind:...} reference object"
+    kind = reference.get("kind")
+    if kind is None:
+        return "must carry a kind"
+    if kind != "curve":
+        return f"must be {{kind:'curve',id:<int>}}, not kind '{kind}'"
+    value = reference.get("id")
+    if type(value) is not int or not 0 <= value <= 2147483647:
+        return "curve reference requires a nonnegative 32-bit integer id"
+    return None
+
+
+def _direction_reference_problem(reference: Any) -> str | None:
+    """FEAT-039/S04: describe why a projection direction is unusable.
+
+    Only references that yield a real vector are accepted: a datum plane or
+    datum axis feature label, or a straight curve id. ``datum_plane`` labels are
+    refused because the resolver drops the label and falls back to the default
+    axis filter (live 2026-11-04, S02); a raw vector is refused because the
+    reported side would then have no measurable basis.
+    """
+    if not isinstance(reference, dict):
+        return "must be a single {kind:...} reference object"
+    kind = reference.get("kind")
+    if kind is None:
+        return "must carry a kind"
+    if kind in ("datum_feature", "datum_axis_feature"):
+        label = reference.get("label")
+        if not isinstance(label, str) or not label:
+            return f"{kind} reference requires a label"
+        return None
+    if kind == "curve":
+        value = reference.get("id")
+        if type(value) is not int or not 0 <= value <= 2147483647:
+            return "curve direction reference requires a nonnegative 32-bit integer id"
+        return None
+    if kind == "datum_plane":
+        return (
+            "must not be {kind:'datum_plane',label:...}: that resolver drops the label and "
+            "picks the default plane; use {kind:'datum_feature',label:...} for a plane feature"
+        )
+    return f"unsupported kind '{kind}': use datum_feature, datum_axis_feature or a curve id"
+
+
+class ProjectCurveOp(StrictModel):
+    """Project one curve onto one quilt along an explicit direction (FEAT-039/S04).
+
+    Exactly one quilt target, exactly one curve source and one direction
+    reference. ``side`` only flips the direction read from ``direction_ref``;
+    which side is "positive" is measured on hardware, never named after a GUI
+    view. A multi-branch projection is refused at run time by the native side
+    instead of being reported as one curve.
+    """
+
+    op: Literal["project_curve"]
+    label: Label
+    target: dict[str, Any]
+    source: dict[str, Any]
+    direction_ref: dict[str, Any]
+    side: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def valid_references(self):
+        problem = _quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"project_curve target {problem}")
+        problem = _curve_reference_problem(self.source)
+        if problem:
+            raise ValueError(f"project_curve source {problem}")
+        problem = _direction_reference_problem(self.direction_ref)
+        if problem:
+            raise ValueError(f"project_curve direction_ref {problem}")
+        return self
+
+
 class BooleanOp(StrictModel):
     op: Literal["boolean_bodies"]
     label: Label
@@ -1731,6 +1814,7 @@ Operation = Annotated[
         SolidifyOp,
         SurfaceTrimOp,
         QuiltMergeOp,
+        ProjectCurveOp,
         BooleanOp,
         RibOp,
     ],

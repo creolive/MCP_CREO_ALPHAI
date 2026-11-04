@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-日期：2026-10-18。类型：功能。优先级：P1。状态：交付中（S02 修剪已 2026-11-04 实机验收并公开；S03 缝合仍 gated，待实机 join）。目标版本：0.12.2（修剪）/ 后续版本（缝合与余下曲面项）。
+日期：2026-10-18。类型：功能。优先级：P1。状态：交付中（S02 修剪与 S04 投影曲线已 2026-11-04 实机验收并公开；S03 缝合仍 gated——路线已排除，待新路线）。目标版本：0.12.2（修剪）/ 后续版本（投影剪裁消费、缝合与余下曲面项）。
 
 来源：外部 0.3.5 曲面链路反馈 §1/§4（Creo 10.0.0.0 / release 42），触发场景为[可乐瓶五爪花瓣瓶底任务书](../validation/feedback-0.3.5-surface-2026-10-18/可乐瓶五爪花瓣瓶底建模任务书.docx)纯曲面法——8 步中 5 步无对应工具，链路几何上不可执行。见[反馈原件](../validation/feedback-0.3.5-surface-2026-10-18/report.md)。关联 [FEAT-009](FEAT-009.md)（loft 曲面模式）、[FEAT-017](FEAT-017.md)（曲面用法扩展）、[BUG-052](BUG-052.md)（曲面类型查询）。
 
@@ -138,3 +138,31 @@
 **诊断保留**：`quilt_merge` 的 details 现在固定回写 `merge_tree`、`feature_status`、`feature_id`、`quilt_item_ids`、`surface_item_ids`、`surface_visit_code`、`result_quilt_visit_code`，失败时随已测得的 `input_area_mm2` 一起发布，便于下一步定位。
 
 **下一步候选**（按成本排序）：① 用 `ProFeatureRedefine` 重建特征后复查 quilt 归属；② 先用 `ProSurfaceMergeElementsGet` 之类读取一个手工建立的 merge 特征树（需在 Creo 界面手工建一次）作为参照树；③ 改用 `ProQuiltInit` 遍历合并后模型，确认 quilt 是否以别的 id 空间存在；④ 若确认 API 不可用，S03 按"能力未实现"结项，join 需求改走 `solidify` + 布尔路线。
+
+补充（2026-11-04 同日）：交叉合并同步复测——把类型改成 `PRO_SRF_MRG_INTSCT`、并把第二张面移到真正相交的位置（`cross` 用例）后，结果仍是 **ACTIVE + 0 quilt**，与 JOIN 一致。四条路线加这次交叉复测都不产 quilt，`quilt_merge` 继续 gated，门禁消息已按实测更新。
+
+## 2026-11-04 S04 实机交付：project_curve 走扫掠面 + 交线（已公开）
+
+**两族投影元素都不可用（实测）**：`PRO_E_COPYTRIM_*` 与 `PRO_E_PROJ_CRV_*` 在本机 SDK 中只出现在 `ProElemId.h`，无父子关系、合法值或必需兄弟节点说明；`ProCurveType` 也没有"投影"类型值。用已注册的 `feature_tree` 逐条提交候选树（不重新编译，结论由内核给出）：
+
+- COPYTRIM 三个布局（`_CURVE_DATA`+`_CURVE_TBL`、平铺 `_QUILT`+`_CURVE`、`_CURVES` 数组）→ 全部 `ProFeatureWithoptionsCreate = -1`；
+- PROJECT 四个布局（`_SURFS`+`_DIR`+`PROJ_TYPE=ALONGDIR`、`_ONESRF_REF`、追加 `PRO_E_CRV_PROJCRV_TYPE`、`PROJ_TYPE=NORM2SRF`）→ 同样全部 -1；
+- 引用本身可解析（单独提交 quilt / curve / datum_feature 引用都进入创建阶段），所以被拒的是树形而不是引用。
+
+**交付路线**（文档化的两步，不是冒充）：扫掠辅助面（`ProExtrude.h`：`PRO_FEAT_DATUM_SURF` + `PRO_EXTRUDE` + surface 模式 + `PRO_E_SEC_USE_SKETCH` 指向源草图 + 对称盲深）∩ 目标 quilt（`ProDtmCrv.h` INTERSECT，`PRO_E_CRV_IP_REF_TYPE` 与 `PRO_E_CURVE_TYPE` 同取 `PRO_CURVE_TYPE_INTSRF`）。扫掠面由源曲线本身沿方向平移生成，交线逐点等于投影。细节与树形见 [G5 契约 §2.2](../development/G5-NATIVE-CONTRACT.md)。
+
+**实测（Creo 12.4.0.0，单会话串行；`build/_live_project_probe2.py`）**：
+
+| 用例 | 结果 |
+| --- | --- |
+| 源直线 (5,10,10)→(35,10,10)，方向 −Z，目标 z=0 的 40×20 填充 | 长度 **30.000 mm**，端点 **(5,10,0)/(35,10,0)**，`curve_id` 为真实几何项，`saved_file_reloaded_and_verified=true` |
+| 源圆弧 半径 8、圆心 (20,10,10)、0°→180° | 长度 **25.133 mm**（π·8），端点 **(12,10,0)/(28,10,0)** |
+| 同一模型 `side="positive"`（+Z，目标在背侧） | 按预期拒绝：`project_curve target quilt lies behind the source curve for side 'positive'` |
+
+**实现要点**：交线特征会同时产出曲线与其复合包络（实测 2 个 `PRO_CURVE` 项），只报非复合曲线；出现两条及以上非复合曲线判为多分支并拒绝。直线源的辅助面有 8 个面、圆弧源被拆成 5 张柱面，扫掠面按"法向与方向平行的平面是端盖、其余面都属于扫掠面"筛选，多面时用 `PRO_CURVE_TYPE_MULTIPLE_SEL` 一次全部作为 REF1。辅助面保留在模型中（删它会连带删掉交线），其 id 以 `helper_feature_id` 返回。
+
+**同批修复的真实缺陷**：① `curve_endpoints_native` 对复合曲线传导数数组，`ProCurveXyzdataEval` 返回 `PRO_TK_NOT_IMPLEMENTED`，改为传 NULL（端点读数已由解析端点验证）；② `feature_geometry` 的自动合并列表不含交线特征的 `PRO_CURVE` 项，补 `PRO_CURVE` 类型访问并按 id 去重合并，客户端因此能再次引用投影曲线。
+
+**验证**：`bridge.py build` 通过；`tests/unit/test_project_curve_schema.py` 22 项通过；`tools/test_surface_chain.py --case project`（离线）通过。
+
+**未验证/剩余**：多分支拒绝、非平面（圆柱）目标与边界裁切、方向与草图法向不平行的拒绝只在实现内存在，未在实机触发；`use_curve` 投影—修剪串联未开工（S02 仍只有 use-quilt）；实机驱动 `--case project --live` 未跑完——探针中断留下的排队作业占住 Toolkit 通道，`creo_reconcile_model` 判定 owner 无法证明已停止、六个动作全部不可用，未越权清理。
