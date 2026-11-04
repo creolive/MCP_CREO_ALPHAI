@@ -123,12 +123,20 @@ def main():
         for source in files:
             output.write(source, f"{NAME}/" + source.relative_to(ROOT).as_posix())
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-    archive.with_suffix(".zip.sha256").write_text(f"{checksum}  {archive.name}\n", encoding="ascii")
+    sidecar = archive.with_suffix(".zip.sha256")
+    sidecar.write_text(f"{checksum}  {archive.name}\n", encoding="ascii")
+    seed_archive = Path(summary["seed_archive"])
+    seed_sidecar = seed_archive.with_suffix(".zip.sha256")
     print(f"Public source: {archive}; {len(files)} files; SHA256 {checksum}")
     print(
         f"Seed archive: {summary['seed_archive']}; "
         f"{summary['seed_count']} seeds; SHA256 {summary['seed_archive_sha256']}"
     )
+    print("Release assets (upload all four; never a *.zip glob):")
+    for path in (archive, sidecar, seed_archive, seed_sidecar):
+        print(f"  {path}")
+    if not seed_sidecar.is_file():
+        print(f"WARNING: missing seed checksum sidecar: {seed_sidecar}", file=sys.stderr)
     if args.stage:
         print(f"GitHub upload directory: {args.stage.resolve()}")
 

@@ -33,9 +33,9 @@
 2. 运行 `tools/dev_check.py`，检查所有适用单元回归。存量风格基线需显式说明，不宣称全库严格格式通过。
 3. 在本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 和编译器环境运行原生发布回归。根据改动影响选择当前和历史套件，逐项记录命令、几何断言、参数编辑、保存擦除重载与适用回滚结果。完整回归未执行时列出具体未测模块，不把旧版本通过数改标为本版通过数。
 4. 核对工具列表与 `capabilities.py`、`creo_capabilities` compact/full 的支持摘要、32 KiB 分页预算、文档、版本、种子数、种子指纹及兼容矩阵。本地 `release_status` 应符合 `version.py` 的候选后缀，完整覆盖声明与远端 `update.is_prerelease` 分开核对。新增单位相关接口应列出毫米、英寸、混合和未知单位证据，保留实际单位名、换算、原始查询码；未知为 null，不把未执行查询填成成功。按用户 2026-10-15 要求，Creo 10 独立复测和双版本验收不作为发布门槛；其他环境收到具体反馈后再登记跟进。Creo 9 与匹配 Toolkit 9 已按 2026-10-16 决定纳入支持/要求范围，BUG-033 编译探测修复已实现；本机无 Creo 9 SDK，实机编译与运行时均未验收；发布说明须如实标注该状态。已有不同版本的测试事实分别保留，不跨环境外推通过。
-5. 使用 `tools/package.py` 与 `tools/package_seeds.py` 制作源码和种子附件；检查分发白名单、第三方许可、配置模板、开发配置、种子及 SHA256。种子附件与源码包必须成对发布，顺序固定：先用 `tools/package_seeds.py --output <new-seed.zip>` 确定性构建种子包，把实测 SHA256 显式回填到 `docs/seed_package.json` 的 `seed_archive_sha256`（同时写 `compatible_server_version`），再重建一次确认哈希不变，最后用 `tools/package.py --seed-archive <new-seed.zip> --output <new-source.zip>` 制作源码包。**DEV-061 起 `tools/package_seeds.py` 构包后默认校验 `docs/seed_package.json`**：未回填或版本不符时保留归档、打印应回填的摘要并以非零退出（`--allow-record-mismatch` 只能用于准备回填，不得用于发布）；`tests/unit/test_seed_record_gate.py` 也在单元阶段守同一件事。`tools/package.py` 的 `--seed-archive` 是必填项：缺参、摘要不符、版本不符、两份种子清单不一致或 README 当前版本段滞后都在写出任何源码包或 stage 文件之前失败（exit 非零）。旧调用不静默猜选父目录 ZIP，须补该显式参数；从新目录解压并运行适用检查，随后在具备 SDK 的环境验收安装和建模。
+5. 使用 `tools/package.py` 与 `tools/package_seeds.py` 制作源码和种子附件；检查分发白名单、第三方许可、配置模板、开发配置、种子及 SHA256。两个打包脚本各自在 ZIP 同目录生成 `<zip>.sha256`（内容为 `<完整 SHA256>  <文件名>` 一行），该文件是发布附件的一部分，不是本地临时产物。种子附件与源码包必须成对发布，顺序固定：先用 `tools/package_seeds.py --output <new-seed.zip>` 确定性构建种子包，把实测 SHA256 显式回填到 `docs/seed_package.json` 的 `seed_archive_sha256`（同时写 `compatible_server_version`），再重建一次确认哈希不变，最后用 `tools/package.py --seed-archive <new-seed.zip> --output <new-source.zip>` 制作源码包。**DEV-061 起 `tools/package_seeds.py` 构包后默认校验 `docs/seed_package.json`**：未回填或版本不符时保留归档、打印应回填的摘要并以非零退出（`--allow-record-mismatch` 只能用于准备回填，不得用于发布）；`tests/unit/test_seed_record_gate.py` 也在单元阶段守同一件事。`tools/package.py` 的 `--seed-archive` 是必填项：缺参、摘要不符、版本不符、两份种子清单不一致或 README 当前版本段滞后都在写出任何源码包或 stage 文件之前失败（exit 非零）。旧调用不静默猜选父目录 ZIP，须补该显式参数；从新目录解压并运行适用检查，随后在具备 SDK 的环境验收安装和建模。
 6. 核对实际验收源码与本次变更对应的 `main` 提交一致，从该提交建立版本标签并发布 GitHub Release，附版本说明、验收摘要、环境与范围限制。核对附件及校验和，并回填 Release 链接。发布平台标记 Pre-release 与项目成熟度一致。
-7. **Release body 必须直接列出源码包与种子包的文件名及完整 SHA256**（DEV-045：0.4.1～0.4.3 的好做法在 0.4.4 漏写，升级者只能去主干 `docs/validation/RELEASE-*.md` 另找一步），发布后核对远端附件哈希与 body 记载一致再报告交付完成。已发布 Release 与附件保持原样，不回填旧版本。
+7. **Release body 必须直接列出源码包与种子包的文件名及完整 SHA256，Release 附件必须固定为四个文件**（DEV-045：0.4.1～0.4.3 的好做法在 0.4.4 漏写，升级者只能去主干 `docs/validation/RELEASE-*.md` 另找一步；DEV-045/C01：0.11.7 与 0.12.0 只上传两个 ZIP，漏传两个 `.zip.sha256` sidecar）。四个附件是 `MCP_CREO_MechDog-<版本>-source.zip`、同名的 `.zip.sha256`、`MCP_CREO_MechDog-<版本>-seed-library.zip` 与同名的 `.zip.sha256`；sidecar 由打包脚本生成，文件名必须是 `<zip 文件名>.sha256`。上传命令须逐个列出四个文件，例如 `gh release create v<版本> <source.zip> <source.zip.sha256> <seed-library.zip> <seed-library.zip.sha256> --title ... --notes-file ...`；不要用 `*.zip` 通配代替清单（通配会漏掉 sidecar）。发布后用 `gh release view <tag> --json assets` 或 `tools/check_release_assets.py --tag <tag>` 核对远端恰有这四个附件、两个 sidecar 的哈希与对应远端 ZIP 摘要一致，再报告交付完成；核对结果写入发布记录。已发布 Release 与附件保持原样，不回填旧版本。
 8. 文档与状态一致性逐 ID 核对：`version.py`、当前版本说明的标题与正文、[docs/DEVELOPMENT.md 当前入口](../DEVELOPMENT.md)、主台账（含完成档案）、本版交付 ID 的工作卡首页及远端 GitHub Release（已发布／草稿／不存在）必须一致。**“本版交付 ID”同时包含功能/接口卡（FEAT）**：本版新增或扩展的能力，其 FEAT 卡首页状态与目标版本必须与 `capabilities.py`、README 和版本说明一致；能力已发布而卡仍写“开发中/未排期”视为本项未通过（DEV-062，对应 0.11.0 反馈 F02 §4）。合入前按候选状态核对一次，发布后按实际状态再核对一次；不允许旧版本遗留的"未发布"描述继续出现在当前入口、主台账或版本说明首部。核对时对本版交付的每个 ID 分别记录：技术状态、实际交付版本、仍开放范围，以及卡首页／主台账／版本说明／开发入口／实际 Release 五处链接。本项为手动清单核对，不为此编写新发布工具、不联网代替人工确认。
 9. 相对上一正式包的身份核对：以最近一个已发布版本的正式源码包为基准，比较 `native/third_party/**` 原字节（至少含 `json.hpp` 与第三方许可）、回调指纹（沿用 `sha256-repo-lf-v1` 的 CRLF→LF 归一化算法，不因比较而改算法）、DLL 身份（loader／callback／worker 的 SHA256）与注册路径（`protk.dat`、实际注册表项及安装目录）。哈希相同只说明字节未变；内容确有变更时，按实际影响说明是否需要重新注册、迁移或重启，不以"所有哈希必须永远相同"阻止合理更新。本项同样为人工核对，不新增发布工具，不把外部报告中的字节数当作本机受测指纹。
 
@@ -64,10 +64,11 @@
 原生修改保存重载、参数编辑、回滚证据：
 未测模块、失败用例、兼容限制：
 源码包及种子包 SHA256（文件名与完整哈希，写入 Release body）：
+Release 附件清单（四个：两个 ZIP 及各自的 `.zip.sha256`；逐个记录远端名称与存在性）：
 发布候选验收结论：
 合入 main 的提交、版本标签及指向：
 GitHub Release 链接与发布状态：
-远端附件与 SHA256 核对结果（body 记载与远端附件逐项一致）：
+远端附件与 SHA256 核对结果（四个附件逐项一致，含 sidecar 内容与对应 ZIP 摘要）：
 
 逐 ID 状态核对（候选态 / 发布后各一次）：
 | ID | 技术状态 | 交付版本 | 剩余范围 | 卡首页 | 主台账 | 版本说明 | 开发入口 | 实际 Release |
