@@ -24,12 +24,6 @@ jobs:
             requirements-dev.txt
       - name: Install locked runtime and development dependencies
         run: python -m pip install -r requirements-dev.txt
-      - name: Prepare offline test configuration
-        shell: pwsh
-        run: |
-          $testConfig = Get-Content -LiteralPath config.example.json -Raw | ConvertFrom-Json
-          $testConfig.auto_start_creo = $false
-          $testConfig | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath config.json -Encoding utf8
       - name: Check style regressions and run unit validation
         run: python tools/dev_check.py
       - name: Upload development evidence

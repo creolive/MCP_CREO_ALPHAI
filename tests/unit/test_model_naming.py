@@ -59,12 +59,17 @@ class SubmitAdmissionNameRule(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="bug069_") as temporary:
             real_root, real_jobs, real_models = bridge.ROOT, bridge.JOBS, general.MODELS
-            real_config = bridge.config()
+            # Admission only needs the template path to exist; the runner below
+            # is mocked, so this fixture never reaches Creo or reads SDK data.
+            template = Path(temporary) / "Common Files/templates/mmns_part_solid_abs.prt"
+            template.parent.mkdir(parents=True)
+            template.touch()
+            test_config = {"creo_root": temporary}
             bridge.ROOT = Path(temporary)
             bridge.JOBS = Path(temporary) / "jobs"
             general.MODELS = Path(temporary) / "models"
             try:
-                with patch.object(bridge, "config", return_value=real_config):
+                with patch.object(bridge, "config", return_value=test_config):
                     with patch.object(
                         bridge, "build_native", return_value=Path(temporary) / "w.exe"
                     ):
