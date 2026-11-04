@@ -2,7 +2,7 @@
 
 日期：2026-11-04。分支 `codex/FEAT-057-mass-properties`，实机环境本机 Windows x64 / Creo 12.4.0.0 / 匹配 Toolkit SDK，单会话串行。
 
-驱动：`tools/test_adoption_mass_properties.py`（离线 11 例 + 实机 4 例，全部通过；证据 `build/acceptance_mass_properties.json`）。探针：`tools/probe_mass_properties.py`。
+驱动：`tools/test_adoption_mass_properties.py`（离线 11 例 + 实机 8 例，19 例全部通过；证据 `build/acceptance_mass_properties.json`，SHA256 `e47d4412b79a8d852a73135fff13860a7325eeed91aa1095320a2189e4b71f9b`，最终格式化源码重建后重跑）。探针：`tools/probe_mass_properties.py`。
 
 ## 一 密度口径（用户 2026-11-04 决定）
 
@@ -20,6 +20,9 @@
 | `part_with_requested_steel` | 7.85 g/cm³ → 47.1 g | `mass_g=47.1`、`density_g_cm3=7.85`、`density_source="request"`、回执带 `job_id`/`model_id` |
 | `read_only_revision` | 查询不改模型 | 查询前后 revision 相同 |
 | `fixture_block` | 底板建模成功 | succeeded |
+| `assembly_two_instances` | 两实例平移装配，总量翻倍、质心随平移移动 | `volume_mm3=12000.0`、`mass_g=94.2`、质心 `[30,10,15]`、`density_source="request"`、查询前后 revision 相同 |
+
+装配夹具（`fixture_assembly` / `fixture_second_instance` / `fixture_instance_translation`）：同一个 10×20×30 零件装两次，第二实例用 `component_placement` 平移 `[50,0,0]`，质心由 `[5,10,15]` 移到 `[30,10,15]`——与 `(5+55)/2=30` 一致，说明位置真的进了计算，不是两台叠在原点。
 
 离线覆盖：回执归一化的四类自相矛盾组合（有质量无来源、质量与体积×密度不符、体积缺失、未知来源）、未知质量单位保留原始值、schema 对 `density_g_cm3` 的边界（0 与 40 拒绝，7.85 与省略接受）。
 
@@ -31,14 +34,19 @@
 - 工具 `creo_get_mass_properties(model_id, density_g_cm3=None)`：同步等待只读作业并返回归一化回执；工具数 95→96（四处契约测试同步更新）。
 - `src/creo_mechdog/mass_properties.py`：回执归一化与自洽校验；`tests/unit/test_mass_properties.py` 9 例。
 
+## 三之二 本轮确认的两条原生事实
+
+1. **装配体查询要回退**：`ProAssemblySolidMassPropertyGet(solid, nullptr, &mp)` 在本机返回 `-1`（它要求真实的 csys selection），回退 `ProSolidMassPropertyWithDensityGet(..., PRO_MP_DENS_USE_ALWAYS, 1.0, ...)` 返回 `0` 并给出正确体积。回执保留 `assembly_query_code` 与 `source`，能看清走了哪条路径。
+2. **装配位姿不生效，位移要用 `component_placement`**：`assemble_component` 的 `placement="default"` 加 `translation` 不会移动实例（先验时质心仍是 `[5,10,15]`），改用 `component_placement` 后质心才到 `[30,10,15]`。夹具按后者写。
+
 ## 四 偏差
 
 - P00 写的 `native/mass_properties.cpp` 实际以 `mass_properties.h` + `generic.cpp` 落点：该文件的孔/查询路由与元素树辅助集中在 `generic.cpp`，独立 .cpp 会重复 `log`/`CK`/`get_optional` 走线。功能与契约不受影响。
 - 契约新增可选参数 `density_g_cm3`（用户已确认），回执多 `density_source`/`hint`/`query_codes` 三个说明性字段。
 
-## 五 未验证范围（A01 尚未整体验收）
+## 五 未验证范围
 
-- **装配体**：原生已改为走 `ProAssemblySolidMassPropertyGet(solid, csys_sel=nullptr, &mp)` 并回报 `volume_query_code`，但**实机未验**：本次尝试用 10×20×30 零件做两实例平移装配时，`assemble_component` 的 `placement` 只接受 `fixed/default/constraints`（`identity` 被 schema 拒绝），改用 `default` 仍未通过校验，`AssemblyPose` 的平移字段口径未确认。因此 P00 的"两实例装配、总质量 94.2 g"**没有通过证据**，装配路径视为未验证，不得据此外推。
-- **混合单位**：模型单位来自模板，工具集无法改单位系统；英寸件只能用离线归一化用例覆盖，未做实机。
+- **混合单位**：模型单位来自模板，工具集没有改单位系统的操作；英寸件只能用离线归一化用例（`unknown_mass_unit_keeps_model_values`）覆盖，**未做实机**。质量换算表目前只认 `g/kg/tonne`，其他质量单位报原始值。
+- 带真实材料密度的路径（`density_source="model_material"`）**未实机触发**：本机新零件的材料没有密度，只能靠显式密度走通；该分支只有离线用例。
 - Creo 9 / Creo 10 实机。
 - WorkBuddy 黑盒验收。

@@ -332,6 +332,7 @@ def submit(
                 "save",
                 "export",
                 "dump_tree",
+                "mass_properties",
                 "feature_tree",
             }:
                 raise ValueError("This operation requires a part model")

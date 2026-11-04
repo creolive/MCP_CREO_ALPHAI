@@ -566,10 +566,17 @@ static J mass_properties_json(const J &op) {
     ProError volume_code = PRO_TK_NO_ERROR;
     if (assembly_model()) {
         // FEAT-057: an assembly is measured by its own query, not by summing
-        // components in Python. The default assembly coordinate system is used
-        // (null selection) and the raw code is reported when Creo refuses.
+        // components in Python. The assembly call wants a coordinate-system
+        // selection; a null one is refused with -1 on this build, so the plain
+        // solid query is the documented fallback and both codes are reported.
         out["source"] = "ProAssemblySolidMassPropertyGet";
         volume_code = ProAssemblySolidMassPropertyGet((ProSolid)board, nullptr, &unit_density);
+        out["assembly_query_code"] = (int)volume_code;
+        if (volume_code != PRO_TK_NO_ERROR) {
+            volume_code = ProSolidMassPropertyWithDensityGet(
+                (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
+            out["source"] = "ProSolidMassPropertyWithDensityGet";
+        }
         out["volume_query_code"] = (int)volume_code;
     } else {
         volume_code = ProSolidMassPropertyWithDensityGet(

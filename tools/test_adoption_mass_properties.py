@@ -244,7 +244,128 @@ def run_live(generic_bridge) -> tuple[list[dict], bool]:
             "pass": before == after,
         }
     )
+
+    cases.extend(assembly_cases(generic_bridge, model_id))
     return cases, all(case["pass"] for case in cases)
+
+
+def assembly_cases(generic_bridge, part_id: str) -> list[dict]:
+    """Two translated instances: totals must double, the centre must shift."""
+    cases: list[dict] = []
+    created = generic_bridge.submit(
+        [
+            {
+                "op": "assemble_component",
+                "label": "mp_asm_i1",
+                "source_model_id": part_id,
+                "placement": "default",
+            }
+        ],
+        model_name="mp_asm_" + str(int(time.time())),
+        model_type="assembly",
+    )
+    job = wait(created["job_id"])
+    cases.append(
+        {
+            "case": "fixture_assembly",
+            "kind": "setup",
+            "job_id": created["job_id"],
+            "status": job.get("status"),
+            "message": job.get("message"),
+            "pass": job.get("status") == "succeeded",
+        }
+    )
+    if job.get("status") != "succeeded":
+        return cases
+
+    assembly_id = job["model_id"]
+    revision = generic_bridge.model_info(assembly_id).get("revision")
+    second = generic_bridge.submit(
+        [
+            {
+                "op": "assemble_component",
+                "label": "mp_asm_i2",
+                "source_model_id": part_id,
+                "placement": "default",
+            }
+        ],
+        model_id=assembly_id,
+        expected_revision=revision,
+    )
+    second_job = wait(second["job_id"])
+    cases.append(
+        {
+            "case": "fixture_second_instance",
+            "kind": "setup",
+            "job_id": second["job_id"],
+            "status": second_job.get("status"),
+            "message": second_job.get("message"),
+            "pass": second_job.get("status") == "succeeded",
+        }
+    )
+    if second_job.get("status") != "succeeded":
+        return cases
+
+    # Translate the second instance explicitly: the assembly pose on
+    # assemble_component is not honoured on this build, while
+    # component_placement moves the placed occurrence.
+    translate = generic_bridge.submit(
+        [
+            {
+                "op": "component_placement",
+                "component": "mp_asm_i2",
+                "translation": [BLOCK[0] * 5, 0.0, 0.0],
+            }
+        ],
+        model_id=assembly_id,
+        expected_revision=generic_bridge.model_info(assembly_id).get("revision"),
+    )
+    translate_job = wait(translate["job_id"])
+    cases.append(
+        {
+            "case": "fixture_instance_translation",
+            "kind": "setup",
+            "job_id": translate["job_id"],
+            "status": translate_job.get("status"),
+            "message": translate_job.get("message"),
+            "pass": translate_job.get("status") == "succeeded",
+        }
+    )
+    if translate_job.get("status") != "succeeded":
+        return cases
+
+    before = generic_bridge.model_info(assembly_id).get("revision")
+    receipt = generic_bridge.get_mass_properties(assembly_id, STEEL_DENSITY)
+    after = generic_bridge.model_info(assembly_id).get("revision")
+    expected_volume = EXPECTED_VOLUME * 2
+    expected_mass = EXPECTED_MASS * 2
+    # Instance one spans x 0..10 (centre 5), instance two is moved to 50..60
+    # (centre 55), so the assembly centre sits at x 30.
+    expected_center = [EXPECTED_CENTER[0] + BLOCK[0] * 2.5, EXPECTED_CENTER[1], EXPECTED_CENTER[2]]
+    checks = {
+        "volume_doubled": abs((receipt.get("volume_mm3") or 0) - expected_volume) < 1e-6,
+        "mass_doubled": abs((receipt.get("mass_g") or 0) - expected_mass) < 1e-6,
+        "center_translated": _close_triple(receipt.get("center_of_mass_mm"), expected_center),
+        "source_request": receipt.get("density_source") == "request",
+        "read_only_revision": before == after,
+        "assembly_query_code": (receipt.get("query_codes") or {}).get("volume") == 0,
+    }
+    cases.append(
+        {
+            "case": "assembly_two_instances",
+            "kind": "live_receipt",
+            "model_id": assembly_id,
+            "observed": receipt,
+            "expected": {
+                "volume_mm3": expected_volume,
+                "mass_g": expected_mass,
+                "center_of_mass_mm": expected_center,
+            },
+            "checks": checks,
+            "pass": all(checks.values()),
+        }
+    )
+    return cases
 
 
 def _close_triple(value, expected) -> bool:
