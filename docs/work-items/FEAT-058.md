@@ -70,3 +70,5 @@
 
 未验证/边界：改型对指向该壁的下游特征只有离线判定与原生 `ProFeatureChildrenGet` 守卫（实机 wall 的 children 为 0，未构造子特征）；非矩形截面、非 XY/XZ/YZ 支撑面、`sheetmetal_flange`/后续特征附着在原生首壁上、Creo 9/10 实机、WorkBuddy 黑盒均未验证。厚度只由体积反算证明（`ProSmtPartThicknessValueGet` 在新鲜钣金模板读到 0）。
 
+交付记录：提交 `464a27e`（分支 `codex/FEAT-058-native-planar-wall`，父提交 `88a02dc`，提交时工作区干净）。受测源码指纹（SHA256 前 16 位）：`native/planar_wall.cpp ef3d0110295714b6`、`native/planar_wall.h e1956e8522579d7f`、`native/generic.cpp 3294e2848f69ec55`、`native/advanced.cpp be9056b6d9a77d28`、`src/creo_mechdog/native_planar_wall.py fe5ac85f8c9b8620`、`src/creo_mechdog/schema.py dbd66fccf6b648b6`、`src/creo_mechdog/capabilities.py c1caf4351f3871f2`、`generic_bridge.py 7da439dc26a3c5b6`、`server.py 623791f4f1967c09`、`tools/test_adoption_planar_wall.py 75f436a61d99a42b`。未跑 `tools/dev_check.py` 的单元部分（其环境与本机虚拟环境安装路径冲突），语言检查 `--skip-unit` 无回归。
+
