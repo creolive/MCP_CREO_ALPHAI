@@ -1,5 +1,5 @@
 {
-  "compatible_server_version": "0.12.1",
-  "seed_archive_name": "MCP_CREO_MechDog-0.12.1-seed-library.zip",
-  "seed_archive_sha256": "ede9e9f3f3dadb09928045ec14f045d40fef86260deca34ad8ed6de627b59cb5"
+  "compatible_server_version": "0.12.2",
+  "seed_archive_name": "MCP_CREO_MechDog-0.12.2-seed-library.zip",
+  "seed_archive_sha256": "044f1da0f78c52cf3fe11993486184063ceafac82615e77c28a02368f17ea2eb"
 }
