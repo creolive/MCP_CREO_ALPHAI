@@ -60,11 +60,15 @@ class SurfaceTrimSchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tool"):
             validate_operations([trim_operation(tool={"kind": "body", "id": 3})])
 
-    def test_rejects_curve_tool_use_curve_variant(self):
-        # use-curve trimming is not part of the first release; a curve tool is
-        # refused instead of being forwarded as an unproven tree variant.
+    def test_accepts_curve_tool_use_curve_variant(self):
+        # The use-curve tree was measured live on 2026-11-04 (200/600 split of an
+        # 800 mm2 fill), so a curve tool is a real trimming tool now.
+        validated = validate_operations([trim_operation(tool={"kind": "curve", "id": 41})])
+        self.assertEqual(validated[0]["tool"], {"kind": "curve", "id": 41})
+
+    def test_rejects_curve_tool_without_integer_id(self):
         with self.assertRaisesRegex(ValueError, "tool"):
-            validate_operations([trim_operation(tool={"kind": "curve", "id": 41})])
+            validate_operations([trim_operation(tool={"kind": "curve", "label": "cut"})])
 
     def test_rejects_tool_list(self):
         with self.assertRaisesRegex(ValueError, "tool"):
@@ -137,8 +141,10 @@ class SurfaceTrimNativeSourceTests(unittest.TestCase):
         self.assertIn("PRO_E_SRF_TRIM_TYPE", source)
         self.assertIn("PRO_E_SURF_TRIM_TYPE", source)
         self.assertIn("PRO_SURF_TRIM_USE_QLT", source)
-        # The use-curve variant is out of the first release.
-        self.assertNotIn("PRO_E_STD_CURVE_COLLECTION_APPL", source)
+        # Both documented variants are built; the curve one is selected by the
+        # tool kind and takes its geometry from the documented collection.
+        self.assertIn("PRO_SURF_TRIM_USE_CRV", source)
+        self.assertIn("PRO_E_STD_CURVE_COLLECTION_APPL", source)
         generic = GENERIC.read_text(encoding="utf-8")
         self.assertEqual(generic.count("generic_surface_trim(op)"), 1)
         self.assertIn('#include "surface_trim.cpp"', generic)

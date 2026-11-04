@@ -1545,12 +1545,15 @@ class SolidifyOp(StrictModel):
     new_body: bool = False
 
 
-def _quilt_reference_problem(reference: Any, *, allow_datum_plane: bool) -> str | None:
+def _quilt_reference_problem(
+    reference: Any, *, allow_datum_plane: bool, allow_curve: bool = False
+) -> str | None:
     """FEAT-039/S02: describe why a surface_trim reference is unusable.
 
-    Only explicit quilt references are accepted; the use-curve trimming
-    variant is not part of the first release, so a curve tool is refused here
-    instead of reaching an unproven native tree.
+    Quilt references are always accepted; a datum plane and a curve are
+    trimming tools only, so they are opt-in. A curve is passed as the geometry
+    item (`{kind: curve, id: N}`) because that is what the use-curve tree
+    consumes; a curve feature label would name the parent sketch instead.
     """
     if not isinstance(reference, dict):
         return "must be a single {kind:...} reference object"
@@ -1570,14 +1573,23 @@ def _quilt_reference_problem(reference: Any, *, allow_datum_plane: bool) -> str 
         if not isinstance(reference.get("label"), str) or not reference["label"]:
             return "datum_plane reference requires a label"
         return None
+    if allow_curve and kind == "curve":
+        value = reference.get("id")
+        if type(value) is not int or value < 0:
+            return "curve reference requires a nonnegative integer id"
+        return None
     return f"unsupported kind '{kind}'"
 
 
 class SurfaceTrimOp(StrictModel):
     """High-level surface trim (FEAT-039/S02).
 
-    The target is one quilt; the tool is one quilt or one datum plane. Curves,
-    bodies and multiple tools are refused before a job is queued. ``keep_side``
+    The target is one quilt; the tool is one quilt, one datum plane or one
+    curve. Bodies and multiple tools are refused before a job is queued. For a
+    curve tool ProTrim.h defines the two sides along the curve direction, which
+    the 2026-11-04 probe measured: reversing the curve swaps the retained
+    region, so ``kept_side_basis`` reports ``side_reference=curve_direction``.
+    ``keep_side``
     is ``one``/``two`` only — its physical direction is read back through
     ``kept_side_basis`` instead of being named after a GUI view.
     """
@@ -1593,7 +1605,7 @@ class SurfaceTrimOp(StrictModel):
         problem = _quilt_reference_problem(self.target, allow_datum_plane=False)
         if problem:
             raise ValueError(f"surface_trim target {problem}")
-        problem = _quilt_reference_problem(self.tool, allow_datum_plane=True)
+        problem = _quilt_reference_problem(self.tool, allow_datum_plane=True, allow_curve=True)
         if problem:
             raise ValueError(f"surface_trim tool {problem}")
         # The same reference object cannot be both sides of the trim. Two

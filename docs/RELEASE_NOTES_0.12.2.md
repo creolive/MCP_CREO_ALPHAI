@@ -8,6 +8,7 @@
 - 修复保留侧不生效：原实现只让 `PRO_E_PRIMARY_QLTSIDE` 跟随 `keep_side`，`PRO_E_MATERIAL_SIDE` 固定为 ONE，实机两侧得到同一区域；现在两个元素同时跟随 `keep_side`，不允许互相矛盾。
 - 修复基准面引用被静默改写：`{kind:'datum_plane',label:...}` 的标签会被几何解析丢弃，默认轴过滤选中 TOP，修剪随后停在 `PRO_FEAT_UNREGENERATED`。Python 契约与原生解析现在都拒绝在几何类引用上携带标签，指引用 `{kind:'datum_feature',label:...}`。
 - 修剪再生失败改为可诊断：返回 `regeneration`（失败阶段、特征 ID 与状态、目标 quilt、工具种类、两侧枚举值、结果特征 quilt 访问码与 ID 列表），失败消息带同一组数值；已测得的面积字段在失败记录中保留。
+- `creo_surface_trim` 的修剪工具在 quilt 与基准面之外新增**曲线**（`{kind:'curve',id:...}`），走 `ProTrim.h` 文档化的 Use Curve 变体；实机矩阵确认 `PRO_E_MATERIAL_SIDE` 决定保留侧、保留侧相对曲线方向，`kept_side_basis` 因而不报 `tool_normal` 而报 `side_reference='curve_direction'` 与 `tool_curve_id`。已知边界：用曲线修剪它自己依赖的那张 quilt（例如刚投影到其上的曲线）会在保存阶段失败并回滚，见 [G5 契约 §2.3.2](development/G5-NATIVE-CONTRACT.md)。
 - 新增公开算子 `creo_project_curve`：把一个曲线沿显式方向投影到一个 quilt，返回真实 `curve_id`、`curve_length_mm` 与两个 `endpoints_mm`。SDK 中两族投影元素（`PRO_E_COPYTRIM_*`、`PRO_E_PROJ_CRV_*`）只有 ID 而无树文档，实测 7 个候选树全部被内核拒绝，因此实现走文档化的两步路线：先由源草图沿方向生成扫掠辅助面，再用 `ProDtmCrv.h` 的 INTERSECT 求交——扫掠面由源曲线本身生成，交线逐点等于投影，不是用曲面求交冒充。实机：源直线 (5,10,10)→(35,10,10) 沿 −Z 投到 z=0 的 40×20 面得 30.000 mm、(5,10,0)/(35,10,0)；半径 8 圆弧得 25.133 mm、(12,10,0)/(28,10,0)；目标在请求背侧时按实测理由拒绝。辅助面作为真实父特征保留，其 ID 以 `helper_feature_id` 返回；方向必须与源草图平面法向平行，多分支或空投影一律失败而非挑选一条。
 - `creo_quilt_merge` 仍为门禁状态，未公开。版本入口、两份种子清单与受信摘要同步至 **0.12.2**；种子包确定性重建 SHA256 为 `044f1da0f78c52cf3fe11993486184063ceafac82615e77c28a02368f17ea2eb`（24 文件、9 种子），与两份清单一致，详见[发布记录](validation/RELEASE-0.12.2.md)。
 

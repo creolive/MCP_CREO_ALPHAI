@@ -55,7 +55,7 @@
 | **本机 SDK 差异** | 外部方案把 surface_trim 说成"Copy-Trim 特征本身"，**不成立**：本机 COPYTRIM 五个元素无任何父子关系文档；真正的曲面修剪是独立的 `PRO_FEAT_CUT` + `PRO_USE_SURFS` + `PRO_E_SRF_TRIM_TYPE` 特征。`PRO_E_TRIM_QLT_SIDE` **不是通用 trim 侧元素**（其语义按父特征族分化为 `ProExtTrimQltSide`/`ProRevTrimQltSide`/`pro_sweep_trimqlt_side`，而 `ProTrim.h` 根本不含该元素）；trim 侧用 `PRO_E_MATERIAL_SIDE`/`PRO_E_PRIMARY_QLTSIDE`/`PRO_E_STD_USEQLT_SIDE`。0.3.5 反馈所称"`PRO_E_BNDRY*` 已导出 21 条"在本机**只有 1 条**（`PRO_E_BNDRY_CONTRS`） |
 | **未验证** | `keep_side` 的 `one`/`two` 与工具法向的物理绑定；`PRO_E_SURF_TRIM_TYPE` 的合法值在本机 `constants.inc` 未导出（`ProTrim.h` 不在 `HEADERS`） |
 
-**首版能力边界（契约 §3.3）：** 目标恰好 1 个 quilt、工具恰好 1 个 quilt 或基准面（use-quilt 变体）、`keep_side` ∈ `{one,two}`；薄壳、曲线工具（use-curve 变体）、多区域/孔环**不公开**。**body 布尔不可替代 quilt 修剪语义**（`boolean_bodies` 只接受 body）。
+**能力边界（契约 §3.3）：** 目标恰好 1 个 quilt；工具为 1 个 quilt、基准面（use-quilt 变体）或 1 条曲线（use-curve 变体，2026-11-04 实机加入）；`keep_side` ∈ `{one,two}`。薄壳、多工具、多区域/孔环**不公开**；曲线工具下"两侧都保留"也不公开。**body 布尔不可替代 quilt 修剪语义**（`boolean_bodies` 只接受 body）。
 
 **返回字段冻结（契约 §4.4.2）：** `area_before_mm2`/`area_after_mm2`（各带 `*_status`）、`kept_side`（`"one"|"two"|null`）、`kept_side_basis`（含 `tool_normal`、`target_centroid`、`kept_centroid`、`signed_offset_mm`，使保留侧可被独立验证，不按 GUI 正负命名）。单位查询失败 ⇒ 数值 null + 原因，**不得填 0**。
 
@@ -167,4 +167,18 @@
 
 **统一驱动实机通过**（重启 Creo 会话后）：`tools/test_surface_chain.py --case project --live --confirm-session-usable`，run `20261104-134443-396700`，6 个作业、18 项检查全通过——直线 30.000 mm、圆弧 25.1327 mm、端点均精确到 1e-6、两次 `saved_file_reloaded_and_verified`、`route=swept_surface_intersect`/`helper_feature_id=95`/`direction_basis=datum_plane_normal`、反向拒绝。驱动同时修了两处自身缺陷：`wait_ready` 首次轮询只请求一次 retry（否则每轮都重开协调器尝试、旧状态停在 active 相位永不结束），提交改用作业回报的 revision 而不是另发只读刷新作业占住 `pending_job`。
 
-**未验证/剩余**：多分支拒绝、非平面（圆柱）目标与边界裁切、方向与草图法向不平行的拒绝只在实现内存在，未在实机触发；`use_curve` 投影—修剪串联未开工（S02 仍只有 use-quilt）。
+**未验证/剩余**：多分支拒绝、非平面（圆柱）目标与边界裁切、方向与草图法向不平行的拒绝只在实现内存在，未在实机触发。
+
+## 2026-11-04 S04 消费者：surface_trim 加入 Use Curve 变体（已公开）
+
+`ProTrim.h` §(3.1)/(3.2) 的 "Use Curve" 树与 "Use Quilt" 是两套元素：没有 `PRO_E_FEATURE_FORM`、没有 `PRO_E_KEEP_TRIM_SURF_OPT`，修剪几何来自 `PRO_E_STD_CURVE_COLLECTION_APPL`（`PRO_CURVE`/`PRO_COMP_CRV`/curve_chain），两个类型元素取 `PRO_SURF_TRIM_USE_CRV`。实机矩阵（10 个模型，`build/_live_usecurve_trim_probe.py`）：
+
+- `PRO_E_MATERIAL_SIDE` 决定保留侧：1/2 各保留一侧（200 / 600 mm²），3 表示两侧都保留（两个 quilt）；`PRO_E_PRIMARY_QLTSIDE`（1/2/-1）实测不改变结果。
+- 保留侧相对**曲线方向**：同一材质侧下把直线反向，保留区域随之交换。因此 `kept_side_basis` 报告 `side_reference="curve_direction"`、`tool_curve_id`、`tool_kind="curve"`，不报 `tool_normal`。
+- 用内核的 `feature_tree` 通道逐条提交这棵树可被接受，属于文档化路线而非猜测。
+
+操作符验证（`build/_live_op_trim_probe.py` 的 `flat` 形态）：z=0 草图直线经公开 `surface_trim` 修剪同平面填充，面积 800→600，`saved_file_reloaded_and_verified=true`。实现中修正一处真实缺陷：use-curve 特征创建后立即读状态为 `PRO_FEAT_FAILED(6)`（集合在再生时才解析），必须先 `ProSolidRegenerate` 再判状态；use-quilt 变体创建后已是 ACTIVE。
+
+**已知边界（实测，未绕过）**：先投影到某 quilt、再用该投影曲线修剪同一 quilt 的链在保存阶段失败——`ProMdlnameBackup=-1`，作业回滚、目标保持未修剪（同模型里的投影作业本身可保存）。该投影曲线是交线特征，持有被修剪 quilt 的几何项选择；修剪消费掉该 quilt 后曲线参考悬空，内核拒绝写出模型。所以"独立曲线修剪"可用，"曲线依赖目标 quilt"会在保存阶段失败并明确报错，不会被当成成功。
+
+**消费者剩余**：跨面曲线链、投影曲线对非本 quilt 的修剪、两侧同时保留（`BOTH`）都未公开；投影—修剪同一 quilt 的串联要等真实投影特征或多分支交线之外的路线。

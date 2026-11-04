@@ -400,13 +400,26 @@ def case_trim_offline() -> dict:
             return pattern in str(error)
         return False
 
+    def accepts(candidate: dict) -> bool:
+        try:
+            validate_operations([candidate])
+        except ValueError:
+            return False
+        return True
+
     check(
         "body_target_rejected",
         rejects({**operation, "target": {"kind": "body", "id": 3}}, "target"),
     )
+    # The use-curve variant is published (2026-11-04 live matrix), so a curve
+    # tool is accepted; only a curve without a real id is refused.
     check(
-        "curve_tool_rejected",
-        rejects({**operation, "tool": {"kind": "curve", "id": 41}}, "tool"),
+        "curve_tool_accepted",
+        accepts({**operation, "tool": {"kind": "curve", "id": 41}}),
+    )
+    check(
+        "curve_tool_without_id_rejected",
+        rejects({**operation, "tool": {"kind": "curve", "label": "cut"}}, "tool"),
     )
     check(
         "multi_tool_rejected",

@@ -1,43 +1,63 @@
 // surface_trim.cpp — FEAT-039/S02: the high-level surface trim.
 //
 // Contract: docs/development/G5-NATIVE-CONTRACT.md §2.3 (the documented
-// ProTrim.h "Use Quilt" tree), §3.3 (first-release boundary), §4.4.2/§4.5
-// (measurement and retained-side fields). This module reuses the S01 quilt
-// reference resolution and the shared quilt measurement; it never enumerates
-// quilts itself and never invents a retained side.
+// ProTrim.h trees), §3.3 (first-release boundary), §4.4.2/§4.5 (measurement and
+// retained-side fields). This module reuses the S01 quilt reference resolution
+// and the shared quilt measurement; it never enumerates quilts itself and never
+// invents a retained side.
 //
-// First release is the use-quilt variant only: the target is one quilt and
-// the tool is one quilt or one datum plane. The use-curve variant is refused
-// by the Python contract and is not built here.
+// Two documented variants are built: "Use Quilt" (tool = quilt or datum plane)
+// and "Use Curve" (tool = one curve, ProTrim.h §3.1/§3.2). The curve variant is
+// what lets a projected curve trim the quilt it was projected onto.
 //
 // This file is included by generic.cpp after the shared element-tree,
 // inspection and quilt helpers are visible; it defines no entry point of its
 // own beyond generic_surface_trim.
 #include <ProTrim.h>
 
+struct SurfaceTrimTool {
+    ProSelection selection = nullptr;
+    std::string kind; // "quilt" | "datum_plane" | "curve"
+    ProVector normal = {0.0, 0.0, 0.0};
+    bool normal_known = false;
+    int curve_id = -1;
+};
+
 // The tool side of the trim tree. A quilt reference goes through the S01
 // resolver; a datum plane is resolved as its owning feature and also yields
-// the real plane normal for kept_side_basis (§4.5).
-static ProSelection surface_trim_tool_selection(const J &reference, ProVector normal,
-                                                bool &normal_known) {
+// the real plane normal for kept_side_basis (§4.5); a curve is resolved as the
+// curve geometry item itself, which is what PRO_E_STD_CURVE_COLLECTION_APPL
+// takes.
+static SurfaceTrimTool surface_trim_tool(const J &reference) {
+    SurfaceTrimTool tool;
     std::string kind = reference.value("kind", "");
     auto units = inspect_length_units(board);
     auto scale = length_scale_to_mm(board, units);
-    if (kind == "quilt" || kind == "quilt_feature")
-        return resolve_quilt_reference(reference, (ProSolid)board, units, scale);
+    if (kind == "quilt" || kind == "quilt_feature") {
+        tool.kind = "quilt";
+        tool.selection = resolve_quilt_reference(reference, (ProSolid)board, units, scale);
+        return tool;
+    }
     if (kind == "datum_plane") {
-        ProSelection tool = resolve({{"kind", "datum_feature"}, {"label", reference.at("label")}});
+        tool.kind = "datum_plane";
+        tool.selection = resolve({{"kind", "datum_feature"}, {"label", reference.at("label")}});
         // resolve() leaves exactly one entry in `planes` for a datum feature.
         if (planes.size() == 1) {
             for (int i = 0; i < 3; i++)
-                normal[i] = planes[0].n[i];
-            normal_known = true;
+                tool.normal[i] = planes[0].n[i];
+            tool.normal_known = true;
         }
         return tool;
     }
-    throw std::runtime_error(
-        "surface_trim tool must be a quilt or a datum plane; the use-curve trimming "
-        "variant is not part of this release");
+    if (kind == "curve" || kind == "curve_feature") {
+        tool.kind = "curve";
+        tool.selection = resolve(reference);
+        tool.curve_id = reference.contains("id") ? reference["id"].get<int>() : -1;
+        return tool;
+    }
+    throw std::runtime_error("surface_trim tool must be one quilt, one datum plane or one "
+                             "curve; kind '" +
+                             kind + "' is not a trimming tool");
 }
 
 // The retained region after the trim. Review focus 1 of the plan, confirmed on
@@ -87,10 +107,7 @@ static void generic_surface_trim(const J &op) {
         area_before = quilt_area_native(target_quilt);
     }
 
-    ProVector tool_normal = {0.0, 0.0, 0.0};
-    bool tool_normal_known = false;
-    ProSelection tool_selection =
-        surface_trim_tool_selection(op.at("tool"), tool_normal, tool_normal_known);
+    SurfaceTrimTool tool = surface_trim_tool(op.at("tool"));
 
     // §4.5: keep_side selects the retained region. The 2026-11-04 live probe
     // (build/_live_trim_probe.py) measured that PRO_E_PRIMARY_QLTSIDE alone does
@@ -101,25 +118,40 @@ static void generic_surface_trim(const J &op) {
     int primary_side = keep_side == "one" ? PRO_TRIM_PRIM_QLT_SIDE_ONE : PRO_TRIM_PRIM_QLT_SIDE_TWO;
     int material_side = keep_side == "one" ? PRO_TRIM_MATL_SIDE_ONE : PRO_TRIM_MATL_SIDE_TWO;
 
+    bool curve_tool = tool.kind == "curve";
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_CUT);
-    integer(root, PRO_E_FEATURE_FORM, PRO_USE_SURFS);
+    if (!curve_tool)
+        integer(root, PRO_E_FEATURE_FORM, PRO_USE_SURFS);
     // PRO_E_SRF_TRIM_TYPE is non-redefinable mandatory; both type elements must
-    // agree (ProTrim.h §2.1).
-    integer(root, PRO_E_SRF_TRIM_TYPE, PRO_SURF_TRIM_USE_QLT);
-    integer(root, PRO_E_SURF_TRIM_TYPE, PRO_SURF_TRIM_USE_QLT);
+    // agree (ProTrim.h §2.1/§3.1). The use-curve tree has no FEATURE_FORM and
+    // takes its trimming geometry from PRO_E_STD_CURVE_COLLECTION_APPL.
+    integer(root, PRO_E_SRF_TRIM_TYPE, curve_tool ? PRO_SURF_TRIM_USE_CRV : PRO_SURF_TRIM_USE_QLT);
+    integer(root, PRO_E_SURF_TRIM_TYPE, curve_tool ? PRO_SURF_TRIM_USE_CRV : PRO_SURF_TRIM_USE_QLT);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
     ref(root, PRO_E_TRIM_QUILT, target_selection);
-    ref(root, PRO_E_STD_USEQLT_QLT, tool_selection);
+    if (curve_tool)
+        curve_collection(node(root, PRO_E_STD_CURVE_COLLECTION_APPL), J::array({op.at("tool")}));
+    else
+        ref(root, PRO_E_STD_USEQLT_QLT, tool.selection);
     // "Keep trim surface" stays off in this release; only the two side
     // elements follow keep_side.
     integer(root, PRO_E_MATERIAL_SIDE, material_side);
     integer(root, PRO_E_PRIMARY_QLTSIDE, primary_side);
-    integer(root, PRO_E_KEEP_TRIM_SURF_OPT, PRO_KEEP_TRIM_SURF_OPT_NO);
+    if (!curve_tool)
+        integer(root, PRO_E_KEEP_TRIM_SURF_OPT, PRO_KEEP_TRIM_SURF_OPT_NO);
     ProFeature feature = create(root);
     ProElementFree(&root);
     ProSelectionFree(&target_selection);
-    ProSelectionFree(&tool_selection);
+    ProSelectionFree(&tool.selection);
+
+    // A use-curve trim resolves its trimming geometry during regeneration: read
+    // straight after creation and the feature is PRO_FEAT_FAILED even though
+    // the kernel accepted the tree (live 2026-11-04, feature_status=6 with an
+    // unchanged area). The use-quilt variant is active at that point, so only
+    // the curve variant pays for the extra regenerate.
+    if (curve_tool)
+        CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
 
     ProFeatStatus status;
     CK(ProFeatureStatusGet(&feature, &status));
@@ -154,11 +186,17 @@ static void generic_surface_trim(const J &op) {
     // instead of being estimated from a bounding box, and signed_offset_mm is
     // null because it depends on them.
     J tool_normal_json = nullptr;
-    if (tool_normal_known && scale.known)
-        tool_normal_json = {tool_normal[0] * scale.scale, tool_normal[1] * scale.scale,
-                            tool_normal[2] * scale.scale};
+    if (tool.normal_known && scale.known)
+        tool_normal_json = {tool.normal[0] * scale.scale, tool.normal[1] * scale.scale,
+                            tool.normal[2] * scale.scale};
     details["kept_side_basis"] = {
         {"keep_side", keep_side},
+        {"tool_kind", tool.kind},
+        {"tool_curve_id", curve_tool && tool.curve_id >= 0 ? J(tool.curve_id) : J(nullptr)},
+        // A curve tool has no normal of its own: ProTrim.h defines its two sides
+        // along the curve direction, so nothing is reported where a plane normal
+        // would be.
+        {"side_reference", curve_tool ? "curve_direction" : "tool_plane_normal"},
         {"primary_quilt_side_value", primary_side},
         {"material_side_value", material_side},
         {"tool_normal", tool_normal_json},
@@ -184,7 +222,7 @@ static void generic_surface_trim(const J &op) {
                                    {"feature_id", feature.id},
                                    {"feature_status", (int)status},
                                    {"target_quilt_id", target_id},
-                                   {"tool_kind", tool_normal_known ? "datum_plane" : "quilt"},
+                                   {"tool_kind", tool.kind},
                                    {"primary_quilt_side_value", primary_side},
                                    {"material_side_value", material_side},
                                    {"owned_quilt_visit_code", (int)owned_code},
@@ -192,9 +230,8 @@ static void generic_surface_trim(const J &op) {
         stage_operation_result(details);
         throw std::runtime_error(
             "Surface trim regeneration failed (feature_status=" + std::to_string((int)status) +
-            ", feature_id=" + std::to_string(feature.id) +
-            ", target_quilt_id=" + std::to_string(target_id) +
-            ", tool=" + (tool_normal_known ? "datum_plane" : "quilt") + ", keep_side=" + keep_side +
+            ", feature_id=" + std::to_string(feature.id) + ", target_quilt_id=" +
+            std::to_string(target_id) + ", tool=" + tool.kind + ", keep_side=" + keep_side +
             "); check that the tool actually intersects the target quilt");
     }
     stage_operation_result(details);

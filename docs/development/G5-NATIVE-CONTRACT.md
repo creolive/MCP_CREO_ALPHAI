@@ -268,7 +268,40 @@ PRO_E_FEATURE_TREE
  └─ PRO_E_KEEP_TRIM_SURF_OPT(ProKeepTrimSurfOpts)
 ```
 
-"use curve" 变体把 `PRO_E_STD_USEQLT_QLT` 换成 `PRO_E_STD_CURVE_COLLECTION_APPL`，`PRO_E_SURF_TRIM_TYPE`/`PRO_E_SRF_TRIM_TYPE` 改为 `PRO_SURF_TRIM_USE_CRV`。**首版只用 use-quilt 变体**（工具是一个 quilt 或基准面），use-curve 变体不在首版范围。
+#### 2.3.1 use-curve 变体（2026-11-04 实机加入）
+
+`ProTrim.h` §(3.1)/(3.2) 的 "Use Curve" 变体单独成树：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE              = PRO_FEAT_CUT
+ ├─ PRO_E_SRF_TRIM_TYPE             = PRO_SURF_TRIM_USE_CRV (1)
+ ├─ PRO_E_STD_FEATURE_NAME          = <label>
+ ├─ PRO_E_SURF_TRIM_TYPE            = PRO_SURF_TRIM_USE_CRV (1)
+ ├─ PRO_E_TRIM_QUILT                (被修剪的 quilt)
+ ├─ PRO_E_STD_CURVE_COLLECTION_APPL (PRO_CURVE / PRO_COMP_CRV / curve_chain)
+ ├─ PRO_E_MATERIAL_SIDE             (ProTrimMatlSideOpts)
+ └─ PRO_E_PRIMARY_QLTSIDE           (ProTrimStdQuiltSideOpts)
+```
+
+实测要点（2026-11-04，`build/_live_usecurve_trim_probe.py`，40×20 填充被 y=15 直线切开）：
+
+- 该树**没有** `PRO_E_FEATURE_FORM`，也没有 `PRO_E_KEEP_TRIM_SURF_OPT`；写了反而多一层不必要的元素。
+- `PRO_E_MATERIAL_SIDE` 才是真正决定保留侧的元素：1/2 分别保留一侧（200 或 600 mm²），3 表示两侧都保留（两个 quilt）。`PRO_E_PRIMARY_QLTSIDE` 实测（1/2/-1）不改变保留结果。
+- 保留侧相对**曲线方向**：同一材质侧下把直线方向反过来，保留的区域随之交换。因此 `kept_side_basis` 报告 `side_reference="curve_direction"`、`tool_curve_id` 与 `tool_kind="curve"`，不报告 `tool_normal`。
+- 曲线特征创建后立即读状态是 `PRO_FEAT_FAILED(6)`，因为集合要等再生才解析；先 `ProSolidRegenerate` 再读状态即为 ACTIVE。use-quilt 变体创建后已是 ACTIVE，所以只有曲线分支多付一次再生。
+- 实机操作符验证（`build/_live_op_trim_probe.py` 的 `flat` 形态）：z=0 的草图直线修剪同平面填充，面积 800→600，`kept_quilt_id` 为保留侧 quilt，作业 `saved_file_reloaded_and_verified=true`。
+
+#### 2.3.2 已知边界：投影曲线不能修剪它自己投影到的那张 quilt
+
+同一台机器上，"投影到 quilt → 用该投影曲线修剪同一 quilt"的链在保存阶段失败：
+`ProMdlnameBackup(board, destination) = -1`（`save_and_reload` 阶段），作业回滚，模型恢复为未修剪状态
+（`build/_live_op_trim_probe.py` 的 `projected` 形态）。同一模型里的投影作业本身可以保存。
+
+原因是该投影曲线是 `ProDtmCrv.h` 的**交线**，它持有被修剪 quilt 的几何项选择；修剪把这个 quilt 消费掉后，
+曲线的参考悬空，内核拒绝写出这个模型。真实投影特征（若可用）会让曲线随父曲面一起再生，这里没有那条树。
+因此：**独立曲线（草图曲线、另一张面上的曲线）修剪已验证可用；依赖目标 quilt 的曲线在保存阶段会失败并回滚**，
+调用方会看到原始 `ProMdlnameBackup` 失败信息，不会被当成成功。
 
 **注意：`PRO_E_SRF_TRIM_TYPE` 是 non-redefinable mandatory**（`ProTrim.h:276-278`），创建后不可改；`PRO_E_SURF_TRIM_TYPE` 必须与之一致。
 
@@ -328,8 +361,8 @@ PRO_E_FEATURE_TREE
 | 项 | 首版公开 | 首版明确拒绝 |
 | --- | --- | --- |
 | 目标 | 恰好 1 个 quilt | 非 quilt、多 quilt |
-| 工具 | 恰好 1 个 quilt 或基准面 | 曲线工具（use-curve 变体）、多工具 |
-| 保留侧 | `keep_side` ∈ `{"one","two"}` | 其它值 |
+| 工具 | 恰好 1 个 quilt、基准面或曲线（`{kind:'curve',id:N}`） | 多工具、跨表曲线链 |
+| 保留侧 | `keep_side` ∈ `{"one","two"}` | 其它值（曲线工具的"两侧都保留"未公开） |
 | 薄壳 | 不提供 | `thin` / `thickness` |
 | 轮廓/孔环 | 不提供 | 多区域、孔环（首版只处理单外环区域） |
 | 输出 | 修剪后的 quilt（可供 `thicken` 消费） | — |
@@ -771,3 +804,16 @@ PRO_E_FEATURE_TREE
 以及 `wrong_side_refused`（`target quilt lies behind the source curve for side 'positive'`）。
 驱动为此修了两处自身缺陷：`wait_ready` 现在只在首次轮询请求一次 retry（否则每次轮询都会重开一个协调器尝试，
 旧状态永远停在 active 相位），提交用作业自身回报的 revision，不再额外发只读刷新作业占住 `pending_job`。
+
+### 9.2 2026-11-04 S04 消费者：surface_trim 的 use-curve 变体
+
+环境同上（Creo 12.4.0.0，重启会话后单通道串行）。
+
+| 用例 | 前置 | 结果 | 判定 |
+| --- | --- | --- | --- |
+| 侧向组合矩阵 | 40×20 填充 + z=0 直线（y=15） | `MATERIAL_SIDE`=1/2 → 200 / 600 mm²；=3 → 两个 quilt；`PRIMARY_QLTSIDE` 无影响；曲线反向交换保留侧 | 语义确定 |
+| 操作符 `flat` | 同一模型经公开 `surface_trim`，工具为草图曲线 `{kind:curve,id:88}` | 面积 800→600，`kept_quilt_id=82`，`saved_file_reloaded_and_verified=true`，`kept_side_basis={tool_kind:curve, side_reference:curve_direction}` | 通过 |
+| 操作符 `projected` | 先投影到该 quilt，再用投影曲线修剪同一 quilt | 修剪几何成立，但保存阶段 `ProMdlnameBackup=-1`，作业回滚、目标仍为 800 | 边界（见 §2.3.2） |
+
+证据：`build/live_usecurve_trim_probe.json`（侧向矩阵，10 个模型）、`build/live_op_trim_probe.json`（两个操作符形态）。
+实现侧同时发现并修正一处真实缺陷：use-curve 特征创建后立即读状态是 `PRO_FEAT_FAILED(6)`，必须先再生的模型再判状态。

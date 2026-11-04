@@ -2581,11 +2581,14 @@ async def creo_surface_trim(
     tool: dict[str, Any],
     keep_side: Literal["one", "two"],
 ) -> dict[str, Any]:
-    """Trim one quilt with another quilt or a datum plane.
+    """Trim one quilt with another quilt, a datum plane or a curve.
 
     target is one quilt ({kind:'quilt',id:...} or {kind:'quilt_feature',label:...});
-    tool is one quilt or a datum plane. keep_side is 'one' or 'two'; the physical side
-    is read back through kept_side_basis instead of being named after a GUI view.
+    tool is one quilt, one datum plane or one curve ({kind:'curve',id:...}, which is
+    how a projected curve trims the quilt it was projected onto). keep_side is 'one'
+    or 'two'; the physical side is read back through kept_side_basis instead of being
+    named after a GUI view. For a curve tool the two sides follow the curve direction,
+    so kept_side_basis reports side_reference='curve_direction' and no tool_normal.
     """
     return await invoke(
         general.submit,
