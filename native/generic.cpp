@@ -560,15 +560,22 @@ static J mass_properties_json(const J &op) {
              {"density_source", "none"},
              {"hint", nullptr},
              {"source", "ProSolidMassPropertyWithDensityGet"}};
-    if (assembly_model())
-        throw std::runtime_error(
-            "Mass properties of an assembly are not implemented yet; query each part");
     auto length_units = inspect_length_units(board);
     out["length_unit"] = preview_utf8(std::wstring(length_units.length.name));
     ProMassProperty unit_density{};
-    ProError volume_code = ProSolidMassPropertyWithDensityGet(
-        (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
-    out["volume_query_code"] = (int)volume_code;
+    ProError volume_code = PRO_TK_NO_ERROR;
+    if (assembly_model()) {
+        // FEAT-057: an assembly is measured by its own query, not by summing
+        // components in Python. The default assembly coordinate system is used
+        // (null selection) and the raw code is reported when Creo refuses.
+        out["source"] = "ProAssemblySolidMassPropertyGet";
+        volume_code = ProAssemblySolidMassPropertyGet((ProSolid)board, nullptr, &unit_density);
+        out["volume_query_code"] = (int)volume_code;
+    } else {
+        volume_code = ProSolidMassPropertyWithDensityGet(
+            (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
+        out["volume_query_code"] = (int)volume_code;
+    }
     double volume_mm3 = 0.0;
     if (!volume_code) {
         out["center_of_mass_model_units"] = xyz(unit_density.center_of_gravity);

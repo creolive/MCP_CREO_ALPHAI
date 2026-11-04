@@ -38,7 +38,7 @@
 
 ## 五 未验证范围（A01 尚未整体验收）
 
-- **装配体**：`ProAssemblySolidMassPropertyGet(solid, csys_sel, &mp)` 需要 csys selection，尚未接入；当前原生对装配体明确报错 "Mass properties of an assembly are not implemented yet"。P00 的"两实例平移装配、总质量 94.2 g"因此**未验**。
+- **装配体**：原生已改为走 `ProAssemblySolidMassPropertyGet(solid, csys_sel=nullptr, &mp)` 并回报 `volume_query_code`，但**实机未验**：本次尝试用 10×20×30 零件做两实例平移装配时，`assemble_component` 的 `placement` 只接受 `fixed/default/constraints`（`identity` 被 schema 拒绝），改用 `default` 仍未通过校验，`AssemblyPose` 的平移字段口径未确认。因此 P00 的"两实例装配、总质量 94.2 g"**没有通过证据**，装配路径视为未验证，不得据此外推。
 - **混合单位**：模型单位来自模板，工具集无法改单位系统；英寸件只能用离线归一化用例覆盖，未做实机。
 - Creo 9 / Creo 10 实机。
 - WorkBuddy 黑盒验收。
