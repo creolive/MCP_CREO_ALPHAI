@@ -11,7 +11,7 @@
 - 新增公开算子 `creo_project_curve`：把一个曲线沿显式方向投影到一个 quilt，返回真实 `curve_id`、`curve_length_mm` 与两个 `endpoints_mm`。SDK 中两族投影元素（`PRO_E_COPYTRIM_*`、`PRO_E_PROJ_CRV_*`）只有 ID 而无树文档，实测 7 个候选树全部被内核拒绝，因此实现走文档化的两步路线：先由源草图沿方向生成扫掠辅助面，再用 `ProDtmCrv.h` 的 INTERSECT 求交——扫掠面由源曲线本身生成，交线逐点等于投影，不是用曲面求交冒充。实机：源直线 (5,10,10)→(35,10,10) 沿 −Z 投到 z=0 的 40×20 面得 30.000 mm、(5,10,0)/(35,10,0)；半径 8 圆弧得 25.133 mm、(12,10,0)/(28,10,0)；目标在请求背侧时按实测理由拒绝。辅助面作为真实父特征保留，其 ID 以 `helper_feature_id` 返回；方向必须与源草图平面法向平行，多分支或空投影一律失败而非挑选一条。
 - `creo_quilt_merge` 仍为门禁状态，未公开。版本入口、两份种子清单与受信摘要同步至 **0.12.2**；种子包确定性重建 SHA256 为 `044f1da0f78c52cf3fe11993486184063ceafac82615e77c28a02368f17ea2eb`（24 文件、9 种子），与两份清单一致，详见[发布记录](validation/RELEASE-0.12.2.md)。
 
-验证命令为 `python tools/test_unit.py`（2353 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py` 与 `python tools/test_surface_chain.py --case trim --live --confirm-session-usable`。结果与受测源码身份见[发布记录](validation/RELEASE-0.12.2.md)。
+验证命令为 `python tools/test_unit.py`（2375 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py`、`python tools/test_surface_chain.py --case trim --live --confirm-session-usable` 与 `python tools/test_surface_chain.py --case project --live --confirm-session-usable`（run `20261104-134443-396700`，18 项检查全通过）。结果与受测源码身份见[发布记录](validation/RELEASE-0.12.2.md)。
 
 本版实机验收只覆盖修剪的再生、面积/位置、保存与重载，以及投影曲线的直线与圆弧用例、反向拒绝和保存重载；修剪结果在重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询，`signed_offset_mm` 保持 null）、失败回滚的实机表现、`use_curve` 投影—修剪串联、投影的多分支拒绝、圆柱/非平面目标与边界裁切均未验证。Creo 9 无本机 SDK，构建与运行时未验收；Creo 10 不要求独立复测；BUG-001 的既有边界继续适用。
 

@@ -165,4 +165,6 @@
 
 **验证**：`bridge.py build` 通过；`tests/unit/test_project_curve_schema.py` 22 项通过；`tools/test_surface_chain.py --case project`（离线）通过。
 
-**未验证/剩余**：多分支拒绝、非平面（圆柱）目标与边界裁切、方向与草图法向不平行的拒绝只在实现内存在，未在实机触发；`use_curve` 投影—修剪串联未开工（S02 仍只有 use-quilt）；实机驱动 `--case project --live` 未跑完——探针中断留下的排队作业占住 Toolkit 通道，`creo_reconcile_model` 判定 owner 无法证明已停止、六个动作全部不可用，未越权清理。
+**统一驱动实机通过**（重启 Creo 会话后）：`tools/test_surface_chain.py --case project --live --confirm-session-usable`，run `20261104-134443-396700`，6 个作业、18 项检查全通过——直线 30.000 mm、圆弧 25.1327 mm、端点均精确到 1e-6、两次 `saved_file_reloaded_and_verified`、`route=swept_surface_intersect`/`helper_feature_id=95`/`direction_basis=datum_plane_normal`、反向拒绝。驱动同时修了两处自身缺陷：`wait_ready` 首次轮询只请求一次 retry（否则每轮都重开协调器尝试、旧状态停在 active 相位永不结束），提交改用作业回报的 revision 而不是另发只读刷新作业占住 `pending_job`。
+
+**未验证/剩余**：多分支拒绝、非平面（圆柱）目标与边界裁切、方向与草图法向不平行的拒绝只在实现内存在，未在实机触发；`use_curve` 投影—修剪串联未开工（S02 仍只有 use-quilt）。

@@ -177,18 +177,26 @@ def case_quilts_offline() -> dict:
     }
 
 
-async def wait_ready(client, budget_seconds: int = 210) -> dict:
+async def wait_ready(client, budget_seconds: int = 210, retry_once: bool = True) -> dict:
     """Poll the startup coordinator inside this session until it is connected.
 
     The coordinator runs on a thread of the serving process: a client that
     submits first, or that disconnects while the build phase is running, only
     ever sees the persisted `building_worker` snapshot. Polling here keeps the
     session alive until the Toolkit verification actually settles.
+
+    `retry_once` asks the coordinator for one attempt when the persisted state
+    is stale (a previous client exited mid-build). Only the first call carries
+    it: every retry starts another attempt, and a state file left in an active
+    phase cannot be replaced otherwise.
     """
     deadline = time.monotonic() + budget_seconds
     state: dict = {}
     while time.monotonic() < deadline:
-        state = (await client.call_tool("creo_startup_status", {})).structured_content
+        state = (
+            await client.call_tool("creo_startup_status", {"retry": retry_once})
+        ).structured_content
+        retry_once = False
         if state.get("connected"):
             return state
         if state.get("state") in ("timeout", "failed", "error", "blocked", "unavailable"):
@@ -1142,17 +1150,14 @@ async def case_project_live() -> dict:
             check(f"source_curve_{source}", bool(curve_ids), {"curve_ids": curve_ids})
             if not curve_ids:
                 continue
-            revision = (
-                await client.call_tool("creo_refresh_model", {"model_id": model_id})
-            ).structured_content
-            expected_revision = None
-            if revision.get("job_id"):
-                jobs.append(revision["job_id"])
-                expected_revision = (
-                    await client.call_tool("creo_get_job", {"job_id": revision["job_id"]})
-                ).structured_content.get("revision")
+            # The build job already reported the revision it left the model at;
+            # a second read-only job would hold the model's pending_job and make
+            # the next submit busy for no benefit.
             state = await submit(
-                client, [project_operation(curve_ids[0], "negative")], model_id, expected_revision
+                client,
+                [project_operation(curve_ids[0], "negative")],
+                model_id,
+                build.get("revision"),
             )
             result = (state.get("result") or {}).get("operations", [{}])[-1]
             expected = PROJECT_EXPECTED[source]
@@ -1214,17 +1219,11 @@ async def case_project_live() -> dict:
                 if item.get("feature_id") == (source_feature or {}).get("id")
                 and item.get("type") == 62
             ]
-            refreshed = (
-                await client.call_tool("creo_refresh_model", {"model_id": model_id})
-            ).structured_content
-            expected_revision = None
-            if refreshed.get("job_id"):
-                jobs.append(refreshed["job_id"])
-                expected_revision = (
-                    await client.call_tool("creo_get_job", {"job_id": refreshed["job_id"]})
-                ).structured_content.get("revision")
             refused = await submit(
-                client, [project_operation(curve_ids[0], "positive")], model_id, expected_revision
+                client,
+                [project_operation(curve_ids[0], "positive")],
+                model_id,
+                build.get("revision"),
             )
             check(
                 "wrong_side_refused",

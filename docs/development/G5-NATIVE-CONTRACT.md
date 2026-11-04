@@ -763,6 +763,11 @@ PRO_E_FEATURE_TREE
 
 证据：`build/live_project_probe.json`（7 棵候选树逐条）、`build/live_ref_probe.json`（引用隔离）、
 `build/live_project_probe2.json`（三条几何用例）及对应 `jobs/*/native.log`（本机忽略目录）。
-驱动 `tools/test_surface_chain.py --case project --live --confirm-session-usable` 在本次交付时
-**未能跑完**：探针脚本中断留下的排队作业占住 Toolkit 通道，`creo_reconcile_model` 判定
-"Previous runner/worker is active or cannot be proven stopped"、六个动作全部不可用，未越权清理。
+
+统一驱动 `tools/test_surface_chain.py --case project --live --confirm-session-usable`
+在重启 Creo 会话后跑通（run `20261104-134443-396700`，6 个作业，18 项检查全通过）：
+`session_ready`、直线 30.000 mm/端点精确、圆弧 25.1327 mm/端点精确、两次 `saved_file_reloaded_and_verified`、
+`route=swept_surface_intersect`、`helper_feature_id=95`、`direction_basis=datum_plane_normal`、
+以及 `wrong_side_refused`（`target quilt lies behind the source curve for side 'positive'`）。
+驱动为此修了两处自身缺陷：`wait_ready` 现在只在首次轮询请求一次 retry（否则每次轮询都会重开一个协调器尝试，
+旧状态永远停在 active 相位），提交用作业自身回报的 revision，不再额外发只读刷新作业占住 `pending_job`。
