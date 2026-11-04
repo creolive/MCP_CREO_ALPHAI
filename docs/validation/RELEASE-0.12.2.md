@@ -16,7 +16,7 @@
 | 实机驱动（`tools/test_surface_chain.py --case trim --live --confirm-session-usable`） | `native_surface_trim="verified"`，jobs `247f76de…`、`7ae993e6…` |
 | 种子包 | 24 文件、9 种子，确定性重建 SHA256 `044f1da0f78c52cf3fe11993486184063ceafac82615e77c28a02368f17ea2eb`；`--allow-record-mismatch` 回填后再构建摘要一致，`docs/seed_package.json` 与 `docs/seed_manifest.json`、`seed_library/seed_manifest.json` 三方一致 |
 
-源码身份（本次检查）：`version.py` = 0.12.2；`tools/dev_check.py` 记录的受检源码指纹 `84d8740884d6af24a6f6f7630c5836055f9270d917ab12b6b13515a65a1a9732`（基线提交 `30b7c36`，工作区 dirty=true，因本版改动尚未提交）；README 检出字节 SHA256 `7de83ed4924deb76814bc9d1cb176f095141b9a7eee478f2a9ed8a6a8146aab3`。最终受测提交以合并到主干后的提交为准。
+源码身份（本次检查）：`version.py` = 0.12.2；`tools/dev_check.py` 记录的受检源码指纹 `6ba60640bc56bced43ee22d8b19cdb918b16ef75a59c8dd773f6b8782ff1c149（2026-11-04 S04 消费者 / S06 实体化 / S07 偏置取证 / S09 模块化之后重算；发布运行仍会再算一次，以发布那次的值为准）65a1a9732`（基线提交 `30b7c36`，工作区 dirty=true，因本版改动尚未提交）；README 检出字节 SHA256 `7de83ed4924deb76814bc9d1cb176f095141b9a7eee478f2a9ed8a6a8146aab3`。最终受测提交以合并到主干后的提交为准。
 
 ## 未验证范围
 
