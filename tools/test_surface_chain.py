@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import sys
 import time
 from datetime import datetime, timezone
@@ -567,12 +568,16 @@ async def case_trim_live() -> dict:
 MERGE_FACE = 20.0
 
 
-def merge_plan() -> list[dict]:
-    """Two adjacent 20x20 coplanar fills joined into one 800 mm2 quilt.
+def merge_plan(gap: float = 0.0) -> list[dict]:
+    """Two coplanar 20x20 fills joined into one 800 mm2 quilt.
 
+    ``gap`` separates the second face along +X: 0 gives two faces sharing an
+    edge (a join that must succeed), a positive value gives a pair that cannot
+    be joined (the negative case that must not report a false closure).
     The result is judged by the measured area and the reported closure only;
     no tolerance is claimed and no gap is measured (plan S03 step 4).
     """
+    second_min = MERGE_FACE + gap
     return [
         {
             "op": "sketch",
@@ -593,8 +598,8 @@ def merge_plan() -> list[dict]:
                 {
                     "type": "rectangle",
                     "name": "rect_b",
-                    "min": [MERGE_FACE, 0],
-                    "max": [MERGE_FACE * 2, MERGE_FACE],
+                    "min": [second_min, 0],
+                    "max": [second_min + MERGE_FACE, MERGE_FACE],
                 }
             ],
         },
@@ -605,6 +610,69 @@ def merge_plan() -> list[dict]:
             "label": "merge_result",
             "target": {"kind": "quilt_feature", "label": "merge_face_a"},
             "tool": {"kind": "quilt_feature", "label": "merge_face_b"},
+        },
+    ]
+
+
+# Closed case: a cylinder tube plus two circular caps, joined in two steps, then
+# solidified. A cylinder is chosen over a six-faced box because it needs two
+# merges instead of five, and every expected value stays analytic.
+MERGE_RADIUS = 5.0
+MERGE_HEIGHT = 10.0
+MERGE_TUBE_AREA = 2 * math.pi * MERGE_RADIUS * MERGE_HEIGHT
+MERGE_CAP_AREA = math.pi * MERGE_RADIUS * MERGE_RADIUS
+MERGE_CLOSED_AREA = MERGE_TUBE_AREA + 2 * MERGE_CAP_AREA
+MERGE_CLOSED_VOLUME = MERGE_CAP_AREA * MERGE_HEIGHT
+
+
+def merged_closed_plan() -> list[dict]:
+    """Tube + two caps joined twice into a closed quilt, then solidified.
+
+    The quilt counts as closed only if the reported closure is true and the
+    solidified volume matches pi*r^2*h; an open result must not reach the
+    solid step.
+    """
+    return [
+        {
+            "op": "sketch",
+            "label": "merge_circle_lower",
+            "entities": [
+                {"type": "circle", "name": "c_low", "center": [0, 0], "radius": MERGE_RADIUS}
+            ],
+        },
+        {
+            "op": "sketch",
+            "label": "merge_circle_upper",
+            "offset": MERGE_HEIGHT,
+            "entities": [
+                {"type": "circle", "name": "c_up", "center": [0, 0], "radius": MERGE_RADIUS}
+            ],
+        },
+        {
+            "op": "extrude",
+            "label": "merge_tube",
+            "sketch": "merge_circle_lower",
+            "mode": "surface",
+            "depth": MERGE_HEIGHT,
+        },
+        {"op": "surface_fill", "label": "merge_cap_lower", "sketch": "merge_circle_lower"},
+        {"op": "surface_fill", "label": "merge_cap_upper", "sketch": "merge_circle_upper"},
+        {
+            "op": "quilt_merge",
+            "label": "merge_half",
+            "target": {"kind": "quilt_feature", "label": "merge_tube"},
+            "tool": {"kind": "quilt_feature", "label": "merge_cap_lower"},
+        },
+        {
+            "op": "quilt_merge",
+            "label": "merge_closed_result",
+            "target": {"kind": "quilt_feature", "label": "merge_half"},
+            "tool": {"kind": "quilt_feature", "label": "merge_cap_upper"},
+        },
+        {
+            "op": "solidify",
+            "label": "merge_solid",
+            "reference": {"kind": "quilt_feature", "label": "merge_closed_result"},
         },
     ]
 
@@ -622,6 +690,11 @@ def case_merge_offline() -> dict:
     operation = merge_plan()[-1]
     validated = validate_operations([operation])
     check("merge_plan_validates", validated[0]["op"] == "quilt_merge")
+    closed_ops = validate_operations(merged_closed_plan())
+    check(
+        "closed_plan_validates",
+        closed_ops[-1]["op"] == "solidify" and closed_ops[5]["op"] == "quilt_merge",
+    )
 
     def rejects(candidate: dict, pattern: str) -> bool:
         try:
@@ -682,7 +755,7 @@ def case_merge_offline() -> dict:
 
 
 async def case_merge_live() -> dict:
-    """One model: two adjacent 20x20 fills joined into 800 mm2, open quilt."""
+    """Three models: open join, closed cylinder (with solidify), gap negative."""
     from mcp import Client
     from mcp.client.stdio import StdioServerParameters
 
@@ -695,6 +768,16 @@ async def case_merge_live() -> dict:
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
+        started = await wait_ready(client)
+        check("session_ready", bool(started.get("connected")), {"state": started.get("state")})
+        if not started.get("connected"):
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_quilt_merge": "not_verified",
+                "note": "the session never reported connected; no geometry was submitted",
+                "checks": checks,
+            }
         capabilities = (await client.call_tool("creo_capabilities", {})).structured_content
         published = "quilt_merge" in (capabilities.get("operations") or [])
         check("quilt_merge_published", published)
@@ -710,24 +793,106 @@ async def case_merge_live() -> dict:
                 "checks": checks,
             }
         run_job = job_runner(client, jobs)
+
+        # 1. Two faces sharing an edge join into one 800 mm2 open quilt.
         state = await run_job("creo_execute_plan", {"operations": merge_plan()})
         detail = state["result"]["operations"][-1]
-        expected = MERGE_FACE * MERGE_FACE * 2
+        expected_open = MERGE_FACE * MERGE_FACE * 2
         area = detail.get("area_mm2")
         check(
-            "merged_area",
-            area is not None and abs(area - expected) <= 0.5,
-            {"expected_mm2": expected, "area_mm2": area, "area_status": detail.get("area_status")},
+            "open_merge_area",
+            area is not None and abs(area - expected_open) <= 0.5,
+            {
+                "expected_mm2": expected_open,
+                "area_mm2": area,
+                "area_status": detail.get("area_status"),
+            },
         )
         check(
-            "merged_result_quilt_reported",
+            "open_merge_result_quilt_reported",
             detail.get("result_quilt_id") is not None,
             {"result_quilt_id": detail.get("result_quilt_id")},
         )
         check(
-            "merged_open_quilt_reports_false",
+            "open_merge_reports_open",
             detail.get("closed") is False,
             {"closed": detail.get("closed"), "closed_status": detail.get("closed_status")},
+        )
+        check(
+            "open_merge_saved_and_reloaded",
+            state["result"].get("saved_file_reloaded_and_verified") is True,
+            {"saved": state["result"].get("saved_file_reloaded_and_verified")},
+        )
+        if state.get("model_id"):
+            page = (
+                await client.call_tool(
+                    "creo_inspect_model",
+                    {"model_id": state["model_id"], "detail": "full", "section": "quilts"},
+                )
+            ).structured_content
+            records = (page.get("data") or {}).get("quilts") or []
+            check(
+                "open_merge_reference_readable_after_reload",
+                any(
+                    record.get("area_mm2") is not None
+                    and abs(record["area_mm2"] - expected_open) <= 0.5
+                    for record in records
+                ),
+                {"records": [record.get("area_mm2") for record in records]},
+            )
+
+        # 2. Tube plus two caps joins into a closed quilt that solidifies.
+        closed_state = await run_job("creo_execute_plan", {"operations": merged_closed_plan()})
+        closed_ops = closed_state["result"]["operations"]
+        closed_detail = closed_ops[-2] if len(closed_ops) > 1 else closed_ops[-1]
+        solid_detail = closed_ops[-1]
+        closed_area = closed_detail.get("area_mm2")
+        check(
+            "closed_merge_area",
+            closed_area is not None and abs(closed_area - MERGE_CLOSED_AREA) <= 1.0,
+            {
+                "expected_mm2": MERGE_CLOSED_AREA,
+                "area_mm2": closed_area,
+                "area_status": closed_detail.get("area_status"),
+            },
+        )
+        check(
+            "closed_merge_reports_closed",
+            closed_detail.get("closed") is True,
+            {
+                "closed": closed_detail.get("closed"),
+                "closed_status": closed_detail.get("closed_status"),
+            },
+        )
+        volume = solid_detail.get("volume_mm3")
+        check(
+            "solidified_volume",
+            volume is not None and abs(volume - MERGE_CLOSED_VOLUME) <= 1.0,
+            {
+                "expected_mm3": MERGE_CLOSED_VOLUME,
+                "volume_mm3": volume,
+                "keys": sorted(solid_detail),
+            },
+        )
+
+        # 3. Two faces with a gap must not join into a false closure.
+        gap_state = await run_job("creo_execute_plan", {"operations": merge_plan(gap=2.0)})
+        gap_detail = (gap_state["result"].get("operations") or [{}])[-1]
+        gap_failed = gap_state.get("status") == "failed"
+        gap_honest = gap_failed or (
+            gap_detail.get("closed") is not True
+            and gap_detail.get("area_mm2") is not None
+            and abs(gap_detail["area_mm2"] - expected_open) > 0.5
+        )
+        check(
+            "gap_join_does_not_claim_success",
+            gap_honest,
+            {
+                "job_status": gap_state.get("status"),
+                "closed": gap_detail.get("closed"),
+                "area_mm2": gap_detail.get("area_mm2"),
+                "message": str(gap_state.get("message"))[:200],
+            },
         )
     passed = all(item["ok"] for item in checks)
     return {

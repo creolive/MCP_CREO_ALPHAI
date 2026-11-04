@@ -121,3 +121,20 @@
 - **证据**：`build/live_trim_report.json`（驱动 `build/_live_trim.py`，非对称几何 + 期望面积断言）；`build/surface_chain/20261104-094447-635200/report.json`（`--case trim --live --confirm-session-usable`，`native_surface_trim="verified"`，jobs `247f76de…`、`7ae993e6…`）；诊断矩阵 `build/live_trim_probe.json`（10 个配置：平面/曲面目标 × 基准面/quilt 工具 × 偏移）。
 - **验证**：`bridge.py build` 通过；`test_surface_trim_schema.py` 20 项、`test_datum_plane_contract.py` 18 项通过；`tools/test_surface_chain.py --case trim`（离线）与 `--case trim --live`（实机）均 passed。
 - **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询，`signed_offset_mm` 仍为 null）、失败回滚的实机表现、`PRO_E_PRIMARY_QLTSIDE` 在薄修剪/双侧变体下的语义。
+
+## 2026-11-04 S03 实机：join 三条路线均未产出结果 quilt（保持门禁）
+
+环境同上（Creo 12.4.0.0，单会话串行）。驱动 `tools/test_surface_chain.py --case merge --live` 现含三个模型：两张共边的 20×20 面 join、圆柱筒 + 上下盖两次 join 后 `solidify`、以及 2 mm 间隙负例。
+
+**实测结果（job `86fd9e55…`、`c2d95902…`）**：join 特征的 `feature_status=0`（`PRO_FEAT_ACTIVE`），但 `ProFeatureGeomitemVisit(PRO_QUILT)` 返回 **-4** 且 0 个 quilt；改为访问 `PRO_SURFACE` 返回 0 且**恰好 4 个** surface 项（`132/134/136/138`，type=5）。合并后模型 quilt 列表为空，两张输入 quilt（91、127）被消耗。输入面积 800 mm² 可测，结果面积/闭合不可测，故 op 按设计失败，工具保持 gated。
+
+**已排除的路线**：
+
+1. 文档数组树（`PRO_E_SRF_MRG_QUILT_ARR` + CMPD/REF），默认 side → ACTIVE、4 surface、0 quilt。
+2. 同一棵树显式写 `PRO_E_SRF_MRG_QUILT_SIDE=PRO_SRF_MRG_QLT_SIDE_1` → 结果完全相同。
+3. 文档 legacy 平面树（`PRO_E_SRF_MRG_PRNT_QLT` / `PRO_E_SRF_MRG_ADTL_QLT`）→ `ProFeatureWithoptionsCreate` 返回 **-1**，Creo 12 已不接受该树。
+4. 强制 `ProSolidRegenerate(PRO_REGEN_FORCE_REGEN)` 后再访问 → 仍是 ACTIVE、4 surface、0 quilt。
+
+**诊断保留**：`quilt_merge` 的 details 现在固定回写 `merge_tree`、`feature_status`、`feature_id`、`quilt_item_ids`、`surface_item_ids`、`surface_visit_code`、`result_quilt_visit_code`，失败时随已测得的 `input_area_mm2` 一起发布，便于下一步定位。
+
+**下一步候选**（按成本排序）：① 用 `ProFeatureRedefine` 重建特征后复查 quilt 归属；② 先用 `ProSurfaceMergeElementsGet` 之类读取一个手工建立的 merge 特征树（需在 Creo 界面手工建一次）作为参照树；③ 改用 `ProQuiltInit` 遍历合并后模型，确认 quilt 是否以别的 id 空间存在；④ 若确认 API 不可用，S03 按"能力未实现"结项，join 需求改走 `solidify` + 布尔路线。

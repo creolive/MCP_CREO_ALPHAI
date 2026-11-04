@@ -18,7 +18,12 @@
 // ignored, and closure is reported only from the real volume probe.
 #include <ProMerge.h>
 
-// Path of a direct child element of the feature tree, used for array members.
+// ProMerge.h documents two trees. The flat legacy tree
+// (PRO_E_SRF_MRG_PRNT_QLT / PRO_E_SRF_MRG_ADTL_QLT) is rejected by
+// ProFeatureWithoptionsCreate with -1 on this machine, so the array tree is the
+// only usable form. It creates an ACTIVE feature that owns four PRO_SURFACE
+// items and no quilt until the solid is regenerated, which is why the flow
+// below forces a full regenerate before it looks for the result quilt.
 static ProElempath quilt_merge_array_path(int element_id) {
     ProElempathItem item = {};
     item.type = PRO_ELEM_PATH_ITEM_TYPE_ID;
@@ -29,13 +34,10 @@ static ProElempath quilt_merge_array_path(int element_id) {
     return path;
 }
 
-// One array member: a quilt compound holding the mandatory reference. The
-// per-quilt side element is optional and left at the SDK default, so the
-// retained region is whatever the documented default produces and is measured
-// rather than assumed.
 static ProElement quilt_merge_member(ProSelection quilt) {
     ProElement member = node(nullptr, PRO_E_SRF_MRG_QUILT_CMPD);
     ref(member, PRO_E_SRF_MRG_QUILT_REF, quilt);
+    integer(member, PRO_E_SRF_MRG_QUILT_SIDE, PRO_SRF_MRG_QLT_SIDE_1);
     return member;
 }
 
@@ -93,6 +95,10 @@ static void generic_quilt_merge(const J &op) {
     ProSelectionFree(&first);
     ProSelectionFree(&second);
 
+    // A forced full regenerate does not change the outcome: the feature stays
+    // ACTIVE and still owns only surface items (live 2026-11-04), so no extra
+    // regenerate is issued here.
+
     ProFeatStatus status;
     CK(ProFeatureStatusGet(&feature, &status));
 
@@ -104,6 +110,12 @@ static void generic_quilt_merge(const J &op) {
     // being raised as a raw Toolkit error.
     ProError result_visit =
         ProFeatureGeomitemVisit(&feature, PRO_QUILT, collect_geom_ids, nullptr, &ids);
+    // Live 2026-11-04: the join feature regenerates ACTIVE but reports no quilt
+    // item, so the diagnostic has to distinguish "quilt type filter wrong" from
+    // "the feature really owns nothing" - surface items are counted as well.
+    J surface_ids = J::array();
+    ProError surface_visit =
+        ProFeatureGeomitemVisit(&feature, PRO_SURFACE, collect_geom_ids, nullptr, &surface_ids);
     int result_id = -1;
     if (result_visit == PRO_TK_NO_ERROR && ids.size() == 1)
         result_id = ids[0]["id"];
@@ -142,6 +154,12 @@ static void generic_quilt_merge(const J &op) {
     details["closed"] = closed_json;
     details["closed_status"] = measurement_status_json(closed, units, scale);
     details["merge_type"] = "join";
+    details["merge_tree"] = "array";
+    details["feature_status"] = (int)status;
+    details["feature_id"] = (int)feature.id;
+    details["quilt_item_ids"] = ids;
+    details["surface_item_ids"] = surface_ids;
+    details["surface_visit_code"] = (int)surface_visit;
     details["inputs"] = {{"target_quilt_id", first_id}, {"tool_quilt_id", second_id}};
     stage_operation_result(details);
 

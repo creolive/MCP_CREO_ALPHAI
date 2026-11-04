@@ -78,11 +78,13 @@ REGISTERED_OPERATIONS = (
 # trim-result quilt reference are only proved in a live serial window. Until
 # that evidence exists the operation is refused before a job is queued, so no
 # client receives a success the release cannot back up.
-UNAVAILABLE_OPERATIONS = {
+UNAVAILABLE_OPERATIONS: dict[str, str] = {
     "quilt_merge": (
-        "the surface merge is not published yet: the documented ProMerge.h join still "
-        "needs a live serial-window run for the merged area, the result quilt reference, "
-        "closure reporting and the saved-reload hand-off to thicken"
+        "the surface merge is not published: on this machine the documented ProMerge.h join "
+        "creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
+        "(the quilt visit answers -4 and the model keeps zero quilts), the flat legacy tree is "
+        "rejected with -1, an explicit quilt side and a forced full regenerate change nothing, "
+        "and the joined area/closure therefore cannot be measured or handed to thicken"
     ),
 }
 
