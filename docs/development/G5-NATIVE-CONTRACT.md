@@ -334,6 +334,27 @@ S06 补的是**判据**，不是新树：
 **闭合** quilt（面积 1000π mm²），实体化后体积 **2000π = 6283.185307179587 mm³**（与解析值差 <1e-9），
 作业 `saved_file_reloaded_and_verified=true`；开放 quilt（40×20 填充面）按上述理由拒绝，模型保持未实体化。
 
+### 2.7 quilt 偏置：文档树存在但实测不生效（2026-11-04，S07 取证）
+
+本机 SDK 里与"偏置"有关的文档只有两处：`ProTrim.h` §(4.1) 的 **thin trim**（把修剪面按 `PRO_E_THICKNESS`
+沿 `PRO_E_STD_USEQLT_SIDE` 偏置后再切）与 `ProThicken.h` 的加厚偏移参数。**没有**独立的"偏置曲面/偏置 quilt"
+特征树：`ProQuilt.h` 只有 `Init/IdGet/SurfaceVisit/VolumeEval/IsBackupgeometry/IsInternal`，
+`ProElemId.h` 里的 `PRO_E_SRF_OFFS_SRF`/`PRO_E_SRF_OFFS_OFFSET`/`PRO_E_SRF_OFFS_TYPE`/`PRO_E_SRF_OFFS_METHOD`
+只在 thicken 与 trim 的树里作为子元素出现，没有任何头文件给出它们的父子关系。
+
+实机（`build/_live_offset_probe.py`，40×20 填充 + x=20 基准面/竖直 quilt 工具）：
+
+| 工具 | 请求 | 实测 |
+| --- | --- | --- |
+| 基准面 | `offset_mm=5`, side one | 作业成功，但保留面积仍是 **400/400**（切口没有移动到 x=15 或 x=25） |
+| 竖直 quilt | `offset_mm=5`, side one / two | 同样 400/400，两个方向的保留区不互换 |
+| 基准面 | `offset_mm=50`（必定不相交） | 作业成功且没有拒绝，切口仍在 x=20 |
+
+结论：thin-trim 的偏置元素**被内核接受但不产生可测量的偏置**；公开一个距离会让调用方得到"照做但没生效"的结果。
+因此 `surface_trim` 的 `offset_mm`/`offset_side` 字段留在 schema 里（请求是良构的），但由
+`capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
+直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

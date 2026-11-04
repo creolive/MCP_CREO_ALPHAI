@@ -140,6 +140,18 @@ static void generic_surface_trim(const J &op) {
     integer(root, PRO_E_PRIMARY_QLTSIDE, primary_side);
     if (!curve_tool)
         integer(root, PRO_E_KEEP_TRIM_SURF_OPT, PRO_KEEP_TRIM_SURF_OPT_NO);
+    // FEAT-039/S07: the documented thin-trim route (ProTrim.h §4.1) offsets the
+    // trimming surface by PRO_E_THICKNESS along PRO_E_STD_USEQLT_SIDE before it
+    // cuts, so the distance and its direction are explicit instead of inherited
+    // from a GUI view.
+    bool offset_tool = !curve_tool && op.contains("offset_mm");
+    if (offset_tool) {
+        real(root, PRO_E_THICKNESS, op["offset_mm"]);
+        integer(root, PRO_E_STD_USEQLT_SIDE,
+                op["offset_side"] == "one" ? PRO_TRIM_STD_QUILT_SIDE_ONE
+                                           : PRO_TRIM_STD_QUILT_SIDE_TWO);
+        integer(root, PRO_E_SRF_OFFS_METHOD, PRO_TRIM_SRF_OFFS_METH_NORMTOSURF);
+    }
     ProFeature feature = create(root);
     ProElementFree(&root);
     ProSelectionFree(&target_selection);
@@ -176,6 +188,8 @@ static void generic_surface_trim(const J &op) {
     for (auto it = after.begin(); it != after.end(); ++it)
         details[it.key()] = it.value();
     details["keep_side"] = keep_side;
+    details["offset_mm"] = offset_tool ? op["offset_mm"] : J(nullptr);
+    details["offset_side"] = offset_tool ? op["offset_side"] : J(nullptr);
     details["kept_quilt_id"] = kept_id < 0 ? J(nullptr) : J(kept_id);
     details["kept_quilt_source"] = kept_source ? J(kept_source) : J(nullptr);
     // Where the retained id came from, and what the direct visit said. F03's

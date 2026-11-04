@@ -1611,6 +1611,11 @@ class SurfaceTrimOp(StrictModel):
     target: dict[str, Any]
     tool: dict[str, Any]
     keep_side: Literal["one", "two"]
+    # FEAT-039/S07: the documented thin-trim route offsets the trimming
+    # surface by a distance before it cuts (ProTrim.h §4.1). The distance and
+    # its direction are given explicitly, never derived from a GUI view.
+    offset_mm: Positive | None = None
+    offset_side: Literal["one", "two"] | None = None
 
     @model_validator(mode="after")
     def valid_references(self):
@@ -1626,6 +1631,13 @@ class SurfaceTrimOp(StrictModel):
         if self.target == self.tool:
             raise ValueError(
                 "surface_trim target and tool must be distinct quilts; one quilt cannot trim itself"
+            )
+        if (self.offset_mm is None) != (self.offset_side is None):
+            raise ValueError("surface_trim offset_mm and offset_side must be given together")
+        if self.offset_mm is not None and self.tool.get("kind") == "curve":
+            raise ValueError(
+                "surface_trim offset applies to the use-quilt trimming variant; a curve "
+                "tool has no surface to offset"
             )
         return self
 

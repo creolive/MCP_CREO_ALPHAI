@@ -107,6 +107,18 @@ def require_available(operations: list[dict]) -> None:
             raise ValueError(
                 "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted"
             )
+        if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
+            # FEAT-039/S07: the documented thin-trim elements are accepted by the
+            # kernel but they do not move the cut on this machine, so a
+            # published distance would be a silent lie.
+            raise ValueError(
+                "surface_trim offset_mm is not published: the documented thin-trim "
+                "elements (PRO_E_THICKNESS with PRO_E_STD_USEQLT_SIDE and "
+                "PRO_E_SRF_OFFS_METHOD) are accepted by the kernel, but the cut does "
+                "not move (2026-11-04: a 5 mm offset on a 40x20 fill still leaves "
+                "400/400 mm2, and a 50 mm offset that cannot intersect the target is "
+                "not refused either), so the requested distance cannot be honoured"
+            )
 
 
 def families() -> dict:

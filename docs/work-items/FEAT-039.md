@@ -196,3 +196,20 @@
 **闭合 quilt 的来源**：用 360° 旋转曲面得到，**不依赖仍 gated 的 `quilt_merge`**。这也给出 S03 之外的一条闭合面路径。
 
 **未验证**：thicken 的体积字段未实机核对；`cut` 模式的体积字段未核对；闭合判据只覆盖 `mode="add"`。
+
+## 2026-11-04 S07 取证：偏置的文档树存在，但实测不生效（保持门禁）
+
+本机 SDK 与偏置有关的文档只有 `ProTrim.h` 的 thin trim（修剪面先按 `PRO_E_THICKNESS` 沿
+`PRO_E_STD_USEQLT_SIDE` 偏置再切）与 `ProThicken.h` 的加厚偏移参数；**没有**独立的偏置曲面/偏置 quilt
+特征树（`ProQuilt.h` 只有查询 API，`PRO_E_SRF_OFFS_*` 只作为 thicken/trim 的子元素出现）。
+
+实机（`build/_live_offset_probe.py`）：40×20 填充 + x=20 基准面与竖直 quilt 工具，请求 `offset_mm=5`：
+
+- 基准面工具：作业成功，但保留面积仍是 **400/400**（切口没有移到 x=15/x=25）；
+- quilt 工具：同样 400/400，两个偏置方向的保留区不互换；
+- `offset_mm=50`（必定不相交）：作业成功且**没有拒绝**，切口仍在 x=20。
+
+即：偏置元素被内核接受却不产生可测量的偏置，公开距离等于骗人。因此 `surface_trim` 的
+`offset_mm`/`offset_side` 字段保留在 schema（请求良构），但由 `capabilities.require_available`
+在排队前拒绝，消息带实测依据。偏置能力维持门禁，等能真正移动切口的路线（真实偏置曲面树，
+或按法向扫掠构造等距面——与 S04 的扫掠思路同源）。
