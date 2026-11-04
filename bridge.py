@@ -1526,6 +1526,10 @@ def compact_job(manifest: dict) -> dict:
         result_keys = (
             "success",
             "seed_load_evidence",
+            # FEAT-058: the planar wall verdict rides the polling payload; the
+            # tools return a queued job, so compact polling is where the caller
+            # reads feature identity, dimensions and the signed envelope from.
+            "planar_wall",
             "loft_seed_feature",
             "creo_release_numeric",
             "creo_release_query_code",

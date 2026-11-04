@@ -1,6 +1,6 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-类型：功能。优先级：P2。状态：已实现并实机验收（2026-11-04），待集成人同步台账与发布。目标版本：未排期。
+类型：功能。优先级：P2。状态：已实现并实机验收，复核 6 项已整改（2026-11-04）；待集成人同步台账与发布。目标版本：未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -66,9 +66,36 @@
 
 另以服务工具路径（`creo_new_sheetmetal(template="native_planar")` → `creo_sheetmetal_planar_wall`）复核一次：job `99fbbf33…` 成功、体积 6000 mm³，轮询结果携带 `planar_wall.verified=true`。此路径同时暴露并修复了初版判定块只挂在提交返回上的缺陷。
 
-测试：`tests/unit/test_native_planar_wall.py` 9 项、`test_sheetmetal_contract` 37 项、`test_t01_capability_contracts` 10 项通过；`ruff check` 干净。全量 `discover -s tests` 2276 项中出现 3 项 packing/安装布局失败、22 项 stdio 服务导入错误（均为本机虚拟环境 editable 安装指向 `codex-A03` 造成的 `server.py` 源检出保护，与本改动无关）。
+### 2026-11-04 复核整改（第二笔，关闭复核 6 项）
 
-未验证/边界：改型对指向该壁的下游特征只有离线判定与原生 `ProFeatureChildrenGet` 守卫（实机 wall 的 children 为 0，未构造子特征）；非矩形截面、非 XY/XZ/YZ 支撑面、`sheetmetal_flange`/后续特征附着在原生首壁上、Creo 9/10 实机、WorkBuddy 黑盒均未验证。厚度只由体积反算证明（`ProSmtPartThicknessValueGet` 在新鲜钣金模板读到 0）。
+复核指出 6 项问题，逐条整改如下：
+
+| # | 复核问题 | 整改 | 证据 |
+| --- | --- | --- | --- |
+| 1 | 内部草图名 `<label>_sk` 未纳入重名/墓碑保护，可覆盖受管别名 | `native_planar_wall.internal_labels/declared_names/name_conflict`；`generic_bridge.submit` 把内部名一并纳入既有别名、墓碑与计划内重复检查；原生在建草图前再查 `alias_entry(label \|\| sketch_name)` | 单测 `NameProtectionTest`；实机拒绝矩阵未受影响 |
+| 2 | 判定只比跨度，正方向请求 `n=[-1,0]`、整体偏移、缺体积/尺寸仍得 `verified=true` | 包络改为**有符号区间**（u[0,L]、v[0,W]、n[0,t] / n[-t,0]），原生 `planar_wall_require_envelope` 与 Python `envelope_problem` 双向强制；判定新增体积、方向、厚度读回、钣金 body、feature_id 必需项 | 单测 `EvidenceTest`（10 个反例）；实机 XZ 首跑即因方向不符失败并暴露第 4 行的方向语义缺陷 |
+| 3 | 厚度来自请求或记录，未独立读回 | 新增 `ProSmtBodyThicknessValueGet`/`ProSmtBodyIsLinkedToPart` 读回（`MECHDOG_HAS_*` 门控并加入 `FUNCTION_PROBES`）；创建后按承载几何的钣金 body 比对；改型开始前从已保存文件重读并与记录比对 | 实机 `PLANAR_WALL_BODIES … thickness_mm=1.0 thickness_known=1 linked=1`；改型 `thickness_loaded_mm=1.0` |
+| 4 | 公开接口未接完整：轮询看不到 `planar_wall`；同计划"创建→改型"被提前拒绝 | `bridge.compact_job` 结果白名单加入 `planar_wall`（full 本就按 page 输出）；`validate_plan` 按顺序模拟计划内别名，同计划创建→改型放行 | `test_job_result_publishes_the_verdict`、`PlanOrderTest`；实机 compact 轮询可见 |
+| 5 | 关键实机场景缺失 | 驱动扩到 8 个实机场景（正/负方向、XZ、YZ、方形→长方形改型、下游依赖、原生拒绝回滚后合法编辑、旧首壁+折边链路） | 见下表 |
+| 6 | 源码身份与交接记录未收尾 | 三份新实现文件进入 `reconciliation._deployment` 部署指纹；驱动报告改为按运行时间戳分目录并写入 commit/分支/dirty/逐文件 SHA256/worker 摘要；新增本契约文档 | `docs/development/FEAT058-PLANAR-WALL-CONTRACT.md`、`build/planar_wall/20261104T032633Z/adoption_live.json` |
+
+另修正一处方向语义缺陷：`PRO_E_STD_DIRECTION=+1` 实际沿**支撑面法向**增长，而具名平面的草图 frame normal 是"请求轴"，XZ 支撑面法向为 +Y 时直接用 `+1` 会得到 `n[-1,0]`（实机 job `c4753cb6…` 失败）。现按 `tree_direction = (support_flipped == negative) ? +1 : -1` 修正并在 `PLANAR_WALL_DIRECTION` 记录两个法向。
+
+实机结果（Creo 12.4.0.0，命令同上，报告 `build/planar_wall/20261104T032633Z/adoption_live.json`，67 项全部通过）：
+
+| 场景 | 结果 |
+| --- | --- |
+| 创建 100×60×1 / 改型 120×80 | 6000 → 9600 mm³，`feature_id` 49 不变，`thickness_measured_mm=1.0`，保存重载 true |
+| `direction=negative` | 6000 mm³，包络 `n[-1,0]`，`direction=negative` |
+| XZ / YZ 支撑面 | 各 6000 mm³，包络 `n[0,1]`，`verified=true` |
+| 方形 60×60×1 → 90×60 | 3600 → 5400 mm³，同一 `feature_id`，`square` 由 true 变 false |
+| 下游依赖 | 原生壁挂 `sheetmetal_flange` 成功（子特征 104），改型在建模前被拒：`downstream dependencies ([104])` |
+| 原生拒绝后回滚 | 转换模板模型上原生首壁 `failed`（要求钣金子类型），revision 保持 1，随后旧 `sheetmetal_wall` 成功 42920 mm³ |
+| 旧首壁 + 折边链路 | 42920 → 47178.64 mm³，`saved_file_reloaded_and_verified=true` |
+
+测试：`tests/unit/test_native_planar_wall.py` 14 项、`test_sheetmetal_contract` 37 项、`test_t01_capability_contracts` 11 项、服务/更新/引用 4 个模块合计 98 项通过；`dev_check --skip-unit` 无风格回归。
+
+未验证/边界：非矩形或多环截面；`plane` 传显式支撑面并覆写 origin；原生壁上的第二个折边与四壁（受 FEAT-014/corner relief 限制）；Creo 9/10 实机；WorkBuddy 黑盒。厚度由壁体 `ProSmtBodyThicknessValueGet` 读回，零件级 `ProSmtPartThicknessValueGet` 在新鲜钣金模板读到 0，故不再作为证据来源。
 
 交付记录：提交 `464a27e`（分支 `codex/FEAT-058-native-planar-wall`，父提交 `88a02dc`，提交时工作区干净）。受测源码指纹（SHA256 前 16 位）：`native/planar_wall.cpp ef3d0110295714b6`、`native/planar_wall.h e1956e8522579d7f`、`native/generic.cpp 3294e2848f69ec55`、`native/advanced.cpp be9056b6d9a77d28`、`src/creo_mechdog/native_planar_wall.py fe5ac85f8c9b8620`、`src/creo_mechdog/schema.py dbd66fccf6b648b6`、`src/creo_mechdog/capabilities.py c1caf4351f3871f2`、`generic_bridge.py 7da439dc26a3c5b6`、`server.py 623791f4f1967c09`、`tools/test_adoption_planar_wall.py 75f436a61d99a42b`。未跑 `tools/dev_check.py` 的单元部分（其环境与本机虚拟环境安装路径冲突），语言检查 `--skip-unit` 无回归。
 

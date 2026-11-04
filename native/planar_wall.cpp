@@ -94,18 +94,116 @@ static J planar_wall_material_bounds(const J &state) {
     return J::array({J::array({low[0], low[1], low[2]}), J::array({high[0], high[1], high[2]})});
 }
 
-static int planar_wall_sheetmetal_bodies() {
+// The wall's body is the only sheetmetal body that carries geometry; the stock
+// template keeps an empty body next to it. Gauge and part link are read from
+// that body - never taken from the request - so a wall that ignores the
+// requested thickness cannot look verified. SDK generations that do not declare
+// the body reads stay compilable through the generated capability macros; there
+// the thickness is reported as unverified instead of being invented.
+struct PlanarWallBodies {
+    int total = 0;
+    int sheetmetal = 0;
+    int material = 0;
+    double thickness = 0;
+    bool thickness_known = false;
+    int thickness_code = 0;
+    bool linked = false;
+    bool linked_known = false;
+};
+
+static PlanarWallBodies planar_wall_bodies() {
+    PlanarWallBodies evidence;
     ProSolidBody *bodies = nullptr;
     CK(ProSolidBodiesCollect((ProSolid)board, &bodies));
-    int count = 0, sheetmetal = 0;
+    int count = 0;
     CK(ProArraySizeGet((ProArray)bodies, &count));
+    evidence.total = count;
+    int material_index = -1;
+    double material_size = 0;
     for (int i = 0; i < count; i++) {
         ProBoolean smt = PRO_B_FALSE;
-        if (ProSolidBodyIsSheetmetal(&bodies[i], &smt) == PRO_TK_NO_ERROR && smt)
-            sheetmetal++;
+        if (ProSolidBodyIsSheetmetal(&bodies[i], &smt) != PRO_TK_NO_ERROR || !smt)
+            continue;
+        evidence.sheetmetal++;
+        ProOutline outline = {};
+        if (ProSolidBodyOutlineGet(&bodies[i], outline) != PRO_TK_NO_ERROR)
+            continue;
+        double size = 0;
+        for (int axis = 0; axis < 3; axis++)
+            size += fabs(outline[1][axis] - outline[0][axis]);
+        if (size <= PLANAR_WALL_ENVELOPE_TOLERANCE)
+            continue;
+        evidence.material++;
+        if (size > material_size) {
+            material_size = size;
+            material_index = i;
+        }
+    }
+    if (material_index >= 0) {
+#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+        double value = 0;
+        evidence.thickness_code = ProSmtBodyThicknessValueGet(&bodies[material_index], &value);
+        evidence.thickness_known = evidence.thickness_code == PRO_TK_NO_ERROR;
+        if (evidence.thickness_known)
+            evidence.thickness = value;
+#else
+        evidence.thickness_code = -1; // -1: this SDK generation declares no body gauge read
+#endif
+#ifdef MECHDOG_HAS_ProSmtBodyIsLinkedToPart
+        ProBoolean linked = PRO_B_FALSE;
+        if (ProSmtBodyIsLinkedToPart(&bodies[material_index], &linked) == PRO_TK_NO_ERROR) {
+            evidence.linked = linked == PRO_B_TRUE;
+            evidence.linked_known = true;
+        }
+#endif
     }
     ProArrayFree((ProArray *)&bodies);
-    return sheetmetal;
+    return evidence;
+}
+
+static void planar_wall_log_bodies(const PlanarWallBodies &bodies, const char *phase) {
+    log("PLANAR_WALL_BODIES phase=%s total=%d sheetmetal=%d material=%d thickness_mm=%.9f "
+        "thickness_known=%d thickness_code=%d linked=%d linked_known=%d\n",
+        phase, bodies.total, bodies.sheetmetal, bodies.material, bodies.thickness,
+        (int)bodies.thickness_known, bodies.thickness_code, (int)bodies.linked,
+        (int)bodies.linked_known);
+}
+
+// A span-only envelope accepted a wall that grew on the opposite side of the
+// sketch plane at the wrong origin offset. The rectangle starts at the sketch
+// origin, so the accepted interval is signed: u[0,L], v[0,W] and either
+// n[0,t] or n[-t,0].
+static void planar_wall_require_envelope(const J &envelope, double length, double width,
+                                         double thickness, bool negative, const char *phase) {
+    struct Expected {
+        const char *axis;
+        double low;
+        double high;
+    } expected[3] = {{"u", 0.0, length},
+                     {"v", 0.0, width},
+                     {"n", negative ? -thickness : 0.0, negative ? 0.0 : thickness}};
+    for (const auto &axis : expected) {
+        const J &entry = envelope[axis.axis];
+        double low = entry["min"].get<double>();
+        double high = entry["max"].get<double>();
+        double scale = std::max(std::max(fabs(axis.high - axis.low), 1.0), fabs(low) + fabs(high));
+        double tolerance =
+            std::max(PLANAR_WALL_ENVELOPE_TOLERANCE, scale * PLANAR_WALL_ENVELOPE_TOLERANCE);
+        if (fabs(low - axis.low) > tolerance || fabs(high - axis.high) > tolerance)
+            throw std::runtime_error(
+                std::string("The ") + phase + " wall envelope on " + axis.axis + " is [" +
+                std::to_string(low) + ", " + std::to_string(high) +
+                "] mm instead of the requested [" + std::to_string(axis.low) + ", " +
+                std::to_string(axis.high) +
+                "] mm: the wall grew on the wrong side of the sketch plane or away from the "
+                "sketch origin");
+    }
+    log("PLANAR_WALL_ENVELOPE phase=%s direction=%s u=[%.9f,%.9f] v=[%.9f,%.9f] "
+        "n=[%.9f,%.9f]\n",
+        phase, negative ? "negative" : "positive", envelope["u"]["min"].get<double>(),
+        envelope["u"]["max"].get<double>(), envelope["v"]["min"].get<double>(),
+        envelope["v"]["max"].get<double>(), envelope["n"]["min"].get<double>(),
+        envelope["n"]["max"].get<double>());
 }
 
 // Count the point dimensions the driving sketch actually carries. A rectangle
@@ -150,6 +248,37 @@ static void planar_wall_require_volume(double measured, double length, double wi
                                  "thickness = " + std::to_string(expected) + " mm3");
 }
 
+// PRO_E_STD_DIRECTION grows along the *support surface* normal, which is not
+// always the reported frame normal: the named-plane sketch keeps the requested
+// axis as its view normal while the datum plane under it may point the other
+// way, so XZ with direction=positive grew toward -n. The wall is documented to
+// grow toward +n, so the tree direction is corrected by the support normal the
+// sketch really sits on.
+static V planar_wall_support_normal(const J &plane) {
+    J reference = plane.is_string() ? J{{"kind", "datum_plane"},
+                                        {"axis", plane == "XY"   ? "z"
+                                                 : plane == "XZ" ? "y"
+                                                                 : "x"},
+                                        {"offset", 0}}
+                                    : plane.at("reference");
+    ProSelection support = resolve(reference);
+    ProModelitem item;
+    CK(ProSelectionModelitemGet(support, &item));
+    ProSurface surface;
+    CK(ProSurfaceInit((ProSolid)board, item.id, &surface));
+    ProSelectionFree(&support);
+    ProGeomitemdata *data = nullptr;
+    CK(ProSurfaceDataGet(surface, &data));
+    V normal = {0, 0, 0};
+    if (data && data->data.p_surface_data && data->data.p_surface_data->type == PRO_SRF_PLANE) {
+        auto &axis = data->data.p_surface_data->srf_shape.plane.e3;
+        normal = {axis[0], axis[1], axis[2]};
+    }
+    if (data)
+        ProGeomitemdataFree(&data);
+    return normalized(normal);
+}
+
 static void generic_sheetmetal_planar_wall(const J &op) {
     planar_wall_require_empty_sheetmetal("sheetmetal_planar_wall");
     std::string label = op["label"].get<std::string>();
@@ -161,6 +290,12 @@ static void generic_sheetmetal_planar_wall(const J &op) {
     // 1) The driving sketch: one rectangle covering 0..length by 0..width, fully
     //    dimensioned by coordinates so a later resize can drive its dimensions.
     std::string sketch_name = label + "_sk";
+    // The internal sketch is a real feature name: creating it while the name is
+    // already taken would overwrite a managed alias behind the caller's back.
+    if (alias_entry(label) || alias_entry(sketch_name))
+        throw std::runtime_error(
+            "The planar wall would create " + label + " and " + sketch_name +
+            ", but that name already exists in this model; managed labels are never overwritten");
     J sketch_op = {{"op", "sketch"},
                    {"label", sketch_name},
                    {"plane", op["plane"]},
@@ -184,7 +319,16 @@ static void generic_sheetmetal_planar_wall(const J &op) {
     ref(node(root, PRO_E_STD_SECTION), PRO_E_SEC_USE_SKETCH, reference);
     ProSelectionFree(&reference);
     integer(root, PRO_E_IS_UNATTACHED_WALL, PRO_B_TRUE);
-    integer(root, PRO_E_STD_DIRECTION, negative ? -1 : 1);
+    V support_normal = planar_wall_support_normal(op["plane"]);
+    bool support_flipped = dot(support_normal, n) < 0;
+    // +1 grows along +support_normal. Aligned support: that is +n. Flipped
+    // support: the tree sign has to be inverted to still grow toward +n.
+    int tree_direction = (support_flipped == negative) ? 1 : -1;
+    log("PLANAR_WALL_DIRECTION requested=%s support_flipped=%d tree=%d support_n=%.6f,%.6f,%.6f "
+        "frame_n=%.6f,%.6f,%.6f\n",
+        negative ? "negative" : "positive", (int)support_flipped, tree_direction, support_normal[0],
+        support_normal[1], support_normal[2], n[0], n[1], n[2]);
+    integer(root, PRO_E_STD_DIRECTION, tree_direction);
     integer(root, PRO_E_STD_SMT_SWAP_DRV_SIDE, PRO_B_FALSE);
     integer(node(root, PRO_E_BODY), PRO_E_BODY_USE, PRO_BODY_USE_NEW);
     // PRO_E_SMT_NEW_BODY_LINKED is documented as PRO_B_TRUE with a new body while
@@ -205,32 +349,49 @@ static void generic_sheetmetal_planar_wall(const J &op) {
     J bounds = planar_wall_material_bounds(state);
     J envelope = planar_wall_envelope(bounds, origin, u, v, n);
     int dimensions = planar_wall_dimension_count(sketch_name);
-    int sheetmetal_bodies = planar_wall_sheetmetal_bodies();
-    log("PLANAR_WALL_CREATED feature_id=%d sketch=%s dimensions=%d sheetmetal_bodies=%d "
-        "envelope_u=%.9f envelope_v=%.9f envelope_n=%.9f\n",
-        wall.id, sketch_name.c_str(), dimensions, sheetmetal_bodies,
-        envelope["u"]["max"].get<double>() - envelope["u"]["min"].get<double>(),
-        envelope["v"]["max"].get<double>() - envelope["v"]["min"].get<double>(),
-        envelope["n"]["max"].get<double>() - envelope["n"]["min"].get<double>());
+    PlanarWallBodies bodies = planar_wall_bodies();
+    planar_wall_log_bodies(bodies, "created");
+    log("PLANAR_WALL_CREATED feature_id=%d sketch=%s dimensions=%d\n", wall.id, sketch_name.c_str(),
+        dimensions);
     if (dimensions < PLANAR_WALL_MIN_DIMENSIONS)
         throw std::runtime_error("The driving sketch carries only " + std::to_string(dimensions) +
                                  " point dimensions; the rectangle would stay under-constrained");
-    if (!sheetmetal_bodies)
+    if (!bodies.sheetmetal)
         throw std::runtime_error(
             "The wall regenerated but no body reports the sheetmetal state; the feature is not a "
             "sheetmetal wall in this part");
+    if (!bodies.material)
+        throw std::runtime_error(
+            "The wall regenerated but no sheetmetal body carries geometry; the feature did not "
+            "build a wall body");
+    planar_wall_require_envelope(envelope, length, width, thickness, negative, "created");
+    // The gauge is read back from the wall's own body. A measured value that
+    // disagrees fails the operation; an unreadable one is published as
+    // unverified (older SDKs) instead of being replaced by the request.
+    if (bodies.thickness_known && fabs(bodies.thickness - thickness) > 1e-6)
+        throw std::runtime_error("The wall body carries " + std::to_string(bodies.thickness) +
+                                 " mm instead of the requested " + std::to_string(thickness) +
+                                 " mm; the sheetmetal gauge was not applied");
+#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+    if (!bodies.thickness_known)
+        throw std::runtime_error("The wall body thickness could not be read (ProSmtBody"
+                                 "ThicknessValueGet=" +
+                                 std::to_string(bodies.thickness_code) +
+                                 "); the gauge cannot be verified independently");
+#endif
 
     J frame = {{"origin", xyz(origin.data())},
                {"u_axis", xyz(u.data())},
                {"v_axis", xyz(v.data())},
                {"normal", xyz(n.data())}};
+    std::string direction = negative ? "negative" : "positive";
     remember(op, wall,
              {{"planar_wall",
                {{"sketch", sketch_name},
                 {"length", length},
                 {"width", width},
                 {"thickness", thickness},
-                {"direction", negative ? "negative" : "positive"},
+                {"direction", direction},
                 {"frame", frame}}}});
     stage_operation_result(
         {{"op", "sheetmetal_planar_wall"},
@@ -240,15 +401,21 @@ static void generic_sheetmetal_planar_wall(const J &op) {
          {"length", length},
          {"width", width},
          {"thickness", thickness},
+         {"direction", direction},
          {"square", fabs(length - width) <= 1e-9},
          {"dimension_count", dimensions},
          {"volume_mm3", measured},
          {"frame", frame},
          {"envelope", envelope},
          {"bounds_mm", bounds},
-         {"sheetmetal_body", true},
-         {"sheetmetal_bodies", sheetmetal_bodies},
-         {"thickness_source", thickness_from_parameter ? "parameter" : "element"}});
+         {"sheetmetal_body", bodies.sheetmetal > 0},
+         {"sheetmetal_bodies", bodies.sheetmetal},
+         {"material_bodies", bodies.material},
+         {"thickness_source", thickness_from_parameter ? "parameter" : "element"},
+         {"thickness_measured_mm", bodies.thickness_known ? J(bodies.thickness) : J(nullptr)},
+         {"thickness_verified", bodies.thickness_known},
+         {"thickness_body_code", bodies.thickness_code},
+         {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
 }
 
 // Resize drives the existing sketch's coordinate dimensions: the wall keeps its
@@ -263,10 +430,27 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     J record = (*wall_meta)["planar_wall"];
     std::string sketch_name = record["sketch"].get<std::string>();
     double thickness = record["thickness"].get<double>();
+    bool negative = record.value("direction", "positive") == "negative";
     J frame = record.value("frame", J::object());
     double length = op["length"].get<double>();
     double width = op["width"].get<double>();
     ProFeature wall = feature(label);
+
+    // The part was loaded from the saved file at the start of this job, so the
+    // gauge measured here is the saved-and-reloaded thickness of the previous
+    // operation. A saved wall that lost its gauge must not be resized further.
+    PlanarWallBodies loaded = planar_wall_bodies();
+    planar_wall_log_bodies(loaded, "loaded");
+    if (loaded.thickness_known && fabs(loaded.thickness - thickness) > 1e-6)
+        throw std::runtime_error("The saved wall carries " + std::to_string(loaded.thickness) +
+                                 " mm instead of the recorded " + std::to_string(thickness) +
+                                 " mm; the sheetmetal gauge did not survive save/reload");
+#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+    if (!loaded.thickness_known)
+        throw std::runtime_error("The saved wall body thickness could not be read (code " +
+                                 std::to_string(loaded.thickness_code) +
+                                 "); the gauge cannot be verified before resizing");
+#endif
 
     // A downstream feature would be silently rebuilt by an in-place reshape.
     int *children = nullptr, child_count = 0;
@@ -354,6 +538,8 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     J envelope = planar_wall_envelope(bounds, vec(frame["origin"]), vec(frame["u_axis"]),
                                       vec(frame["v_axis"]), vec(frame["normal"]));
     int dimensions = planar_wall_dimension_count(sketch_name);
+    PlanarWallBodies bodies = planar_wall_bodies();
+    planar_wall_log_bodies(bodies, "resized");
     log("PLANAR_WALL_RESIZED feature_before=%d feature_after=%d dimensions=%d volume_mm3=%.9f\n",
         wall.id, after_wall.id, dimensions, measured);
     if (after_wall.id != wall.id)
@@ -363,23 +549,39 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     if (dimensions < PLANAR_WALL_MIN_DIMENSIONS)
         throw std::runtime_error("The resize left the sketch with only " +
                                  std::to_string(dimensions) + " point dimensions");
+    if (!bodies.material)
+        throw std::runtime_error("The resize left no sheetmetal body carrying geometry");
+    planar_wall_require_envelope(envelope, length, width, thickness, negative, "resized");
+    if (bodies.thickness_known && fabs(bodies.thickness - thickness) > 1e-6)
+        throw std::runtime_error("The resized wall carries " + std::to_string(bodies.thickness) +
+                                 " mm instead of the recorded " + std::to_string(thickness) +
+                                 " mm; the in-place resize changed the gauge");
 
     aliases[label]["planar_wall"]["length"] = length;
     aliases[label]["planar_wall"]["width"] = width;
-    stage_operation_result({{"op", "resize_sheetmetal_planar_wall"},
-                            {"feature", label},
-                            {"feature_id", after_wall.id},
-                            {"feature_id_before", wall.id},
-                            {"sketch", sketch_name},
-                            {"length", length},
-                            {"width", width},
-                            {"thickness", thickness},
-                            {"square", fabs(length - width) <= 1e-9},
-                            {"dimension_count", dimensions},
-                            {"volume_mm3", measured},
-                            {"frame", frame},
-                            {"envelope", envelope},
-                            {"bounds_mm", bounds},
-                            {"sheetmetal_body", true},
-                            {"thickness_source", record.value("thickness_source", "parameter")}});
+    stage_operation_result(
+        {{"op", "resize_sheetmetal_planar_wall"},
+         {"feature", label},
+         {"feature_id", after_wall.id},
+         {"feature_id_before", wall.id},
+         {"sketch", sketch_name},
+         {"length", length},
+         {"width", width},
+         {"thickness", thickness},
+         {"direction", negative ? "negative" : "positive"},
+         {"square", fabs(length - width) <= 1e-9},
+         {"dimension_count", dimensions},
+         {"volume_mm3", measured},
+         {"frame", frame},
+         {"envelope", envelope},
+         {"bounds_mm", bounds},
+         {"sheetmetal_body", bodies.sheetmetal > 0},
+         {"sheetmetal_bodies", bodies.sheetmetal},
+         {"material_bodies", bodies.material},
+         {"thickness_source", record.value("thickness_source", "parameter")},
+         {"thickness_measured_mm", bodies.thickness_known ? J(bodies.thickness) : J(nullptr)},
+         {"thickness_verified", bodies.thickness_known},
+         {"thickness_body_code", bodies.thickness_code},
+         {"thickness_loaded_mm", loaded.thickness_known ? J(loaded.thickness) : J(nullptr)},
+         {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
 }

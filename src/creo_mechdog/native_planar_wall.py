@@ -16,7 +16,14 @@ freezes:
 * length runs along the sketch u axis, width along v and thickness along the
   signed sketch normal, so the envelope must be reported in that frame. A sorted
   world bounding box cannot prove the axes, which is why every judgement here
-  works on signed frame coordinates.
+  works on signed frame coordinates;
+* the rectangle starts at the sketch origin and the gauge grows one side of the
+  plane, so the accepted interval is signed - u[0,L], v[0,W] and n[0,t] or
+  n[-t,0]. A span-only comparison accepted a wall that grew on the opposite side
+  at an offset origin (review, 2026-11-04);
+* the gauge is read back from the wall's own body, and the resize re-reads it
+  from the saved file before editing, so neither the request nor a stored record
+  stands in for a measurement.
 
 This module is admission and judgement only: geometry, thickness read-back and
 the envelope come from the native executor, and nothing here re-derives a
@@ -34,6 +41,9 @@ SKETCH_SUFFIX = "_sk"
 # section under-constrained and must never be reported as a verified wall.
 MIN_RECTANGLE_DIMENSIONS = 4
 ENVELOPE_TOLERANCE_MM = 1e-6
+VOLUME_TOLERANCE = 1e-6
+ABSOLUTE_VOLUME_TOLERANCE_MM3 = 0.01
+DIRECTIONS = ("positive", "negative")
 
 
 def sketch_label(label: str) -> str:
@@ -41,21 +51,70 @@ def sketch_label(label: str) -> str:
     return f"{label}{SKETCH_SUFFIX}"
 
 
-def create_problem(model: dict[str, Any] | None) -> str | None:
+def internal_labels(operation: dict[str, Any]) -> tuple[str, ...]:
+    """Feature names this operation creates besides its own label.
+
+    A planar wall creates its driving sketch as ``<label>_sk``. That name is a
+    real Creo feature name and enters the managed alias table, so it has to take
+    part in duplicate, plan-collision and tombstone protection exactly like the
+    label itself.
+    """
+    if operation.get("op") != PLANAR_WALL_OP:
+        return ()
+    label = operation.get("label")
+    if not isinstance(label, str) or not label:
+        return ()
+    return (sketch_label(label),)
+
+
+def declared_names(operations: list[dict[str, Any]]) -> list[str]:
+    """Every managed feature name a plan introduces, labels and internal names."""
+    names: list[str] = []
+    for operation in operations:
+        label = operation.get("label")
+        if isinstance(label, str):
+            names.append(label)
+        names.extend(internal_labels(operation))
+    return names
+
+
+def name_conflict(names: list[str], reserved: set[str]) -> list[str]:
+    """Names that are already taken, either by an alias or earlier in this plan."""
+    conflicts: set[str] = set()
+    seen: set[str] = set()
+    for name in names:
+        if name in reserved or name in seen:
+            conflicts.add(name)
+        seen.add(name)
+    return sorted(conflicts)
+
+
+def create_problem(
+    model: dict[str, Any] | None,
+    aliases: dict[str, Any] | None = None,
+    operation: dict[str, Any] | None = None,
+) -> str | None:
     """Why a new planar wall cannot be created here, or None when it may be."""
-    if model is None:
-        return None
-    if model.get("model_type") != "sheetmetal":
-        return (
-            "sheetmetal_planar_wall requires an MCP sheetmetal model: the native "
-            "unattached planar wall only regenerates in a sheetmetal part"
-        )
-    summary = model.get("inspection_summary") or {}
-    if summary.get("has_solid"):
-        return (
-            "sheetmetal_planar_wall creates the first wall; this model already has "
-            "geometry. Create a new sheetmetal model with the native planar template"
-        )
+    if model is not None:
+        if model.get("model_type") != "sheetmetal":
+            return (
+                "sheetmetal_planar_wall requires an MCP sheetmetal model: the native "
+                "unattached planar wall only regenerates in a sheetmetal part"
+            )
+        summary = model.get("inspection_summary") or {}
+        if summary.get("has_solid"):
+            return (
+                "sheetmetal_planar_wall creates the first wall; this model already has "
+                "geometry. Create a new sheetmetal model with the native planar template"
+            )
+    if operation is not None and aliases is not None:
+        label = operation.get("label")
+        taken = [name for name in (label, *internal_labels(operation)) if name in aliases]
+        if taken:
+            return (
+                f"sheetmetal_planar_wall would create {sorted(taken)}, but that feature name "
+                "already exists in this model; managed labels are never overwritten"
+            )
     return None
 
 
@@ -111,14 +170,24 @@ def validate_plan(
     aliases: dict[str, Any] | None = None,
     features: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Raise ValueError before a job exists when a planar-wall plan is inadmissible."""
+    """Raise ValueError before a job exists when a planar-wall plan is inadmissible.
+
+    Operations are walked in order and the labels an earlier operation will
+    create are visible to a later one, so ``create -> resize`` inside one plan is
+    admitted instead of being refused as an unknown label. Feature ids are not
+    known before execution, so a plan-local wall carries only its operation kind.
+    """
+    known: dict[str, Any] = dict(aliases or {})
     for operation in operations:
         kind = operation.get("op")
         problem: str | None = None
         if kind == PLANAR_WALL_OP:
-            problem = create_problem(model)
+            problem = create_problem(model, known, operation)
+            label = operation.get("label")
+            if problem is None and isinstance(label, str):
+                known.setdefault(label, {"op": PLANAR_WALL_OP, "plan_local": True})
         elif kind == PLANAR_WALL_RESIZE_OP:
-            problem = resize_problem(model, operation, aliases, features)
+            problem = resize_problem(model, operation, known, features)
         if problem:
             raise ValueError(problem)
 
@@ -172,12 +241,28 @@ def _vector(frame: dict[str, Any], key: str) -> list[float]:
     return [float(component) for component in value]
 
 
+def expected_intervals(
+    length: float, width: float, thickness: float, direction: str
+) -> dict[str, tuple[float, float]]:
+    """Signed envelope the wall must occupy, measured along the sketch frame.
+
+    The rectangle starts at the sketch origin and the gauge grows one side of the
+    sketch plane, so the accepted interval keeps its sign: comparing spans alone
+    accepted a wall that grew on the opposite side.
+    """
+    if direction not in DIRECTIONS:
+        raise ValueError(f"unknown planar wall direction: {direction!r}")
+    n_low, n_high = (-thickness, 0.0) if direction == "negative" else (0.0, thickness)
+    return {"u": (0.0, length), "v": (0.0, width), "n": (n_low, n_high)}
+
+
 def envelope_problem(
     frame: dict[str, Any] | None,
     envelope: dict[str, Any] | None,
     length: float,
     width: float,
     thickness: float,
+    direction: str = "positive",
     tolerance: float = ENVELOPE_TOLERANCE_MM,
 ) -> str | None:
     """Why the reported frame envelope does not prove the requested rectangle."""
@@ -185,8 +270,11 @@ def envelope_problem(
         return "the planar wall result carries no sketch frame"
     if not isinstance(envelope, dict):
         return "the planar wall result carries no frame envelope"
-    expected = {"u": length, "v": width, "n": thickness}
-    for axis, requested in expected.items():
+    if direction not in DIRECTIONS:
+        return f"the planar wall result carries no usable direction ({direction!r})"
+    for axis, (want_low, want_high) in expected_intervals(
+        length, width, thickness, direction
+    ).items():
         entry = envelope.get(axis)
         if not isinstance(entry, dict) or "min" not in entry or "max" not in entry:
             return f"envelope is missing the {axis} extent"
@@ -195,11 +283,13 @@ def envelope_problem(
             return f"envelope {axis} extent is not numeric"
         if low > high:
             return f"envelope {axis} extent is not a signed interval ({low} > {high})"
-        measured = high - low
-        if abs(measured - requested) > max(tolerance, abs(requested) * tolerance):
+        scale = max(abs(want_high - want_low), 1.0, abs(low) + abs(high))
+        allowed = max(tolerance, scale * tolerance)
+        if abs(low - want_low) > allowed or abs(high - want_high) > allowed:
             return (
-                f"envelope {axis} extent {measured:.9f} mm does not match the requested "
-                f"{requested:.9f} mm"
+                f"envelope {axis} is [{low:.9f}, {high:.9f}] mm instead of the requested "
+                f"[{want_low:.9f}, {want_high:.9f}] mm: the wall grew on the wrong side of the "
+                "sketch plane or away from the sketch origin"
             )
     axes = _frame_axes(frame)
     for name, axis in axes.items():
@@ -224,6 +314,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     length = _number(result, "length")
     width = _number(result, "width")
     thickness = _number(result, "thickness")
+    direction = result.get("direction")
     projection: dict[str, Any] = {
         "op": result.get("op"),
         "feature": result.get("feature"),
@@ -232,6 +323,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "length": length,
         "width": width,
         "thickness": thickness,
+        "direction": direction,
         "square": bool(length is not None and width is not None and abs(length - width) <= 1e-9),
         "dimension_count": result.get("dimension_count"),
         "volume_mm3": result.get("volume_mm3"),
@@ -239,11 +331,17 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "envelope": result.get("envelope"),
         "sheetmetal_body": result.get("sheetmetal_body"),
         "thickness_source": result.get("thickness_source"),
+        "thickness_measured_mm": result.get("thickness_measured_mm"),
+        "thickness_verified": result.get("thickness_verified"),
+        "thickness_body_code": result.get("thickness_body_code"),
+        "body_linked": result.get("body_linked"),
     }
     if result.get("op") == PLANAR_WALL_RESIZE_OP:
+        projection["feature_id_before"] = result.get("feature_id_before")
         projection["feature_id_unchanged"] = result.get("feature_id_before") == result.get(
             "feature_id"
         )
+        projection["thickness_loaded_mm"] = result.get("thickness_loaded_mm")
     problems: list[str] = []
     if not isinstance(projection["feature_id"], int):
         problems.append("the native result carries no feature id")
@@ -255,9 +353,52 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         )
     if result.get("op") == PLANAR_WALL_RESIZE_OP and not projection["feature_id_unchanged"]:
         problems.append("the resize changed the wall feature identity")
+    if direction not in DIRECTIONS:
+        problems.append(f"the native result carries no usable direction ({direction!r})")
+    if projection["sheetmetal_body"] is not True:
+        problems.append("the result does not report the wall as a sheetmetal body")
     if length is not None and width is not None and thickness is not None:
+        volume = projection["volume_mm3"]
+        expected = length * width * thickness
+        if not isinstance(volume, (int, float)) or isinstance(volume, bool):
+            problems.append("the native result carries no measured volume")
+        elif abs(float(volume) - expected) > max(
+            ABSOLUTE_VOLUME_TOLERANCE_MM3, abs(expected) * VOLUME_TOLERANCE
+        ):
+            problems.append(
+                f"the measured volume {float(volume):.9f} mm3 does not match "
+                f"length*width*thickness = {expected:.9f} mm3"
+            )
+        measured_thickness = projection["thickness_measured_mm"]
+        if projection["thickness_verified"] is not True:
+            problems.append(
+                "the sheetmetal gauge was not read back from the wall body "
+                f"(thickness_body_code={projection['thickness_body_code']!r})"
+            )
+        elif not isinstance(measured_thickness, (int, float)) or isinstance(
+            measured_thickness, bool
+        ):
+            problems.append("the native result claims a verified gauge without a value")
+        elif abs(float(measured_thickness) - thickness) > 1e-6:
+            problems.append(
+                f"the wall body carries {float(measured_thickness):.9f} mm instead of the "
+                f"requested {thickness:.9f} mm"
+            )
+        if result.get("op") == PLANAR_WALL_RESIZE_OP:
+            loaded = projection["thickness_loaded_mm"]
+            if isinstance(loaded, (int, float)) and not isinstance(loaded, bool):
+                if abs(float(loaded) - thickness) > 1e-6:
+                    problems.append(
+                        f"the saved wall carried {float(loaded):.9f} mm instead of the recorded "
+                        f"{thickness:.9f} mm"
+                    )
         envelope = envelope_problem(
-            projection["frame"], projection["envelope"], length, width, thickness
+            projection["frame"],
+            projection["envelope"],
+            length,
+            width,
+            thickness,
+            direction if isinstance(direction, str) else "positive",
         )
         if envelope:
             problems.append(envelope)

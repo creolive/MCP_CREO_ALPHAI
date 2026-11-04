@@ -22,12 +22,21 @@
 //
 // Everything here is evidence: the wall is accepted only after regeneration,
 // a measured volume and a frame-signed envelope agree with the request.
+//
+// The envelope is compared as a *signed* interval, not as a span: the rectangle
+// starts at the sketch origin and the material grows one side of the sketch
+// plane, so a correct wall reads u[0, length], v[0, width] and either
+// n[0, thickness] (direction=positive) or n[-thickness, 0] (direction=negative).
+// Comparing spans alone accepted a wall that grew on the opposite side of the
+// plane, which the review reproduced.
 
 #pragma once
 
 // Relative tolerance accepted for length*width*thickness against the measured
 // solid volume; anything looser would hide a wrong gauge.
 static const double PLANAR_WALL_VOLUME_TOLERANCE = 1e-6;
+// Absolute floor for the signed envelope comparison, in model units (mm).
+static const double PLANAR_WALL_ENVELOPE_TOLERANCE = 1e-6;
 // The rectangle is four lines with four corners; fewer point dimensions leave
 // the section under-constrained and the wall must not be reported as verified.
 static const int PLANAR_WALL_MIN_DIMENSIONS = 4;

@@ -71,6 +71,7 @@ def create_result(**overrides) -> dict:
         "length": 100.0,
         "width": 60.0,
         "thickness": 1.0,
+        "direction": "positive",
         "dimension_count": 8,
         "volume_mm3": 6000.0,
         "frame": FRAME_XY,
@@ -81,6 +82,10 @@ def create_result(**overrides) -> dict:
         },
         "sheetmetal_body": True,
         "thickness_source": "parameter",
+        "thickness_measured_mm": 1.0,
+        "thickness_verified": True,
+        "thickness_body_code": 0,
+        "body_linked": True,
     }
     result.update(overrides)
     return result
@@ -150,6 +155,7 @@ class SquareTest(unittest.TestCase):
         square = create_result(
             length=60.0,
             width=60.0,
+            volume_mm3=3600.0,
             envelope={
                 "u": {"min": 0.0, "max": 60.0},
                 "v": {"min": 0.0, "max": 60.0},
@@ -316,6 +322,121 @@ class NativeWiringTest(unittest.TestCase):
         server = SERVER.read_text(encoding="utf-8", errors="replace")
         self.assertIn("creo_sheetmetal_planar_wall", server)
         self.assertIn("creo_resize_sheetmetal_planar_wall", server)
+
+
+class NameProtectionTest(unittest.TestCase):
+    """Review finding: the driving sketch is a feature name too."""
+
+    def test_internal_sketch_name_is_reserved(self):
+        self.assertEqual(pwall.internal_labels(create_op()), (pwall.sketch_label("wall"),))
+        self.assertIn("wall_sk", pwall.declared_names([create_op()]))
+        self.assertEqual(pwall.internal_labels({"op": "extrude", "label": "b"}), ())
+
+        taken = {"wall_sk": {"op": "sketch", "feature_id": 40}}
+        problem = pwall.create_problem(empty_sheetmetal_model(), taken, create_op())
+        self.assertIn("wall_sk", problem or "")
+        self.assertIsNone(pwall.create_problem(empty_sheetmetal_model(), {}, create_op()))
+        self.assertIsNone(pwall.create_problem(empty_sheetmetal_model()))
+
+        self.assertEqual(pwall.name_conflict(["wall", "wall_sk"], set()), [])
+        self.assertEqual(pwall.name_conflict(["wall", "wall"], set()), ["wall"])
+        self.assertEqual(pwall.name_conflict(["wall_sk", "wall_sk"], set()), ["wall_sk"])
+        self.assertEqual(pwall.name_conflict(["wall_sk"], {"wall_sk"}), ["wall_sk"])
+
+        bridge_source = (REPO_ROOT / "generic_bridge.py").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        for token in ("declared_names", "internal_labels", "name_conflict"):
+            self.assertIn(token, bridge_source)
+
+    def test_native_refuses_a_taken_internal_name(self):
+        wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
+        self.assertIn("alias_entry(sketch_name)", wall)
+        self.assertIn("managed labels are never overwritten", wall)
+
+
+class PlanOrderTest(unittest.TestCase):
+    """A plan may create and resize its own wall; a stranger label may not."""
+
+    def test_create_then_resize_in_one_plan(self):
+        resize = {
+            "op": pwall.PLANAR_WALL_RESIZE_OP,
+            "feature": "wall",
+            "length": 120.0,
+            "width": 80.0,
+        }
+        model = empty_sheetmetal_model()
+        pwall.validate_plan(model, [create_op(), resize])
+        with self.assertRaises(ValueError):
+            pwall.validate_plan(model, [resize])
+        with self.assertRaises(ValueError):
+            pwall.validate_plan(model, [create_op(), dict(resize, feature="other")])
+
+
+class EvidenceTest(unittest.TestCase):
+    """Review finding: missing or misdirected evidence must not look verified."""
+
+    def test_missing_or_misdirected_evidence_is_not_verified(self):
+        opposite = {
+            "u": {"min": 0.0, "max": 100.0},
+            "v": {"min": 0.0, "max": 60.0},
+            "n": {"min": -1.0, "max": 0.0},
+        }
+        offset = {
+            "u": {"min": 5.0, "max": 105.0},
+            "v": {"min": 0.0, "max": 60.0},
+            "n": {"min": 0.0, "max": 1.0},
+        }
+        cases = {
+            "growth on the opposite side": create_result(envelope=opposite),
+            "origin offset": create_result(envelope=offset),
+            "no direction": create_result(direction=None),
+            "unknown direction": create_result(direction="up"),
+            "no volume": create_result(volume_mm3=None),
+            "wrong volume": create_result(volume_mm3=0.0),
+            "gauge not read back": create_result(
+                thickness_verified=False, thickness_measured_mm=None, thickness_body_code=-1
+            ),
+            "gauge disagrees": create_result(thickness_measured_mm=3.71),
+            "no sheetmetal body": create_result(sheetmetal_body=False),
+            "no feature id": create_result(feature_id=None),
+        }
+        for name, result in cases.items():
+            with self.subTest(case=name):
+                self.assertFalse(pwall.result_projection(result)["verified"])
+
+        negative = create_result(
+            direction="negative",
+            envelope={
+                "u": {"min": 0.0, "max": 100.0},
+                "v": {"min": 0.0, "max": 60.0},
+                "n": {"min": -1.0, "max": 0.0},
+            },
+        )
+        projection = pwall.result_projection(negative)
+        self.assertTrue(projection["verified"], projection["problems"])
+
+        missing_volume = pwall.result_projection(create_result(volume_mm3=None))
+        self.assertTrue(any("measured volume" in item for item in missing_volume["problems"]))
+
+    def test_saved_gauge_is_rechecked_on_resize(self):
+        result = create_result(
+            op=pwall.PLANAR_WALL_RESIZE_OP,
+            length=120.0,
+            width=80.0,
+            volume_mm3=9600.0,
+            feature_id_before=49,
+            thickness_loaded_mm=1.0,
+            envelope={
+                "u": {"min": 0.0, "max": 120.0},
+                "v": {"min": 0.0, "max": 80.0},
+                "n": {"min": 0.0, "max": 1.0},
+            },
+        )
+        self.assertTrue(pwall.result_projection(result)["verified"])
+        stale = pwall.result_projection(dict(result, thickness_loaded_mm=3.71))
+        self.assertFalse(stale["verified"])
+        self.assertTrue(any("saved wall carried" in item for item in stale["problems"]))
 
 
 if __name__ == "__main__":

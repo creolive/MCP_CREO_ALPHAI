@@ -1685,15 +1685,19 @@ async def creo_sheetmetal_planar_wall(
     """Create the first sheetmetal wall as a native unattached planar wall.
 
     The wall is Creo's Fill tree with the sheetmetal branch, so it needs a model created by
-    creo_new_sheetmetal(template="native_planar") that still has no geometry; a solid-template
-    sheetmetal model is refused (its subtype is not sheetmetal and the tree cannot regenerate).
-    The rectangle runs 0..length along the sketch u axis and 0..width along v on `plane`;
-    thickness is the sheet gauge along the signed sketch normal (direction=positive grows toward
-    +normal). The driving sketch is the feature <label>_sk. Verification is measured, not echoed:
-    the reply's planar_wall block reports feature_id, dimension_count (4+ point dimensions, so a
-    square is not silently under-constrained), volume_mm3 and the signed frame envelope
-    (envelope.u/v/n min/max). Use creo_resize_sheetmetal_planar_wall to change the rectangle;
-    do not rebuild the wall.
+    creo_new_sheetmetal(template="native_planar") that still has no geometry; this direct route
+    needs the sheetmetal subtype, so a solid-template sheetmetal model is refused natively (it
+    keeps its revision and stays editable). The rectangle runs 0..length along the sketch u axis
+    and 0..width along v on `plane`; direction=positive grows toward the reported sketch normal,
+    direction=negative toward the opposite side, verified on XY, XZ and YZ. The op also creates
+    the feature <label>_sk, so both names must be free (the plan is refused when either name
+    exists, was deleted, or repeats inside the same plan). Verification is measured, not echoed:
+    read the planar_wall block on the job result (creo_get_job detail=compact keeps it) with
+    feature_id, dimension_count (4+ point dimensions, so a square is not silently
+    under-constrained), volume_mm3, thickness_measured_mm/thickness_verified (read back from the
+    wall body), and the signed envelope (envelope.u/v/n min/max). Use
+    creo_resize_sheetmetal_planar_wall to change the rectangle; do not rebuild the wall. A flange
+    can attach to this wall, which then makes the wall a parent of that feature.
     """
     payload = await invoke(
         general.submit,
@@ -1728,10 +1732,14 @@ async def creo_resize_sheetmetal_planar_wall(
     The resize drives the wall's own sketch coordinate dimensions, so the wall feature id and
     the sheet thickness do not change and unrelated constraints are not rebuilt. Only walls
     created by creo_sheetmetal_planar_wall can be resized; a wall with downstream dependencies
-    (child features), an unknown label or a wall made by another operation is refused instead
-    of being silently rebuilt. Verify with the reply's planar_wall block: feature_id must equal
-    feature_id_before, feature_id_unchanged must be true, and volume_mm3 must equal
-    length*width*thickness.
+    (child features, e.g. a flange attached to it), an unknown label or a wall made by another
+    operation is refused before a job exists instead of being silently rebuilt. Before editing,
+    the gauge is re-read from the saved file, so a wall whose thickness did not survive a
+    save/reload is refused too. Verify with the planar_wall block on the job result (creo_get_job
+    detail=compact keeps it): feature_id must equal feature_id_before, feature_id_unchanged must
+    be true, volume_mm3 must equal length*width*thickness, thickness_loaded_mm and
+    thickness_measured_mm must both equal the recorded gauge, and the signed envelope must match
+    the recorded direction.
     """
     payload = await invoke(
         general.submit,

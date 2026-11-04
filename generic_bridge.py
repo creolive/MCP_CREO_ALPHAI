@@ -313,21 +313,58 @@ def submit(
         # (FEAT-027), so they are reserved exactly like existing aliases.
         feature_state.reject_tombstoned_labels(model if not new else None, operations)
         reserved = set(aliases) | (feature_state.tombstone_labels(model) if not new else set())
-        duplicate = reserved.intersection(op["label"] for op in operations if "label" in op)
+        # FEAT-058 review: an operation may create more than its own label (the
+        # planar wall also creates its driving sketch `<label>_sk`). Every name a
+        # plan introduces is protected, against the model and against the plan
+        # itself.
+        from creo_mechdog import native_planar_wall
+
+        names = native_planar_wall.declared_names(operations)
+        internal = [
+            name
+            for operation in operations
+            for name in native_planar_wall.internal_labels(operation)
+        ]
+        duplicate = reserved.intersection(names)
         if duplicate:
             raise ValueError(f"Feature labels already exist: {sorted(duplicate)}")
+        feature_state.reject_tombstoned_labels(
+            model if not new else None,
+            [{"op": "internal", "label": name} for name in internal],
+        )
+        conflict = native_planar_wall.name_conflict(names, set())
+        if conflict:
+            raise ValueError(
+                "This plan declares the same feature name more than once: "
+                f"{conflict}; a planar wall also creates its driving sketch <label>_sk"
+            )
         # Part feature lifecycle admission: resolve explicit targets against
         # the saved inspection, refuse system objects/members, and require every
         # affected dependency to be listed (native re-checks before executing).
         feature_state.validate_plan(model if not new else None, operations)
         # FEAT-058: the native unattached planar wall is the *first* sheetmetal
         # wall and only regenerates in an empty sheetmetal part; its resize must
-        # not rebuild features that depend on the wall. Both are refused here,
-        # before a job exists (the native executor re-checks subtype, emptiness
-        # and children before it writes anything).
-        from creo_mechdog import native_planar_wall
+        # not rebuild features that depend on the wall, and a plan may create a
+        # wall and resize it in the same breath. All of it is refused here,
+        # before a job exists (the native executor re-checks subtype, emptiness,
+        # names and children before it writes anything).
+        features = None
+        if not new and any(
+            operation.get("op") == native_planar_wall.PLANAR_WALL_RESIZE_OP
+            for operation in operations
+        ):
+            # A recorded child means a downstream feature depends on the wall.
+            # The saved inspection is only read for a resize plan; an unreadable
+            # reference leaves the native ProFeatureChildrenGet check authoritative.
+            from creo_mechdog import inspection_refs
 
-        native_planar_wall.validate_plan(model if not new else None, operations, aliases)
+            try:
+                saved = inspection_refs.full_inspection(model)
+            except (ValueError, OSError):
+                saved = None
+            if isinstance(saved, dict) and isinstance(saved.get("features"), list):
+                features = saved["features"]
+        native_planar_wall.validate_plan(model if not new else None, operations, aliases, features)
         # FEAT-052: recolor_assembly admission and payload resolution share one
         # path for the standalone tool and execute_plan (the verified
         # checkpoint, appearance baseline, family grouping and complete
