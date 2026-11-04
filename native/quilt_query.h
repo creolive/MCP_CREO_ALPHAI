@@ -19,6 +19,7 @@
 
 #include <ProFeature.h>
 #include <ProQuilt.h>
+#include <ProSelection.h>
 #include <ProSolid.h>
 
 #include <algorithm>
@@ -82,22 +83,8 @@ static J quilt_record(ProSolid solid, int quilt_id, const J &feature_ids,
     MeasurementOutcome area = init_code ? MeasurementOutcome{} : quilt_area_native(quilt);
     MeasurementOutcome closed = {false, init_code ? init_code : PRO_TK_NO_ERROR,
                                  init_code ? "quilt_init_failed" : nullptr, 0.0};
-    if (!init_code) {
-        double volume = 0.0;
-        ProError volume_code = ProQuiltVolumeEval(quilt, &volume);
-        // Documented probe: a closed quilt yields its volume; an open one
-        // reports PRO_TK_INVALID_TYPE. Anything else stays unknown.
-        if (volume_code == PRO_TK_NO_ERROR) {
-            closed.available = true;
-        } else if (volume_code == PRO_TK_INVALID_TYPE) {
-            closed.available = false;
-            closed.reason = "quilt_is_open";
-            closed.query_code = volume_code;
-        } else {
-            closed.reason = "quilt_volume_eval_failed";
-            closed.query_code = volume_code;
-        }
-    }
+    if (!init_code)
+        closed = quilt_closed_native(quilt);
     J bbox_mm = nullptr;
     if (visit_code == PRO_TK_NO_ERROR && faces.bbox_ok && faces.face_count > 0 && scale.known) {
         bbox_mm = {xyz_json(faces.bb_min, scale), xyz_json(faces.bb_max, scale)};
@@ -196,6 +183,15 @@ static std::string quilt_candidates_hint(ProSolid solid, const InspectionLengthU
     J candidates = quilt_reference_candidates(solid, units, scale);
     return " Inspect the model and use {kind:\"quilt\",id:<quilt_id>}; known quilts: " +
            candidates.dump();
+}
+
+// The geometry id behind a resolved quilt selection. Every consumer that needs
+// to re-measure or record a quilt id uses this instead of keeping its own
+// ProSelectionModelitemGet copy.
+static int quilt_selection_id(ProSelection selection) {
+    ProModelitem item;
+    CK(ProSelectionModelitemGet(selection, &item));
+    return item.id;
 }
 
 // §4.1 quilt references, S00 revision. kind:"quilt" carries an explicit quilt

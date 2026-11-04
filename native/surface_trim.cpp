@@ -15,15 +15,6 @@
 // own beyond generic_surface_trim.
 #include <ProTrim.h>
 
-// A trim measurement projected onto the §4.4.2 names. area_mm2_json already
-// keeps "measured zero" apart from "could not measure"; only the keys change.
-static J trim_area_fields(const MeasurementOutcome &area, const InspectionLengthUnits &units,
-                          const MillimeterScale &scale, const char *value_key,
-                          const char *status_key) {
-    J projected = area_mm2_json(area, units, scale);
-    return {{value_key, projected["area_mm2"]}, {status_key, projected["area_status"]}};
-}
-
 // The tool side of the trim tree. A quilt reference goes through the S01
 // resolver; a datum plane is resolved as its owning feature and also yields
 // the real plane normal for kept_side_basis (§4.5).
@@ -47,12 +38,6 @@ static ProSelection surface_trim_tool_selection(const J &reference, ProVector no
     throw std::runtime_error(
         "surface_trim tool must be a quilt or a datum plane; the use-curve trimming "
         "variant is not part of this release");
-}
-
-static int surface_trim_geometry_id(ProSelection selection) {
-    ProModelitem item;
-    CK(ProSelectionModelitemGet(selection, &item));
-    return item.id;
 }
 
 // The retained region after the trim. Review focus 1 of the plan: a trim may
@@ -87,7 +72,7 @@ static void generic_surface_trim(const J &op) {
     // §3.3: one quilt target, one quilt/datum-plane tool.
     ProSelection target_selection =
         resolve_quilt_reference(op.at("target"), (ProSolid)board, units, scale);
-    int target_id = surface_trim_geometry_id(target_selection);
+    int target_id = quilt_selection_id(target_selection);
     ProQuilt target_quilt = nullptr;
     MeasurementOutcome area_before;
     if (ProQuiltInit((ProSolid)board, target_id, &target_quilt)) {
@@ -140,8 +125,8 @@ static void generic_surface_trim(const J &op) {
     }
 
     J details =
-        trim_area_fields(area_before, units, scale, "area_before_mm2", "area_before_status");
-    J after = trim_area_fields(area_after, units, scale, "area_after_mm2", "area_after_status");
+        area_fields_json(area_before, units, scale, "area_before_mm2", "area_before_status");
+    J after = area_fields_json(area_after, units, scale, "area_after_mm2", "area_after_status");
     for (auto it = after.begin(); it != after.end(); ++it)
         details[it.key()] = it.value();
     details["keep_side"] = keep_side;

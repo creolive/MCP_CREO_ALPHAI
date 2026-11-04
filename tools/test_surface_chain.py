@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts", "trim")
+CASES = ("quilts", "trim", "merge")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -507,11 +507,188 @@ async def case_trim_live() -> dict:
     }
 
 
+MERGE_FACE = 20.0
+
+
+def merge_plan() -> list[dict]:
+    """Two adjacent 20x20 coplanar fills joined into one 800 mm2 quilt.
+
+    The result is judged by the measured area and the reported closure only;
+    no tolerance is claimed and no gap is measured (plan S03 step 4).
+    """
+    return [
+        {
+            "op": "sketch",
+            "label": "merge_profile_a",
+            "entities": [
+                {
+                    "type": "rectangle",
+                    "name": "rect_a",
+                    "min": [0, 0],
+                    "max": [MERGE_FACE, MERGE_FACE],
+                }
+            ],
+        },
+        {
+            "op": "sketch",
+            "label": "merge_profile_b",
+            "entities": [
+                {
+                    "type": "rectangle",
+                    "name": "rect_b",
+                    "min": [MERGE_FACE, 0],
+                    "max": [MERGE_FACE * 2, MERGE_FACE],
+                }
+            ],
+        },
+        {"op": "surface_fill", "label": "merge_face_a", "sketch": "merge_profile_a"},
+        {"op": "surface_fill", "label": "merge_face_b", "sketch": "merge_profile_b"},
+        {
+            "op": "quilt_merge",
+            "label": "merge_result",
+            "target": {"kind": "quilt_feature", "label": "merge_face_a"},
+            "tool": {"kind": "quilt_feature", "label": "merge_face_b"},
+        },
+    ]
+
+
+def case_merge_offline() -> dict:
+    """S03 contract, gate and native wiring. No Creo session is involved."""
+    from creo_mechdog.capabilities import UNAVAILABLE_OPERATIONS, require_available
+    from creo_mechdog.schema import validate_operations
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    operation = merge_plan()[-1]
+    validated = validate_operations([operation])
+    check("merge_plan_validates", validated[0]["op"] == "quilt_merge")
+
+    def rejects(candidate: dict, pattern: str) -> bool:
+        try:
+            validate_operations([candidate])
+        except ValueError as error:
+            return pattern in str(error)
+        return False
+
+    check(
+        "self_merge_rejected",
+        rejects({**operation, "tool": dict(operation["target"])}, "distinct"),
+    )
+    check("body_rejected", rejects({**operation, "tool": {"kind": "body", "id": 3}}, "tool"))
+    check(
+        "datum_plane_tool_rejected",
+        rejects({**operation, "tool": {"kind": "datum_plane", "label": "FRONT"}}, "tool"),
+    )
+    check(
+        "tolerance_rejected",
+        rejects({**operation, "tolerance_mm": 0.01}, "tolerance"),
+    )
+
+    check("quilt_merge_gated", "quilt_merge" in UNAVAILABLE_OPERATIONS)
+    refused = False
+    try:
+        require_available([operation])
+    except ValueError as error:
+        refused = "no native job was queued" in str(error)
+    check("gate_refuses_before_job", refused)
+
+    generic = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
+    native = (ROOT / "native" / "quilt_merge.cpp").read_text(encoding="utf-8")
+    check(
+        "native_included_and_dispatched",
+        '#include "quilt_merge.cpp"' in generic and generic.count("generic_quilt_merge(op)") == 1,
+    )
+    check(
+        "native_uses_join_not_default_intersect",
+        "PRO_SRF_MRG_JOIN" in native and "PRO_SRF_MRG_INTSCT" not in native,
+    )
+    check(
+        "native_closure_from_shared_probe",
+        "quilt_closed_native" in native and "quilt_area_native" in native,
+    )
+    check(
+        "native_no_unproved_tolerance_or_gap",
+        "gap_mm" not in native and "tolerance_mm" not in native,
+    )
+
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "offline",
+        "passed": passed,
+        "native_quilt_merge": "not_verified",
+        "gate": UNAVAILABLE_OPERATIONS.get("quilt_merge"),
+        "checks": checks,
+    }
+
+
+async def case_merge_live() -> dict:
+    """One model: two adjacent 20x20 fills joined into 800 mm2, open quilt."""
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    jobs: list[str] = []
+    async with Client(
+        StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
+    ) as client:
+        capabilities = (await client.call_tool("creo_capabilities", {})).structured_content
+        published = "quilt_merge" in (capabilities.get("operations") or [])
+        check("quilt_merge_published", published)
+        if not published:
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_quilt_merge": "gated",
+                "note": (
+                    "quilt_merge is refused before any job until the live join acceptance "
+                    "(plan S03) is on record; no geometry was submitted"
+                ),
+                "checks": checks,
+            }
+        run_job = job_runner(client, jobs)
+        state = await run_job("creo_execute_plan", {"operations": merge_plan()})
+        detail = state["result"]["operations"][-1]
+        expected = MERGE_FACE * MERGE_FACE * 2
+        area = detail.get("area_mm2")
+        check(
+            "merged_area",
+            area is not None and abs(area - expected) <= 0.5,
+            {"expected_mm2": expected, "area_mm2": area, "area_status": detail.get("area_status")},
+        )
+        check(
+            "merged_result_quilt_reported",
+            detail.get("result_quilt_id") is not None,
+            {"result_quilt_id": detail.get("result_quilt_id")},
+        )
+        check(
+            "merged_open_quilt_reports_false",
+            detail.get("closed") is False,
+            {"closed": detail.get("closed"), "closed_status": detail.get("closed_status")},
+        )
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "live",
+        "passed": passed,
+        "native_quilt_merge": "verified" if passed else "failed",
+        "jobs": jobs,
+        "checks": checks,
+    }
+
+
 def run_case(case: str, live: bool) -> dict:
     if case == "quilts":
         return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
     if case == "trim":
         return asyncio.run(case_trim_live()) if live else case_trim_offline()
+    if case == "merge":
+        return asyncio.run(case_merge_live()) if live else case_merge_offline()
     raise SystemExit(BUSY_EXIT, f"unknown case: {case}; available: {', '.join(CASES)}\n")
 
 

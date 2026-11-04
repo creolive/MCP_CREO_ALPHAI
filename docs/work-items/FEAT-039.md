@@ -96,3 +96,14 @@
 - 驱动：`tools/test_surface_chain.py --case trim`（默认离线，校验契约、门禁与原生接线）；`--case trim --live` 先用 `creo_capabilities` 确认算子是否公开，未公开时如实记 `native_surface_trim="gated"` 并不提交几何；公开后按两个独立模型分别 `keep_side=one/two` 实测面积 400 mm²（±0.5）与 x 覆盖区间，不跨模型比较 quilt id。
 - 验证：`bridge.py build` 编译通过；`tests/unit/test_surface_trim_schema.py` 20 项通过；`tests.unit.test_surface_trim_schema + test_quilt_query_contract + test_g5_native_contract` 49 项通过；全量 2 316 项单测通过；`tools/dev_check.py --skip-unit` 无新增风格回归（同时按项目格式器整理了 S01 的 `quilt_query.h`/`surface_measure.h` 与两个契约测试的行尾与格式）。
 - **未验证**：`keep_side` 与工具法向的绑定（P3）、真实修剪面积/位置、保存重载后同一引用仍可被 `thicken` 消费、`ProFeatureGeomitemVisit -4` 在处理后的引用链上是否消失、失败回滚的实机表现。工具在取得这些证据前保持 gated，不登记为可用能力。
+
+## 2026-11-04 S03 离线交付：quilt_merge（两面 join）
+
+- 契约：`schema.py::QuiltMergeOp`（`op="quilt_merge"`、`label`、`target`、`tool`）。两侧都必须是显式 quilt 引用且互不相同；基准面、曲线、body、缺 kind、`tolerance` 等未知字段在受理前拒绝。`boolean_bodies` 不作为缝合替代。
+- 原生：`native/quilt_merge.cpp::generic_quilt_merge`，按 `ProMerge.h` 文档化的当前（数组）树构建：`PRO_E_FEATURE_TYPE=PRO_FEAT_DATUM_QUILT`、`PRO_E_SRF_MRG_TYPE=PRO_SRF_MRG_JOIN`（**显式写 join，因为 SDK 默认是 INTERSECT**）、`PRO_E_SRF_MRG_QUILT_ARR` 两个成员经 `ProElementArraySet` 写入，每个成员 `PRO_E_SRF_MRG_QUILT_REF` 走 S01 解析。`PRO_E_SRF_MRG_QUILT_SIDE` 是 optional，首版不设置，保留区域靠实测而不靠假设。
+- 回执：`result_quilt_id`、`area_mm2`/`area_status`、`input_area_mm2`/`input_area_status`（合并前两个输入之和）、`closed`/`closed_status`（只来自 `ProQuiltVolumeEval`，开放报 `false`、探测失败报 `null`）、`merge_type="join"`、`inputs`。不提供容差与间隙测量。
+- 共享 helper 收敛：闭包探测从 `quilt_query.h` 下沉为 `surface_measure.h::quilt_closed_native`，quilt 选择 ID 收敛为 `quilt_query.h::quilt_selection_id`，面积字段拼装收敛为 `surface_measure.h::area_fields_json`；trim/merge/查询三处消费同一实现。
+- 接线：`generic.cpp` 单点 include 与分发；`server.py` 注册 `creo_quilt_merge` 并纳入 `_SOURCE_NAMES`；`quilt_merge` 列入 `UNAVAILABLE_OPERATIONS`（工具从 MCP 面移除、提交前拒绝）。
+- 驱动：`--case merge`（离线校验契约/门禁/树与 join 显式写入）；`--case merge --live` 先用 `creo_capabilities` 判公开，未公开记 `gated` 不提交几何；公开后两个相邻 20×20 共面 fill 合并，校验面积 800 mm²（±0.5）、`result_quilt_id` 非空、开放 quilt 报 `closed=false`。立方体闭合用例尚未实现（等实机窗口）。
+- 验证：`bridge.py build` 编译通过；`tests/unit/test_quilt_merge_schema.py` 18 项通过；S02+S03+S01+G5 四条契约共 63 项通过；`tools/test_surface_chain.py --case merge/trim/quilts` 三条离线用例 passed。
+- **未验证**：实机 join 再生、合并面积/位置、结果 quilt 引用在保存重载后仍可被 `thicken` 消费、闭合用例、空白间隙与不连续边界的失败行为。工具继续保持 gated。

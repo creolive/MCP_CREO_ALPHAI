@@ -3300,6 +3300,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "advanced.cpp"
 #include "surfaces.cpp"
 #include "surface_trim.cpp"
+#include "quilt_merge.cpp"
 #include "udf.cpp"
 #include "loft_mode.cpp"
 #include "loft_seed.cpp"
@@ -3576,6 +3577,8 @@ static void execute_operation_body(const J &op) {
         generic_surface_solid(op);
     else if (kind == "surface_trim")
         generic_surface_trim(op);
+    else if (kind == "quilt_merge")
+        generic_quilt_merge(op);
     else if (kind == "boolean_bodies")
         generic_boolean(op);
     else if (kind == "rib")

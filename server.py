@@ -128,6 +128,7 @@ _SOURCE_NAMES = (
     "native/surface_measure.h",
     "native/quilt_query.h",
     "native/surface_trim.cpp",
+    "native/quilt_merge.cpp",
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
@@ -2484,6 +2485,32 @@ async def creo_surface_trim(
     return await invoke(
         general.submit,
         [dict(op="surface_trim", label=label, target=target, tool=tool, keep_side=keep_side)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_quilt_merge(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+) -> dict[str, Any]:
+    """Join two quilts into one surface merge.
+
+    Both sides must be explicit quilt references ({kind:'quilt',id:...} or
+    {kind:'quilt_feature',label:...}) and must be distinct. The result reports
+    result_quilt_id, the measured merged area and the real closure status; no
+    tolerance and no gap measurement are offered in this release.
+    This release is registered but gated: the join still needs a live acceptance
+    run, so submissions are refused before a native job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="quilt_merge", label=label, target=target, tool=tool)],
         model_id,
         None,
         expected_revision,

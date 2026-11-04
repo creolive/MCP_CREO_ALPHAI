@@ -133,6 +133,23 @@ static MeasurementOutcome quilt_area_native(ProQuilt quilt) {
     return out;
 }
 
+// Closure probe shared by every quilt consumer (S01 quilts, S03 merge).
+// ProQuiltVolumeEval answers only for a closed quilt; an open one reports
+// PRO_TK_INVALID_TYPE, and any other failure stays unknown instead of false.
+static MeasurementOutcome quilt_closed_native(ProQuilt quilt) {
+    MeasurementOutcome out;
+    double volume = 0.0;
+    out.query_code = ProQuiltVolumeEval(quilt, &volume);
+    if (out.query_code == PRO_TK_NO_ERROR) {
+        out.available = true;
+        out.value = volume;
+        return out;
+    }
+    out.reason =
+        out.query_code == PRO_TK_INVALID_TYPE ? "quilt_is_open" : "quilt_volume_eval_failed";
+    return out;
+}
+
 // Curve length in native units (ProCurveLengthEval).
 static MeasurementOutcome curve_length_native(ProCurve curve) {
     MeasurementOutcome out;
@@ -189,6 +206,17 @@ static J area_mm2_json(const MeasurementOutcome &area, const InspectionLengthUni
     return {{"area_mm2", area.available && scale.known ? J(area.value * scale.scale * scale.scale)
                                                        : J(nullptr)},
             {"area_status", measurement_status_json(area, units, scale)}};
+}
+
+// §4.4.2 area projection under a caller-chosen field pair (surface_trim uses
+// area_before/area_after, quilt_merge uses input_area/area). Only the keys
+// change; the status structure and the "measured zero is not unknown" rule
+// stay in one place.
+static J area_fields_json(const MeasurementOutcome &area, const InspectionLengthUnits &units,
+                          const MillimeterScale &scale, const char *value_key,
+                          const char *status_key) {
+    J projected = area_mm2_json(area, units, scale);
+    return {{value_key, projected["area_mm2"]}, {status_key, projected["area_status"]}};
 }
 
 // §4.4.2 length projection: mm only when the length scale is known.

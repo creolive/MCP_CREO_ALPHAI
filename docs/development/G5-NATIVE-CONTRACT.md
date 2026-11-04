@@ -29,6 +29,12 @@
 | R5 跨模型 ID 比较 | O3 用两次 `kept_quilt_id` 不同证明两侧不同 | 改为面积、位置与 `signed_offset_mm` 判据；只有**同一模型内**两次保留侧运行才比较 ID | 不同模型/不同 revision 的 ID 数字相同不代表同一对象 |
 | R6 旧路线失败状态 | 只记"待验证" | 明确记录"路线失败"与"未验证"两种状态，失败历史不删除 | 旧三路线本机探针失败事实保持 |
 
+### 0.2 S02/S03 实施状态（2026-11-04）
+
+- `surface_trim`（S02）与 `quilt_merge`（S03）的 schema、原生模块、驱动离线用例已完成并编译通过；两者都**已注册但列入 `UNAVAILABLE_OPERATIONS`**：`server.py` 把对应工具从 MCP 面移除，`require_available` 在提交前拒绝。**因此它们对客户端仍不可用，不构成已公开能力。**
+- 未验证项保持不变：§2.3/§2.4 的树在实机再生结果、§4.4.2 的真实面积/位置、§4.5 的 `keep_side` 法向绑定（P3）、修剪/合并结果保存重载后能否被 `thicken` 消费、失败回滚表现。
+- §4.4.2 的质心字段（`target_centroid`/`kept_centroid`/`signed_offset_mm`）在本机没有可依据的 quilt 质心查询，实现**一律返回 null 并附原因**，不用外框中心估算；P3 回填前也不做"方向矛盾即失败"的强制判定。
+
 ---
 
 ## 1. SDK 逐项核实结论表
@@ -199,6 +205,28 @@ PRO_E_FEATURE_TREE
 
 **注意：`PRO_E_SRF_TRIM_TYPE` 是 non-redefinable mandatory**（`ProTrim.h:276-278`），创建后不可改；`PRO_E_SURF_TRIM_TYPE` 必须与之一致。
 
+### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
+
+`ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE      = PRO_FEAT_DATUM_QUILT
+ ├─ PRO_E_SRF_MRG_TYPE      = ProSrfMrgType（默认 INTERSECT）
+ ├─ PRO_E_STD_FEATURE_NAME  = <label>
+ └─ PRO_E_SRF_MRG_QUILT_ARR (数组，至少 2 个成员)
+     └─ PRO_E_SRF_MRG_QUILT_CMPD
+         ├─ PRO_E_SRF_MRG_QUILT_REF  (PRO_QUILT 选择，mandatory)
+         └─ PRO_E_SRF_MRG_QUILT_SIDE (ProSrfMrgQltSide，optional)
+```
+
+两条必须显式处理的默认值：
+
+- `PRO_E_SRF_MRG_TYPE` 的**默认是 INTERSECT**，首版只要 join，因此必须显式写 `PRO_SRF_MRG_JOIN`；不写就等于悄悄做交集。
+- `PRO_E_SRF_MRG_QUILT_SIDE` 是可选项，且在参与者 >2 时不可用；首版不设置它，保留区域由默认行为决定并**测量**，不按 GUI 观感假设。
+
+数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
+
 ---
 
 ## 3. 第一版能力边界（冻结）
@@ -238,6 +266,19 @@ PRO_E_FEATURE_TREE
 | 薄壳 | 不提供 | `thin` / `thickness` |
 | 轮廓/孔环 | 不提供 | 多区域、孔环（首版只处理单外环区域） |
 | 输出 | 修剪后的 quilt（可供 `thicken` 消费） | — |
+
+### 3.4 quilt_merge
+
+| 项 | 首版公开 | 首版明确拒绝 |
+| --- | --- | --- |
+| 参与者 | **恰好 2 个类型明确的 quilt** | 基准面、曲线、body、多个参与者 |
+| 合并方式 | 只做 join（`PRO_SRF_MRG_JOIN`） | intersect 变体 |
+| 容差 | 不提供 | 任何 `tolerance` 参数（未证明生效前不得接受） |
+| 间隙测量 | 不提供 | 任何间隙字段 |
+| 闭合 | 只报告真实探测结果（§4.4.1 结构） | 由面积或外框反推 `closed` |
+| 输出 | 一个结果 quilt（`result_quilt_id`，可供 `thicken` 消费） | — |
+
+`quilt_merge` **不是** `boolean_bodies` 的替代：实体布尔不在曲面链里，不能用它掩饰缝合失败。
 
 ---
 
@@ -360,6 +401,20 @@ PRO_E_FEATURE_TREE
 | `kept_side` | `"one" \| "two" \| null` | 实际保留的一侧 |
 | `kept_side_basis` | `object` | 保留侧的判定依据，见 §4.5 |
 | `kept_quilt_id` | `int \| null` | 保留区域 quilt 几何 ID，供 `thicken` 消费 |
+
+**quilt_merge**
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `result_quilt_id` | `int \| null` | 合并结果 quilt 几何 ID，供 `thicken` 消费 |
+| `area_mm2` | `float \| null` | 合并后 quilt 的真实面积（mm²） |
+| `area_status` | `object` | §4.4.1 结构 |
+| `input_area_mm2` | `float \| null` | 两个输入 quilt 面积之和（合并前测量） |
+| `input_area_status` | `object` | §4.4.1 结构 |
+| `closed` | `bool \| null` | 只来自 `ProQuiltVolumeEval` 探测：闭合为 `true`，明确开放为 `false`，探测失败为 `null` |
+| `closed_status` | `object` | §4.4.1 结构 |
+| `merge_type` | `"join"` | 首版唯一取值 |
+| `inputs` | `object` | `{"target_quilt_id": int, "tool_quilt_id": int}` |
 
 **所有测量字段在 compact/full 两种投影里都必须存在**（null 也保留字段与 status），compact 不得丢字段。
 

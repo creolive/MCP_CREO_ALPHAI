@@ -55,6 +55,7 @@ REGISTERED_OPERATIONS = (
     "thicken",
     "solidify",
     "surface_trim",
+    "quilt_merge",
     "boolean_bodies",
     "rib",
     "drawing_model",
@@ -80,6 +81,11 @@ UNAVAILABLE_OPERATIONS = {
         "the high-level trim is not published yet: its retained-side binding and the "
         "trim-result quilt reference still need a live serial-window acceptance run "
         "(0.11.7 F03 reported ProFeatureGeomitemVisit -4 on that reference)"
+    ),
+    "quilt_merge": (
+        "the surface merge is not published yet: the documented ProMerge.h join still "
+        "needs a live serial-window run for the merged area, the result quilt reference, "
+        "closure reporting and the saved-reload hand-off to thicken"
     ),
 }
 

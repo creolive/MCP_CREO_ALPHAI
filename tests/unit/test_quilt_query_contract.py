@@ -181,9 +181,14 @@ class QuiltNativeContractTests(unittest.TestCase):
         self.assertIn("ProCurveLengthEval", text)
 
     def test_closed_uses_the_documented_quilt_probe(self):
+        # S03 moved the probe into surface_measure.h so trim and merge share one
+        # implementation; quilt_query.h must delegate instead of keeping a copy.
         text = QUILT_QUERY.read_text(encoding="utf-8")
-        self.assertIn("ProQuiltVolumeEval", text)
-        self.assertIn("PRO_TK_INVALID_TYPE", text)
+        self.assertIn("quilt_closed_native", text)
+        self.assertNotIn("ProQuiltVolumeEval", text)
+        measure = SURFACE_MEASURE.read_text(encoding="utf-8")
+        self.assertIn("ProQuiltVolumeEval", measure)
+        self.assertIn("PRO_TK_INVALID_TYPE", measure)
 
 
 if __name__ == "__main__":

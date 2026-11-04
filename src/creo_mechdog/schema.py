@@ -1563,6 +1563,34 @@ class SurfaceTrimOp(StrictModel):
         return self
 
 
+class QuiltMergeOp(StrictModel):
+    """Surface merge of two quilts (FEAT-039/S03).
+
+    The first release is the documented ProMerge.h join of exactly two quilts.
+    No tolerance and no intersect variant are accepted: an unproved tolerance
+    would just be ignored by the SDK tree, and intersect is not this op's
+    semantics.
+    """
+
+    op: Literal["quilt_merge"]
+    label: Label
+    target: dict[str, Any]
+    tool: dict[str, Any]
+
+    @model_validator(mode="after")
+    def two_distinct_quilts(self):
+        for field, reference in (("target", self.target), ("tool", self.tool)):
+            problem = _quilt_reference_problem(reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"quilt_merge {field} {problem}")
+        if self.target == self.tool:
+            raise ValueError(
+                "quilt_merge target and tool must be distinct quilts; a quilt cannot be "
+                "merged with itself"
+            )
+        return self
+
+
 class BooleanOp(StrictModel):
     op: Literal["boolean_bodies"]
     label: Label
@@ -1657,6 +1685,7 @@ Operation = Annotated[
         ThickenOp,
         SolidifyOp,
         SurfaceTrimOp,
+        QuiltMergeOp,
         BooleanOp,
         RibOp,
     ],
