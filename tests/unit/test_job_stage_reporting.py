@@ -12,6 +12,9 @@ class JobStageReporting(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(patch.object(bridge, "JOBS", self.root))
+        self.enterContext(
+            patch.object(bridge, "config", return_value={"native_timeout_seconds": 180})
+        )
 
     def job(self, status, stage, result=None, log=None):
         job_id = "a" * 32

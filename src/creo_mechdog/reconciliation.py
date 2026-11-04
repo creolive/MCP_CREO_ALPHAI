@@ -344,6 +344,11 @@ def _deployment(deadline: float) -> str:
         "native/adoption_source.h",
         "native/inspection_sidecar.h",
         "native/generic.cpp",
+        # FEAT-058: the deployment identity has to move with the planar wall,
+        # otherwise a service running new wall code reports the old fingerprint.
+        "src/creo_mechdog/native_planar_wall.py",
+        "native/planar_wall.cpp",
+        "native/planar_wall.h",
         "native/result_delivery.h",
         "native/recovery_deadline.h",
         "src/creo_mechdog/blend_callback.py",

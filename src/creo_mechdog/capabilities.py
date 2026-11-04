@@ -28,6 +28,8 @@ REGISTERED_OPERATIONS = (
     "loft",
     "draft",
     "sheetmetal_wall",
+    "sheetmetal_planar_wall",
+    "resize_sheetmetal_planar_wall",
     "sheetmetal_flange",
     "sheetmetal_unbend",
     "sheetmetal_flat_pattern",
@@ -525,9 +527,39 @@ def families() -> dict:
         },
         "sheetmetal": {
             "enabled": True,
-            "scope": "first flat wall, attached flange, unbend, bend-back and flat pattern",
-            "native_test": "40 x 30 x 1 wall, 90 degree flange with R2/R3 bend, followed by unfolding and refolding",
-            "limits": "sheetmetal modeling starts from creo_new_sheetmetal; wait for its terminal state before wall/flange operations, because execute_plan without model_id creates a plain part by default and never converts an existing solid part into sheetmetal implicitly; first wall uses thin extrusion then native conversion; bend relief is a parameter on creo_sheetmetal_flange with native echo verification (offline verified, live unverified, default none); a flange whose attach-edge ends abut existing bends fails to regenerate (live verified 2026-10-30: a free full edge attaches, an edge shortened at even one end by a previous bend fails and rolls back), so four walls are not supported until corner relief exists; forms, hems and jogs are not high-level tools",
+            "scope": (
+                "first flat wall (thin extrusion + native conversion), native rectangular "
+                "unattached planar wall with in-place resize, attached flange, unbend, "
+                "bend-back and flat pattern"
+            ),
+            "native_test": "40 x 30 x 1 wall, 90 degree flange with R2/R3 bend, followed by unfolding and refolding; 100 x 60 x 1 native planar wall resized to 120 x 80 (live 2026-11-04, 6000 -> 9600 mm3, same feature id, saved reload verified)",
+            "limits": (
+                "sheetmetal modeling starts from creo_new_sheetmetal; wait for its terminal "
+                "state before wall/flange operations, because execute_plan without model_id "
+                "creates a plain part by default and never converts an existing solid part into "
+                "sheetmetal implicitly; creo_sheetmetal_wall keeps the thin-extrusion + "
+                "conversion first wall; creo_sheetmetal_planar_wall is the native unattached "
+                "planar wall (Fill tree with the sheetmetal branch) and therefore needs "
+                "creo_new_sheetmetal(template='native_planar'), an empty model and a closed "
+                "rectangle - this direct first-wall route needs the sheetmetal subtype, so a "
+                "solid-template part refuses it natively; it also creates the feature "
+                "<label>_sk, so both names are protected against duplicates, tombstones and "
+                "same-plan collisions; direction=positive grows toward the reported sketch "
+                "normal (verified on XY/XZ/YZ and negative), the gauge is read back from the "
+                "wall body and re-read from the saved file before a resize, and the signed "
+                "envelope plus volume must match the request; its resize drives the driving "
+                "sketch's coordinate dimensions, so it keeps the feature id and gauge but "
+                "refuses unknown labels, walls from other operations and walls with downstream "
+                "dependencies (a flange on the wall counts); a flange attaches to a native "
+                "first wall (live 2026-11-04) but non-rectangular sections, a second flange and "
+                "four walls remain unverified; bend relief is a parameter on "
+                "creo_sheetmetal_flange with native echo verification (offline verified, live "
+                "unverified, default none); a flange whose attach-edge ends abut existing bends "
+                "fails to regenerate (live verified 2026-10-30: a free full edge attaches, an "
+                "edge shortened at even one end by a previous bend fails and rolls back), so four "
+                "walls are not supported until corner relief exists; forms, hems and jogs are not "
+                "high-level tools"
+            ),
         },
         "assembly": {
             "enabled": True,

@@ -896,6 +896,49 @@ class SheetmetalWallOp(StrictModel):
     direction: Literal["positive", "negative"] = "positive"
 
 
+class SheetmetalPlanarWallOp(StrictModel):
+    """FEAT-058: native rectangular unattached planar wall (the primary wall).
+
+    Creo Toolkit builds the primary wall as the Fill feature carrying the
+    sheetmetal branch (PRO_E_IS_UNATTACHED_WALL, PRO_E_BODY_USE=NEW,
+    PRO_E_SMT_NEW_BODY_LINKED), not as a PRO_FEAT_WALL. It therefore needs a
+    sheetmetal part, and the part must still be empty. `length` runs along the
+    sketch u axis, `width` along v, and `thickness` is the sheet gauge along the
+    signed sketch normal. The internal sketch is named `<label>_sk`.
+    """
+
+    op: Literal["sheetmetal_planar_wall"]
+    label: Label
+    plane: Literal["XY", "XZ", "YZ"] | dict[str, Any] = "XY"
+    length: Positive
+    width: Positive
+    thickness: Positive
+    direction: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def label_leaves_room_for_sketch(self):
+        # The internal driving sketch is a real Creo feature, so the wall label
+        # has to leave room for the suffix instead of colliding with the native
+        # 28-character feature-name limit.
+        if len(self.label) > 25:
+            raise ValueError("sheetmetal_planar_wall label must be at most 25 characters")
+        return self
+
+
+class SheetmetalPlanarWallResizeOp(StrictModel):
+    """FEAT-058: resize the rectangular planar wall in place.
+
+    The resize drives the wall's own sketch coordinate dimensions, so the wall
+    feature id and its thickness stay untouched. Downstream features and
+    unsupported frames are refused instead of being silently rebuilt.
+    """
+
+    op: Literal["resize_sheetmetal_planar_wall"]
+    feature: Label
+    length: Positive
+    width: Positive
+
+
 class FlangeRelief(StrictModel):
     # DEV-051 T11 / FEAT-014. Creo 12.4 exposes one relief compound per bend end
     # (ProSmtFlangeWall.h: PRO_E_SMT_BEND_RELIEF_SIDE1/SIDE2) with the types
@@ -1656,6 +1699,8 @@ Operation = Annotated[
         LoftOp,
         DraftOp,
         SheetmetalWallOp,
+        SheetmetalPlanarWallOp,
+        SheetmetalPlanarWallResizeOp,
         SheetmetalFlangeOp,
         SheetmetalUnbendOp,
         AssembleOp,

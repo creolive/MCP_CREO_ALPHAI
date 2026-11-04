@@ -123,6 +123,11 @@ _SOURCE_NAMES = (
     "native/geometry.cpp",
     "tools/generate_constants.py",
     "native/generic.cpp",
+    # FEAT-058: the first-wall implementation and its judgement module are part
+    # of the runtime identity, otherwise a service can run them unreported.
+    "native/planar_wall.cpp",
+    "native/planar_wall.h",
+    "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/surface_measure.h",
@@ -1606,13 +1611,28 @@ async def creo_draft(
 
 
 @mcp.tool(annotations=CREATE)
-async def creo_new_sheetmetal(model_name: str | None = None) -> dict[str, Any]:
-    """Prepare a metric part for sheetmetal. The first wall creates its native sheetmetal body by conversion.
+async def creo_new_sheetmetal(
+    model_name: str | None = None,
+    template: Literal["conversion", "native_planar"] = "conversion",
+) -> dict[str, Any]:
+    """Prepare a metric sheetmetal model. `template` decides which first wall it can host.
 
-    Wait for this job's terminal state before submitting wall/flange operations.
-    creo_execute_plan without model_id creates a plain part by default and never converts
-    an existing solid part into sheetmetal implicitly."""
-    return await invoke(general.submit, [], None, model_name, model_type="sheetmetal")
+    template="conversion" (default) starts from the solid template; the first wall is created
+    by creo_sheetmetal_wall, whose thin extrusion converts the body to sheetmetal.
+    template="native_planar" starts from Creo's own sheetmetal template, which is the only kind
+    of part that can host creo_sheetmetal_planar_wall (the native unattached planar wall); a
+    solid-template part cannot be switched to the sheetmetal subtype later. Wait for this job's
+    terminal state before submitting wall operations. creo_execute_plan without model_id creates
+    a plain part by default and never converts an existing solid part into sheetmetal implicitly.
+    """
+    return await invoke(
+        general.submit,
+        [],
+        None,
+        model_name,
+        model_type="sheetmetal",
+        template_name=("mmns_part_sheetmetal_abs.prt" if template == "native_planar" else None),
+    )
 
 
 @mcp.tool(annotations=CREATE)
@@ -1658,6 +1678,93 @@ async def creo_sheetmetal_wall(
         None,
         expected_revision,
     )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_sheetmetal_planar_wall(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    length: float,
+    width: float,
+    thickness: float,
+    plane: Literal["XY", "XZ", "YZ"] = "XY",
+    direction: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Create the first sheetmetal wall as a native unattached planar wall.
+
+    The wall is Creo's Fill tree with the sheetmetal branch, so it needs a model created by
+    creo_new_sheetmetal(template="native_planar") that still has no geometry; this direct route
+    needs the sheetmetal subtype, so a solid-template sheetmetal model is refused natively (it
+    keeps its revision and stays editable). The rectangle runs 0..length along the sketch u axis
+    and 0..width along v on `plane`; direction=positive grows toward the reported sketch normal,
+    direction=negative toward the opposite side, verified on XY, XZ and YZ. The op also creates
+    the feature <label>_sk, so both names must be free (the plan is refused when either name
+    exists, was deleted, or repeats inside the same plan). Verification is measured, not echoed:
+    read the planar_wall block on the job result (creo_get_job detail=compact keeps it) with
+    feature_id, dimension_count (4+ point dimensions, so a square is not silently
+    under-constrained), volume_mm3, thickness_measured_mm/thickness_verified (read back from the
+    wall body), and the signed envelope (envelope.u/v/n min/max). Use
+    creo_resize_sheetmetal_planar_wall to change the rectangle; do not rebuild the wall. A flange
+    can attach to this wall, which then makes the wall a parent of that feature.
+    """
+    payload = await invoke(
+        general.submit,
+        [
+            {
+                "op": "sheetmetal_planar_wall",
+                "label": label,
+                "plane": plane,
+                "length": length,
+                "width": width,
+                "thickness": thickness,
+                "direction": direction,
+            }
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+    return payload
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_resize_sheetmetal_planar_wall(
+    model_id: str,
+    expected_revision: int,
+    feature: str,
+    length: float,
+    width: float,
+) -> dict[str, Any]:
+    """Resize a native planar wall in place, keeping its feature identity and gauge.
+
+    The resize drives the wall's own sketch coordinate dimensions, so the wall feature id and
+    the sheet thickness do not change and unrelated constraints are not rebuilt. Only walls
+    created by creo_sheetmetal_planar_wall can be resized; a wall with downstream dependencies
+    (child features, e.g. a flange attached to it), an unknown label or a wall made by another
+    operation is refused before a job exists instead of being silently rebuilt. Before editing,
+    the gauge is re-read from the saved file, so a wall whose thickness did not survive a
+    save/reload is refused too. Verify with the planar_wall block on the job result (creo_get_job
+    detail=compact keeps it): feature_id must equal feature_id_before, feature_id_unchanged must
+    be true, volume_mm3 must equal length*width*thickness, thickness_loaded_mm and
+    thickness_measured_mm must both equal the recorded gauge, and the signed envelope must match
+    the recorded direction.
+    """
+    payload = await invoke(
+        general.submit,
+        [
+            {
+                "op": "resize_sheetmetal_planar_wall",
+                "feature": feature,
+                "length": length,
+                "width": width,
+            }
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+    return payload
 
 
 @mcp.tool(annotations=CREATE)
