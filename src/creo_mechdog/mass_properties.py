@@ -8,6 +8,7 @@ a missing mass is never filled in from an assumed density.
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
 
 DENSITY_SOURCES = ("model_material", "request", "none")
@@ -18,9 +19,9 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("Mass properties reading is missing")
 
-    volume = _number_or_none(raw.get("volume_mm3"))
-    mass = _number_or_none(raw.get("mass_g"))
-    density = _number_or_none(raw.get("density_g_cm3"))
+    volume = _number_or_none(raw.get("volume_mm3"), "volume_mm3")
+    mass = _number_or_none(raw.get("mass_g"), "mass_g")
+    density = _number_or_none(raw.get("density_g_cm3"), "density_g_cm3")
     source = raw.get("density_source")
     if source not in DENSITY_SOURCES:
         raise ValueError(f"Unknown density source: {source!r}")
@@ -33,8 +34,14 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
             raise ValueError("A mass reading needs a positive volume")
         if mass is None or density is None:
             raise ValueError("A mass reading with a density source must carry mass and density")
-        expected = volume * density / 1000.0
-        if abs(expected - mass) > max(1e-9, abs(expected) * 1e-9):
+        product = volume * density
+        if not isfinite(product):
+            raise ValueError("volume_mm3 * density_g_cm3 must be finite for mass_g consistency")
+        expected = product / 1000.0
+        difference = expected - mass
+        if not isfinite(difference):
+            raise ValueError("mass_g difference from volume_mm3 * density_g_cm3 must be finite")
+        if abs(difference) > max(1e-9, abs(expected) * 1e-9):
             raise ValueError(f"Mass {mass} g does not match volume {volume} mm3 at {density} g/cm3")
 
     return {
@@ -54,10 +61,20 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _number_or_none(value: Any) -> float | None:
+def _number_or_none(value: Any, field: str) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    return _finite_number(value, field)
+
+
+def _finite_number(value: int | float, field: str) -> float:
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field} cannot be represented as a finite float") from exc
+    if not isfinite(number):
+        raise ValueError(f"{field} must be finite")
+    return number
 
 
 def _triple_or_none(value: Any) -> list[float] | None:
@@ -65,4 +82,4 @@ def _triple_or_none(value: Any) -> list[float] | None:
         return None
     if any(isinstance(item, bool) or not isinstance(item, (int, float)) for item in value):
         return None
-    return [float(item) for item in value]
+    return [_finite_number(item, f"center_of_mass_mm[{index}]") for index, item in enumerate(value)]

@@ -1,6 +1,6 @@
 # FEAT-057：真实材料质量属性
 
-类型：功能。优先级：P2。状态：待规划（派工方案已建，未指派、未实施）。目标版本：未排期。
+类型：功能。优先级：P2。状态：开发中（离线数值守卫子项完成；其余A01范围开放）。目标版本：未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -23,3 +23,17 @@
 
 2026-11-03 仅登记和规划；未修改产品代码，未运行产品测试、未连接 Creo、未提交/合入 main/发布。执行者按主计划交接实际提交、dirty、受测源码指纹、命令、环境、结果和未测范围；完成后由集成人同步主台账、能力边界与发布记录。
 
+
+## 2026-11-04 离线数值守卫子项
+
+本次只修改回执归一化模块和专项测试：拒绝三标量/三维重心中的 NaN、±Inf，把巨大整数转 float 的溢出统一为含字段/坐标位置的 ValueError，在自洽比较前拒绝乘法和差值的非有限中间值。保留缺省/None、非数字/形状错误重心的旧行为、有限负重心、正常 6000 mm³ / 7.85 g/cm³ / 47.1 g 和回执元数据；未改公共签名、字段、单位或密度优先级。
+
+环境为 Windows x64 / Python 3.12.14，解释器 `.venv/Scripts/python.exe`、实际包路径 `src/creo_mechdog/mass_properties.py` 与 `SOURCE_PATHS.resource_root` 均核对属于 `E:\Projects\codex-A01`。受测基线 `f4be20e9cc1921ae031d453b61cf1b27c4317f4a`，测试时 dirty=true；开发检查受测源码指纹 `e99c50c61fedb59dc7372aadfa5a346f168b3875f48ca45607af4b3d59a0e428`。
+
+- `.\.venv\Scripts\python.exe -m unittest tests.unit.test_mass_properties -v`：修复前 20 例，48 failures / 12 errors；修复及格式化后 20/20 通过。
+- `.\.venv\Scripts\python.exe -m ruff check src/creo_mechdog/mass_properties.py tests/unit/test_mass_properties.py` 及相同文件的 `ruff format --check`：通过。
+- `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards`：失败，四个未修改测试文件的既有格式问题阻断（test_callback_admission、test_reference_contract、test_t01_capability_contracts、test_update_check），unit_tests=not_run；未改其他文件或重建基线。不得将单独单测结果等同于该检查通过。
+
+本次无原生改动/构建、无 Toolkit/Creo/MCP 连接、无 live 驱动。真实材料重心、混合单位/未知单位、同步/异步接口、主惯量与 complete 契约等其余 A01 范围仍开放，历史实机记录不构成本次证据。原始日志和详细交接保存在本机 `.superpowers/sdd/2026-11-04-a01-numeric-guards-plan/task-1-report.md`，交控制者独立审查。
+
+独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（`build/unit_test_report.json`）。此结果与失败的 dev_check 分别记录。

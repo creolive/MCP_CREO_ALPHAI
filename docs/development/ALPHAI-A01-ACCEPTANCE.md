@@ -50,3 +50,17 @@
 - 带真实材料密度的路径（`density_source="model_material"`）**未实机触发**：本机新零件的材料没有密度，只能靠显式密度走通；该分支只有离线用例。
 - Creo 9 / Creo 10 实机。
 - WorkBuddy 黑盒验收。
+
+## 六 2026-11-04 离线数值守卫补充（仅本子项）
+
+本轮仅在 `E:\Projects\codex-A01` / `codex/FEAT-057-mass-properties` 强化 Python 回执归一化，不重跑或改写上述历史实机证据。正常 6000 mm³、7.85 g/cm³、47.1 g、重心 [5,10,15]、model_material/none 语义和原始 query_codes/hint 均保留。三标量与合法三维重心中的非有限数字、float 转换溢出及自洽乘法/差值溢出现在拒绝为含字段上下文的 ValueError；有限负重心仍可返回浮点列表。
+
+环境 Windows x64 / Python 3.12.14，实际解释器、模块和 SOURCE_PATHS.resource_root 均确认来自本工作树。测试基线 `f4be20e9cc1921ae031d453b61cf1b27c4317f4a`、dirty=true；源码指纹 `e99c50c61fedb59dc7372aadfa5a346f168b3875f48ca45607af4b3d59a0e428`。
+
+- 专项命令 `.\.venv\Scripts\python.exe -m unittest tests.unit.test_mass_properties -v`：RED 为 20 例 / 48 failures / 12 errors；GREEN 为 20/20 通过。
+- 两个改动 Python 文件的 `ruff check` 与 `ruff format --check` 均通过（Ruff 0.17.0）。
+- 一次 `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards` 明确失败：四个本次未改文件的格式回归阻断，unit_tests=not_run、native_validation=not_run。对应文件与基线无 diff 且 LF 规范化哈希相同，未修改基线；详见本机交接报告及 `build/development_check.json`。
+
+本轮没有原生修改/构建、Toolkit/Creo/MCP 连接或 live 驱动。真实材料密度与材料重心、混合/未知单位、同步/异步接口、工具数、主惯量、complete 契约和其余 A01 范围未在本子项验证/完成；Creo 9/10、WorkBuddy 仍未测。不以离线数值防护通过宣称整个 A01 完成。
+
+独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（`build/unit_test_report.json`）。此结果与失败的 dev_check 分别记录。
