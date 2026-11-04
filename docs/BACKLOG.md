@@ -233,7 +233,7 @@
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
 | [FEAT-057](work-items/FEAT-057.md) | P2 | 待规划 | 未排期 | A01：新增受管 part/sheetmetal/assembly 的只读质量接口；查询实际材料密度与单位，输出 kg、mm 重心、主惯量及完整性；按 occurrence 计重复实例，缺材料/未知单位/失败组件不返回伪造总质量。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned，未实施。 |
-| [FEAT-058](work-items/FEAT-058.md) | P2 | 待规划 | 未排期 | A04：先核 SDK/做独立原生探针，再新增显式矩形首壁创建/改型；保留 feature 身份，核厚度、有符号包络、体积与恢复；首版拒绝下游依赖；旧 sheetmetal_wall 默认路线保持。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned，未实施。 |
+| [FEAT-058](work-items/FEAT-058.md) | P2 | 已实现并实机验收（2026-11-04），待发布同步 | 未排期 | A04：原生矩形首壁（Fill 树 + 钣金分支，需 `creo_new_sheetmetal(template="native_planar")`）与就地改型（驱动草图坐标尺寸，feature_id/厚度不变）已实机验收：100×60×1→6000 mm³、120×80→9600 mm³、方形 3600 mm³、旧 `sheetmetal_wall` 42920 mm³ 回归通过；非空零件/未知标签/他类壁拒绝。未验证：下游子特征实机、非矩形截面、原生壁上的 flange、Creo 9/10。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned。 |
 | [FEAT-059](work-items/FEAT-059.md) | P2 | 待规划 | 未排期 | B01：最小标准骨架原生探针，父装配/骨架显式身份和依赖、许可/模板核对、共同修改日志及失败保护；先冻结共享 model_transaction 契约，不允许独立零件冒充骨架。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned，未实施。 |
 | [FEAT-060](work-items/FEAT-060.md) | P2 | 待规划 | 未排期 | B02：仅对受管标准骨架和本批原生矩形壁，显式映射长宽、保留其他关系、拒绝冲突/循环/歧义；共同日志、依赖闭包和 expected_revisions 在同一锁内核对。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned，未实施。 |
 | [FEAT-061](work-items/FEAT-061.md) | P2 | 待规划 | 未排期 | C01：仅受管单层装配，按 occurrence label/feature_id 抑制、恢复，两个 op 表达原子切换；保留标签、源绑定、约束、位姿、appearance；不支持嵌套写入或显示隐藏替代抑制。 [派工计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)；负责人unassigned，未实施。 |

@@ -185,6 +185,7 @@ def submit(
     readonly: bool = False,
     model_type: str = "part",
     loft_seed: dict | None = None,
+    template_name: str | None = None,
 ) -> dict:
     operations = validate_operations(operations)
     require_available(operations)
@@ -319,6 +320,14 @@ def submit(
         # the saved inspection, refuse system objects/members, and require every
         # affected dependency to be listed (native re-checks before executing).
         feature_state.validate_plan(model if not new else None, operations)
+        # FEAT-058: the native unattached planar wall is the *first* sheetmetal
+        # wall and only regenerates in an empty sheetmetal part; its resize must
+        # not rebuild features that depend on the wall. Both are refused here,
+        # before a job exists (the native executor re-checks subtype, emptiness
+        # and children before it writes anything).
+        from creo_mechdog import native_planar_wall
+
+        native_planar_wall.validate_plan(model if not new else None, operations, aliases)
         # FEAT-052: recolor_assembly admission and payload resolution share one
         # path for the standalone tool and execute_plan (the verified
         # checkpoint, appearance baseline, family grouping and complete
@@ -337,11 +346,19 @@ def submit(
             "assembly": "mmns_asm_design_abs.asm",
             "drawing": "a4_drawing.drw",
         }
-        template = (
-            Path(bridge.config()["creo_root"]) / "Common Files/templates" / templates[actual_type]
-        )
+        # FEAT-058 probe only: a native unattached planar wall needs a real
+        # sheetmetal part, and only the sheetmetal template produces one (a part
+        # cannot be switched to the sheetmetal subtype). Accepted flows keep the
+        # solid template, so the default path is unchanged.
+        if template_name is not None:
+            if not new or actual_type not in ("part", "sheetmetal"):
+                raise ValueError("template_name is only available for a new part/sheetmetal model")
+            if Path(template_name).name != template_name:
+                raise ValueError("template_name must be a bare file name in the Creo templates")
+        selected = template_name or templates[actual_type]
+        template = Path(bridge.config()["creo_root"]) / "Common Files/templates" / selected
         if not template.is_file():
-            raise ValueError(f"Missing local model template: {templates[actual_type]}")
+            raise ValueError(f"Missing local model template: {selected}")
         # BUG-100: acceptance releases the submit lock before the spawned
         # runner acquires the channel; an accepted-but-unfinished job must
         # reject here instead of letting this one queue behind it. Everything
@@ -554,6 +571,13 @@ def run_generic_job(job_id: str, manifest: dict):
                     from creo_mechdog import appearance
 
                     appearance.annotate_recolor(result)
+                    # FEAT-058: publish the planar wall verdict (feature
+                    # identity, dimension count, signed frame envelope) on the
+                    # result the client polls, because the tool returns the
+                    # queued job rather than the finished one.
+                    from creo_mechdog import native_planar_wall
+
+                    native_planar_wall.annotate_result(result)
                     # Shared preview projection (T07): raw capture codes live on
                     # the result, a failed image stays a failed image, and the
                     # model save/revision outcome is never altered by it.
