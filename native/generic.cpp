@@ -3299,6 +3299,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "appearance.h"
 #include "advanced.cpp"
 #include "surfaces.cpp"
+#include "surface_trim.cpp"
 #include "udf.cpp"
 #include "loft_mode.cpp"
 #include "loft_seed.cpp"
@@ -3573,6 +3574,8 @@ static void execute_operation_body(const J &op) {
         generic_fill(op);
     else if (kind == "thicken" || kind == "solidify")
         generic_surface_solid(op);
+    else if (kind == "surface_trim")
+        generic_surface_trim(op);
     else if (kind == "boolean_bodies")
         generic_boolean(op);
     else if (kind == "rib")

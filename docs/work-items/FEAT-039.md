@@ -85,3 +85,14 @@
 - 显式 `{"kind":"quilt","id":<int>}` 引用经校验后解析（非负 32 位整数、`ProQuiltInit` 探测存在性），失败附候选清单；`resolve()` 中旧的盲选 PRO_QUILT 一行式分支移除。
 - `native/surface_measure.h`：quilt 面积（外环−内环轮廓面积和）、曲线长度/端点、`measurement_status_json` 的唯一实现；S02—S07 的原生模块一律复用，不得各自复制测量逻辑。`quilt_area_mm2`/`curve_length_mm`/`curve_endpoints_mm` 语义与 G5 契约 §4.4.2 一致。
 - 验证：编译通过、`tests/unit/test_quilt_query_contract.py` 10 项通过、全量 2 286 项单元测试通过；`tools/test_surface_chain.py --case quilts` 离线通过。实机未验证；merge/trim 的实机修复证据仍待 S02/S03 实机阶段。
+
+## 2026-11-04 S02 离线交付：高层 surface_trim
+
+- 契约：`src/creo_mechdog/schema.py::SurfaceTrimOp`（`op="surface_trim"`、`label`、`target`、`tool`、`keep_side ∈ {one,two}`）。target 只接受一个 quilt（`{kind:"quilt",id}` 或 `{kind:"quilt_feature",label}`）；tool 额外接受 `{kind:"datum_plane",label}`；body、曲线（use-curve 变体）、多工具、缺 kind、非整数/负 quilt id、target 与 tool 同一引用均在受理前拒绝，不建 job。
+- 原生：`native/surface_trim.cpp::generic_surface_trim`，按 G5 契约 §2.3 的 `ProTrim.h` use-quilt 树（`PRO_FEAT_CUT` + `PRO_USE_SURFS` + 两个 trim type 元素取值一致 + `PRO_E_TRIM_QUILT`/`PRO_E_STD_USEQLT_QLT`），材料侧固定 `PRO_TRIM_MATL_SIDE_ONE`、`PRO_E_KEEP_TRIM_SURF_OPT_NO`，只有 `PRO_E_PRIMARY_QLTSIDE` 跟随 `keep_side`。引用解析与面积测量全部复用 S01（`resolve_quilt_reference`、`quilt_area_native`），不复制测量实现。
+- 回执：`area_before_mm2`/`area_after_mm2` 及各自 status、`keep_side`、`kept_side_basis`（`primary_quilt_side_value`/`material_side_value`/`tool_normal`/`target_centroid`/`kept_centroid`/`signed_offset_mm`）、`kept_quilt_id`、`kept_quilt_source`。质心没有可依据的公开 quilt 查询，一律 null 并附 `centroid_status`，不用外框中心估算；`signed_offset_mm` 因此为 null，方向判定与“矛盾即失败”的强制项留待 P3 实机回填。
+- 修剪结果归属（计划评审焦点 1）：先枚举结果特征的 `PRO_QUILT` 几何项，恰好 1 个记为 `feature_quilt_geomitem`；0 个按“修改既有 quilt”处理、重新核实 target quilt 并记 `retrimmed_target_quilt`；多个则判歧义失败。面积未减少、结果不可测量、特征未再生成功都按失败处理并回滚，不以构树返回 0 判成功。
+- 接线：`generic.cpp` 单点 `#include "surface_trim.cpp"` 与 `execute_operation_body` 分发；`server.py` 注册 `creo_surface_trim`（写入 `_SOURCE_NAMES` 的 `surface_trim.cpp`/`quilt_query.h`/`surface_measure.h`）；`surface_trim` 列入 `creo_mechdog/capabilities.py::UNAVAILABLE_OPERATIONS`，`server.py` 的既有钩子把 `creo_surface_trim` 从 MCP 工具面移除，`require_available` 在提交前拒绝并说明原因。
+- 驱动：`tools/test_surface_chain.py --case trim`（默认离线，校验契约、门禁与原生接线）；`--case trim --live` 先用 `creo_capabilities` 确认算子是否公开，未公开时如实记 `native_surface_trim="gated"` 并不提交几何；公开后按两个独立模型分别 `keep_side=one/two` 实测面积 400 mm²（±0.5）与 x 覆盖区间，不跨模型比较 quilt id。
+- 验证：`bridge.py build` 编译通过；`tests/unit/test_surface_trim_schema.py` 20 项通过；`tests.unit.test_surface_trim_schema + test_quilt_query_contract + test_g5_native_contract` 49 项通过；全量 2 316 项单测通过；`tools/dev_check.py --skip-unit` 无新增风格回归（同时按项目格式器整理了 S01 的 `quilt_query.h`/`surface_measure.h` 与两个契约测试的行尾与格式）。
+- **未验证**：`keep_side` 与工具法向的绑定（P3）、真实修剪面积/位置、保存重载后同一引用仍可被 `thicken` 消费、`ProFeatureGeomitemVisit -4` 在处理后的引用链上是否消失、失败回滚的实机表现。工具在取得这些证据前保持 gated，不登记为可用能力。

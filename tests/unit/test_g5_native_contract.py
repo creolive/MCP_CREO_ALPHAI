@@ -50,7 +50,9 @@ class OracleTests(unittest.TestCase):
             project["source_line_mm"]["length"],
             places=9,
         )
-        self.assertAlmostEqual(project["expected_endpoint_z"], project["target_plane_mm"]["z"], places=9)
+        self.assertAlmostEqual(
+            project["expected_endpoint_z"], project["target_plane_mm"]["z"], places=9
+        )
         # The source line must sit off the target plane, otherwise the oracle
         # could not tell a real projection from an echoed input curve.
         self.assertNotAlmostEqual(
@@ -96,7 +98,9 @@ class OracleTests(unittest.TestCase):
     def test_trim_oracle_separates_sides_by_position_not_by_id(self):
         # S00 R5: cross-model id comparison is not an acceptance criterion.
         trim = next(o for o in probe.ORACLES if o["id"] == "O3")
-        self.assertNotEqual(trim["kept_side_domains_mm"]["one"], trim["kept_side_domains_mm"]["two"])
+        self.assertNotEqual(
+            trim["kept_side_domains_mm"]["one"], trim["kept_side_domains_mm"]["two"]
+        )
         joined = " ".join(trim["extra_assertions"])
         self.assertIn("same model and revision", joined)
         self.assertNotIn("kept_quilt_id", joined)

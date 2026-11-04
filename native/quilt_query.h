@@ -61,10 +61,8 @@ static ProError quilt_face_cb(ProSurface surface, ProError status, ProAppData da
         return PRO_TK_NO_ERROR;
     }
     for (int i = 0; i < 3; i++) {
-        acc->bb_min[i] =
-            std::min(acc->bb_min[i], surface_data->data.p_surface_data->xyz_min[i]);
-        acc->bb_max[i] =
-            std::max(acc->bb_max[i], surface_data->data.p_surface_data->xyz_max[i]);
+        acc->bb_min[i] = std::min(acc->bb_min[i], surface_data->data.p_surface_data->xyz_min[i]);
+        acc->bb_max[i] = std::max(acc->bb_max[i], surface_data->data.p_surface_data->xyz_max[i]);
     }
     ProGeomitemdataFree(&surface_data);
     return PRO_TK_NO_ERROR;
@@ -107,8 +105,8 @@ static J quilt_record(ProSolid solid, int quilt_id, const J &feature_ids,
     J bbox_status = measurement_status_json(
         {visit_code == PRO_TK_NO_ERROR && faces.bbox_ok && faces.face_count > 0,
          visit_code ? visit_code : faces.bbox_code,
-         visit_code   ? "quilt_surface_visit_failed"
-         : !faces.bbox_ok ? "surface_data_get_failed"
+         visit_code              ? "quilt_surface_visit_failed"
+         : !faces.bbox_ok        ? "surface_data_get_failed"
          : faces.face_count == 0 ? "quilt_has_no_surfaces"
                                  : (scale.known ? nullptr : "unit_scale_unknown")},
         units, scale);
@@ -210,8 +208,7 @@ static ProSelection resolve_quilt_reference(const J &r, ProSolid solid,
     if (kind == "quilt") {
         const J &raw_id = r.at("id");
         if (!raw_id.is_number_integer() || raw_id < 0 || raw_id > 2147483647)
-            throw std::runtime_error(
-                "Quilt reference id must be a nonnegative 32-bit integer");
+            throw std::runtime_error("Quilt reference id must be a nonnegative 32-bit integer");
         int id = raw_id.get<int>();
         ProQuilt quilt = nullptr;
         if (ProQuiltInit(solid, id, &quilt))
@@ -228,9 +225,8 @@ static ProSelection resolve_quilt_reference(const J &r, ProSolid solid,
             "quilt feature" +
             quilt_candidates_hint(solid, units, scale));
     if (ids.size() > 1)
-        throw std::runtime_error(
-            "Feature reference identifies " + std::to_string((int)ids.size()) +
-            " quilts; name the intended one explicitly" +
-            quilt_candidates_hint(solid, units, scale));
+        throw std::runtime_error("Feature reference identifies " + std::to_string((int)ids.size()) +
+                                 " quilts; name the intended one explicitly" +
+                                 quilt_candidates_hint(solid, units, scale));
     return selection(ids[0]["id"], PRO_QUILT);
 }

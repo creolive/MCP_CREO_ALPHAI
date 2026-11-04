@@ -125,6 +125,9 @@ _SOURCE_NAMES = (
     "native/generic.cpp",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
+    "native/surface_measure.h",
+    "native/quilt_query.h",
+    "native/surface_trim.cpp",
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
@@ -2454,6 +2457,33 @@ async def creo_solidify(
                 new_body=new_body,
             )
         ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_surface_trim(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+    keep_side: Literal["one", "two"],
+) -> dict[str, Any]:
+    """Trim one quilt with another quilt or a datum plane.
+
+    target is one quilt ({kind:'quilt',id:...} or {kind:'quilt_feature',label:...});
+    tool is one quilt or a datum plane. keep_side is 'one' or 'two'; the physical side
+    is read back through kept_side_basis instead of being named after a GUI view.
+    This release is registered but gated: the retained-side binding and the trim-result
+    quilt reference still need a live acceptance run, so submissions are refused before
+    a native job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_trim", label=label, target=target, tool=tool, keep_side=keep_side)],
         model_id,
         None,
         expected_revision,

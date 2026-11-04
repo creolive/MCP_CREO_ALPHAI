@@ -1,6 +1,6 @@
 """Unified surface-chain driver (FEAT-055/S01, FEAT-039).
 
-All surface-chain cases (S01 quilts query, later S02 surface_trim and S03
+All surface-chain cases (S01 quilts query, S02 surface_trim, later S03
 quilt_merge closure) run from this entry. Acceptance uses public MCP tools
 only (creo_execute_plan / creo_get_job / creo_inspect_model); no internal
 Python API ever decides a case's outcome.
@@ -21,6 +21,7 @@ Discipline:
 Example (PowerShell, from the repo root):
 .venv\\Scripts\\python.exe tools\\test_surface_chain.py --case quilts
 .venv\\Scripts\\python.exe tools\\test_surface_chain.py --case quilts --live --confirm-session-usable
+.venv\\Scripts\\python.exe tools\\test_surface_chain.py --case trim
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts",)
+CASES = ("quilts", "trim")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -121,7 +122,10 @@ def case_quilts_offline() -> dict:
             "quilts": [record],
         },
     }
-    legacy = {**with_quilts, "inspection": {k: v for k, v in with_quilts["inspection"].items() if k != "quilts"}}
+    legacy = {
+        **with_quilts,
+        "inspection": {k: v for k, v in with_quilts["inspection"].items() if k != "quilts"},
+    }
 
     check("quilts_section_registered", "quilts" in SECTIONS and "quilts" in COUNT_KEYS)
     check(
@@ -172,6 +176,41 @@ def case_quilts_offline() -> dict:
     }
 
 
+def job_runner(client, jobs: list[str]):
+    """Submit through the public tool and poll only the accepted job."""
+
+    async def run_job(tool: str, args: dict) -> dict:
+        result = await client.call_tool(tool, args)
+        if result.is_error:
+            raise RuntimeError(str(result))
+        state = result.structured_content
+        job_id = state["job_id"]
+        jobs.append(job_id)
+        print(json.dumps({"tool": tool, "job_id": job_id}), flush=True)
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            state = (await client.call_tool("creo_get_job", {"job_id": job_id})).structured_content
+            if state["status"] in ("succeeded", "failed", "unknown_outcome"):
+                break
+            await asyncio.sleep(0.5)
+        else:
+            raise TimeoutError("job did not settle; inspect it, never blindly resubmit")
+        if state["status"] != "succeeded":
+            raise RuntimeError(
+                json.dumps(
+                    {
+                        "job_id": job_id,
+                        "status": state["status"],
+                        "message": state.get("message"),
+                    }
+                )
+            )
+        assert state["result"]["saved_file_reloaded_and_verified"]
+        return state
+
+    return run_job
+
+
 async def case_quilts_live() -> dict:
     """Real geometry through the MCP surface: query the quilts section."""
     from mcp import Client
@@ -187,33 +226,10 @@ async def case_quilts_live() -> dict:
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
-
-        async def run_job(tool: str, args: dict) -> dict:
-            result = await client.call_tool(tool, args)
-            if result.is_error:
-                raise RuntimeError(str(result))
-            state = result.structured_content
-            job_id = state["job_id"]
-            jobs.append(job_id)
-            print(json.dumps({"tool": tool, "job_id": job_id}), flush=True)
-            deadline = time.monotonic() + 180
-            while time.monotonic() < deadline:
-                state = (
-                    await client.call_tool("creo_get_job", {"job_id": job_id})
-                ).structured_content
-                if state["status"] in ("succeeded", "failed", "unknown_outcome"):
-                    break
-                await asyncio.sleep(0.5)
-            else:
-                raise TimeoutError("job did not settle; inspect it, never blindly resubmit")
-            if state["status"] != "succeeded":
-                raise RuntimeError(
-                    json.dumps({"job_id": job_id, "status": state["status"], "message": state.get("message")})
-                )
-            assert state["result"]["saved_file_reloaded_and_verified"]
-            return state
-
-        build = await run_job("creo_execute_plan", {"operations": surface_chain_plan(width, height)})
+        run_job = job_runner(client, jobs)
+        build = await run_job(
+            "creo_execute_plan", {"operations": surface_chain_plan(width, height)}
+        )
         model_id = build["model_id"]
         page = (
             await client.call_tool(
@@ -274,10 +290,237 @@ async def case_quilts_live() -> dict:
     }
 
 
+TRIM_WIDTH, TRIM_HEIGHT, TRIM_X = 40.0, 20.0, 20.0
+
+
+def trim_plan(keep_side: str) -> list[dict]:
+    """One 40x20 fill trimmed at x=20 by a datum plane (plan S02 step 4).
+
+    The retained region is judged by measured area and position, never by
+    comparing quilt ids across two independent models (contract §4.5 / R5).
+    """
+    return [
+        {
+            "op": "sketch",
+            "label": "trim_profile",
+            "entities": [
+                {
+                    "type": "rectangle",
+                    "name": "rect",
+                    "min": [0, 0],
+                    "max": [TRIM_WIDTH, TRIM_HEIGHT],
+                }
+            ],
+        },
+        {"op": "surface_fill", "label": "trim_target", "sketch": "trim_profile"},
+        {
+            "op": "datum_plane",
+            "label": "trim_cut_plane",
+            "reference": {"kind": "datum_plane", "label": "RIGHT"},
+            "offset": TRIM_X,
+        },
+        {
+            "op": "surface_trim",
+            "label": "trim_result",
+            "target": {"kind": "quilt_feature", "label": "trim_target"},
+            "tool": {"kind": "datum_plane", "label": "trim_cut_plane"},
+            "keep_side": keep_side,
+        },
+    ]
+
+
+def case_trim_offline() -> dict:
+    """S02 contract, gate and native wiring. No Creo session is involved."""
+    from creo_mechdog.capabilities import UNAVAILABLE_OPERATIONS, require_available
+    from creo_mechdog.schema import validate_operations
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    operation = trim_plan("one")[3]
+    validated = validate_operations([operation])
+    check(
+        "trim_plan_validates",
+        validated[0]["op"] == "surface_trim" and validated[0]["keep_side"] == "one",
+    )
+
+    def rejects(candidate: dict, pattern: str) -> bool:
+        try:
+            validate_operations([candidate])
+        except ValueError as error:
+            return pattern in str(error)
+        return False
+
+    check(
+        "body_target_rejected",
+        rejects({**operation, "target": {"kind": "body", "id": 3}}, "target"),
+    )
+    check(
+        "curve_tool_rejected",
+        rejects({**operation, "tool": {"kind": "curve", "id": 41}}, "tool"),
+    )
+    check(
+        "multi_tool_rejected",
+        rejects(
+            {**operation, "tool": [{"kind": "quilt", "id": 1}, {"kind": "quilt", "id": 2}]},
+            "tool",
+        ),
+    )
+    check(
+        "keep_side_both_rejected",
+        rejects({**operation, "keep_side": "both"}, "keep_side"),
+    )
+    check(
+        "self_trim_rejected",
+        rejects({**operation, "tool": dict(operation["target"])}, "distinct"),
+    )
+
+    check("surface_trim_gated", "surface_trim" in UNAVAILABLE_OPERATIONS)
+    refused = False
+    try:
+        require_available([operation])
+    except ValueError as error:
+        refused = "no native job was queued" in str(error)
+    check("gate_refuses_before_job", refused)
+
+    generic = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
+    native = (ROOT / "native" / "surface_trim.cpp").read_text(encoding="utf-8")
+    check(
+        "native_included_and_dispatched",
+        '#include "surface_trim.cpp"' in generic and generic.count("generic_surface_trim(op)") == 1,
+    )
+    check(
+        "native_reuses_shared_helpers",
+        "resolve_quilt_reference" in native and "quilt_area_native" in native,
+    )
+    check(
+        "native_result_fields_frozen",
+        all(
+            field in native
+            for field in (
+                "area_before_mm2",
+                "area_after_mm2",
+                "kept_side_basis",
+                "kept_quilt_id",
+            )
+        ),
+    )
+    check(
+        "native_reports_missing_centroids_honestly",
+        '"target_centroid", nullptr' in native and '"signed_offset_mm", nullptr' in native,
+    )
+
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "offline",
+        "passed": passed,
+        "native_surface_trim": "not_verified",
+        "gate": UNAVAILABLE_OPERATIONS.get("surface_trim"),
+        "checks": checks,
+    }
+
+
+async def case_trim_live() -> dict:
+    """Two independent 40x20 trims at x=20 judged by measured area/position."""
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    jobs: list[str] = []
+    async with Client(
+        StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
+    ) as client:
+        capabilities = (await client.call_tool("creo_capabilities", {})).structured_content
+        published = "surface_trim" in (capabilities.get("operations") or [])
+        check("surface_trim_published", published)
+        if not published:
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_surface_trim": "gated",
+                "note": (
+                    "surface_trim is refused before any job until the live retained-side "
+                    "measurement (plan S02 step 3) is on record; no geometry was submitted"
+                ),
+                "checks": checks,
+            }
+        run_job = job_runner(client, jobs)
+        for side in ("one", "two"):
+            state = await run_job("creo_execute_plan", {"operations": trim_plan(side)})
+            page = (
+                await client.call_tool(
+                    "creo_inspect_model",
+                    {
+                        "model_id": state["model_id"],
+                        "detail": "full",
+                        "section": "quilts",
+                    },
+                )
+            ).structured_content
+            records = [
+                record
+                for record in (page.get("data", {}).get("quilts") or [])
+                if record.get("area_mm2") is not None
+            ]
+            expected = TRIM_WIDTH * TRIM_HEIGHT / 2
+            check(
+                f"trim_area_{side}",
+                bool(records) and abs(records[0]["area_mm2"] - expected) <= 0.5,
+                {
+                    "expected_mm2": expected,
+                    "records": [record.get("area_mm2") for record in records],
+                },
+            )
+            bbox = records[0].get("bbox_mm") if records else None
+            low, high = (bbox[0][0], bbox[1][0]) if bbox else (None, None)
+            if side == "one":
+                check(
+                    f"trim_position_{side}",
+                    low is not None and abs(low) <= 0.5 and abs(high - TRIM_X) <= 0.5,
+                    {"bbox_mm": bbox},
+                )
+            else:
+                check(
+                    f"trim_position_{side}",
+                    low is not None and abs(low - TRIM_X) <= 0.5 and abs(high - TRIM_WIDTH) <= 0.5,
+                    {"bbox_mm": bbox},
+                )
+            basis = state["result"]["operations"][-1].get("kept_side_basis")
+            check(
+                f"trim_side_basis_{side}",
+                isinstance(basis, dict) and basis.get("keep_side") == side,
+                {"kept_side_basis": basis},
+            )
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "live",
+        "passed": passed,
+        "native_surface_trim": "verified" if passed else "failed",
+        "jobs": jobs,
+        "checks": checks,
+    }
+
+
+def run_case(case: str, live: bool) -> dict:
+    if case == "quilts":
+        return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
+    if case == "trim":
+        return asyncio.run(case_trim_live()) if live else case_trim_offline()
+    raise SystemExit(BUSY_EXIT, f"unknown case: {case}; available: {', '.join(CASES)}\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", default="quilts", help=f"case to run, one of: {', '.join(CASES)}")
-    parser.add_argument("--live", action="store_true", help="run against the connected Creo session")
+    parser.add_argument(
+        "--live", action="store_true", help="run against the connected Creo session"
+    )
     parser.add_argument(
         "--confirm-session-usable",
         action="store_true",
@@ -292,7 +535,9 @@ def main() -> int:
             "--live and --confirm-session-usable must be given together\n",
         )
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + f"{time.time_ns() % 1_000_000:06d}"
+    run_id = (
+        datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + f"{time.time_ns() % 1_000_000:06d}"
+    )
     run_dir = ROOT / "build" / "surface_chain" / run_id
     if run_dir.exists():
         parser.exit(OVERWRITE_EXIT, f"run directory already exists: {run_dir}\n")
@@ -306,10 +551,7 @@ def main() -> int:
         "command": "tools/test_surface_chain.py " + " ".join(sys.argv[1:]),
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    if args.live:
-        outcome = asyncio.run(case_quilts_live())
-    else:
-        outcome = case_quilts_offline()
+    outcome = run_case(args.case, args.live)
     report.update(outcome)
     path = run_dir / "report.json"
     path.write_text(json.dumps(report, indent=2, ensure_ascii=True), encoding="utf-8")

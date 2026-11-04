@@ -54,3 +54,9 @@
 - 统一驱动：`tools/test_surface_chain.py --case quilts`（离线默认；`--live --confirm-session-usable` 双开关；未知用例连接前拒绝；报告写 `build/surface_chain/<run_id>/` 不覆盖）。离线报告明确 `native_quilt_query=not_verified`。
 - 验证：`bridge.py build` 编译通过；`tests/unit/test_quilt_query_contract.py` 10 项全过；全量 2 286 项单元测试通过；驱动离线用例通过（含游标绑定、旧快照 unavailable、ID 不混用）。**实机未验证**：quilts 分区的真实几何、面积/闭合/外框值、`ProQuiltVolumeEval` 闭合探测与候选诊断均待实机串行窗口；不得把编译通过当作建模能力。
 
+## 2026-11-04 S02 增量：quilt 引用被高层 trim 消费
+
+- `native/surface_trim.cpp` 只经 `resolve_quilt_reference` 解析 target/tool，不自行枚举 quilt，也不新开第二条 PRO_QUILT 选取路径；S01 的 0/多候选拒绝与有界候选清单对高层算子同样生效。
+- `creo_surface_trim` 已注册进 `REGISTERED_OPERATIONS`，同时列入 `UNAVAILABLE_OPERATIONS`：`server.py` 的既有钩子把它从 MCP 工具面移除，`require_available` 在受理前拒绝并给出原因（保留侧绑定与 trim 结果引用仍需实机证据）。因此 quilts 查询面不变（`sections_available` 仍 21 项、`counts.quilts` 语义不变），新增的只是被门禁的算子和其原生实现。
+- 详见 [FEAT-039 S02 段](FEAT-039.md)。
+

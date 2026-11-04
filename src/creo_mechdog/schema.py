@@ -1502,6 +1502,67 @@ class SolidifyOp(StrictModel):
     new_body: bool = False
 
 
+def _quilt_reference_problem(reference: Any, *, allow_datum_plane: bool) -> str | None:
+    """FEAT-039/S02: describe why a surface_trim reference is unusable.
+
+    Only explicit quilt references are accepted; the use-curve trimming
+    variant is not part of the first release, so a curve tool is refused here
+    instead of reaching an unproven native tree.
+    """
+    if not isinstance(reference, dict):
+        return "must be a single {kind:...} reference object"
+    kind = reference.get("kind")
+    if kind is None:
+        return "must carry a kind"
+    if kind == "quilt":
+        value = reference.get("id")
+        if type(value) is not int or value < 0:
+            return "quilt reference requires a nonnegative integer id"
+        return None
+    if kind == "quilt_feature":
+        if not isinstance(reference.get("label"), str) or not reference["label"]:
+            return "quilt_feature reference requires a label"
+        return None
+    if allow_datum_plane and kind == "datum_plane":
+        if not isinstance(reference.get("label"), str) or not reference["label"]:
+            return "datum_plane reference requires a label"
+        return None
+    return f"unsupported kind '{kind}'"
+
+
+class SurfaceTrimOp(StrictModel):
+    """High-level surface trim (FEAT-039/S02).
+
+    The target is one quilt; the tool is one quilt or one datum plane. Curves,
+    bodies and multiple tools are refused before a job is queued. ``keep_side``
+    is ``one``/``two`` only — its physical direction is read back through
+    ``kept_side_basis`` instead of being named after a GUI view.
+    """
+
+    op: Literal["surface_trim"]
+    label: Label
+    target: dict[str, Any]
+    tool: dict[str, Any]
+    keep_side: Literal["one", "two"]
+
+    @model_validator(mode="after")
+    def valid_references(self):
+        problem = _quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_trim target {problem}")
+        problem = _quilt_reference_problem(self.tool, allow_datum_plane=True)
+        if problem:
+            raise ValueError(f"surface_trim tool {problem}")
+        # The same reference object cannot be both sides of the trim. Two
+        # different spellings of one quilt are caught at run time by the native
+        # resolver, which already refuses ambiguous quilt references.
+        if self.target == self.tool:
+            raise ValueError(
+                "surface_trim target and tool must be distinct quilts; one quilt cannot trim itself"
+            )
+        return self
+
+
 class BooleanOp(StrictModel):
     op: Literal["boolean_bodies"]
     label: Label
@@ -1595,6 +1656,7 @@ Operation = Annotated[
         FillOp,
         ThickenOp,
         SolidifyOp,
+        SurfaceTrimOp,
         BooleanOp,
         RibOp,
     ],

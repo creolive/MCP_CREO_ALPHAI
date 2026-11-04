@@ -54,6 +54,7 @@ REGISTERED_OPERATIONS = (
     "surface_fill",
     "thicken",
     "solidify",
+    "surface_trim",
     "boolean_bodies",
     "rib",
     "drawing_model",
@@ -69,7 +70,18 @@ REGISTERED_OPERATIONS = (
     "drawing_delete",
 )
 
-UNAVAILABLE_OPERATIONS = {}
+# FEAT-039/S02: surface_trim has its schema and native tree in place, but the
+# retained-side binding (keep_side one/two against the tool normal) and the
+# trim-result quilt reference are only proved in a live serial window. Until
+# that evidence exists the operation is refused before a job is queued, so no
+# client receives a success the release cannot back up.
+UNAVAILABLE_OPERATIONS = {
+    "surface_trim": (
+        "the high-level trim is not published yet: its retained-side binding and the "
+        "trim-result quilt reference still need a live serial-window acceptance run "
+        "(0.11.7 F03 reported ProFeatureGeomitemVisit -4 on that reference)"
+    ),
+}
 
 
 def require_available(operations: list[dict]) -> None:

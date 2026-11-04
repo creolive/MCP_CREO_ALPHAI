@@ -32,14 +32,12 @@ struct MeasurementOutcome {
 // §4.4.1: every measurement ships its unit context so the Python side can
 // tell "measured zero" apart from "could not measure".
 static J measurement_status_json(const MeasurementOutcome &outcome,
-                                 const InspectionLengthUnits &units,
-                                 const MillimeterScale &scale) {
+                                 const InspectionLengthUnits &units, const MillimeterScale &scale) {
     return {{"available", outcome.available},
             {"reason", outcome.reason ? J(outcome.reason) : J(nullptr)},
             {"query_code", (int)outcome.query_code},
             {"scale_to_mm_known", scale.known},
-            {"unit_name",
-             units.length.name[0] ? J(utf8(units.length.name)) : J(nullptr)}};
+            {"unit_name", units.length.name[0] ? J(utf8(units.length.name)) : J(nullptr)}};
 }
 
 // Trimmed-surface area: external contour area minus internal ones
@@ -186,20 +184,19 @@ static J xyz_json(const ProVector &point, const MillimeterScale &scale) {
 }
 
 // §4.4.2 area projection: mm² only when the length scale is known.
-static J area_mm2_json(const MeasurementOutcome &area,
-                       const InspectionLengthUnits &units, const MillimeterScale &scale) {
-    return {{"area_mm2", area.available && scale.known
-                             ? J(area.value * scale.scale * scale.scale)
-                             : J(nullptr)},
+static J area_mm2_json(const MeasurementOutcome &area, const InspectionLengthUnits &units,
+                       const MillimeterScale &scale) {
+    return {{"area_mm2", area.available && scale.known ? J(area.value * scale.scale * scale.scale)
+                                                       : J(nullptr)},
             {"area_status", measurement_status_json(area, units, scale)}};
 }
 
 // §4.4.2 length projection: mm only when the length scale is known.
-static J length_mm_json(const MeasurementOutcome &length,
-                        const InspectionLengthUnits &units, const MillimeterScale &scale) {
-    return {{"length_mm", length.available && scale.known ? J(length.value * scale.scale)
-                                                          : J(nullptr)},
-            {"length_status", measurement_status_json(length, units, scale)}};
+static J length_mm_json(const MeasurementOutcome &length, const InspectionLengthUnits &units,
+                        const MillimeterScale &scale) {
+    return {
+        {"length_mm", length.available && scale.known ? J(length.value * scale.scale) : J(nullptr)},
+        {"length_status", measurement_status_json(length, units, scale)}};
 }
 
 static J curve_endpoints_json(ProCurve curve, const InspectionLengthUnits &units,
