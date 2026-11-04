@@ -355,6 +355,25 @@ S06 补的是**判据**，不是新树：
 `capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
 直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
 
+### 2.8 surface_loft：混合曲面树无文档，四个候选全部被拒（2026-11-04，S05 取证）
+
+本机 SDK **没有 `ProBlend.h`**：边界混合（Boundary Blend）与放样曲面的特征树没有任何文档，
+只有 `ProElemId.h` 里的 `PRO_E_BLEND_*` 元素 ID（`PRO_BLEND`、`PRO_E_BLEND_SEC_ARRAY`、
+`PRO_E_BLEND_SECTION`、`PRO_E_BLEND_ITEMS`、`PRO_E_BLEND_CONTROL` 等）。用已注册的 `feature_tree`
+逐条提交候选树（内核判卷，不重新编译），2026-11-04 实测：
+
+| 候选树 | 结构 | 结果 |
+| --- | --- | --- |
+| `datum_surface_blend_sec_array` | `PRO_FEAT_DATUM_SURF` + `PRO_BLEND` + `PRO_E_BLEND_SEC_ARRAY`→两个 `PRO_E_BLEND_SECTION`（草图特征选择） | `ProElementReferenceSet` 返回 **-18**（PRO_TK_INVALID_TYPE） |
+| `datum_surface_blend_sections_flat` | 同上但两个 section 平铺在根下 | 同上（-18） |
+| `datum_surface_blend_items` | `PRO_E_BLEND_ITEMS` 取代 SEC_ARRAY | `ProElemtreeElementAdd` 返回 **-2**（PRO_TK_BAD_CONTEXT） |
+| `datum_surface_blend_sec_array_with_type` | 追加 `PRO_E_BLEND_TYPE` | 同上（-18） |
+
+结论：`PRO_E_BLEND_SECTION` 不接受草图的 `PRO_FEATURE` 选择（-18），`PRO_E_BLEND_ITEMS` 不能直接挂在
+特征树根下（-2）。放样/混合曲面的**引用类型**在本机没有文档可依，需要参照树或更多候选形状才能推进；
+`surface_loft` 保持未开工，`loft` 的曲面模式仍由 `capabilities.require_available` 明确拒绝
+（"Direct Blend supports solid add into the default body only"）。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：
