@@ -55,6 +55,7 @@
 #include <ProAsmcomppath.h>
 #include <ProSheetmetal.h>
 #include <ProSmtDrvSurf.h>
+#include <ProFlatSrf.h>
 using J = nlohmann::json;
 using V = std::array<double, 3>;
 static J aliases = J::object(), gfeatures = J::array(), gsurfaces = J::array(), gedges = J::array();
@@ -3285,6 +3286,8 @@ static J choice_inspection(const J &holder, const char *key);
 #include "loft_seed.cpp"
 #include "blend_create.cpp"
 #include "sketch_edit.cpp"
+#include "planar_wall.h"
+#include "planar_wall.cpp"
 #include "placement.cpp"
 #include "feature_state.cpp"
 // FEAT-053: three-point datum plane ({kind:'through_points'}). Each label names
@@ -3560,6 +3563,10 @@ static void execute_operation_body(const J &op) {
         generic_rib(op);
     else if (kind == "sheetmetal_wall")
         generic_sheetmetal_wall(op);
+    else if (kind == "sheetmetal_planar_wall")
+        generic_sheetmetal_planar_wall(op);
+    else if (kind == "resize_sheetmetal_planar_wall")
+        generic_resize_sheetmetal_planar_wall(op);
     else if (kind == "sheetmetal_flange")
         generic_sheetmetal_flange(op);
     else if (kind == "sheetmetal_unbend" || kind == "sheetmetal_flat_pattern" ||

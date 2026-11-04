@@ -76,3 +76,9 @@
 - **与既有验收的关系**：本卡 2026-10-31 N10 六例已用 `contract_tip_overall`/`depth_evidence` 记录口径（`depth_evidence.cone_depth_max`、`total_depth`、`bore_depth_max`），但那是**验收驱动**的判据字段，不是稳定公开回执；`matched_variant` 属离线驱动判定，不是工具返回契约。
 - **计划增量（2026-11-02 已离线交付）**：`native/generic.cpp` 新增 `hole_depth_basis_json()`，从**创建后特征树**实读 `PRO_E_HLE_COM/PRO_E_HLE_DEPTH_DIM_TYPE`，孔结果输出 `depth_basis`（`tip`/`not_tip`/null）、`depth_scheme_code`、`depth_scheme_query="PRO_E_HLE_DEPTH_DIM_TYPE"`；`bridge.compact_job` 白名单同步。`tip` 仅在读到 `PRO_HLE_DEP_TIP_DIM_SCHEME` 时给出，普通直孔走另一元素树故为 null，**不猜 `"shoulder"`**。README 接口表 hole 行已注明“0.10.0 起 custom 盲孔为钻尖口径”。单元 `tests/unit/test_hole_depth_basis.py` 6 项通过（含 compact 保留与不默认）。
 - **边界**：只加字段，不改既有 `depth` 数值语义；不重新解释历史作业记录（缺字段保持缺省）。通孔口径与其它孔型仍不在本卡已验范围。**实机未验**：普通直孔是否也返回非 null 取决于 Creo 是否把该元素写进树，未连会话确认。
+
+## 2026-11-03 alphai 能力吸收：A03 标准螺纹孔（仅规划）
+
+沿用本 ID 的“螺纹/标准孔”余项，不重做已交付沉孔/沉头/tip 口径。拟增加受安装孔表约束的 `standard={series,size,thread_depth}`，原生核验系列/规格/底孔与保存的螺纹元数据；不是实体螺旋牙型。旧 `diameter` 仅在新标准分支可省略，其余行为兼容。
+
+负责人 unassigned；接口、文件、针对性回归、实机矩阵见 [A03 子计划](../superpowers/plans/2026-11-03-alphai-a-foundation-plan.md)，协调 [DEV-067](DEV-067.md)。本次未实现、未测试/连 Creo；本卡原状态、已交付版本和其他开放范围保持，后续仅按新证据回填本子项。

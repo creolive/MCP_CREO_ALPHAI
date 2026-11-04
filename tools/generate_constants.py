@@ -47,7 +47,14 @@ PROBES = ("PRO_E_HLE_ADD_PARAMETERS", "PRO_HOLE_NO_PARAMETERS_FLAG")
 # are removed) emits a MECHDOG_HAS_<name> capability macro so native code can
 # keep missing APIs out of the compile unit; comments and same-name text without
 # a call parenthesis do not declare a function.
-FUNCTION_PROBES = ("ProSmtPartThicknessGet", "ProSmtPartThicknessValueGet")
+FUNCTION_PROBES = (
+    "ProSmtPartThicknessGet",
+    "ProSmtPartThicknessValueGet",
+    # FEAT-058: the wall's own body gauge and its part link are the independent
+    # read-back path; older SDK generations that lack them must keep compiling.
+    "ProSmtBodyThicknessValueGet",
+    "ProSmtBodyIsLinkedToPart",
+)
 
 
 def available_headers(inc_dir: Path) -> tuple[list[str], list[str]]:
