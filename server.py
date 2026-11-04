@@ -123,6 +123,11 @@ _SOURCE_NAMES = (
     "native/geometry.cpp",
     "tools/generate_constants.py",
     "native/generic.cpp",
+    # FEAT-058: the first-wall implementation and its judgement module are part
+    # of the runtime identity, otherwise a service can run them unreported.
+    "native/planar_wall.cpp",
+    "native/planar_wall.h",
+    "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/component_transform.h",

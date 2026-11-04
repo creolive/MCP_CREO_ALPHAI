@@ -32,6 +32,7 @@ measurement it did not receive.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 PLANAR_WALL_OP = "sheetmetal_planar_wall"
@@ -281,6 +282,8 @@ def envelope_problem(
         low, high = entry["min"], entry["max"]
         if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
             return f"envelope {axis} extent is not numeric"
+        if not (math.isfinite(low) and math.isfinite(high)):
+            return f"envelope {axis} extent is not finite [{low!r}, {high!r}]"
         if low > high:
             return f"envelope {axis} extent is not a signed interval ({low} > {high})"
         scale = max(abs(want_high - want_low), 1.0, abs(low) + abs(high))
@@ -294,6 +297,8 @@ def envelope_problem(
     axes = _frame_axes(frame)
     for name, axis in axes.items():
         norm = sum(component * component for component in axis) ** 0.5
+        if not math.isfinite(norm):
+            return f"frame {name} is not a finite vector (|{name}|={norm!r})"
         if abs(norm - 1) > 1e-6:
             return f"frame {name} is not a unit vector (|{name}|={norm:.9f})"
     for first, second in (("u", "v"), ("u", "n"), ("v", "n")):
@@ -309,11 +314,13 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     ``verified`` is true only when the native result carries the feature, the
     four rectangle dimensions, the frame and an envelope that matches the
     requested size. A square wall is reported as such instead of being merged
-    into one dimension.
+    into one dimension. Missing or non-finite evidence is itself a problem: it
+    must never remove a check and leave the wall looking verified.
     """
     length = _number(result, "length")
     width = _number(result, "width")
     thickness = _number(result, "thickness")
+    resize = result.get("op") == PLANAR_WALL_RESIZE_OP
     direction = result.get("direction")
     projection: dict[str, Any] = {
         "op": result.get("op"),
@@ -326,22 +333,22 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "direction": direction,
         "square": bool(length is not None and width is not None and abs(length - width) <= 1e-9),
         "dimension_count": result.get("dimension_count"),
-        "volume_mm3": result.get("volume_mm3"),
+        "volume_mm3": _number(result, "volume_mm3"),
         "frame": result.get("frame"),
         "envelope": result.get("envelope"),
         "sheetmetal_body": result.get("sheetmetal_body"),
         "thickness_source": result.get("thickness_source"),
-        "thickness_measured_mm": result.get("thickness_measured_mm"),
+        "thickness_measured_mm": _number(result, "thickness_measured_mm"),
         "thickness_verified": result.get("thickness_verified"),
         "thickness_body_code": result.get("thickness_body_code"),
         "body_linked": result.get("body_linked"),
     }
-    if result.get("op") == PLANAR_WALL_RESIZE_OP:
+    if resize:
         projection["feature_id_before"] = result.get("feature_id_before")
         projection["feature_id_unchanged"] = result.get("feature_id_before") == result.get(
             "feature_id"
         )
-        projection["thickness_loaded_mm"] = result.get("thickness_loaded_mm")
+        projection["thickness_loaded_mm"] = _number(result, "thickness_loaded_mm")
     problems: list[str] = []
     if not isinstance(projection["feature_id"], int):
         problems.append("the native result carries no feature id")
@@ -357,10 +364,24 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         problems.append(f"the native result carries no usable direction ({direction!r})")
     if projection["sheetmetal_body"] is not True:
         problems.append("the result does not report the wall as a sheetmetal body")
-    if length is not None and width is not None and thickness is not None:
+    # A missing or non-finite size is a problem of its own. Skipping the size,
+    # gauge and envelope checks when one is absent let a result without any
+    # measurement be published as verified (review, 2026-11-04).
+    missing = [
+        name
+        for name, value in (("length", length), ("width", width), ("thickness", thickness))
+        if value is None
+    ]
+    if missing:
+        problems.append(
+            "the native result reports no usable "
+            + ", ".join(missing)
+            + " for the rectangle, so its size, gauge and envelope cannot be judged"
+        )
+    else:
         volume = projection["volume_mm3"]
         expected = length * width * thickness
-        if not isinstance(volume, (int, float)) or isinstance(volume, bool):
+        if volume is None:
             problems.append("the native result carries no measured volume")
         elif abs(float(volume) - expected) > max(
             ABSOLUTE_VOLUME_TOLERANCE_MM3, abs(expected) * VOLUME_TOLERANCE
@@ -375,23 +396,27 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                 "the sheetmetal gauge was not read back from the wall body "
                 f"(thickness_body_code={projection['thickness_body_code']!r})"
             )
-        elif not isinstance(measured_thickness, (int, float)) or isinstance(
-            measured_thickness, bool
-        ):
+        elif measured_thickness is None:
             problems.append("the native result claims a verified gauge without a value")
         elif abs(float(measured_thickness) - thickness) > 1e-6:
             problems.append(
                 f"the wall body carries {float(measured_thickness):.9f} mm instead of the "
                 f"requested {thickness:.9f} mm"
             )
-        if result.get("op") == PLANAR_WALL_RESIZE_OP:
+        if resize:
+            # The resize reads the gauge from the loaded file before editing, so
+            # an unreadable saved gauge must not fall through as a pass.
             loaded = projection["thickness_loaded_mm"]
-            if isinstance(loaded, (int, float)) and not isinstance(loaded, bool):
-                if abs(float(loaded) - thickness) > 1e-6:
-                    problems.append(
-                        f"the saved wall carried {float(loaded):.9f} mm instead of the recorded "
-                        f"{thickness:.9f} mm"
-                    )
+            if loaded is None:
+                problems.append(
+                    "the resize result reports no gauge read back from the saved wall "
+                    "(thickness_loaded_mm is missing or not finite)"
+                )
+            elif abs(float(loaded) - thickness) > 1e-6:
+                problems.append(
+                    f"the saved wall carried {float(loaded):.9f} mm instead of the recorded "
+                    f"{thickness:.9f} mm"
+                )
         envelope = envelope_problem(
             projection["frame"],
             projection["envelope"],
@@ -426,7 +451,13 @@ def annotate_result(result: dict[str, Any]) -> None:
 
 
 def _number(result: dict[str, Any], key: str) -> float | None:
+    """Reported measurement as a finite float, or None when it cannot be used.
+
+    A NaN or an infinity is not a measurement: both make every comparison
+    ``False`` and would otherwise read as agreement (review, 2026-11-04).
+    """
     value = result.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    number = float(value)
+    return number if math.isfinite(number) else None

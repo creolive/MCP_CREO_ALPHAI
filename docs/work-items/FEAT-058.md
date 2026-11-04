@@ -1,6 +1,6 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-类型：功能。优先级：P2。状态：已实现并实机验收，复核 6 项已整改（2026-11-04）；待集成人同步台账与发布。目标版本：未排期。
+类型：功能。优先级：P2。状态：已实现并实机验收，复核 6 项与复核记录 3 处已整改（2026-11-04）；待集成人同步台账与发布。目标版本：未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -100,4 +100,20 @@
 交付记录：提交 `464a27e`（分支 `codex/FEAT-058-native-planar-wall`，父提交 `88a02dc`，提交时工作区干净）。受测源码指纹（SHA256 前 16 位）：`native/planar_wall.cpp ef3d0110295714b6`、`native/planar_wall.h e1956e8522579d7f`、`native/generic.cpp 3294e2848f69ec55`、`native/advanced.cpp be9056b6d9a77d28`、`src/creo_mechdog/native_planar_wall.py fe5ac85f8c9b8620`、`src/creo_mechdog/schema.py dbd66fccf6b648b6`、`src/creo_mechdog/capabilities.py c1caf4351f3871f2`、`generic_bridge.py 7da439dc26a3c5b6`、`server.py 623791f4f1967c09`、`tools/test_adoption_planar_wall.py 75f436a61d99a42b`。未跑 `tools/dev_check.py` 的单元部分（其环境与本机虚拟环境安装路径冲突），语言检查 `--skip-unit` 无回归。
 
 复核整改交付记录：提交 `0dfb92f`（同一分支，父提交 `5ed8e3e`，15 个文件）。受测源码指纹（SHA256 前 16 位，CRLF→LF 归一）：`native/planar_wall.cpp 3c7c6a7674fdfb0e`、`native/planar_wall.h da6159fa0f9c622e`、`src/creo_mechdog/native_planar_wall.py 237a4777fae2303d`、`generic_bridge.py d6a17e8975bdc0db`、`bridge.py be8b91c50fb42da5`、`server.py 0073a75e5b9c1e65`、`src/creo_mechdog/reconciliation.py e305a6535b16bca5`、`tools/test_adoption_planar_wall.py c7752895221d8c22`。实机证据 `build/planar_wall/20261104T032633Z/adoption_live.json` 由该源码构建的 worker 生成（报告内含 commit/dirty/逐文件摘要/worker 摘要）。全量 `discover -s tests`（`PYTHONPATH=src`）2282 项：3 项失败 + 22 项错误，全部为本机虚拟环境 editable 安装指向 `codex-A03` 导致的 `server.py` 源检出保护与安装布局断言，与本改动无关；`dev_check --skip-unit` 无风格回归。剩余待办：非矩形截面、显式支撑面 origin、第二折边/四壁、Creo 9/10 实机、WorkBuddy 黑盒。
+
+### 2026-11-04 复核整改（第三笔，关闭复核记录三处）
+
+复核记录 `build/feat058_review_20261104T035042429265Z/review_findings.json`（基线提交 `d333f83`）给出 5 个 `expected_verified=false / actual_verified=true / problems=[]` 反例与 3 项 `runtime_fingerprint_omissions`。按用户要求只收口这三类、补对应反例回归，不扩展功能范围。
+
+| # | 复核问题 | 复现反例 | 整改 |
+| --- | --- | --- | --- |
+| 1 | 尺寸缺失时体积、厚度、包络裁决整体被跳过，仅靠 `dimension_count` 兜底；改型不校验存档读回的厚度 | `missing_length`、`missing_all_sizes_and_shape`、`missing_loaded_thickness` | `result_projection` 把缺失尺寸本身记为 problem（`... reports no usable length/width/thickness ...`），不再进入静默分支；resize 的 `thickness_loaded_mm` 缺失或非有限也记为 problem（`... no gauge read back from the saved wall ...`） |
+| 2 | NaN 使所有阈值比较为 False，等价于一致 | `nan_volume`、`nan_measured_thickness` | `_number()` 只返回有限数，NaN/Inf 视为无值并落入缺失分支；`volume_mm3`、`thickness_measured_mm`、`thickness_loaded_mm` 在投影中发布为 `null`；同类漏洞补到包络 min/max（`... extent is not finite ...`）与坐标系轴（`... is not a finite vector ...`） |
+| 3 | 平面壁实现未进入运行时源码身份 | 三项 `runtime_fingerprint_omissions` | `server._SOURCE_NAMES` 补 `native/planar_wall.cpp`、`native/planar_wall.h`、`src/creo_mechdog/native_planar_wall.py`（`reconciliation._deployment` 第二笔已含，未重复改动） |
+
+行为变化：改型结果只有带回读自存档的 `thickness_loaded_mm` 才算 `verified`（原生在 `MECHDOG_HAS_ProSmtBodyThicknessValueGet` 分支本就抛错，未定义该探针时输出 `null`，此前会被当成通过）；异常输入下投影不再泄漏 NaN。正向用例 `ResizeProjectionTest` 相应补 `thickness_loaded_mm=1.0`，与原生实际输出一致。
+
+证据：`tests/unit/test_native_planar_wall.py` 新增 `CounterexampleTest`（缺尺寸 4 例、缺存档厚度 1 例、非有限 5 例，均断言 `verified is False` 且命中对应 problem）与 `RuntimeIdentityTest`（三项在 `_SOURCE_NAMES` 且可算出 64 位指纹），模块 18 项通过；`tools/test_unit.py` 全量 2286 项 OK（277s）；`tools/dev_check.py --skip-unit` `success=true`（24 条 lint、13 个未格式化文件均为既有基线）；三个改动文件 `ruff check` 与 `ruff format --check` 通过。
+
+未验证/边界：原生 C++ 未改动，本次无实机运行，几何与实机证据沿用 `build/planar_wall/20261104T032633Z/adoption_live.json`；默认模板路线保留；非矩形、四壁、显式支撑面 origin 仍属后续范围；`annotate_result` 只裁决首个匹配算子（多壁结果）也未在本次扩展。
 

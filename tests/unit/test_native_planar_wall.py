@@ -240,6 +240,7 @@ class ResizeProjectionTest(unittest.TestCase):
             volume_mm3=9600.0,
             feature_id_before=49,
             feature_id=49,
+            thickness_loaded_mm=1.0,
             envelope={
                 "u": {"min": 0.0, "max": 120.0},
                 "v": {"min": 0.0, "max": 80.0},
@@ -437,6 +438,121 @@ class EvidenceTest(unittest.TestCase):
         stale = pwall.result_projection(dict(result, thickness_loaded_mm=3.71))
         self.assertFalse(stale["verified"])
         self.assertTrue(any("saved wall carried" in item for item in stale["problems"]))
+
+
+class CounterexampleTest(unittest.TestCase):
+    """Review finding (2026-11-04): absent or non-finite evidence read as verified."""
+
+    def test_missing_size_is_its_own_problem(self):
+        cases = {
+            "no length": create_result(length=None),
+            "no width": create_result(width=None),
+            "no thickness": create_result(thickness=None),
+            # The review case that carried neither a size nor a shape.
+            "no size and no shape": create_result(
+                length=None,
+                width=None,
+                thickness=None,
+                volume_mm3=None,
+                frame=None,
+                envelope=None,
+            ),
+        }
+        for name, result in cases.items():
+            with self.subTest(case=name):
+                projection = pwall.result_projection(result)
+                self.assertFalse(projection["verified"])
+                self.assertTrue(
+                    any("no usable" in item for item in projection["problems"]),
+                    projection["problems"],
+                )
+        # An unknown length cannot make the wall look square either.
+        self.assertFalse(pwall.result_projection(create_result(length=None))["square"])
+        self.assertTrue(pwall.result_projection(create_result())["verified"])
+
+    def test_missing_saved_gauge_is_its_own_problem(self):
+        result = create_result(
+            op=pwall.PLANAR_WALL_RESIZE_OP,
+            length=120.0,
+            width=80.0,
+            volume_mm3=9600.0,
+            feature_id_before=49,
+            envelope={
+                "u": {"min": 0.0, "max": 120.0},
+                "v": {"min": 0.0, "max": 80.0},
+                "n": {"min": 0.0, "max": 1.0},
+            },
+        )
+        projection = pwall.result_projection(result)
+        self.assertFalse(projection["verified"])
+        self.assertIsNone(projection["thickness_loaded_mm"])
+        self.assertTrue(any("saved wall" in item for item in projection["problems"]))
+
+        # The same result with the saved gauge read back stays verified.
+        read_back = pwall.result_projection(dict(result, thickness_loaded_mm=1.0))
+        self.assertTrue(read_back["verified"], read_back["problems"])
+
+    def test_non_finite_evidence_is_rejected(self):
+        not_a_number = float("nan")
+        infinite = float("inf")
+        cases = {
+            "nan volume": (
+                create_result(volume_mm3=not_a_number),
+                "measured volume",
+            ),
+            "nan gauge": (
+                create_result(thickness_measured_mm=not_a_number),
+                "verified gauge",
+            ),
+            "infinite length": (
+                create_result(length=infinite),
+                "no usable length",
+            ),
+            "nan envelope": (
+                create_result(
+                    envelope={
+                        "u": {"min": 0.0, "max": not_a_number},
+                        "v": {"min": 0.0, "max": 60.0},
+                        "n": {"min": 0.0, "max": 1.0},
+                    }
+                ),
+                "not finite",
+            ),
+            "nan frame": (
+                create_result(frame=dict(FRAME_XY, normal=[0.0, 0.0, not_a_number])),
+                "not a finite vector",
+            ),
+        }
+        for name, (result, expected) in cases.items():
+            with self.subTest(case=name):
+                projection = pwall.result_projection(result)
+                self.assertFalse(projection["verified"])
+                self.assertTrue(
+                    any(expected in item for item in projection["problems"]),
+                    projection["problems"],
+                )
+        # A non-finite measurement is published as absent, never as a number.
+        nan_volume = pwall.result_projection(create_result(volume_mm3=not_a_number))
+        self.assertIsNone(nan_volume["volume_mm3"])
+        nan_gauge = pwall.result_projection(create_result(thickness_measured_mm=not_a_number))
+        self.assertIsNone(nan_gauge["thickness_measured_mm"])
+
+
+class RuntimeIdentityTest(unittest.TestCase):
+    """Review finding (2026-11-04): the planar wall sources missed the identity."""
+
+    def test_planar_wall_sources_participate_in_runtime_identity(self):
+        import server
+
+        fingerprints = server._source_fingerprints()
+        for name in (
+            "src/creo_mechdog/native_planar_wall.py",
+            "native/planar_wall.cpp",
+            "native/planar_wall.h",
+        ):
+            with self.subTest(name=name):
+                self.assertIn(name, server._SOURCE_NAMES)
+                self.assertEqual(len(fingerprints[name]), 64)
 
 
 if __name__ == "__main__":
