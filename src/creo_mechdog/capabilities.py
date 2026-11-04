@@ -47,6 +47,7 @@ REGISTERED_OPERATIONS = (
     "save",
     "export",
     "dump_tree",
+    "mass_properties",
     "udf_inspect",
     "udf_create",
     "datum_csys",
@@ -90,6 +91,13 @@ def require_available(operations: list[dict]) -> None:
 
 def families() -> dict:
     return {
+        "mass_properties": {
+            "enabled": True,
+            "tool": "creo_get_mass_properties",
+            "scope": "Read-only volume, mass, density and centre of mass of a part",
+            "density": "Model material density first; density_g_cm3 is an explicit what-if fallback; neither means null mass",
+            "parts_only": True,
+        },
         "job_reporting": {
             "failed_stage": "Terminal failed jobs prefer the native failed_stage when reported; otherwise retain the last known stage",
             "busy": "Busy requests are rejected without a job; blocking owner fields are preserved",
