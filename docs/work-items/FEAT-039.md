@@ -78,3 +78,10 @@
 - [0.11.7 计划](../superpowers/plans/2026-11-04-0.11.7-surface-chain-improvement-plan.md) 的 S02（surface_trim）/ S03（quilt_merge）/ S04（project_curve，含 use-curve 消费）派工归本卡；原生入口统一 `static void generic_<op>(const J &op)`。
 - G5 契约按 S00 修订（[§0.1](../development/G5-NATIVE-CONTRACT.md)）：显式 `{"kind":"quilt","id"}` 引用（与 `quilt_feature` 并存）、quilt/surface ID 不可互换、schema 不建 job 与运行时引用失效分层（已受理 job 可失败并回滚）、O2 投影 oracle 纠偏、O3 两侧判据改实测位置与 `signed_offset_mm`（不跨模型比 ID）。
 - P1/P2/P3 旧探针失败历史保留为 `route_not_established`/`unverified`（`tools/test_g5_native_probe.py` `ROUTE_HISTORY`），任何路线升级为 feasible 必须有新的实机证据。本轮离线，实机项未验证。
+
+## 2026-11-04 S01 交付：quilt 引用修复与共享测量底座
+
+- F03 的 merge 引用 trim 结果 `ProFeatureGeomitemVisit -4` 两版同码问题，从引用解析层修复：`native/generic.cpp` 的 `quilt_feature` 分支改走 `resolve_quilt_reference`——0 个或多个 `PRO_QUILT` 几何项一律拒绝，错误信息附 ≤20 个有界候选（`quilt_id`/`feature_ids`/`face_count`/`area_mm2`）；不引入自动选取，也不做 `require_single` 宽松模式。
+- 显式 `{"kind":"quilt","id":<int>}` 引用经校验后解析（非负 32 位整数、`ProQuiltInit` 探测存在性），失败附候选清单；`resolve()` 中旧的盲选 PRO_QUILT 一行式分支移除。
+- `native/surface_measure.h`：quilt 面积（外环−内环轮廓面积和）、曲线长度/端点、`measurement_status_json` 的唯一实现；S02—S07 的原生模块一律复用，不得各自复制测量逻辑。`quilt_area_mm2`/`curve_length_mm`/`curve_endpoints_mm` 语义与 G5 契约 §4.4.2 一致。
+- 验证：编译通过、`tests/unit/test_quilt_query_contract.py` 10 项通过、全量 2 286 项单元测试通过；`tools/test_surface_chain.py --case quilts` 离线通过。实机未验证；merge/trim 的实机修复证据仍待 S02/S03 实机阶段。

@@ -2082,7 +2082,7 @@ async def creo_inspect_model(
 
     Use detail=full for geometry; large snapshots return data grouped by section,
     complete=false and next_cursor. Repeat with the same detail/section and cursor.
-    Sections: features, dimensions, surfaces, edges, bodies, datum_planes, datum_axes,
+    Sections: features, dimensions, surfaces, edges, quilts, bodies, datum_planes, datum_axes,
     parameters, aliases, components, feature_geometry, sketch_dimensions.
     Drawings also support sheets/views/notes/tables/models/shown_dimensions;
     metadata preserves additional inspection fields.

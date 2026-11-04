@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import Any
 
 RESPONSE_BUDGET = 32 * 1024
-COUNT_KEYS = ("features", "surfaces", "edges", "bodies", "components")
+COUNT_KEYS = ("features", "surfaces", "edges", "quilts", "bodies", "components")
 # BUG-040: counts.bodies is the number of body *objects* (records), which
 # includes non-active records that hold no material. The native body_counts
 # block carries the separated numbers; it is projected only when present, and
@@ -20,6 +20,7 @@ SECTIONS = (
     "dimensions",
     "surfaces",
     "edges",
+    "quilts",
     "bodies",
     "datum_planes",
     "datum_axes",

@@ -558,6 +558,10 @@ static const char *body_state_name(ProSolidBodyState state) {
     return "unknown";
 }
 
+// FEAT-039/S01: quilt enumeration, shared measurements and quilt reference
+// resolution live in quilt_query.h; this is the only include point.
+#include "quilt_query.h"
+
 static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
     gsurfaces = J::array();
@@ -695,7 +699,17 @@ static J inspection(bool require_healthy = true) {
             if (f["type"].get<int>() == PRO_FEAT_COMPONENT)
                 solid = true;
     auto length_units = inspect_length_units(board);
-    J length_unit = length_unit_json(length_units, length_scale_to_mm(board, length_units));
+    auto length_scale = length_scale_to_mm(board, length_units);
+    J length_unit = length_unit_json(length_units, length_scale);
+    // FEAT-055/S01: quilts are enumerated per part with their own statuses.
+    // Assemblies keep null — quilt records are part-level geometry.
+    J quilts = nullptr, quilts_visit = nullptr;
+    if (!isasm) {
+        J collected = collect_model_quilts((ProSolid)board, length_units, length_scale);
+        quilts = collected["records"];
+        collected.erase("records");
+        quilts_visit = collected;
+    }
     // Coordinates/dimensions retain model units. Do not label native in^3 as mm^3.
     J units = length_units.code || !length_units.length.name[0] ? J(nullptr)
                                                                 : J(utf8(length_units.length.name));
@@ -718,6 +732,8 @@ static J inspection(bool require_healthy = true) {
     J result = {{"features", gfeatures},
                 {"surfaces", gsurfaces},
                 {"edges", gedges},
+                {"quilts", quilts},
+                {"quilts_visit", quilts_visit},
                 {"bodies", bodies},
                 {"body_counts", body_counts},
                 {"healthy", healthy},
@@ -796,11 +812,11 @@ static ProSelection resolve(const J &r) {
                         return selection(g["id"], PRO_CSYS);
         throw std::runtime_error("No default coordinate system found");
     }
-    if (r.at("kind") == "quilt_feature" || r.at("kind") == "datum_csys_feature" ||
-        r.at("kind") == "datum_point_feature") {
-        ProType type = r["kind"] == "quilt_feature"        ? PRO_QUILT
-                       : r["kind"] == "datum_csys_feature" ? PRO_CSYS
-                                                           : PRO_POINT;
+    if (r.at("kind") == "quilt_feature")
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (r.at("kind") == "datum_csys_feature" || r.at("kind") == "datum_point_feature") {
+        ProType type = r["kind"] == "datum_csys_feature" ? PRO_CSYS : PRO_POINT;
         ProFeature f = feature(r.at("label"));
         J ids = J::array();
         CK(ProFeatureGeomitemVisit(&f, type, collect_geom_ids, nullptr, &ids));
@@ -816,10 +832,13 @@ static ProSelection resolve(const J &r) {
         CK(ProSelectionAlloc(nullptr, &mi, &s));
         return s;
     }
-    if (kind == "csys" || kind == "point" || kind == "quilt")
-        return selection(r.at("id"), kind == "csys"    ? PRO_CSYS
-                                     : kind == "point" ? PRO_POINT
-                                                       : PRO_QUILT);
+    if (kind == "quilt")
+        // S00 R1: validated against the real quilt collection, with bounded
+        // candidates in the failure message; never a blind PRO_QUILT pick.
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (kind == "csys" || kind == "point")
+        return selection(r.at("id"), kind == "csys" ? PRO_CSYS : PRO_POINT);
     if (kind == "feature")
         return selection(feature_id(r.contains("label") ? r["label"] : r["id"]), PRO_FEATURE);
     if (kind == "body") {
