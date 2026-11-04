@@ -1,6 +1,6 @@
 # G5 曲面链路原生契约（surface_loft / project_curve / surface_trim）
 
-状态：**冻结**（Q07 交付，2026-11-01）。关联条目：[FEAT-009](../work-items/FEAT-009.md)、[FEAT-039](../work-items/FEAT-039.md)。消费方：Q08（surface_loft）、Q09（project_curve）、Q10（surface_trim）。
+状态：**冻结**（Q07 交付，2026-11-01；S00 修订，2026-11-04）。关联条目：[FEAT-009](../work-items/FEAT-009.md)、[FEAT-039](../work-items/FEAT-039.md)、[FEAT-055](../work-items/FEAT-055.md)。消费方：Q08（surface_loft）、Q09（project_curve）、Q10（surface_trim）；S01–S08 按同名派工编号消费。
 
 本文件是 Q08–Q10 的唯一接口依据。**未经本文件冻结的原生元素树、引用形态、测量字段和单位语义，三个任务都不得自行实现**；需要改动时先改本文件，再改代码。
 
@@ -15,6 +15,19 @@
 | 常量来源规则 | 元素 ID 与枚举值一律**由 `tools/generate_constants.py` 机制按 SDK 头文件符号名解析**；本文件只写符号名，不写数值 |
 
 > **硬边界**：文档中凡标注"待实机验证"的条目，Q08–Q10 实现时必须先跑 §7 的对应探针并把结论回填本文件，再进入公开 op 的实现。**不能用"编译通过"或"元素名存在"代替真实原生证据。**
+
+### 0.1 S00 修订记录（2026-11-04）
+
+来源：[0.11.7 反馈归档](../validation/feedback-0.11.7-2026-11-04/MAPPING.md)。旧契约不变的部分继续有效；本节列出被修订的条款及理由，`tools/test_g5_native_probe.py` 与 `tests/unit/test_g5_native_contract.py` 同步锁定。
+
+| 修订 | 旧表述 | 现表述 | 依据 |
+| --- | --- | --- | --- |
+| R1 显式 quilt 引用 | 只有 `{"kind":"quilt_feature","label":...}` | 增加 `{"kind":"quilt","id":<int>}`；并明确 quilt ID 与 surface ID **不可互换** | F03 §3：`resolve()` 已区分 `PRO_QUILT` 与 `PRO_SURFACE`；修剪结果特征不必然有可直接枚举的 `PRO_QUILT` 几何项 |
+| R2 错误分层 | 引用解析失败一律"不建 job" | 只有 **schema 可判定**的错误不建 job；原生运行时才发现的引用失效**允许已受理 job 失败并回滚** | 引用是否仍存在只能由原生侧判定 |
+| R3 候选唯一性 | "命中 ≥2 个拒绝"（无候选清单） | 拒绝**并返回有界候选清单**；仍不得自动选取第一个或"最大面积" | F03 §3 建议 B 的部分采纳 |
+| R4 投影 oracle | 高 20 mm 圆柱承载长 30 mm 源线 | 首个可解析用例改为 40×20 平面、z=10 的 30 mm 直线沿 −Z 投影到 z=0；圆柱用例单列并标"有效域/多交点待定义" | 旧用例几何不自洽（源线长于承载面高度） |
+| R5 跨模型 ID 比较 | O3 用两次 `kept_quilt_id` 不同证明两侧不同 | 改为面积、位置与 `signed_offset_mm` 判据；只有**同一模型内**两次保留侧运行才比较 ID | 不同模型/不同 revision 的 ID 数字相同不代表同一对象 |
+| R6 旧路线失败状态 | 只记"待验证" | 明确记录"路线失败"与"未验证"两种状态，失败历史不删除 | 旧三路线本机探针失败事实保持 |
 
 ---
 
@@ -236,10 +249,17 @@ PRO_E_FEATURE_TREE
 
 | 语义 | 引用形态 | 解析规则 |
 | --- | --- | --- |
-| quilt（放样产物 / 修剪目标 / 修剪工具） | `{"kind":"quilt_feature","label":"<label>"}` | 复用 `native/generic.cpp:715-726`：`quilt_feature` → 特征内**恰好一个** `PRO_QUILT` 几何项；0 个或多个一律拒绝 |
-| 曲线（投影源） | `{"kind":"curve","id":<int>}` | 复用 `native/generic.cpp:750-758`：`curve` → `PRO_CURVE` 几何 ID（**非负 32 位**） |
+| quilt（放样产物 / 修剪目标 / 修剪工具） | `{"kind":"quilt_feature","label":"<label>"}` | 复用 `native/generic.cpp` 的 `quilt_feature` 分支：特征内**恰好一个** `PRO_QUILT` 几何项；0 个或多个一律拒绝，多个时返回有界候选清单 |
+| quilt（显式几何 ID，S01 起） | `{"kind":"quilt","id":<int>}` | 经 S01 的 `inspection.quilts` 取得的 `quilt_id`；原生侧用 `ProQuiltInit` 初始化后读取面/面积/闭合状态 |
+| 曲线（投影源） | `{"kind":"curve","id":<int>}` | 复用 `native/generic.cpp` 的 `curve` 分支：`PRO_CURVE` 几何 ID（**非负 32 位**） |
 | 方向来源 | `{"kind":"datum_plane","label":...}` / `{"kind":"datum_axis_feature","label":...}` / `{"kind":"edge","id":...}` / `{"kind":"curve","id":...}` | 复用既有 `resolve()`；必须能读出**真实方向向量**，读不出即拒绝 |
 | 基准面（trim 工具） | `{"kind":"datum_plane","label":...}` | `ProTrim.h` 允许 `PRO_DATUM_PLANE` 作为 `PRO_E_STD_USEQLT_QLT` |
+
+**ID 类型规则（硬，S00 R1）**：
+
+1. `quilt_id` 与 `surface_id` 是两套命名空间。把 quilt ID 填进 `{"kind":"surface","id":N}`，或把面 ID 填进 `{"kind":"quilt","id":N}`，都是**类型错误**：必须保留类型诊断后拒绝，不得"长得像就试一下"。
+2. ID 只对**产生它的模型与 revision** 有效。保存/擦除/重载、重生成或拓扑改变后必须重新查询；跨模型比较 ID 数字**不是**任何验收判据。
+3. `surface_ids` 是 quilt 的成员面，**不是** quilt 本身；`surface_ids` 可以直接用于面引用，但不得用来缝合或修剪 quilt。
 
 **唯一性规则（硬）**：
 
@@ -380,8 +400,8 @@ PRO_E_FEATURE_TREE
 
 | 场景 | 行为 |
 | --- | --- |
-| schema 拒绝（非法枚举、截面数不对、引用种类不支持、重复引用、缺 kind） | **不派发 job**，不产生 `job_id`，不产生特征 |
-| 引用解析失败（不存在 / 不唯一 / 类型不符 / 已删除墓碑） | 同上，schema 或原生前置校验阶段拒绝 |
+| schema 拒绝（非法枚举、截面数不对、引用种类不支持、重复引用、缺 kind、ID 类型不匹配） | **不派发 job**，不产生 `job_id`，不产生特征 |
+| 原生运行时引用失效（标签已删除、几何 ID 在当前 revision 不存在、特征不含可用 quilt 几何项） | **允许已受理 job 失败**，走既有事务回滚，`rollback_succeeded=true`；不得承诺"所有引用错误都不建 job"（S00 R2） |
 | 原生 `ProFeatureCreate` 失败 | 事务回滚，**不留下**新特征；`rollback_succeeded=true`；revision 不推进 |
 | 测量失败（面积/长度查不到、单位未知） | **特征保留**（几何成功即成功），测量字段 `null` + 原因 |
 | `keep_side` 与实测方向矛盾 | **op 失败并回滚**（§4.5） |
@@ -421,12 +441,21 @@ PRO_E_FEATURE_TREE
 - 附加断言：产出为 datum surface；`surface_type == "datum_surface"`；不是实体（模型无 solid，体积为 null/`has_solid=false`）。
 - 失败判据：面积与 800 偏差 > 0.5；或产出是实体；或两截面被静默合并/交换顺序（回显 `sections` 必须仍是 `[S0, S1]`）。
 
-### O2 project_curve：圆柱面上的投影曲线长度
+### O2 project_curve：平面上沿 −Z 的投影曲线长度（S00 R4 修订）
 
-- 构造：目标 quilt = 一个**圆柱面**（`extrude{mode:"surface"}` 圆形草图，轴沿 Z，半径 10，高 20）；源曲线 = 圆柱外一条直线（沿 Z，长 30，x=15 处）；投影方向 = 沿 −X（朝圆柱轴）。
-- 闭式解：投影曲线落在圆柱面上，是一条**母线方向**的直线段（投影方向为径向时，源直线平行于 Z ⇒ 投影结果长度等于源长度 30 mm）。
-- 断言：`curve_length_mm == 30.0`（±0.5）；`endpoints_mm` 两点 z 差 = 30.0（±0.5）；两点的径向距离 = 10.0（±0.5，落在圆柱面上）；`curve_id` 非空。
-- 失败判据：长度与 30 偏差 > 0.5；或端点 z 差不为 30；或回执其实是**源曲线**（端点径向距离 = 15 而非 10 —— 这直接判定"只回显输入、冒充投影"）。
+- 构造：目标 quilt = 一个 **40 × 20 的平面矩形**（`surface_fill`，z = 0，覆盖 x∈[0,40]、y∈[0,20]）；源曲线 = z = 10 平面上的一条直线 `(5,10,10) → (35,10,10)`（长 30 mm）；投影方向 = **−Z**（垂直落到目标面）。
+- 闭式解：投影结果落在 z=0 的平面上，是 x∈[5,35]、y=10 的直线段，长度仍为 30 mm。
+- 域内性（新）：投影后的两个端点 `(5,10,0)`、`(35,10,0)` 必须落在目标面的有效域内（x∈[0,40]、y∈[0,20]）；若端点越界，该用例不成立，必须先退回修改构造，不得把截断结果当成功。
+- 断言：`curve_length_mm == 30.0`（±0.5）；`endpoints_mm` 两点 z = 0（±1e-6）；两点 x 跨距 30.0（±0.5）；`curve_id` 非空。
+- 反方向用例：沿 +Z 投影时源线与目标面无交点 ⇒ 必须返回空结果与原因，**不得回显源曲线**（源线 z=10 ≠ 0，可直接分辨）。
+- 失败判据：长度与 30 偏差 > 0.5；或端点 z ≠ 0；或结果端点是源线端点（z = 10）——这直接判定"只回显输入、冒充投影"。
+
+### O2b project_curve：圆柱面投影（有效域与多交点待定义）
+
+- 状态：**候选，定义未冻结**。旧表述"高 20 mm 圆柱承载长 30 mm 源线"几何上不自洽（源线比承载面高），已撤销，不得作为验收 oracle。
+- 后续定义必须同时给出：圆柱的有效域（周向角区间 + 轴向区间）、源线的有效域、投影方向与法向关系、多交点（源线穿过圆柱前后两侧）时的分支选择规则。
+- 在该定义冻结前，圆柱投影只作**探索性观察**，不进入 oracle 计数与通过判据。
+
 
 ### O3 surface_trim：矩形面直线二分 → 面积守恒
 
@@ -434,8 +463,9 @@ PRO_E_FEATURE_TREE
 - 闭式解：矩形被二分，两块各 20 × 20 = 400.0 mm²。
 - 断言（`keep_side="one"`）：`area_before_mm2 == 800.0`（±0.5）；`area_after_mm2 == 400.0`（±0.5）。
 - 守恒断言：再跑一次 `keep_side="two"`，`area_after_mm2 == 400.0`（±0.5），且 `one` 与 `two` 的 `area_after_mm2` 之和 == `area_before_mm2`（±1.0）。
-- **两侧产物必须不同**：两次的 `kept_quilt_id` 必须不同；`kept_side_basis.signed_offset_mm` 必须符号相反。
-- 失败判据：两次 `area_after_mm2` 相同但 `kept_quilt_id` 也相同（两侧产物相同却回报成功）；或面积不守恒；或 `area_before_mm2` 为 0/null。
+- **两侧产物必须不同（S00 R5 修订）**：判据是**实测位置**——`keep_side="one"` 的保留区域覆盖 x∈[0,20]，`keep_side="two"` 覆盖 x∈[20,40]（各 ±0.5），且 `kept_side_basis.signed_offset_mm` 符号相反。**不得**用不同模型（或不同 revision）之间比较 `kept_quilt_id` 数字来证明两侧不同：ID 只对产生它的模型与 revision 有效。
+- 同一模型内两次保留侧运行时，才额外记录 `kept_quilt_id`，并要求两次不同；该字段在该场景外只作诊断。
+- 失败判据：两个保留区域的位置区间相同（两侧其实没变）却回报成功；或面积不守恒；或 `area_before_mm2` 为 0/null。
 
 ---
 

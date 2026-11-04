@@ -39,3 +39,11 @@
 - 曲面前提事实：低层 `creo_create_feature_tree` 已能修剪（10 元素树，job `7045d780…`，`saved_file_reloaded_and_verified=true`），漏 `PRO_E_MATERIAL_SIDE` 会再生失败且无缺口提示；`PRO_FEAT_TRIM` 在 Creo 10 SDK 不存在，须 `PRO_FEAT_CUT` + `PRO_E_SRF_TRIM_TYPE`。
 - MVR 顺序维持报告方建议：`inspect_model(section="quilts")` → `creo_surface_trim` → `creo_quilt_merge` → `creo_quilt_offset` → `creo_boundary_blend` → `loft{mode:"surface"}`。
 - R13 只登记事实与顺序，**不实现**；若后续开工，先做 quilts 查询（不解决它，后续全部卡住）。
+
+## 2026-11-04 S00 增量：0.11.7 反馈归档、派工登记与契约修订
+
+- 0.11.7 四份原件逐字节归档（[manifest](../validation/feedback-0.11.7-2026-11-04/manifest.json)）；逐条映射与证据分级见 [MAPPING](../validation/feedback-0.11.7-2026-11-04/MAPPING.md)。F03 证实：`sections_available` 仍无 `quilts`、merge 引用 trim 结果 `ProFeatureGeomitemVisit -4` 两版同码；本卡状态保持待规划。
+- 派工登记：[0.11.7 计划](../superpowers/plans/2026-11-04-0.11.7-surface-chain-improvement-plan.md) 的 S00—S10 / C01—C04 / W01—W06 复用既有行，Sxx 是派工编号；S01（quilts 查询、共享测量、quilt 引用修复）归本卡与 FEAT-039，S02—S07 归 FEAT-039/FEAT-009，S08 集成、S09 归 FEAT-054、S10 交付。
+- G5 契约按 S00 修订（[§0.1](../development/G5-NATIVE-CONTRACT.md)）：显式 `{"kind":"quilt","id"}` 引用、quilt/surface ID 不可互换、schema 不建 job 与运行时引用失效分层、投影 oracle 纠偏（O2 平面用例 + O2b 圆柱待定义）、修剪两侧按实测位置判、旧路线失败历史保留。
+- 契约测试同步：`tests/unit/test_g5_native_contract.py` 19 项全过（新增 oracle 域内性、显式 quilt 类型、候选清单、旧路线状态断言）。本轮不连 Creo、不运行 Toolkit、不合 main、不发布；实机项均未验证。
+
