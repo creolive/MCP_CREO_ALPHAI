@@ -44,7 +44,7 @@
 | [BUG-007](work-items/BUG-007.md) | P0 | 已完成 | 未排期 | 本环境核心验收通过：标签引用两/三截面straight/smooth、已有底座追加、计划入口、几何/原生参数/保存重载/revision/回滚及后续通道；[最终WorkBuddy报告](validation/BUG-007-WorkBuddy-acceptance-2026-10-14.md)。整数公开引用失败单列BUG-028，开发者stdio整数成功证据保留；Creo10/并发/外部模态/策略未测，不外推 |
 | [BUG-022](work-items/BUG-022.md) | P1 | 已完成 | 未排期 | 本机 Creo 12.4 边参考定位修复及 [WorkBuddy 四场景](validation/BUG-022-WorkBuddy-retest-20261015.md)通过，0.3.1 报告补真实去料正例；用户取消 Creo 10 独立验收门槛后按本机已测范围关闭。原报告来源、根因未确认及未测事实保留，收到新反馈再沿用本 ID 跟进。 |
 | [FEAT-019](work-items/FEAT-019.md) | P1 | 已完成 | 0.2.6 | 用户接受 WorkBuddy / Creo 12.4 最终 MCP 验收：自动启动与真实 Toolkit 就绪、新建/草图/拉伸/尺寸驱动/倒角、保存重载通过；Codex MCP 只读复核 6 个成功修改任务与 revision=6 / volume=9980 mm³；121 项 Windows 单元/语言检查通过；Creo 10 及真实多客户端并发/退出后重连未测，Codex 冷启动失败单列 BUG-005；见 [证据](validation/FEAT-019.md) |
-| [DEV-001](work-items/DEV-001.md) | P1 | 已完成 | 0.2.6 | 开发入口、台账、模板、语言基线与守卫、Windows 离线测试隔离、源码分发同步；[本批验收](validation/DEV-001.md) |
+| [DEV-001](work-items/DEV-001.md) | P1 | 已完成 | 0.2.6 | 开发入口、台账、模板、语言基线与守卫、Windows CI 配置、源码分发同步；[本批验收](validation/DEV-001.md) |
 | DEV-010 | P2 | 已完成 | 0.2.6 | 根 AGENTS.md 与[开发入口](DEVELOPMENT.md#workbuddy-测试约定)统一 WorkBuddy 最终 MCP 黑盒测试约定，不查看源码、不运行本地源码测试；2026-10-13 Windows 文档引用与约定一致性检查通过，未执行 WorkBuddy 测试 |
 | [DEV-011](work-items/DEV-011.md) | P1 | 已完成 | 0.2.6 | 合并近两日三个开发分支至 main；121 项单元/语言守卫、SDK 构建、协议、解压与九种子 ZIP 安装通过；v0.2.6 预发布，源码/种子附件及 SHA256；本轮 Toolkit 超时、Creo 10 未测、BUG-005 保留，见 [发布证据](validation/RELEASE-0.2.6.md) |
 | [DEV-012](work-items/DEV-012.md) | P2 | 已完成 | 0.2.6 文档补充 | 根据用户确认与已有 Creo 12.4 实机证据，统一 Creo 10 / Creo 12 可用性说明并补充 12.4 安装示例；文档链接与范围一致性检查通过，GitHub Release 正文已修改并回读核对；历史测试日期、未测分支、BUG-005、标签及附件保持原样；本次未执行新实机测试，见 [记录](work-items/DEV-012.md) |
