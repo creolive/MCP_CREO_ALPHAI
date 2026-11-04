@@ -305,6 +305,35 @@ PRO_E_FEATURE_TREE
 
 **注意：`PRO_E_SRF_TRIM_TYPE` 是 non-redefinable mandatory**（`ProTrim.h:276-278`），创建后不可改；`PRO_E_SURF_TRIM_TYPE` 必须与之一致。
 
+### 2.6 surface_solidify：曲面实体化（2026-11-04 实机补齐判据）
+
+`native/surfaces.cpp` 的 `solidify` 一直用这条已有树（`PRO_E_PATCH_QUILT` 取 quilt）：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE      = PRO_FEAT_PROTRUSION
+ ├─ PRO_E_FEATURE_FORM      = PRO_USE_SURFS
+ ├─ PRO_E_STD_FEATURE_NAME  = <label>
+ ├─ PRO_E_PATCH_QUILT       (被实体化的 quilt)
+ ├─ PRO_E_PATCH_MATERIAL_SIDE (PRO_SOLIDIFY_SIDE_ONE / _TWO)
+ └─ PRO_E_BODY_*            (body_options: add/cut/new_body)
+```
+
+S06 补的是**判据**，不是新树：
+
+- **闭合是量出来的**：`quilt_closed_native()` 用 `ProQuiltVolumeEval` 问闭合性，闭合 quilt 得到体积，
+  开放 quilt 返回 `PRO_TK_INVALID_TYPE(-18)`。因此开放 quilt 在建特征**之前**被拒绝，消息带该返回码
+  （`solidify requires a closed quilt; the referenced quilt is open (ProQuiltVolumeEval=-18, quilt_is_open)`），
+  作业失败并回滚，不会留下半个实体。`cut` 模式与 `thicken` 不受此限制（开放面加厚是合法语义）。
+- **体积是量出来的**：`volume_before_mm3` / `volume_after_mm3` 走共享的质量属性 helper，
+  没有实体时体积为 `null`（不是 0），并随算子结果 `stage_operation_result` 一起返回。
+- **引用种类在 schema 层收紧**：`solidify` 的 `mode="add"` 只接受一个 quilt 引用
+  （`{kind:quilt,id}` 或 `{kind:quilt_feature,label}`）；body 不是 quilt，布尔 body 工具不能替代 quilt 语义。
+
+实机（`build/_live_solidify_probe.py` 与驱动 `--case solidify --live`）：绕 X 轴 360° 旋转 5×20 矩形得到
+**闭合** quilt（面积 1000π mm²），实体化后体积 **2000π = 6283.185307179587 mm³**（与解析值差 <1e-9），
+作业 `saved_file_reloaded_and_verified=true`；开放 quilt（40×20 填充面）按上述理由拒绝，模型保持未实体化。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：
@@ -817,3 +846,14 @@ PRO_E_FEATURE_TREE
 
 证据：`build/live_usecurve_trim_probe.json`（侧向矩阵，10 个模型）、`build/live_op_trim_probe.json`（两个操作符形态）。
 实现侧同时发现并修正一处真实缺陷：use-curve 特征创建后立即读状态是 `PRO_FEAT_FAILED(6)`，必须先再生的模型再判状态。
+
+### 9.3 2026-11-04 S06 实机：闭合曲面实体化判据
+
+| 用例 | 前置 | 结果 | 判定 |
+| --- | --- | --- | --- |
+| 闭合 quilt 实体化 | 绕 X 轴 360° 旋转 5×20 矩形（surface 模式） | quilt `closed=true`、面积 1000π mm²；实体体积 **6283.185307179587 mm³**（解析 2000π，差 <1e-9）；保存重载已验证 | 通过 |
+| 开放 quilt 实体化 | 40×20 填充面 | 建特征前被拒：`ProQuiltVolumeEval=-18, quilt_is_open`；作业失败并回滚，面仍为 800 mm² 开放 quilt | 通过（拒绝即期望） |
+| 驱动用例 | `--case solidify --live` | run `20261104-145403-398500`，8 项检查全通过 | 通过 |
+
+证据：`build/live_solidify_probe.json`（两个用例的完整量测）与 `build/surface_chain/<run_id>/report.json`。
+解析期望值由**实测外框**推导（半径取 Y 向跨度的一半、高度取 X 向跨度），不写死常数，避免平面映射假设。

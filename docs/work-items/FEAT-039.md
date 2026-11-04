@@ -182,3 +182,17 @@
 **已知边界（实测，未绕过）**：先投影到某 quilt、再用该投影曲线修剪同一 quilt 的链在保存阶段失败——`ProMdlnameBackup=-1`，作业回滚、目标保持未修剪（同模型里的投影作业本身可保存）。该投影曲线是交线特征，持有被修剪 quilt 的几何项选择；修剪消费掉该 quilt 后曲线参考悬空，内核拒绝写出模型。所以"独立曲线修剪"可用，"曲线依赖目标 quilt"会在保存阶段失败并明确报错，不会被当成成功。
 
 **消费者剩余**：跨面曲线链、投影曲线对非本 quilt 的修剪、两侧同时保留（`BOTH`）都未公开；投影—修剪同一 quilt 的串联要等真实投影特征或多分支交线之外的路线。
+
+## 2026-11-04 S06 实机交付：闭合曲面实体化的体积与闭合判据
+
+`solidify` 的原生树早就在（`PRO_FEAT_PROTRUSION` + `PRO_USE_SURFS` + `PRO_E_PATCH_QUILT` + 材质侧），缺的是**判据**：以前只建特征，不报体积，也不管闭合性。
+
+- **闭合是量出来的**：`quilt_closed_native()` 用 `ProQuiltVolumeEval` 问闭合性，开放 quilt 返回 `PRO_TK_INVALID_TYPE(-18)`。开放 quilt 在建特征**之前**被拒绝，消息带该码（`solidify requires a closed quilt; the referenced quilt is open (ProQuiltVolumeEval=-18, quilt_is_open)`），作业失败并回滚，不留半个实体。`cut` 与 `thicken` 不受此限制（开放面加厚合法）。
+- **体积是量出来的**：`volume_before_mm3` / `volume_after_mm3` 走共享质量属性 helper，没有实体时为 `null`（不是 0），随算子结果返回。
+- **schema 收紧**：`solidify` 的 `mode="add"` 只接受一个 quilt 引用；body 不是 quilt，布尔 body 工具不能替代 quilt 语义。
+
+实机（绕 X 轴 360° 旋转 5×20 矩形）：闭合 quilt 面积 1000π mm²，实体化体积 **6283.185307179587 mm³**（解析 2000π，差 <1e-9），`saved_file_reloaded_and_verified=true`；开放 quilt（40×20 填充面）按上述理由拒绝，模型保持 800 mm² 开放面。驱动 `--case solidify --live`（run `20261104-145403-398500`）8 项检查全通过。解析期望值由实测外框推导，不写死常数。
+
+**闭合 quilt 的来源**：用 360° 旋转曲面得到，**不依赖仍 gated 的 `quilt_merge`**。这也给出 S03 之外的一条闭合面路径。
+
+**未验证**：thicken 的体积字段未实机核对；`cut` 模式的体积字段未核对；闭合判据只覆盖 `mode="add"`。

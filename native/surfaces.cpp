@@ -80,13 +80,48 @@ static void generic_fill(const J &op) {
 }
 static void generic_surface_solid(const J &op) {
     bool thin = op["op"] == "thicken", cut = op.value("mode", "add") == "cut";
+    // S06: a quilt becomes a solid only when it is closed. ProQuiltVolumeEval
+    // answers for a closed quilt and returns PRO_TK_INVALID_TYPE for an open
+    // one, so the closure is measured, not assumed, and an open quilt is
+    // refused with that code instead of a bare feature failure.
+    ProSelection s = resolve(op["reference"]);
+    int target_quilt_id = -1;
+    J closure = J(nullptr);
+    if (!thin && !cut) {
+        ProModelitem item;
+        CK(ProSelectionModelitemGet(s, &item));
+        target_quilt_id = item.id;
+        ProQuilt target_quilt = nullptr;
+        if (ProQuiltInit((ProSolid)board, target_quilt_id, &target_quilt))
+            throw std::runtime_error("solidify could not open the referenced quilt (id " +
+                                     std::to_string(target_quilt_id) + ")");
+        MeasurementOutcome closed = quilt_closed_native(target_quilt);
+        closure = {{"available", closed.available},
+                   {"query_code", (int)closed.query_code},
+                   {"reason", closed.reason ? J(closed.reason) : J(nullptr)}};
+        if (quilt_closed_is_open(closed))
+            throw std::runtime_error(
+                "solidify requires a closed quilt; the referenced quilt is open "
+                "(ProQuiltVolumeEval=" +
+                std::to_string((int)closed.query_code) +
+                (closed.reason ? std::string(", ") + closed.reason : std::string()) + ")");
+    }
+    // The volume is the solid's own measure, so it is read after the feature
+    // exists. A model without a solid yet has no mass property, and that is
+    // reported as unknown instead of zero.
+    bool volume_before_known = true;
+    double volume_before = 0.0;
+    try {
+        volume_before = volume();
+    } catch (...) {
+        volume_before_known = false;
+    }
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, cut ? PRO_FEAT_CUT : PRO_FEAT_PROTRUSION);
     integer(root, PRO_E_FEATURE_FORM, PRO_USE_SURFS);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
     if (thin)
         integer(root, PRO_E_FEAT_FORM_ALWAYS_THIN, PRO_THIN);
-    ProSelection s = resolve(op["reference"]);
     ref(root, thin ? PRO_E_STD_USEQLT_QLT : PRO_E_PATCH_QUILT, s);
     ProSelectionFree(&s);
     if (thin) {
@@ -103,7 +138,17 @@ static void generic_surface_solid(const J &op) {
     body_options(root, op);
     ProFeature f = create(root);
     ProElementFree(&root);
-    remember(op, f);
+    J extra = {{"target_quilt_id", target_quilt_id >= 0 ? J(target_quilt_id) : J(nullptr)},
+               {"closure", closure},
+               {"volume_before_mm3", volume_before_known ? J(volume_before) : J(nullptr)}};
+    if (!cut) {
+        double volume_after = volume();
+        extra["volume_after_mm3"] = volume_after;
+    }
+    // The operation result is what a client reads, so the measured numbers are
+    // staged there as well; remember() only feeds the alias table.
+    stage_operation_result(extra);
+    remember(op, f, extra);
 }
 static void generic_boolean(const J &op) {
     std::string method = op["method"];

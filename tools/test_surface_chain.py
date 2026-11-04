@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts", "trim", "merge", "project")
+CASES = ("quilts", "trim", "merge", "project", "solidify")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -1255,6 +1255,256 @@ async def case_project_live() -> dict:
     }
 
 
+SOLIDIFY_CYLINDER_PLAN = [
+    {
+        "op": "datum_axis",
+        "label": "solid_axis",
+        "references": [
+            {"kind": "datum_plane", "axis": "y"},
+            {"kind": "datum_plane", "axis": "z"},
+        ],
+    },
+    {
+        "op": "sketch",
+        "label": "solid_profile",
+        "plane": "XZ",
+        "entities": [{"type": "rectangle", "name": "rp", "min": [0.0, 0.0], "max": [5.0, 20.0]}],
+    },
+    {
+        "op": "revolve",
+        "label": "solid_wall",
+        "sketch": "solid_profile",
+        "angle": 360.0,
+        "mode": "surface",
+        "axis": {"kind": "datum_axis_feature", "label": "solid_axis"},
+    },
+]
+
+SOLIDIFY_OPEN_PLAN = [
+    {
+        "op": "sketch",
+        "label": "solid_open_profile",
+        "plane": "XY",
+        "entities": [{"type": "rectangle", "name": "ro", "min": [0.0, 0.0], "max": [40.0, 20.0]}],
+    },
+    {"op": "surface_fill", "label": "solid_open_face", "sketch": "solid_open_profile"},
+]
+
+
+def case_solidify_offline() -> dict:
+    """S06 schema, publication and native criteria. No Creo session is involved."""
+    from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
+    from creo_mechdog.schema import validate_operations
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    operation = {
+        "op": "solidify",
+        "label": "solid_body",
+        "reference": {"kind": "quilt", "id": 12},
+        "side": "positive",
+    }
+    try:
+        validate_operations([dict(operation)])
+        check("schema_accepts_one_quilt", True)
+    except ValueError as error:
+        check("schema_accepts_one_quilt", False, {"error": str(error)})
+    try:
+        validate_operations([{**operation, "reference": {"kind": "body", "id": 3}}])
+        check("schema_refuses_a_body_reference", False)
+    except ValueError:
+        check("schema_refuses_a_body_reference", True)
+
+    check("registered", "solidify" in REGISTERED_OPERATIONS)
+    check("published", "solidify" not in UNAVAILABLE_OPERATIONS)
+    native = (ROOT / "native" / "surfaces.cpp").read_text(encoding="utf-8")
+    check("native_measures_the_closure", "quilt_closed_native" in native)
+    check("native_refuses_an_open_quilt", "solidify requires a closed quilt" in native)
+    check("native_reports_the_volume", "volume_after_mm3" in native)
+    return {
+        "mode": "offline",
+        "passed": all(item["ok"] for item in checks),
+        "native_solidify": "not_verified",
+        "checks": checks,
+    }
+
+
+async def case_solidify_live() -> dict:
+    """S06 measured criteria: a closed quilt becomes a solid of the right volume."""
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: dict | None = None) -> None:
+        checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
+
+    jobs: list[str] = []
+
+    async def submit(client, operations, model_id=None, revision=None) -> dict:
+        arguments: dict = {"operations": operations}
+        if model_id:
+            arguments["model_id"] = model_id
+            arguments["expected_revision"] = revision
+        submitted = (await client.call_tool("creo_execute_plan", arguments)).structured_content
+        job_id = (submitted or {}).get("job_id")
+        if not job_id:
+            raise RuntimeError(json.dumps(submitted)[:400])
+        jobs.append(job_id)
+        deadline = time.monotonic() + 300
+        state: dict = {}
+        while time.monotonic() < deadline:
+            state = (await client.call_tool("creo_get_job", {"job_id": job_id})).structured_content
+            if state.get("status") in ("succeeded", "failed", "unknown_outcome"):
+                break
+            await asyncio.sleep(2)
+        else:
+            raise TimeoutError("job did not settle; inspect it, never blindly resubmit")
+        results = (state.get("result") or {}).get("operations") or []
+        state["operation"] = results[-1] if results else None
+        state["saved_verified"] = (state.get("result") or {}).get(
+            "saved_file_reloaded_and_verified"
+        )
+        return state
+
+    async def section(client, model_id: str, name: str) -> list:
+        page = (
+            await client.call_tool(
+                "creo_inspect_model",
+                {"model_id": model_id, "detail": "full", "section": name},
+            )
+        ).structured_content
+        return (page.get("data") or {}).get(name) or []
+
+    async with Client(
+        StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
+    ) as client:
+        started = await wait_ready(client)
+        check(
+            "session_ready",
+            bool(started.get("connected")),
+            {"state": started.get("state"), "message": str(started.get("message"))[:200]},
+        )
+        if not started.get("connected"):
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_solidify": "not_verified",
+                "note": "the session never reported connected; no geometry was submitted",
+                "checks": checks,
+            }
+
+        built = await submit(client, SOLIDIFY_CYLINDER_PLAN)
+        check(
+            "closed_quilt_built",
+            built["status"] == "succeeded",
+            {"status": built.get("status"), "message": built.get("message")},
+        )
+        if built["status"] != "succeeded":
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_solidify": "failed",
+                "checks": checks,
+            }
+        model_id = built["model_id"]
+        quilts = await section(client, model_id, "quilts")
+        check(
+            "quilt_is_closed", bool(quilts) and quilts[0].get("closed") is True, {"quilts": quilts}
+        )
+        if not quilts:
+            return {
+                "mode": "live",
+                "passed": False,
+                "native_solidify": "failed",
+                "checks": checks,
+            }
+        quilt = quilts[0]
+        bbox = quilt.get("bbox_mm") or []
+        radius = (bbox[1][1] - bbox[0][1]) / 2.0 if len(bbox) == 2 else 0.0
+        height = (bbox[1][0] - bbox[0][0]) if len(bbox) == 2 else 0.0
+        expected_volume = math.pi * radius * radius * height
+        expected_area = 2 * math.pi * radius * height + 2 * math.pi * radius * radius
+        check(
+            "closed_quilt_area_matches_oracle",
+            abs(float(quilt.get("area_mm2") or 0.0) - expected_area) <= 0.5,
+            {"area_mm2": quilt.get("area_mm2"), "expected_mm2": expected_area},
+        )
+
+        solidified = await submit(
+            client,
+            [
+                {
+                    "op": "solidify",
+                    "label": "solid_body",
+                    "reference": {"kind": "quilt", "id": quilt.get("quilt_id")},
+                    "side": "positive",
+                }
+            ],
+            model_id,
+            built.get("revision"),
+        )
+        operation = solidified.get("operation") or {}
+        volume = operation.get("volume_after_mm3")
+        check(
+            "solidify_succeeded",
+            solidified["status"] == "succeeded" and solidified.get("saved_verified") is True,
+            {"status": solidified.get("status"), "message": solidified.get("message")},
+        )
+        check(
+            "volume_matches_oracle",
+            isinstance(volume, (int, float)) and abs(volume - expected_volume) <= 0.5,
+            {"volume_after_mm3": volume, "expected_mm3": expected_volume},
+        )
+        check(
+            "closure_is_reported",
+            (operation.get("closure") or {}).get("available") is True,
+            {"closure": operation.get("closure")},
+        )
+
+        open_build = await submit(client, SOLIDIFY_OPEN_PLAN)
+        if open_build["status"] == "succeeded":
+            open_model = open_build["model_id"]
+            open_quilts = await section(client, open_model, "quilts")
+            open_quilt = open_quilts[0] if open_quilts else {}
+            refused = await submit(
+                client,
+                [
+                    {
+                        "op": "solidify",
+                        "label": "solid_open",
+                        "reference": {"kind": "quilt", "id": open_quilt.get("quilt_id")},
+                        "side": "positive",
+                    }
+                ],
+                open_model,
+                open_build.get("revision"),
+            )
+            check(
+                "open_quilt_refused",
+                refused["status"] == "failed" and "closed quilt" in str(refused.get("message")),
+                {"status": refused.get("status"), "message": refused.get("message")},
+            )
+            after = await section(client, open_model, "quilts")
+            check(
+                "open_quilt_untouched_after_refusal",
+                bool(after) and abs(float(after[0].get("area_mm2") or 0.0) - 800.0) <= 0.5,
+                {"quilts_after": after},
+            )
+
+    passed = all(item["ok"] for item in checks)
+    return {
+        "mode": "live",
+        "passed": passed,
+        "native_solidify": "verified" if passed else "failed",
+        "jobs": jobs,
+        "checks": checks,
+    }
+
+
 def run_case(case: str, live: bool) -> dict:
     if case == "quilts":
         return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
@@ -1264,6 +1514,8 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_merge_live()) if live else case_merge_offline()
     if case == "project":
         return asyncio.run(case_project_live()) if live else case_project_offline()
+    if case == "solidify":
+        return asyncio.run(case_solidify_live()) if live else case_solidify_offline()
     raise SystemExit(BUSY_EXIT, f"unknown case: {case}; available: {', '.join(CASES)}\n")
 
 

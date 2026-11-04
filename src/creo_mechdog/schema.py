@@ -1544,6 +1544,18 @@ class SolidifyOp(StrictModel):
     mode: Literal["add", "cut"] = "add"
     new_body: bool = False
 
+    @model_validator(mode="after")
+    def reference_matches_mode(self):
+        # FEAT-039/S06: adding a solid needs one quilt; a body is not a quilt
+        # and the boolean body tools cannot stand in for the quilt semantics.
+        # The cut mode trims a solid with a datum plane and keeps its own
+        # reference spellings.
+        if self.mode == "add":
+            problem = _quilt_reference_problem(self.reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"solidify reference {problem}")
+        return self
+
 
 def _quilt_reference_problem(
     reference: Any, *, allow_datum_plane: bool, allow_curve: bool = False
