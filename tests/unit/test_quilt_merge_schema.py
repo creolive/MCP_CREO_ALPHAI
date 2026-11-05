@@ -152,7 +152,7 @@ class QuiltMergeNativeSourceTests(unittest.TestCase):
     def test_driver_declares_merge_case(self):
         driver = DRIVER.read_text(encoding="utf-8")
         self.assertIn('"merge"', driver)
-        self.assertRegex(driver, r"CASES = \(.*\"merge\"")
+        self.assertRegex(driver, r"(?s)CASES = \([^)]*\"merge\"")
 
 
 if __name__ == "__main__":

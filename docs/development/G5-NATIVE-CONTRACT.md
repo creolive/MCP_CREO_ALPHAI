@@ -476,6 +476,30 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 | | 2：按共享边修剪第二张面 | 面积 **800 → 600.000 mm²**（重叠 200 mm²） |
 | | 3：加厚第一张面 2 mm | committed，模型保存重载通过 |
 
+### 2.8c 曲面扫掠：有文档树、有解析 oracle（2026-11-05 实机，S05 落地路径）
+
+`ProSweep.h` 记录了**曲面扫掠**：`PRO_E_EXT_SURF_CUT_SOLID_TYPE` 取
+`PRO_SWEEP_FEAT_TYPE_SURFACE`（=942）即为曲面输出，端盖由 `PRO_E_SWP_ATTR` 下的
+`PRO_E_END_SRF_ATTR` 决定（`PRO_SWEEP_END_SRF_OPEN`=0 / `PRO_SWEEP_END_SRF_CAPPED`=14）。
+这条树**有父子文档**，因此与 §2.8b 的"猜树"不同：它是可引用的实现依据。
+
+实机（run `20261105-073051-135500`，11 项全通过）：40×20 矩形截面沿 20 mm 直线扫掠。
+
+| 形态 | 实测 | 解析 oracle |
+| --- | --- | --- |
+| 开放曲面（`capped=false`） | 面积 **2400.000 mm²**，未闭合 | 2×(40+20)×20 = 2400（四个侧面） |
+| 加盖曲面（`capped=true`） | 面积 **4000.000 mm²**，闭合 | 2400 + 2×(40×20) = 4000 |
+| 加盖曲面实体化 | 体积 **15999.999999999998 mm³** | 40×20×20 = 16000 |
+
+驱动新增 `--case sweep_surface`（`tools/surface_chain_sweep.py`），三个数都由几何参数
+推导而不是写死；每个作业都要求 `saved_file_reloaded_and_verified=true`。
+
+**边界（必须一起说）**：`ProSweep.h` 只支持**常量截面**
+（`PRO_SWEEP_CONST_SECTION`，文档明确写"only PRO_SWEEP_CONST_SECTION supported"），
+所以**多截面放样/边界混合走不通这条路**；`loft` 的 `mode="surface"` 继续在排队前被拒
+（理由与实测见 §2.8b）。也就是说：S05 现在有了**可测量的曲面生成**（扫掠），
+但"多个截面之间的曲面"仍然缺参照树。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

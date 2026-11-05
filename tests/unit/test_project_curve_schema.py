@@ -215,7 +215,7 @@ class ProjectCurveNativeSourceTests(unittest.TestCase):
     def test_driver_declares_project_case(self):
         driver = DRIVER.read_text(encoding="utf-8")
         self.assertIn('"project"', driver)
-        self.assertRegex(driver, r"CASES = \(.*\"project\"")
+        self.assertRegex(driver, r"(?s)CASES = \([^)]*\"project\"")
 
 
 if __name__ == "__main__":

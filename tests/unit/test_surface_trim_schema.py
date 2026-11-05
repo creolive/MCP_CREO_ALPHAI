@@ -180,7 +180,7 @@ class SurfaceTrimNativeSourceTests(unittest.TestCase):
     def test_driver_declares_trim_case(self):
         driver = DRIVER.read_text(encoding="utf-8")
         self.assertIn('"trim"', driver)
-        self.assertRegex(driver, r"CASES = \(.*\"trim\"")
+        self.assertRegex(driver, r"(?s)CASES = \([^)]*\"trim\"")
 
 
 if __name__ == "__main__":

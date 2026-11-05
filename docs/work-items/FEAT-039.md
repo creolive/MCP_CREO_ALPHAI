@@ -294,3 +294,23 @@
 实机：`p12_surface_blade.json` 三阶段全通过（修剪面积 800 → **600.000 mm²**，加厚 committed，
 保存重载通过）；`surface_trim_merge.json` 同样三阶段全通过（修剪 800 → 600 mm² = 并集的外侧部分，
 加厚 committed）。测试见 `tests/unit/test_surface_examples.py`。
+
+## 2026-11-05 S05 落地：文档化的曲面扫掠（实机 11 项通过）
+
+子任务勘察 SDK 头文件后的结论：`ProSweep.h` 里有**完整的父子文档**
+（`PRO_E_EXT_SURF_CUT_SOLID_TYPE` = `PRO_SWEEP_FEAT_TYPE_SURFACE`，
+`PRO_E_END_SRF_ATTR` 决定端盖），而 `sweep` 算子本来就已经实现了 surface 模式——
+S05 缺的不是能力，是**证据**。
+
+实机（run `20261105-073051-135500`，11 项全通过）：40×20 矩形沿 20 mm 直线扫掠，
+
+- 开放曲面：面积 **2400.000 mm²**、未闭合（oracle：2×(40+20)×20 = 2400）；
+- 加盖曲面：面积 **4000.000 mm²**、闭合（oracle：2400 + 2×40×20 = 4000）；
+- 加盖曲面实体化：体积 **15999.999999999998 mm³**（oracle：40×20×20 = 16000）。
+
+用例在 `--case sweep_surface`，三个 oracle 全部由几何参数推导；作业均要求
+`saved_file_reloaded_and_verified=true`。契约测试 `tests/unit/test_surface_sweep_contract.py`。
+
+**仍未达成**：多截面放样/边界混合。`ProSweep.h` 文档明确只支持常量截面
+（`PRO_SWEEP_CONST_SECTION`），本机也没有 `ProBlend.h`，所以 `loft` 的 `mode="surface"`
+仍按 §2.8b 的实测理由在排队前被拒，用例里标为 blocked step。

@@ -11,7 +11,7 @@ class SurfaceJoinContractTests(unittest.TestCase):
     def test_driver_declares_the_join_case(self):
         driver = DRIVER.read_text(encoding="utf-8")
         self.assertIn('"join"', driver)
-        self.assertRegex(driver, r"CASES = \(.*\"join\"")
+        self.assertRegex(driver, r"(?s)CASES = \([^)]*\"join\"")
 
     def test_join_case_offline_passes(self):
         from tools import test_surface_chain as driver

@@ -510,8 +510,8 @@ def families() -> dict:
         },
         "sweep": {
             "enabled": True,
-            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11",
-            "limits": "constant section; compound trajectories, all frame options, capped surfaces and intersections still require local validation; thin is total symmetric wall thickness",
+            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11; the surface mode was measured on 2026-11-05 with a 40x20 profile swept 20 mm: open 2400.000 mm2 (2*(40+20)*20), capped 4000.000 mm2 (walls plus two 40x20 caps) and the capped quilt solidifies to 15999.999999999998 mm3 (40*20*20)",
+            "limits": "constant section (ProSweep.h documents no variable or multi-section sweep), so a boundary blend through several sections is not reachable through this route; compound trajectories, all frame options and intersections still require local validation; thin is total symmetric wall thickness",
         },
         "draft": {
             "enabled": True,
