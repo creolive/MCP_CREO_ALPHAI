@@ -107,6 +107,18 @@ def require_available(operations: list[dict]) -> None:
             raise ValueError(
                 "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted"
             )
+        if (
+            op["op"] in ("sketch", "airfoil_sketch", "update_sketch_geometry")
+            and op.get("endpoint_policy") == "weld"
+        ):
+            # FEAT-039/W01: the policy layer reports the pairing evidence, but
+            # the native coincidence solver does not exist yet, so an applied
+            # weld cannot be promised.
+            raise ValueError(
+                "endpoint_policy weld is not published: the pairing evidence is "
+                "reported by the report policy, but no native endpoint weld runs "
+                "on this machine, so an applied weld cannot be promised"
+            )
         if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
             # FEAT-039/S07: the documented thin-trim elements are accepted by the
             # kernel but they do not move the cut on this machine, so a

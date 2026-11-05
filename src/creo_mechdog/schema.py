@@ -251,6 +251,19 @@ class SketchOp(StrictModel):
     plane: Literal["XY", "XZ", "YZ"] | dict[str, Any] = "XY"
     offset: float = 0
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensions: list[SketchDimension] = []
     constraints: list[SketchConstraint] = []
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
@@ -351,6 +364,19 @@ class SketchGeometryOp(StrictModel):
     op: Literal["update_sketch_geometry"]
     sketch: Label
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
     # Same fidelity contract as SketchOp; both entries share one definition.
     geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None

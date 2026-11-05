@@ -375,6 +375,11 @@ def submit(
         from creo_mechdog import airfoil
 
         operations = airfoil.prepare(operations, aliases)
+        # FEAT-039/W01: the endpoint weld policy is checked before a job exists,
+        # so a profile the policy rejects never reaches the executor.
+        from creo_mechdog import endpoint_welding
+
+        operations = endpoint_welding.prepare_operations(operations)
         # Initialize from a solid template. Native first-wall conversion creates
         # the sheetmetal body; the stock empty SMT body breaks attached walls.
         templates = {
@@ -615,6 +620,12 @@ def run_generic_job(job_id: str, manifest: dict):
                     from creo_mechdog import native_planar_wall
 
                     native_planar_wall.annotate_result(result)
+                    # FEAT-039/W01: publish the endpoint weld receipt per sketch
+                    # operation; it is computed from the requested geometry and
+                    # never claims the kernel welded anything.
+                    from creo_mechdog import endpoint_welding
+
+                    endpoint_welding.annotate_result(result, request["operations"])
                     # Shared preview projection (T07): raw capture codes live on
                     # the result, a failed image stays a failed image, and the
                     # model save/revision outcome is never altered by it.
