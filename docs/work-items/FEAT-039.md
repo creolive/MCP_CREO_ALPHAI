@@ -358,3 +358,13 @@ S05 缺的不是能力，是**证据**。
   `PRO_E_SWP_MERGE_ENDS`、`PRO_E_TRIM_QUILT` 出现在**曲面特征树**里——本机似乎没有独立的
   "合并面"特征，合并语义落在曲面特征的元素上。
 - **混合（S05）**：Direct Blend 的元素树抽取返回 -18，无树可依（面板路线唯一）。
+
+## 2026-11-05 S07 规格确定：偏置走 `ProThicken.h` 的法向偏移
+
+`ProThicken.h` 把偏移的规格写全了：`PRO_E_FEATURE_FORM=PRO_USE_SURFS`、
+`PRO_E_FEAT_FORM_ALWAYS_THIN=PRO_THIN`、`PRO_E_STD_USEQLT_QLT`（quilt）、`PRO_E_THICKNESS`、
+`PRO_E_SRF_OFFS_METHOD`（法向到曲面 / 自动缩放 / 手动缩放）、方向 `PRO_E_STD_USEQLT_SIDE`、
+逐面处理 `PRO_E_SRF_OFFS_HANDLING`。自建 `PAD` 树与规格逐项吻合，**此前 12 个候选被拒是因为
+挂错了父节点**。实现规格因此确定：加厚凸台 + 法向偏移 + 显式方向，oracle = 面积 × 距离。
+
+S03 侧：合并元素属钣金族语义，本机没有独立的"合并面"特征树，算子继续门禁。

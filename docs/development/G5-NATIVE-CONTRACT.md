@@ -542,6 +542,50 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 种子库清点：**只有 `two_straight`/`two_smooth` 两个放样（混合）参照件，没有 Merge 或 Offset 参照件**，
 所以 S03/S07 的参照树仍需一份手工建成的 `.prt`——有了它，上面的工具一次就能读回。
 
+### 2.8f 偏置的文档规格：`ProThicken.h` 完整记录了偏移树（2026-11-05）
+
+偏置能力此前缺的不是猜测，而是**规格**。`ProThicken.h` 把加厚/偏移的元素树、取值与映射全部写明：
+
+```
+PRO_E_FEATURE_TREE
+ |-- PRO_E_FEATURE_TYPE              (PRO_FEAT_PROTRUSION 或 PRO_FEAT_CUT)
+ |-- PRO_E_FEATURE_FORM              (PRO_USE_SURFS)
+ |-- PRO_E_FEAT_FORM_ALWAYS_THIN     (PRO_THIN，必填且不可重定义)
+ |-- PRO_E_STD_USEQLT_QLT            (PRO_QUILT：被偏移的 quilt)
+ |-- PRO_E_THICKEN_TYPE              (可选)
+ |-- PRO_E_STD_USEQLT_SIDE           (ProThickenSideOption：材料/偏移方向)
+ |-- PRO_E_USEQLT_SOLID_SIDE
+ |-- PRO_E_THICKNESS                 (必填)
+ |-- PRO_E_SRF_OFFS_METHOD           (ProThickenOffMethodOpts)
+ |-- PRO_E_SRF_OFFS_CTRLFIT
+ |    |-- PRO_E_SRF_OFFS_SCALINGCSYS  (PRO_CSYS)
+ |    |-- PRO_E_SRF_OFFS_AXES         (ProThickenAxesOption)
+ |-- PRO_E_SRF_OFFS_HANDLINGS        (仅 PRO_OFFS_METH_NORMTOSURF 可用)
+ |    |-- PRO_E_SRF_OFFS_HANDLING
+ |         |-- PRO_E_SRF_OFFS_REF_SEL (PRO_SURFACE：逐面处理的面)
+ |         |-- PRO_E_SRF_OFFS_ACTION  (ProThickenHandlingAction)
+ |-- PRO_E_IS_SMT_CUT / PRO_E_SMT_CUT_NORMAL_DIR
+```
+
+三种偏移方法（映射表原文）：`PRO_OFFS_METH_NORMTOSURF`（**法向到曲面**，此时可用
+`PRO_E_SRF_OFFS_HANDLINGS` 逐面处理）、`PRO_OFFS_METH_AUTOSCALE`（此时不用 CTRLFIT）、
+`PRO_OFFS_METH_MANUALSCALE`（此时 `PRO_E_SRF_OFFS_CTRLFIT`/`_SCALINGCSYS` 必填、`_AXES` 可选）。
+
+自建特征读回的 `PAD` 树与该规格逐项吻合（`PRO_E_THICKEN_TYPE=917`、`PRO_E_THICKNESS=2.00`、
+`PRO_E_SRF_OFFS_METHOD=1`、`PRO_E_SRF_OFFS_CTRLFIT/PRO_E_SRF_OFFS_SCALINGCSYS`、
+`PRO_E_SRF_OFFS_AXES=0`、`PRO_E_SRF_OFFS_HANDLINGS` 为数组）✓——**此前 12 个候选被拒的根因是
+把 `PRO_E_SRF_OFFS_*` 挂到了错误的父节点上**（`PRO_FEAT_DATUM_SURF` / `PRO_FEAT_OFFSET`），
+而不是元素本身无效。
+
+据此，`surface_offset` 的实现规格是确定的：`PRO_FEAT_PROTRUSION` + `PRO_E_FEATURE_FORM=PRO_USE_SURFS`
++ `PRO_E_FEAT_FORM_ALWAYS_THIN=PRO_THIN` + `PRO_E_STD_USEQLT_QLT`（quilt）+ `PRO_E_THICKNESS=距离`
++ `PRO_E_SRF_OFFS_METHOD=PRO_OFFS_METH_NORMTOSURF` + `PRO_E_STD_USEQLT_SIDE`（方向）；
+oracle 为面积 × 距离（40×20 的 quilt 偏置 5 mm → 4000 mm³，偏移面恰好在 5 mm 处）。
+
+合并侧（S03）：读回的合并元素 `PRO_E_SMT_MERGE_DATA` / `PRO_E_SWP_MERGE_ENDS` 属**钣金族**语义，
+本机没有独立的"合并面"特征树；`ProMerge.h` 的数组树四条路线建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，
+与本机数据结构不合，合并算子继续门禁。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

@@ -61,6 +61,13 @@
 
 即：混合特征**没有可抽取的元素树**，面板路线是唯一路线（已交付的 `loft` 即面板驱动）。
 
+## 规格来源（文档头文件）
+
+`ProThicken.h` 完整记录了加厚/偏移树：元素树、取值表与映射表（三种偏移方法
+`PRO_OFFS_METH_NORMTOSURF` / `PRO_OFFS_METH_AUTOSCALE` / `PRO_OFFS_METH_MANUALSCALE`），
+方向元素是 `PRO_E_STD_USEQLT_SIDE`，逐面偏置用 `PRO_E_SRF_OFFS_HANDLING`（`PRO_E_SRF_OFFS_REF_SEL`
++ `PRO_E_SRF_OFFS_ACTION`）。自建特征的 `PAD` 树与该规格逐项吻合。
+
 ## 尚未解除的缺口
 
 - **偏置特征本体**（`PRO_FEAT_OFFSET`）的树：仍无参照件，只能继续用加厚树的偏置元素推。
