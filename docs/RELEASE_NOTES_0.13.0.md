@@ -2,7 +2,7 @@
 
 2026-11-05，MINOR；条目：[FEAT-039](work-items/FEAT-039.md)（曲面链 S02 修剪 / S03 join 取证 / S04 投影曲线 / S05 曲面扫掠 / S06 实体化判据 / S08 完整链路与示例），随附 [DEV-045](work-items/DEV-045.md)（发布附件校验）与 [DEV-067](work-items/DEV-067.md)（规划与审计记录）。
 
-新增两个公开算子：`creo_surface_trim`（曲面修剪 / use-quilt）与 `creo_project_curve`（曲线投影到 quilt），公开工具由 97 增至 **99**。两者均在 2026-11-04 本机 Creo 12.4.0.0 上完成实机验收后解除门禁。
+新增三个公开算子：`creo_surface_trim`（曲面修剪 / use-quilt）、`creo_project_curve`（曲线投影到 quilt）与 `creo_surface_offset`（曲面偏置），公开工具由 97 增至 **100**。三者均在本机 Creo 12.4.0.0 上完成实机验收后解除门禁。
 
 - `keep_side` 语义已由实机测定：`one` 保留工具面法向正侧，`two` 保留负侧。40×20 平面填充（800 mm²）被 x=5 基准面修剪后分别为 700 mm²（外框 x∈[5,40]）与 100 mm²（x∈[0,5]）；圆柱曲面（1256.64 mm²）被 z=5 平面修剪后分别为 314.16 mm² 与 942.48 mm²；两次均 `saved_file_reloaded_and_verified=true`。
 - 修复保留侧不生效：原实现只让 `PRO_E_PRIMARY_QLTSIDE` 跟随 `keep_side`，`PRO_E_MATERIAL_SIDE` 固定为 ONE，实机两侧得到同一区域；现在两个元素同时跟随 `keep_side`，不允许互相矛盾。
@@ -20,8 +20,8 @@
 - 端点焊接（W01）**仅策略层**交付：创建与更新算子共用 `endpoint_policy`（report/reject/weld）与 `max_endpoint_move_mm`，回执发布配对证据且不改几何；`weld` 策略被明确拒绝——实测草图 epsilon 不是端点重合容差（提到 2e-3 mm 后 5e-4 mm 间隙仍张开，而默认路径自己会合上 8.2e-7 mm），原生受控焊接未完成。
 版本入口、两份种子清单与受信摘要同步至 **0.13.0**；种子包确定性重建 SHA256 为 `e5808ff18049f94a74436636c6633b1867aa487224567dc31738c644c8ad685b`（24 文件、9 种子），与两份清单一致，详见[发布记录](validation/RELEASE-0.13.0.md)。
 
-验证命令为 `python tools/test_unit.py`（2384 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py`、`python tools/test_surface_chain.py --case trim --live --confirm-session-usable`、`python tools/test_surface_chain.py --case project --live --confirm-session-usable`（run `20261104-134443-396700`，18 项检查全通过）与 `python tools/test_surface_chain.py --case solidify --live --confirm-session-usable`（run `20261104-145403-398500`，8 项检查全通过）。结果与受测源码身份见[发布记录](validation/RELEASE-0.13.0.md)。
+验证命令为 `python tools/test_unit.py`（2425 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py`、`python tools/test_surface_chain.py --case trim --live --confirm-session-usable`、`python tools/test_surface_chain.py --case project --live --confirm-session-usable`（run `20261104-134443-396700`，18 项检查全通过）与 `python tools/test_surface_chain.py --case solidify --live --confirm-session-usable`（run `20261104-145403-398500`，8 项检查全通过）。结果与受测源码身份见[发布记录](validation/RELEASE-0.13.0.md)。
 
 本版实机验收覆盖修剪的再生、面积/位置、保存与重载，投影曲线的直线与圆弧用例、反向拒绝和保存重载，以及闭合曲面的体积判据与开放曲面的拒绝回滚；修剪结果在重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询，`signed_offset_mm` 保持 null）、失败回滚的实机表现、`use_curve` 投影—修剪串联、投影的多分支拒绝、圆柱/非平面目标与边界裁切，以及 `thicken` 与 cut 模式的体积字段均未验证。Creo 9 无本机 SDK，构建与运行时未验收；Creo 10 不要求独立复测；BUG-001 的既有边界继续适用。
 
-升级使用配套的 `MCP_CREO_MechDog-0.13.0-source.zip` 与 `MCP_CREO_MechDog-0.13.0-seed-library.zip`，按安装说明更新环境并重启 MCP 服务。旧种子包会被版本闸门拒绝；本版新增一个公开工具，无回调注册变化、无参数迁移、无新增原生编译要求。
+升级使用配套的 `MCP_CREO_MechDog-0.13.0-source.zip` 与 `MCP_CREO_MechDog-0.13.0-seed-library.zip`，按安装说明更新环境并重启 MCP 服务。旧种子包会被版本闸门拒绝；本版新增三个公开工具，无回调注册变化、无参数迁移、无新增原生编译要求。

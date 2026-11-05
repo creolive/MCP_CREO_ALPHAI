@@ -3,13 +3,13 @@
 - 条目：[FEAT-039](../work-items/FEAT-039.md)（曲面链 S02/S03/S04/S05/S06/S08/S09/S10）+ W01 策略层；MINOR（功能批），公开工具 **100**（运行时 `creo_capabilities` 的 `tool_count=100`、`enabled_tool_count=100`，2026-11-05 复测；`creo_surface_offset` 加入后从 99 升为 100）。
 - 基线：实际已发布版本是 **0.12.1**（`docs/development/RELEASING.md`；标签 `v0.12.1`）。`0.12.2` 只是从未发布、从未打标签的预置号，本批含新增能力，按 MINOR 提升为 **0.13.0**（`version.py` = 0.13.0，README 与两份种子清单同步）。
 - 本分支：`codex/DEV-067-alphai-plan`，基线提交 `1acf5a1ecbb5c815e0405d50c641b7f85da1fbce`。
-- 目标版本：标签 `v0.13.0`、Release 与四份附件**尚未创建**。按 S10 规则，本次只被指派开发，故**未合并 main、未打标签、未上传、未发布**；合入发布需另行指派并按 `docs/development/RELEASING.md` 执行。
+- 目标版本：标签 `v0.13.0`、Release 与四份附件。按 S10 规则，本记录先前只覆盖开发验收；2026-11-05 获得发布指派，按 `docs/development/RELEASING.md` 合入 main、打标签、上传附件并做远端核对，远端核对结果记录于对应发布 PR（不再向 main 追加提交）。
 
 ## 验收范围
 
 | 项目 | 结果 |
 | --- | --- |
-| 全量单元测试 `python tools/test_unit.py` | **2420 项通过** |
+| 全量单元测试 `python tools/test_unit.py` | **2425 项通过** |
 | 语言与格式 `python tools/dev_check.py --skip-unit` | `success: true`，无新增回归 |
 | 原生编译 `python bridge.py build` | 通过，`build/creo_worker.exe` 重建 |
 | 实机 `--case chain_open` | 13/13，run `20261105-054951-149100` |
@@ -34,7 +34,7 @@
 | S07 偏置 | ✅ 实机公开（`creo_surface_offset`） | 双侧 5 mm：体积 **3999.9999999999995 mm³**、实测距离 **4.999999999999999 mm**、保存重载通过；`surface_trim` 的 `offset_mm` 仍拒（thin trim 实测不移动切口） |
 | S08 完整链路 | ✅ 实机 | 四条用例 + 两个可运行示例 |
 | S09 模块化 | ✅ | `surface_ops` / `schema_base` 拆分，根目录纯兼容导出 |
-| S10 集成与发布交付 | 🟡 **本记录 + 黑盒提示词已备，发布未执行** | 未合并 main、未打标签、未上传 |
+| S10 集成与发布交付 | 🟡 **按指派发布执行中** | 本记录 + 黑盒提示词已备；合入、标签、附件与远端核对结果见发布 PR |
 | W01 端点焊接本体 | ✅ **本体已交付（坐标规整路线）** | 实机：5e-5 mm 间隙 → 移动 2.5e-5 mm（≤ 上限）→ 残差 0.0；默认路径不动；无上限的请求被拒 |
 | W02—W06 | ⚪ **未在本批复核** | draft/angle+offset/origin/extrude 回执与回归保持沿用既有实现，未补证、未复现 |
 
@@ -47,6 +47,6 @@
 
 ## 附件与远端核对
 
-发布应有四个文件：`MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256`。发布后需逐个列出文件名上传（禁止 `*.zip` 通配），并用 `python tools/check_release_assets.py --tag v0.13.0` 核对四附件齐全、两个 sidecar 与对应 ZIP 摘要一致，再回填本节。
+发布应有四个文件：`MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256`。发布时逐个列出文件名上传（禁止 `*.zip` 通配），并用 `python tools/check_release_assets.py --tag v0.13.0` 核对四附件齐全、两个 sidecar 与对应 ZIP 摘要一致；远端核对结果记录于发布 PR。
 
-当前状态：**四附件已在本地构建并核对通过**（`python tools/check_release_assets.py --tag v0.13.0 --version 0.13.0 --dir E:\Projects` → “four assets present; both sidecars match their ZIP digests”）；种子包确定性指纹见上表，源码包摘要以发布运行重算并再次核对为准（本记录不预写源码包摘要，避免自指）。**未创建标签、未上传附件、未核对远端**——合入发布需另行指派并按 `docs/development/RELEASING.md` 执行。
+当前状态：**按 2026-11-05 指派执行发布**。四附件在本地构建并用 `python tools/check_release_assets.py --tag v0.13.0 --version 0.13.0 --dir ...` 核对（“four assets present; both sidecars match their ZIP digests”）；种子包确定性指纹见上表，源码包摘要以合并 main 后的源码重建为准（本记录不预写源码包摘要，避免自指）。标签、上传与远端核对结果记录于发布 PR。
