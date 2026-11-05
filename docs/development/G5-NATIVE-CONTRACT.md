@@ -1,6 +1,6 @@
 # G5 曲面链路原生契约（surface_loft / project_curve / surface_trim）
 
-状态：**冻结**（Q07 交付，2026-11-01）。关联条目：[FEAT-009](../work-items/FEAT-009.md)、[FEAT-039](../work-items/FEAT-039.md)。消费方：Q08（surface_loft）、Q09（project_curve）、Q10（surface_trim）。
+状态：**冻结**（Q07 交付，2026-11-01；S00 修订，2026-11-04）。关联条目：[FEAT-009](../work-items/FEAT-009.md)、[FEAT-039](../work-items/FEAT-039.md)、[FEAT-055](../work-items/FEAT-055.md)。消费方：Q08（surface_loft）、Q09（project_curve）、Q10（surface_trim）；S01–S08 按同名派工编号消费。
 
 本文件是 Q08–Q10 的唯一接口依据。**未经本文件冻结的原生元素树、引用形态、测量字段和单位语义，三个任务都不得自行实现**；需要改动时先改本文件，再改代码。
 
@@ -15,6 +15,34 @@
 | 常量来源规则 | 元素 ID 与枚举值一律**由 `tools/generate_constants.py` 机制按 SDK 头文件符号名解析**；本文件只写符号名，不写数值 |
 
 > **硬边界**：文档中凡标注"待实机验证"的条目，Q08–Q10 实现时必须先跑 §7 的对应探针并把结论回填本文件，再进入公开 op 的实现。**不能用"编译通过"或"元素名存在"代替真实原生证据。**
+
+### 0.1 S00 修订记录（2026-11-04）
+
+来源：[0.11.7 反馈归档](../validation/feedback-0.11.7-2026-11-04/MAPPING.md)。旧契约不变的部分继续有效；本节列出被修订的条款及理由，`tools/test_g5_native_probe.py` 与 `tests/unit/test_g5_native_contract.py` 同步锁定。
+
+| 修订 | 旧表述 | 现表述 | 依据 |
+| --- | --- | --- | --- |
+| R1 显式 quilt 引用 | 只有 `{"kind":"quilt_feature","label":...}` | 增加 `{"kind":"quilt","id":<int>}`；并明确 quilt ID 与 surface ID **不可互换** | F03 §3：`resolve()` 已区分 `PRO_QUILT` 与 `PRO_SURFACE`；修剪结果特征不必然有可直接枚举的 `PRO_QUILT` 几何项 |
+| R2 错误分层 | 引用解析失败一律"不建 job" | 只有 **schema 可判定**的错误不建 job；原生运行时才发现的引用失效**允许已受理 job 失败并回滚** | 引用是否仍存在只能由原生侧判定 |
+| R3 候选唯一性 | "命中 ≥2 个拒绝"（无候选清单） | 拒绝**并返回有界候选清单**；仍不得自动选取第一个或"最大面积" | F03 §3 建议 B 的部分采纳 |
+| R4 投影 oracle | 高 20 mm 圆柱承载长 30 mm 源线 | 首个可解析用例改为 40×20 平面、z=10 的 30 mm 直线沿 −Z 投影到 z=0；圆柱用例单列并标"有效域/多交点待定义" | 旧用例几何不自洽（源线长于承载面高度） |
+| R5 跨模型 ID 比较 | O3 用两次 `kept_quilt_id` 不同证明两侧不同 | 改为面积、位置与 `signed_offset_mm` 判据；只有**同一模型内**两次保留侧运行才比较 ID | 不同模型/不同 revision 的 ID 数字相同不代表同一对象 |
+| R6 旧路线失败状态 | 只记"待验证" | 明确记录"路线失败"与"未验证"两种状态，失败历史不删除 | 旧三路线本机探针失败事实保持 |
+
+### 0.2 S02/S03 实施状态（2026-11-04）
+
+- `surface_trim`（S02）与 `quilt_merge`（S03）的 schema、原生模块、驱动离线用例已完成并编译通过；两者都**已注册但列入 `UNAVAILABLE_OPERATIONS`**：`server.py` 把对应工具从 MCP 面移除，`require_available` 在提交前拒绝。**因此它们对客户端仍不可用，不构成已公开能力。**
+- 未验证项保持不变：§2.3/§2.4 的树在实机再生结果、§4.4.2 的真实面积/位置、§4.5 的 `keep_side` 法向绑定（P3）、修剪/合并结果保存重载后能否被 `thicken` 消费、失败回滚表现。
+- §4.4.2 的质心字段（`target_centroid`/`kept_centroid`/`signed_offset_mm`）在本机没有可依据的 quilt 质心查询，实现**一律返回 null 并附原因**，不用外框中心估算；P3 回填前也不做"方向矛盾即失败"的强制判定。
+
+### 0.3 S02 P3 实机回填（2026-11-04）
+
+环境：本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK，单会话串行。
+
+- **`keep_side` 绑定已实测**（§4.5）：`one` 保留工具法向正侧、`two` 保留负侧；决定性元素是 `PRO_E_MATERIAL_SIDE`，`PRO_E_PRIMARY_QLTSIDE` 单独不改变保留区域。`surface_trim` 已从 `UNAVAILABLE_OPERATIONS` 移除，成为公开算子；`quilt_merge` 仍在门禁内。
+- **基准面引用写法事故（已修）**：`{kind:'datum_plane',label:'RIGHT'}` 被几何解析分支接受但**丢弃 label**，默认轴过滤（axis z、offset 0）选中 TOP，修剪平面落在别处并停在 `PRO_FEAT_UNREGENERATED`（status 6）。现在 Python 契约与原生 `resolve()` 都拒绝几何类引用上的 label，只允许 `{kind:'datum_feature',label:...}` 携带标签。
+- **修剪失败可诊断**：再生失败分支回写 `regeneration`（`feature_status`、`feature_id`、`target_quilt_id`、`tool_kind`、两侧枚举值、结果特征的 quilt 访问码），失败消息带同一组数值；`area_before/after`、`kept_quilt_*` 等测量字段在失败记录里保持可见。
+- **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询）、失败回滚的实机表现、`quilt_merge` 全套实机项。证据：`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`（jobs `247f76de…`、`7ae993e6…`）。
 
 ---
 
@@ -145,24 +173,82 @@ PRO_E_FEATURE_TREE
 - 曲线以 chain holder + `PRO_E_STD_CURVE_COLLECTION_APPL` 表达；本机已有可复用的 `native/generic.cpp:2393` `curve_collection()`（`ProCrvcollectionAlloc` + `PRO_CURVCOLL_ADD_ONE_INSTR`）。
 - **首版不写** `PRO_E_BBL_ADD_CLOSED`、不写 `PRO_E_BNBLN_TAN_COND`（`TAN_COND_FREE` 无符号定义）。
 
-### 2.2 project_curve：COPYTRIM 族（候选，结构未验证）
+### 2.2 project_curve：实测定论与实际实现树（S04 回填，2026-11-04）
 
-02 方案的候选树：
+#### 2.2.1 两族投影元素都不可用（实测，P2 结论）
+
+`PRO_E_COPYTRIM_*` 与 `PRO_E_PROJ_CRV_*` 在本机 SDK 里都只有 `ProElemId.h` 的 ID 条目，
+没有任何父子关系、合法值或必需兄弟节点的说明。用已注册的 `feature_tree` 逐条提交候选树
+（不重新编译、结论由内核给出），2026-11-04 的实测结果：
+
+| 候选树 | 结构 | 结果 |
+| --- | --- | --- |
+| `copytrim_contract_tree` | `PRO_E_COPYTRIM_CURVE_DATA` → `_QUILT` + `_CURVE_TBL`/`_CURVE` | `ProFeatureWithoptionsCreate` 拒绝（-1） |
+| `copytrim_flat` | `_QUILT` 与 `_CURVE` 平铺为根子元素 | 同上（-1） |
+| `copytrim_curves_array` | `_QUILT` + `_CURVES`/`_CURVE` | 同上（-1） |
+| `proj_crv_surfs` | 根挂 `PRO_E_PROJ_CRV_CURVE`/`_SURFS`/`_DIR`/`_PROJ_TYPE(=ALONGDIR)` | 同上（-1） |
+| `proj_crv_onesrf` | 用 `PRO_E_PROJ_CRV_ONESRF_REF` 替代 `_SURFS` | 同上（-1） |
+| `proj_crv_surfs_with_curve_type` | 追加 `PRO_E_CRV_PROJCRV_TYPE(=PRO_PROJCRV_CURVE)` | 同上（-1） |
+| `proj_crv_normal_to_srf` | `PRO_E_PROJ_CRV_PROJ_TYPE(=NORM2SRF)`，无 `_DIR` | 同上（-1） |
+
+同一批探针里引用本身可解析（单独的 quilt/curve/datum_feature 引用都进入创建阶段），
+所以拒绝的是树形，不是引用。`ProCurveType` 里也没有"投影"类型值，
+`PRO_PROJ_*` 只出现在 `ProElemId.h`。结论：**投影特征没有可依据的官方树，Q09 不得据此创建几何**。
+
+#### 2.2.2 交付路线：扫掠辅助面 + 文档化交线（实测通过）
+
+`ProDtmCrv.h` §"INTERSECT" 是本机唯一有文档的"把面投到面上"特征族。它的语义是两曲面交线，
+单独使用**不是**投影；但"源曲线沿方向扫掠出的曲面 ∩ 目标曲面"在几何上**恰好等于**该曲线沿该方向的
+投影（扫掠面包含曲线上每一点沿方向的平移）。因此 `native/project_curve.cpp` 分两步构建：
 
 ```
+1) 辅助扫掠面（ProExtrude.h，PRO_FEAT_DATUM_SURF + PRO_EXTRUDE，surface 模式）
 PRO_E_FEATURE_TREE
- ├─ PRO_E_FEATURE_TYPE      = PRO_FEAT_CURVE
- ├─ PRO_E_STD_FEATURE_NAME  = <label>
- └─ PRO_E_COPYTRIM_CURVE_DATA
-     ├─ PRO_E_COPYTRIM_QUILT       (目标 quilt)
-     └─ PRO_E_COPYTRIM_CURVE_TBL   (ARRAY)
-         └─ PRO_E_COPYTRIM_CURVE  (待投影的源曲线)
+ ├─ PRO_E_FEATURE_TYPE            = PRO_FEAT_DATUM_SURF
+ ├─ PRO_E_FEATURE_FORM            = PRO_EXTRUDE
+ ├─ PRO_E_EXT_SURF_CUT_SOLID_TYPE = PRO_EXT_FEAT_TYPE_SURFACE
+ ├─ PRO_E_STD_FEATURE_NAME        = "<label>_sweep"
+ ├─ PRO_E_STD_SECTION ── PRO_E_SEC_USE_SKETCH   (源曲线所属草图)
+ └─ PRO_E_STD_EXT_DEPTH
+     ├─ PRO_E_EXT_DEPTH_FROM ── PRO_E_EXT_DEPTH_FROM_TYPE = PRO_EXT_DEPTH_FROM_NONE
+     └─ PRO_E_EXT_DEPTH_TO   ── PRO_E_EXT_DEPTH_TO_TYPE   = PRO_EXT_DEPTH_SYMMETRIC
+                              └ PRO_E_EXT_DEPTH_TO_VALUE  = 2*(到目标包围盒的距离 + 0.5)
 ```
 
-**本机 SDK 对上述父子关系没有任何文档**。因此：
+```
+2) 交线曲线（ProDtmCrv.h INTERSECT，唯一有文档的树）
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE     = PRO_FEAT_CURVE
+ ├─ PRO_E_CURVE_TYPE       = PRO_CURVE_TYPE_INTSRF
+ ├─ PRO_E_CRV_IP_REF_TYPE  = PRO_CURVE_TYPE_INTSRF   (ProDtmCrv.h 注：与 PRO_E_CURVE_TYPE 同值)
+ ├─ PRO_E_STD_FEATURE_NAME = <label>
+ ├─ PRO_E_CRV_IP_COMP_REF1
+ │   ├─ PRO_E_CRV_IP_REF1            (扫掠面：1 面用 PRO_CURVE_TYPE_WHOLE，多面用 MULTIPLE_SEL)
+ │   └─ PRO_E_CRV_IP_REF_SEL1_TYPE
+ └─ PRO_E_CRV_IP_COMP_REF2
+     ├─ PRO_E_CRV_IP_REF2           (目标 quilt，WHOLE)
+     └─ PRO_E_CRV_IP_REF_SEL2_TYPE
+```
 
-- 该树是**假设**，不是结论。探针 P2 必须判定它能否被 `ProFeatureCreate` 接受；若不能，project_curve 的实现路线改为 `ProDtmCrv.h` 的 Intersect/Two Projections（`PRO_CURVE_TYPE_INTSRF`/`PRO_CURVE_TYPE_TWO_PROJ`），**但那条路线的语义是"两曲面交线"，与"把一条曲线投影到曲面上"不是同一件事**，不能直接冒充 project_curve。
-- **若 P2 判定 COPYTRIM 路线不成立**，则 project_curve 只能阻断，Q09 不得用 body 布尔或曲面相交冒充投影曲线。
+实测要点：
+
+- 较早的 `REF_TYPE=0` 与"REF2 用与目标平行的平面"两次都判为失败（后者再生失败、`feature_status=6`），
+  说明 `REF_TYPE` 必须取 `PRO_CURVE_TYPE_INTSRF`，且两参考必须真的相交。
+- 直线源：辅助面 8 个面（3 平面 + 5 曲面），只有法向垂直于扫掠方向的那一张是扫掠面；
+  圆弧源：扫掠面被拆成 5 张柱面，必须用 `MULTIPLE_SEL` 一次性全部作为 REF1。
+  规则因此写成"法向与方向平行的平面是端盖，其余面都属于扫掠面"。
+- 交线特征会同时产出曲线与其包络复合曲线（实测 2 个 `PRO_CURVE` 项）。只报非复合曲线；
+  出现两条及以上非复合曲线即判为多分支并拒绝，不挑选其中一条。
+
+#### 2.2.3 该路线的已声明限制（实现内检查，不是猜测）
+
+- 方向必须与源草图平面法向平行（`ProExtrude.h` 只沿草图法向扫掠）。实测做法：建好辅助面后读取
+  其平面法向与方向的 `|dot|`；不平行即拒绝，消息里给出两者数值。
+- 目标必须真的位于请求侧：用目标 quilt 包围盒角点相对源曲线起点的有符号距离判定，
+  全部在背侧时拒绝（`side="positive"` 朝 +Z 而目标在 z=0 的实测即为此）。
+- 源曲线必须属于曲线特征（草图）；辅助面保留在模型里，因为删掉它等于删掉依赖它的交线。
+- 未实测：多分支拒绝路径、非平面目标、方向与草图法向不平行的拒绝路径只在实现内存在证据，
+  未在实机触发过。
 
 ### 2.3 surface_trim：ProTrim.h 族（候选，结构有文档）
 
@@ -182,9 +268,375 @@ PRO_E_FEATURE_TREE
  └─ PRO_E_KEEP_TRIM_SURF_OPT(ProKeepTrimSurfOpts)
 ```
 
-"use curve" 变体把 `PRO_E_STD_USEQLT_QLT` 换成 `PRO_E_STD_CURVE_COLLECTION_APPL`，`PRO_E_SURF_TRIM_TYPE`/`PRO_E_SRF_TRIM_TYPE` 改为 `PRO_SURF_TRIM_USE_CRV`。**首版只用 use-quilt 变体**（工具是一个 quilt 或基准面），use-curve 变体不在首版范围。
+#### 2.3.1 use-curve 变体（2026-11-04 实机加入）
+
+`ProTrim.h` §(3.1)/(3.2) 的 "Use Curve" 变体单独成树：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE              = PRO_FEAT_CUT
+ ├─ PRO_E_SRF_TRIM_TYPE             = PRO_SURF_TRIM_USE_CRV (1)
+ ├─ PRO_E_STD_FEATURE_NAME          = <label>
+ ├─ PRO_E_SURF_TRIM_TYPE            = PRO_SURF_TRIM_USE_CRV (1)
+ ├─ PRO_E_TRIM_QUILT                (被修剪的 quilt)
+ ├─ PRO_E_STD_CURVE_COLLECTION_APPL (PRO_CURVE / PRO_COMP_CRV / curve_chain)
+ ├─ PRO_E_MATERIAL_SIDE             (ProTrimMatlSideOpts)
+ └─ PRO_E_PRIMARY_QLTSIDE           (ProTrimStdQuiltSideOpts)
+```
+
+实测要点（2026-11-04，`build/_live_usecurve_trim_probe.py`，40×20 填充被 y=15 直线切开）：
+
+- 该树**没有** `PRO_E_FEATURE_FORM`，也没有 `PRO_E_KEEP_TRIM_SURF_OPT`；写了反而多一层不必要的元素。
+- `PRO_E_MATERIAL_SIDE` 才是真正决定保留侧的元素：1/2 分别保留一侧（200 或 600 mm²），3 表示两侧都保留（两个 quilt）。`PRO_E_PRIMARY_QLTSIDE` 实测（1/2/-1）不改变保留结果。
+- 保留侧相对**曲线方向**：同一材质侧下把直线方向反过来，保留的区域随之交换。因此 `kept_side_basis` 报告 `side_reference="curve_direction"`、`tool_curve_id` 与 `tool_kind="curve"`，不报告 `tool_normal`。
+- 曲线特征创建后立即读状态是 `PRO_FEAT_FAILED(6)`，因为集合要等再生才解析；先 `ProSolidRegenerate` 再读状态即为 ACTIVE。use-quilt 变体创建后已是 ACTIVE，所以只有曲线分支多付一次再生。
+- 实机操作符验证（`build/_live_op_trim_probe.py` 的 `flat` 形态）：z=0 的草图直线修剪同平面填充，面积 800→600，`kept_quilt_id` 为保留侧 quilt，作业 `saved_file_reloaded_and_verified=true`。
+
+#### 2.3.2 已知边界：投影曲线不能修剪它自己投影到的那张 quilt
+
+同一台机器上，"投影到 quilt → 用该投影曲线修剪同一 quilt"的链在保存阶段失败：
+`ProMdlnameBackup(board, destination) = -1`（`save_and_reload` 阶段），作业回滚，模型恢复为未修剪状态
+（`build/_live_op_trim_probe.py` 的 `projected` 形态）。同一模型里的投影作业本身可以保存。
+
+原因是该投影曲线是 `ProDtmCrv.h` 的**交线**，它持有被修剪 quilt 的几何项选择；修剪把这个 quilt 消费掉后，
+曲线的参考悬空，内核拒绝写出这个模型。真实投影特征（若可用）会让曲线随父曲面一起再生，这里没有那条树。
+因此：**独立曲线（草图曲线、另一张面上的曲线）修剪已验证可用；依赖目标 quilt 的曲线在保存阶段会失败并回滚**，
+调用方会看到原始 `ProMdlnameBackup` 失败信息，不会被当成成功。
 
 **注意：`PRO_E_SRF_TRIM_TYPE` 是 non-redefinable mandatory**（`ProTrim.h:276-278`），创建后不可改；`PRO_E_SURF_TRIM_TYPE` 必须与之一致。
+
+### 2.6 surface_solidify：曲面实体化（2026-11-04 实机补齐判据）
+
+`native/surfaces.cpp` 的 `solidify` 一直用这条已有树（`PRO_E_PATCH_QUILT` 取 quilt）：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE      = PRO_FEAT_PROTRUSION
+ ├─ PRO_E_FEATURE_FORM      = PRO_USE_SURFS
+ ├─ PRO_E_STD_FEATURE_NAME  = <label>
+ ├─ PRO_E_PATCH_QUILT       (被实体化的 quilt)
+ ├─ PRO_E_PATCH_MATERIAL_SIDE (PRO_SOLIDIFY_SIDE_ONE / _TWO)
+ └─ PRO_E_BODY_*            (body_options: add/cut/new_body)
+```
+
+S06 补的是**判据**，不是新树：
+
+- **闭合是量出来的**：`quilt_closed_native()` 用 `ProQuiltVolumeEval` 问闭合性，闭合 quilt 得到体积，
+  开放 quilt 返回 `PRO_TK_INVALID_TYPE(-18)`。因此开放 quilt 在建特征**之前**被拒绝，消息带该返回码
+  （`solidify requires a closed quilt; the referenced quilt is open (ProQuiltVolumeEval=-18, quilt_is_open)`），
+  作业失败并回滚，不会留下半个实体。`cut` 模式与 `thicken` 不受此限制（开放面加厚是合法语义）。
+- **体积是量出来的**：`volume_before_mm3` / `volume_after_mm3` 走共享的质量属性 helper，
+  没有实体时体积为 `null`（不是 0），并随算子结果 `stage_operation_result` 一起返回。
+- **引用种类在 schema 层收紧**：`solidify` 的 `mode="add"` 只接受一个 quilt 引用
+  （`{kind:quilt,id}` 或 `{kind:quilt_feature,label}`）；body 不是 quilt，布尔 body 工具不能替代 quilt 语义。
+
+实机（`build/_live_solidify_probe.py` 与驱动 `--case solidify --live`）：绕 X 轴 360° 旋转 5×20 矩形得到
+**闭合** quilt（面积 1000π mm²），实体化后体积 **2000π = 6283.185307179587 mm³**（与解析值差 <1e-9），
+作业 `saved_file_reloaded_and_verified=true`；开放 quilt（40×20 填充面）按上述理由拒绝，模型保持未实体化。
+
+### 2.7 quilt 偏置：文档树存在但实测不生效（2026-11-04，S07 取证）
+
+本机 SDK 里与"偏置"有关的文档只有两处：`ProTrim.h` §(4.1) 的 **thin trim**（把修剪面按 `PRO_E_THICKNESS`
+沿 `PRO_E_STD_USEQLT_SIDE` 偏置后再切）与 `ProThicken.h` 的加厚偏移参数。**没有**独立的"偏置曲面/偏置 quilt"
+特征树：`ProQuilt.h` 只有 `Init/IdGet/SurfaceVisit/VolumeEval/IsBackupgeometry/IsInternal`，
+`ProElemId.h` 里的 `PRO_E_SRF_OFFS_SRF`/`PRO_E_SRF_OFFS_OFFSET`/`PRO_E_SRF_OFFS_TYPE`/`PRO_E_SRF_OFFS_METHOD`
+只在 thicken 与 trim 的树里作为子元素出现，没有任何头文件给出它们的父子关系。
+
+实机（`build/_live_offset_probe.py`，40×20 填充 + x=20 基准面/竖直 quilt 工具）：
+
+| 工具 | 请求 | 实测 |
+| --- | --- | --- |
+| 基准面 | `offset_mm=5`, side one | 作业成功，但保留面积仍是 **400/400**（切口没有移动到 x=15 或 x=25） |
+| 竖直 quilt | `offset_mm=5`, side one / two | 同样 400/400，两个方向的保留区不互换 |
+| 基准面 | `offset_mm=50`（必定不相交） | 作业成功且没有拒绝，切口仍在 x=20 |
+
+结论：thin-trim 的偏置元素**被内核接受但不产生可测量的偏置**
+
+独立偏置曲面树也一并排除：
+第三轮换用特征类型本身：常量表里有 `PRO_FEAT_OFFSET`（偏置特征）与 `PRO_FEAT_GEOM_COPY`（几何复制），`ProFeatForm.h` 里有 `PRO_COPY = 4096`。六个候选（`PRO_FEAT_OFFSET` 配 `_REFQUILT`/`_SRF`/`_OFFSET`、加 `_TYPE`、加 `_METHOD`、加 `_SIDEQUILT`，以及 `PRO_FEAT_GEOM_COPY` + `PRO_COPY` + `PRO_E_SRF_COPY_SRFS` + `_OFFSET`）仍然全部被拒：五种 `-1`，`PRO_E_SRF_COPY_SRFS` 那种是 `-2`（元素加不进树）。至此偏置相关候选共 12 个、混合相关候选共 9 个，全部有据可查地失败。
+
+**不靠人手工建参照树的另一条路**：种子库里存着放样参考件（`seed_library/seeds/**/mechdog_loft_reference.prt.5`、`mechdog_smooth_reference.prt.4`、`db_*.prt.2` 等），它们由 Direct Blend 机制生成，理论上带有一棵混合特征树；用 `creo_open_file` 打开后 `dump_tree` 读回，即可得到参照树而不需要界面操作。本轮已排到打开作业，但 Toolkit 通道被前一轮作业占用，读回未完成；下一步是等通道空闲后读回这三棵树的特征类型与元素 id。
+`ProElemId.h` 里的 `PRO_E_SRF_OFFS_REFQUILT`/`_SRF`/`_OFFSET`/`_TYPE`/`_METHOD`/`_SIDEQUILT` 六个候选（`PRO_FEAT_DATUM_SURF` 根，含/不含 TYPE、METHOD、SIDEQUILT）全部被 `ProFeatureWithoptionsCreate` 以 `-1` 拒绝，与 COPYTRIM、PROJ_CRV 两族一致：元素 ID 存在，但没有可用的父子关系。
+；公开一个距离会让调用方得到"照做但没生效"的结果。
+因此 `surface_trim` 的 `offset_mm`/`offset_side` 字段留在 schema 里（请求是良构的），但由
+`capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
+直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
+
+### 2.8b 放样其实不走特征树：它由 Creo 的 Blend 面板宏驱动（S05 的真正入口，2026-11-05）
+
+`native/blend_create.cpp` 揭示了已交付放样的真实机制，因此 S05 的入口**不是**猜特征树：
+
+1. `resident_blend_callback()` 通过 `ProToolkitTaskExecute` 调用常驻 Toolkit 回调
+   （`MechDogBlendPrepare`），回调写 `callback_request.json`
+   （`protocol` / `model_name` / `command` / `curve_ids`）并选中截面；
+2. 真正的特征由**宏**创建：`ProMacroLoad` 载入一段宏，操作 Creo 的混合面板：
+
+```
+~ Command `ProCmdFtPBlend`;
+~ Activate `main_dlg_cur` `chkbn.blend_sectionspage.0` 1;
+~ Select   `blend_sectionspage.0.0` `PH.sketchselopt` 1 `Selected`;
+~ Focus    `blend_sectionspage.0.0` `PH.curve_coll_repr`; ~ Select ... 0;
+~ Activate `blend_sectionspage.0.0` `PH.chain_btn`;
+~ Select   `chain_dlg` `ChainMethod` 1 `others`;
+~ Select   `chain_dlg` `RuleOptions` 1 `all_curves_in_feature`;
+~ Activate `main_dlg_cur` `chkbn.blend_optionspage.0` 1;
+~ Select   `blend_optionspage.0.0` `PH.blendoptions` 1 `Straight|Smooth`;
+~ Activate `main_dlg_cur` `dashInst0.Done`; ~ Activate `main_dlg_cur` `dashInst0.Quit`;
+```
+
+也就是说：**已交付的放样是"面板驱动"的，面板选项（而不是特征元素）才是放样语义的载体**。
+当前的门禁「Direct Blend supports solid add into the default body only」是**我们自己的限制**，
+不是 SDK 的限制；面板的"结果类型/合并结果"选项才是曲面放样的开关。
+
+S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令常量，命令名要靠宏去试）：
+
+1. 用同一机制试**边界混合**的命令名（`ProCmdFtPBlend` 之外的候选，例如
+   `ProCmdFtPBoundaryBlend`、`ProCmdFtPSurfaceBlend`）：宏载入失败只返回错误，不改模型；
+2. 成功后读回该特征的 `dump_tree`，拿到**真正的混合曲面元素树**（这是本节最缺的东西）；
+3. 用读回的树实现 `loft` 的 `mode="surface"`，并以 2400 mm²（两个 40×20 矩形、间距 20 mm
+   的直纹侧壁面积 = 周长×高 = 2×(40+20)×20）作解析 oracle 实机验证。
+
+同一手法也适用于 S03 缝合：混合/缝合类特征的兄弟特征树可以在同一个面板里拿到。
+
+**界面操作不需要人工**：`ProMacroLoad` 已经在我们的执行器里跑通了，缺的只是一个
+"按给定宏试命令并把结果特征树读回"的探针算子。
+
+### 2.8 surface_loft：混合曲面树无文档，四个候选全部被拒（2026-11-04，S05 取证）
+
+本机 SDK **没有 `ProBlend.h`**：边界混合（Boundary Blend）与放样曲面的特征树没有任何文档，
+只有 `ProElemId.h` 里的 `PRO_E_BLEND_*` 元素 ID（`PRO_BLEND`、`PRO_E_BLEND_SEC_ARRAY`、
+`PRO_E_BLEND_SECTION`、`PRO_E_BLEND_ITEMS`、`PRO_E_BLEND_CONTROL` 等）。用已注册的 `feature_tree`
+逐条提交候选树（内核判卷，不重新编译），2026-11-04 实测：
+
+| 候选树 | 结构 | 结果 |
+| --- | --- | --- |
+| `datum_surface_blend_sec_array` | `PRO_FEAT_DATUM_SURF` + `PRO_BLEND` + `PRO_E_BLEND_SEC_ARRAY`→两个 `PRO_E_BLEND_SECTION`（草图特征选择） | `ProElementReferenceSet` 返回 **-18**（PRO_TK_INVALID_TYPE） |
+| `datum_surface_blend_sections_flat` | 同上但两个 section 平铺在根下 | 同上（-18） |
+| `datum_surface_blend_items` | `PRO_E_BLEND_ITEMS` 取代 SEC_ARRAY | `ProElemtreeElementAdd` 返回 **-2**（PRO_TK_BAD_CONTEXT） |
+| `datum_surface_blend_sec_array_with_type` | 追加 `PRO_E_BLEND_TYPE` | 同上（-18） |
+
+结论：`PRO_E_BLEND_SECTION` 不接受草图的 `PRO_FEATURE` 选择（-18），`PRO_E_BLEND_ITEMS` 不能直接挂在
+特征树根下（-2）。
+第二轮按元素名给出的结构再探五个候选（`ProElemId.h` 还有 `PRO_E_BLEND_SEC_LOC_REF`、`PRO_E_BLEND_SKETSEL_OPT`、`PRO_E_BLEND_SURF_OPTION`、`PRO_E_BLEND_TANG_COND`）：把引用放进 `PRO_E_BLEND_SEC_LOC_REF`、`PRO_E_BLEND_SECTION` 作为复合元素，并分别尝试 `SEC_ARRAY` 与 `ITEMS` 两种容器，结果仍是三种 `-1` 与一种 `-2`（`ITEMS` 不能挂在树根）。
+
+因此边界混合的**引用类型**在本机没有可依据的文档：候选树已经覆盖了「引用直接放在 SECTION」「引用放在 SEC_LOC_REF 子元素」「容器用 SEC_ARRAY 或 ITEMS」「是否追加 BLEND_TYPE」四类形状，全部被内核拒绝。剩下的可靠路线只有一份参照树（在 Creo 里手工建一个 Boundary Blend，再用 `dump_tree` 读回元素树）。
+放样/混合曲面的**引用类型**在本机没有文档可依，需要参照树或更多候选形状才能推进；
+`surface_loft` 保持未开工，`loft` 的曲面模式仍由 `capabilities.require_available` 明确拒绝
+（"Direct Blend supports solid add into the default body only"）。
+
+### 2.9 join 的可测量并集：trim + thicken（S03 的替代路线，2026-11-05 实机）
+
+`quilt_merge` 本身仍然门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
+`PRO_SURFACE` 项而没有 `PRO_QUILT` 项（JOIN/INTSCT × 贴合/真相交四条路线加交叉复测都如此），
+模型 quilt 数保持 0，所以合并结果无法作为 quilt 交给下游。
+
+但**并集需求本身**可以由已交付的算子量出来，路线是「修剪 + 加厚」，全部走文档化树：
+
+1. 两张 40×20 的填充面（A: x∈[0,40]，B: x∈[30,70]）在 z=0 上重叠 10×20 = 200 mm²；
+2. 用**共享边所在的基准面**（x=40）修剪 B：`keep_side="one"` 实测保留 **600 mm²**
+   （x∈[40,70] 的外侧部分），另一侧是 200 mm² 的重叠部分；
+   注意：两张**共面**的 quilt 互剪是退化工具（实机修剪作业失败），所以工具是基准面；
+3. 并集面积 = 800 + 600 = **1400 mm²**（= 800 + 800 − 200）；
+4. 把 A 与 B 的外侧部分各加厚 2 mm（`thicken`，`side="symmetric"`）：
+   第一个实体 **1600.000 mm³**（800×2），两个实体合入同一个 body 后的总体积
+   **2799.9999999999995 mm³**（= 1400×2 = 2800），保存重载通过，模型里只有一个 body。
+
+即：**重叠部分只算一次**，并集在曲面层（面积 1400 mm²）与实体层（体积 2800 mm³）都可测。
+这条路线满足"join 需求"，但它产出的是**一个合并后的实体**，不是**单一合并 quilt**；
+后者仍需要 Merge 特征的真实元素树（本机没有，缺口是参照树）。
+
+### 2.10 曲面链示例文件：可运行的分阶段计划（2026-11-05）
+
+`examples/` 里新增两个**可运行**的曲面链示例，配套 `tools/test_surface_chain.py --example <file>`：
+
+```json
+{
+  "description": "...",
+  "phases": [
+    {"operations": [{"op": "sketch", "label": "blade_profile", ...}]},
+    {"operations": [{"op": "surface_trim", "tool": {"kind": "curve", "id": "$curve:blade_cut"}, ...}]}
+  ]
+}
+```
+
+- **阶段**：一个阶段内的算子在同一次作业里跑完，下一阶段在同一个模型上继续；
+- **占位符**：`$curve:<特征名>`、`$quilt:<特征名>`、`$body:<特征名>` 在运行前按检查结果解析成
+  真实 id，示例里不写死会话 id，因此示例是声明式的、可重放的；
+- **离线条**把占位符替换成占位数字再过 schema，并断言没有用到被门禁的算子；
+- **实机条**逐阶段提交，要求每个阶段 `succeeded` 且 `saved_file_reloaded_and_verified=true`。
+
+实机（2026-11-05）：
+
+| 示例 | 阶段 | 实测 |
+| --- | --- | --- |
+| `examples/p12_surface_blade.json` | 1：两张 40×20 填充面 + 切线草图 | 5 个算子全部 committed |
+| | 2：用 `$curve:blade_cut` 修剪 `blade_face` | 面积 **800 → 600.000 mm²** |
+| | 3：加厚 `blade_solid_face` 2 mm | committed，模型保存重载通过 |
+| `examples/surface_trim_merge.json` | 1：两张重叠填充面 + 共享边基准面 | 5 个算子全部 committed |
+| | 2：按共享边修剪第二张面 | 面积 **800 → 600.000 mm²**（重叠 200 mm²） |
+| | 3：加厚第一张面 2 mm | committed，模型保存重载通过 |
+
+### 2.8c 曲面扫掠：有文档树、有解析 oracle（2026-11-05 实机，S05 落地路径）
+
+`ProSweep.h` 记录了**曲面扫掠**：`PRO_E_EXT_SURF_CUT_SOLID_TYPE` 取
+`PRO_SWEEP_FEAT_TYPE_SURFACE`（=942）即为曲面输出，端盖由 `PRO_E_SWP_ATTR` 下的
+`PRO_E_END_SRF_ATTR` 决定（`PRO_SWEEP_END_SRF_OPEN`=0 / `PRO_SWEEP_END_SRF_CAPPED`=14）。
+这条树**有父子文档**，因此与 §2.8b 的"猜树"不同：它是可引用的实现依据。
+
+实机（run `20261105-073051-135500`，11 项全通过）：40×20 矩形截面沿 20 mm 直线扫掠。
+
+| 形态 | 实测 | 解析 oracle |
+| --- | --- | --- |
+| 开放曲面（`capped=false`） | 面积 **2400.000 mm²**，未闭合 | 2×(40+20)×20 = 2400（四个侧面） |
+| 加盖曲面（`capped=true`） | 面积 **4000.000 mm²**，闭合 | 2400 + 2×(40×20) = 4000 |
+| 加盖曲面实体化 | 体积 **15999.999999999998 mm³** | 40×20×20 = 16000 |
+
+驱动新增 `--case sweep_surface`（`tools/surface_chain_sweep.py`），三个数都由几何参数
+推导而不是写死；每个作业都要求 `saved_file_reloaded_and_verified=true`。
+
+**边界（必须一起说）**：`ProSweep.h` 只支持**常量截面**
+（`PRO_SWEEP_CONST_SECTION`，文档明确写"only PRO_SWEEP_CONST_SECTION supported"），
+所以**多截面放样/边界混合走不通这条路**；`loft` 的 `mode="surface"` 继续在排队前被拒
+（理由与实测见 §2.8b）。也就是说：S05 现在有了**可测量的曲面生成**（扫掠），
+但"多个截面之间的曲面"仍然缺参照树。
+
+### 2.8d 受控端点焊接：坐标规整路线（2026-11-05 实机，W01 本体交付）
+
+内核**没有**任何位移上限 API（草图域只有 `ProSectionEpsilonSet`、`ProSecdimValueSet`、
+`ProSectionEntityTranslate` 三个旋钮；全量 includes 检索 `Limit|Tolerance|Deviation|Lock|Frozen`
+在草图/截面域 0 命中），所以**显式点重合约束**（`ProSectionConstraintCreate` +
+`PRO_CONSTRAINT_SAME_POINT`）只能"闭合间隙"，不能保证"移动量 ≤ 请求上限"。
+
+因此受控焊接走**坐标规整**路线：策略层决定配对并给出 `weld_pairs`，原生侧在**写入实体之前**
+把每一对端点各自移动 gap/2（各 2.5e-5 mm，上限 1e-4 mm），再让内核求解已经重合的轮廓；
+求解后从 section 回读两端点距离作为残差。移动量由我们写入的坐标本身保证，**不依赖内核保证**。
+
+实机（`build/_live_weld_probe2.py`，闭合矩形，间隙 5e-5 mm）：
+
+| 场景 | 实测 |
+| --- | --- |
+| `endpoint_policy="weld"`，上限 1e-4 mm | 作业 succeeded、`saved_file_reloaded_and_verified=true`；`applied=true`、`applied_pairs=1`（l1.end↔l2.start）、`gap_mm=4.999999999988347e-05`、`move_mm=2.4999999999941735e-05`（= gap/2 ≤ 上限）、**`max_residual_mm=0.0`**（求解后两端点完全重合） |
+| 默认路径（同一轮廓） | `applied=false`、残差 null：内核不动，间隙保持 |
+
+请求没有 `max_endpoint_move_mm` 时在排队前被拒：上限就是"受控"的含义。
+
+### 2.8e 参照树读取链路与 Direct Blend 的实测判决（2026-11-05）
+
+参照树不再需要人工界面：新增工具 `tools/read_reference_tree.py`
+（`python tools/read_reference_tree.py <file.prt> [--model-id ID] [--feature-id N] [--json out.json]`），
+路线是 **adopt（inspect → apply）→ inspect features → dump_tree**，并把内核自己的判决一起记下来。
+
+对种子库里的放样参照件（`seed_library/seeds/two_straight/mechdog_loft_reference.prt.5`，
+托管副本 `model_id=c416c996171d4759b14fdeb8ca564bb4`）实测：
+
+| 特征 | 类型 | 元素树 |
+| --- | --- | --- |
+| `RIGHT`/`TOP`/`FRONT`/`LOFT_TOP_PLANE` 等 | `PRO_FEAT_DATUM` | 读回成功 |
+| `LOFT_BOTTOM`/`LOFT_TOP` | `PRO_FEAT_CURVE` | 读回成功；截面里带 **`PRO_E_STD_SEC_BLN_VERTS`**（混合顶点的选择） |
+| id 60（Direct Blend 本体） | — | **读取失败**：`ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &root)` 返回 **-18** |
+
+判决：**Direct Blend 没有可抽取的元素树**，因此"用元素树实现混合"这条路被实测关闭，
+面板路线（我们已交付的 `loft` 正是面板驱动）是唯一可用的路线；`loft` 的 surface 模式与
+`quilt_merge` 的门禁消息都带上这条实测依据。
+
+种子库清点：**只有 `two_straight`/`two_smooth` 两个放样（混合）参照件，没有 Merge 或 Offset 参照件**，
+所以 S03/S07 的参照树仍需一份手工建成的 `.prt`——有了它，上面的工具一次就能读回。
+
+### 2.8f 偏置的文档规格：`ProThicken.h` 完整记录了偏移树（2026-11-05）
+
+偏置能力此前缺的不是猜测，而是**规格**。`ProThicken.h` 把加厚/偏移的元素树、取值与映射全部写明：
+
+```
+PRO_E_FEATURE_TREE
+ |-- PRO_E_FEATURE_TYPE              (PRO_FEAT_PROTRUSION 或 PRO_FEAT_CUT)
+ |-- PRO_E_FEATURE_FORM              (PRO_USE_SURFS)
+ |-- PRO_E_FEAT_FORM_ALWAYS_THIN     (PRO_THIN，必填且不可重定义)
+ |-- PRO_E_STD_USEQLT_QLT            (PRO_QUILT：被偏移的 quilt)
+ |-- PRO_E_THICKEN_TYPE              (可选)
+ |-- PRO_E_STD_USEQLT_SIDE           (ProThickenSideOption：材料/偏移方向)
+ |-- PRO_E_USEQLT_SOLID_SIDE
+ |-- PRO_E_THICKNESS                 (必填)
+ |-- PRO_E_SRF_OFFS_METHOD           (ProThickenOffMethodOpts)
+ |-- PRO_E_SRF_OFFS_CTRLFIT
+ |    |-- PRO_E_SRF_OFFS_SCALINGCSYS  (PRO_CSYS)
+ |    |-- PRO_E_SRF_OFFS_AXES         (ProThickenAxesOption)
+ |-- PRO_E_SRF_OFFS_HANDLINGS        (仅 PRO_OFFS_METH_NORMTOSURF 可用)
+ |    |-- PRO_E_SRF_OFFS_HANDLING
+ |         |-- PRO_E_SRF_OFFS_REF_SEL (PRO_SURFACE：逐面处理的面)
+ |         |-- PRO_E_SRF_OFFS_ACTION  (ProThickenHandlingAction)
+ |-- PRO_E_IS_SMT_CUT / PRO_E_SMT_CUT_NORMAL_DIR
+```
+
+三种偏移方法（映射表原文）：`PRO_OFFS_METH_NORMTOSURF`（**法向到曲面**，此时可用
+`PRO_E_SRF_OFFS_HANDLINGS` 逐面处理）、`PRO_OFFS_METH_AUTOSCALE`（此时不用 CTRLFIT）、
+`PRO_OFFS_METH_MANUALSCALE`（此时 `PRO_E_SRF_OFFS_CTRLFIT`/`_SCALINGCSYS` 必填、`_AXES` 可选）。
+
+自建特征读回的 `PAD` 树与该规格逐项吻合（`PRO_E_THICKEN_TYPE=917`、`PRO_E_THICKNESS=2.00`、
+`PRO_E_SRF_OFFS_METHOD=1`、`PRO_E_SRF_OFFS_CTRLFIT/PRO_E_SRF_OFFS_SCALINGCSYS`、
+`PRO_E_SRF_OFFS_AXES=0`、`PRO_E_SRF_OFFS_HANDLINGS` 为数组）✓——**此前 12 个候选被拒的根因是
+把 `PRO_E_SRF_OFFS_*` 挂到了错误的父节点上**（`PRO_FEAT_DATUM_SURF` / `PRO_FEAT_OFFSET`），
+而不是元素本身无效。
+
+据此，`surface_offset` 的实现规格是确定的：`PRO_FEAT_PROTRUSION` + `PRO_E_FEATURE_FORM=PRO_USE_SURFS`
++ `PRO_E_FEAT_FORM_ALWAYS_THIN=PRO_THIN` + `PRO_E_STD_USEQLT_QLT`（quilt）+ `PRO_E_THICKNESS=距离`
++ `PRO_E_SRF_OFFS_METHOD=PRO_OFFS_METH_NORMTOSURF` + `PRO_E_STD_USEQLT_SIDE`（方向）；
+oracle 为面积 × 距离（40×20 的 quilt 偏置 5 mm → 4000 mm³，偏移面恰好在 5 mm 处）。
+
+合并侧（S03）：读回的合并元素 `PRO_E_SMT_MERGE_DATA` / `PRO_E_SWP_MERGE_ENDS` 属**钣金族**语义，
+本机没有独立的"合并面"特征树；`ProMerge.h` 的数组树四条路线建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，
+与本机数据结构不合，合并算子继续门禁。
+
+### 2.8g 受控曲面偏置算子 `surface_offset`（2026-11-05）
+
+按 §2.8f 的规格实现：新建公开算子 `creo_surface_offset`（schema `SurfaceOffsetOp`、
+原生 `generic_surface_offset`），请求为 `reference`（必须是 quilt）、`distance`、`side`
+（positive/negative）。原生侧建树：`PRO_FEAT_PROTRUSION` + `PRO_E_FEATURE_FORM=PRO_USE_SURFS`
++ `PRO_E_FEAT_FORM_ALWAYS_THIN=PRO_THIN` + `PRO_E_STD_USEQLT_QLT` + `PRO_E_THICKNESS=距离`
++ `PRO_E_STD_USEQLT_SIDE`（方向）+ `PRO_E_SRF_OFFS_METHOD=PRO_OFFS_METH_NORMTOSURF`。
+
+回执里的距离是**实测**的，不是回显：偏置前测源 quilt 面积，建特征后测实体体积，
+`measured_offset_distance_mm = volume_after / source_area`（面积 × 距离 = 体积，两个量纲相除
+即距离 ✓，比例尺同时约掉 ✓），另有 `direction`、`offset_method="normal_to_surface"`、
+`source_area_mm2`、`volume_before_mm3`、`volume_after_mm3`。
+
+**实机验收（2026-11-05，双侧）**：40×20 填充面沿法向偏置 5 mm。
+
+| side | 状态 | 体积（oracle 800×5=4000） | 实测距离（体积÷面积） | 保存重载 |
+| --- | --- | --- | --- | --- |
+| positive | succeeded | **3999.9999999999995 mm³** | **4.999999999999999 mm** | true |
+| negative | succeeded | **3999.9999999999995 mm³** | **4.999999999999999 mm** | true |
+
+方向证据的边界（如实记录）：回执 `direction` 是**请求侧**（内核接受
+`PRO_E_STD_USEQLT_SIDE` 的 SIDE_ONE/SIDE_TWO），两侧体积同为单侧 5 mm 壁——对称 2 mm 会是
+1600 mm³——说明材料确实只长在一侧；但 z 符号没有从几何读回（`feature_geometry` 不提供包围盒）。
+
+验收途中修正的两处实现缺陷：① 分发链漏了 `surface_offset`（worker 报
+"Operation is not implemented"），已补上 `generic.cpp` 的分发行；② 实测距离一度误报 1.0
+——三元表达式被书写拆断成 `const double measured = area_known;`（布尔退化为 1.0），已修复并由
+上表复验。另：验收前 Creo 的异步连接槽被一次"连接中途重编 exe"弄脏（`toolkit_code=-4`），
+重启 Creo 后恢复，与算子本身无关。
+
+### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
+
+`ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：
+
+```
+PRO_E_FEATURE_TREE
+ ├─ PRO_E_FEATURE_TYPE      = PRO_FEAT_DATUM_QUILT
+ ├─ PRO_E_SRF_MRG_TYPE      = ProSrfMrgType（默认 INTERSECT）
+ ├─ PRO_E_STD_FEATURE_NAME  = <label>
+ └─ PRO_E_SRF_MRG_QUILT_ARR (数组，至少 2 个成员)
+     └─ PRO_E_SRF_MRG_QUILT_CMPD
+         ├─ PRO_E_SRF_MRG_QUILT_REF  (PRO_QUILT 选择，mandatory)
+         └─ PRO_E_SRF_MRG_QUILT_SIDE (ProSrfMrgQltSide，optional)
+```
+
+两条必须显式处理的默认值：
+
+- `PRO_E_SRF_MRG_TYPE` 的**默认是 INTERSECT**，首版只要 join，因此必须显式写 `PRO_SRF_MRG_JOIN`；不写就等于悄悄做交集。
+- `PRO_E_SRF_MRG_QUILT_SIDE` 是可选项，且在参与者 >2 时不可用；首版不设置它，保留区域由默认行为决定并**测量**，不按 GUI 观感假设。
+
+数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
 
 ---
 
@@ -220,11 +672,24 @@ PRO_E_FEATURE_TREE
 | 项 | 首版公开 | 首版明确拒绝 |
 | --- | --- | --- |
 | 目标 | 恰好 1 个 quilt | 非 quilt、多 quilt |
-| 工具 | 恰好 1 个 quilt 或基准面 | 曲线工具（use-curve 变体）、多工具 |
-| 保留侧 | `keep_side` ∈ `{"one","two"}` | 其它值 |
+| 工具 | 恰好 1 个 quilt、基准面或曲线（`{kind:'curve',id:N}`） | 多工具、跨表曲线链 |
+| 保留侧 | `keep_side` ∈ `{"one","two"}` | 其它值（曲线工具的"两侧都保留"未公开） |
 | 薄壳 | 不提供 | `thin` / `thickness` |
 | 轮廓/孔环 | 不提供 | 多区域、孔环（首版只处理单外环区域） |
 | 输出 | 修剪后的 quilt（可供 `thicken` 消费） | — |
+
+### 3.4 quilt_merge
+
+| 项 | 首版公开 | 首版明确拒绝 |
+| --- | --- | --- |
+| 参与者 | **恰好 2 个类型明确的 quilt** | 基准面、曲线、body、多个参与者 |
+| 合并方式 | 只做 join（`PRO_SRF_MRG_JOIN`） | intersect 变体 |
+| 容差 | 不提供 | 任何 `tolerance` 参数（未证明生效前不得接受） |
+| 间隙测量 | 不提供 | 任何间隙字段 |
+| 闭合 | 只报告真实探测结果（§4.4.1 结构） | 由面积或外框反推 `closed` |
+| 输出 | 一个结果 quilt（`result_quilt_id`，可供 `thicken` 消费） | — |
+
+`quilt_merge` **不是** `boolean_bodies` 的替代：实体布尔不在曲面链里，不能用它掩饰缝合失败。
 
 ---
 
@@ -236,10 +701,17 @@ PRO_E_FEATURE_TREE
 
 | 语义 | 引用形态 | 解析规则 |
 | --- | --- | --- |
-| quilt（放样产物 / 修剪目标 / 修剪工具） | `{"kind":"quilt_feature","label":"<label>"}` | 复用 `native/generic.cpp:715-726`：`quilt_feature` → 特征内**恰好一个** `PRO_QUILT` 几何项；0 个或多个一律拒绝 |
-| 曲线（投影源） | `{"kind":"curve","id":<int>}` | 复用 `native/generic.cpp:750-758`：`curve` → `PRO_CURVE` 几何 ID（**非负 32 位**） |
+| quilt（放样产物 / 修剪目标 / 修剪工具） | `{"kind":"quilt_feature","label":"<label>"}` | 复用 `native/generic.cpp` 的 `quilt_feature` 分支：特征内**恰好一个** `PRO_QUILT` 几何项；0 个或多个一律拒绝，多个时返回有界候选清单 |
+| quilt（显式几何 ID，S01 起） | `{"kind":"quilt","id":<int>}` | 经 S01 的 `inspection.quilts` 取得的 `quilt_id`；原生侧用 `ProQuiltInit` 初始化后读取面/面积/闭合状态 |
+| 曲线（投影源） | `{"kind":"curve","id":<int>}` | 复用 `native/generic.cpp` 的 `curve` 分支：`PRO_CURVE` 几何 ID（**非负 32 位**） |
 | 方向来源 | `{"kind":"datum_plane","label":...}` / `{"kind":"datum_axis_feature","label":...}` / `{"kind":"edge","id":...}` / `{"kind":"curve","id":...}` | 复用既有 `resolve()`；必须能读出**真实方向向量**，读不出即拒绝 |
 | 基准面（trim 工具） | `{"kind":"datum_plane","label":...}` | `ProTrim.h` 允许 `PRO_DATUM_PLANE` 作为 `PRO_E_STD_USEQLT_QLT` |
+
+**ID 类型规则（硬，S00 R1）**：
+
+1. `quilt_id` 与 `surface_id` 是两套命名空间。把 quilt ID 填进 `{"kind":"surface","id":N}`，或把面 ID 填进 `{"kind":"quilt","id":N}`，都是**类型错误**：必须保留类型诊断后拒绝，不得"长得像就试一下"。
+2. ID 只对**产生它的模型与 revision** 有效。保存/擦除/重载、重生成或拓扑改变后必须重新查询；跨模型比较 ID 数字**不是**任何验收判据。
+3. `surface_ids` 是 quilt 的成员面，**不是** quilt 本身；`surface_ids` 可以直接用于面引用，但不得用来缝合或修剪 quilt。
 
 **唯一性规则（硬）**：
 
@@ -341,16 +813,32 @@ PRO_E_FEATURE_TREE
 | `kept_side_basis` | `object` | 保留侧的判定依据，见 §4.5 |
 | `kept_quilt_id` | `int \| null` | 保留区域 quilt 几何 ID，供 `thicken` 消费 |
 
+**quilt_merge**
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `result_quilt_id` | `int \| null` | 合并结果 quilt 几何 ID，供 `thicken` 消费 |
+| `area_mm2` | `float \| null` | 合并后 quilt 的真实面积（mm²） |
+| `area_status` | `object` | §4.4.1 结构 |
+| `input_area_mm2` | `float \| null` | 两个输入 quilt 面积之和（合并前测量） |
+| `input_area_status` | `object` | §4.4.1 结构 |
+| `closed` | `bool \| null` | 只来自 `ProQuiltVolumeEval` 探测：闭合为 `true`，明确开放为 `false`，探测失败为 `null` |
+| `closed_status` | `object` | §4.4.1 结构 |
+| `merge_type` | `"join"` | 首版唯一取值 |
+| `inputs` | `object` | `{"target_quilt_id": int, "tool_quilt_id": int}` |
+
 **所有测量字段在 compact/full 两种投影里都必须存在**（null 也保留字段与 status），compact 不得丢字段。
 
 ### 4.5 keep_side 语义（冻结）
 
 **不按 GUI 正负命名。** `keep_side` 只能是 `"one"` / `"two"`，其物理含义由**工具的取向**决定，且必须可被测量验证：
 
-- `keep_side="one"` → 对应 `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_ONE`。
-- `keep_side="two"` → 对应 `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_TWO`。
-- `PRO_E_MATERIAL_SIDE` 首版固定为 `PRO_TRIM_MATL_SIDE_ONE`（`=1`）；薄修剪与双侧不在首版。
+- `keep_side="one"` → `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_ONE` **且** `PRO_E_MATERIAL_SIDE = PRO_TRIM_MATL_SIDE_ONE`。
+- `keep_side="two"` → `PRO_E_PRIMARY_QLTSIDE = PRO_TRIM_PRIM_QLT_SIDE_TWO` **且** `PRO_E_MATERIAL_SIDE = PRO_TRIM_MATL_SIDE_TWO`。
+- **2026-11-04 实机修正**：仅改 `PRO_E_PRIMARY_QLTSIDE` 不改变保留区域（`one`/`two` 实测同一侧同一面积）；决定保留侧的是 `PRO_E_MATERIAL_SIDE`。两个元素现在同时跟随 `keep_side`，不允许互相矛盾。薄修剪与双侧仍不在首版。
 - `PRO_E_KEEP_TRIM_SURF_OPT` 首版固定为 `PRO_KEEP_TRIM_SURF_OPT_NO`（`=0`）。
+
+**实测绑定（2026-11-04，Creo 12.4.0.0）**：`keep_side="one"` 保留**工具法向正侧**，`keep_side="two"` 保留负侧。证据（`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`）：40×20 平面填充（800 mm²）被 x=5 基准面（法向 +X）修剪，`one` 得 700 mm²、外框 x∈[5,40]，`two` 得 100 mm²、外框 x∈[0,5]；圆柱面（1256.64 mm²）被 z=5 平面（法向 +Z）修剪，`one` 得 314.16 mm²（z>5）、`two` 得 942.48 mm²（z<5）。两次运行均 `saved_file_reloaded_and_verified=true`。
 
 **`kept_side_basis` 必须回写判定依据**，使调用方能独立判断保留的是哪一块，而不是相信一个标签：
 
@@ -372,16 +860,16 @@ PRO_E_FEATURE_TREE
 
 **一致性与失败规则**：
 
-- 若 `signed_offset_mm` 与 `keep_side` 的预期方向矛盾（例如 `keep_side="one"` 却使 `signed_offset_mm > 0` 而约定 `one` 为负侧），**该 op 必须失败并回滚**，不得回报成功。
+- 若 `signed_offset_mm` 与 `keep_side` 的预期方向矛盾（`one` 应使 `signed_offset_mm > 0`，`two` 应使 `< 0`），**该 op 必须失败并回滚**，不得回报成功。判据在质心可读时才生效。
 - 若质心读不出（`target_centroid` 或 `kept_centroid` 为 null），`kept_side_basis` 保留已知字段、`signed_offset_mm=null`，但**不得**因此判失败（质心只是佐证，不是主判据）。
-- `one`/`two` 与法向正负的绑定由探针 P3 判定并回填本节；**在回填前不得公开 `keep_side`**。
+- `one`/`two` 与法向正负的绑定已于 2026-11-04 由实机回填（见本节实测绑定段）：`one` = 工具法向正侧，`two` = 负侧。`surface_trim` 因此解除门禁；判据仍是"两次独立模型的面积 + 外框"，不跨模型比 ID（R5）。
 
 ### 4.6 错误与回滚行为（冻结）
 
 | 场景 | 行为 |
 | --- | --- |
-| schema 拒绝（非法枚举、截面数不对、引用种类不支持、重复引用、缺 kind） | **不派发 job**，不产生 `job_id`，不产生特征 |
-| 引用解析失败（不存在 / 不唯一 / 类型不符 / 已删除墓碑） | 同上，schema 或原生前置校验阶段拒绝 |
+| schema 拒绝（非法枚举、截面数不对、引用种类不支持、重复引用、缺 kind、ID 类型不匹配） | **不派发 job**，不产生 `job_id`，不产生特征 |
+| 原生运行时引用失效（标签已删除、几何 ID 在当前 revision 不存在、特征不含可用 quilt 几何项） | **允许已受理 job 失败**，走既有事务回滚，`rollback_succeeded=true`；不得承诺"所有引用错误都不建 job"（S00 R2） |
 | 原生 `ProFeatureCreate` 失败 | 事务回滚，**不留下**新特征；`rollback_succeeded=true`；revision 不推进 |
 | 测量失败（面积/长度查不到、单位未知） | **特征保留**（几何成功即成功），测量字段 `null` + 原因 |
 | `keep_side` 与实测方向矛盾 | **op 失败并回滚**（§4.5） |
@@ -421,12 +909,21 @@ PRO_E_FEATURE_TREE
 - 附加断言：产出为 datum surface；`surface_type == "datum_surface"`；不是实体（模型无 solid，体积为 null/`has_solid=false`）。
 - 失败判据：面积与 800 偏差 > 0.5；或产出是实体；或两截面被静默合并/交换顺序（回显 `sections` 必须仍是 `[S0, S1]`）。
 
-### O2 project_curve：圆柱面上的投影曲线长度
+### O2 project_curve：平面上沿 −Z 的投影曲线长度（S00 R4 修订）
 
-- 构造：目标 quilt = 一个**圆柱面**（`extrude{mode:"surface"}` 圆形草图，轴沿 Z，半径 10，高 20）；源曲线 = 圆柱外一条直线（沿 Z，长 30，x=15 处）；投影方向 = 沿 −X（朝圆柱轴）。
-- 闭式解：投影曲线落在圆柱面上，是一条**母线方向**的直线段（投影方向为径向时，源直线平行于 Z ⇒ 投影结果长度等于源长度 30 mm）。
-- 断言：`curve_length_mm == 30.0`（±0.5）；`endpoints_mm` 两点 z 差 = 30.0（±0.5）；两点的径向距离 = 10.0（±0.5，落在圆柱面上）；`curve_id` 非空。
-- 失败判据：长度与 30 偏差 > 0.5；或端点 z 差不为 30；或回执其实是**源曲线**（端点径向距离 = 15 而非 10 —— 这直接判定"只回显输入、冒充投影"）。
+- 构造：目标 quilt = 一个 **40 × 20 的平面矩形**（`surface_fill`，z = 0，覆盖 x∈[0,40]、y∈[0,20]）；源曲线 = z = 10 平面上的一条直线 `(5,10,10) → (35,10,10)`（长 30 mm）；投影方向 = **−Z**（垂直落到目标面）。
+- 闭式解：投影结果落在 z=0 的平面上，是 x∈[5,35]、y=10 的直线段，长度仍为 30 mm。
+- 域内性（新）：投影后的两个端点 `(5,10,0)`、`(35,10,0)` 必须落在目标面的有效域内（x∈[0,40]、y∈[0,20]）；若端点越界，该用例不成立，必须先退回修改构造，不得把截断结果当成功。
+- 断言：`curve_length_mm == 30.0`（±0.5）；`endpoints_mm` 两点 z = 0（±1e-6）；两点 x 跨距 30.0（±0.5）；`curve_id` 非空。
+- 反方向用例：沿 +Z 投影时源线与目标面无交点 ⇒ 必须返回空结果与原因，**不得回显源曲线**（源线 z=10 ≠ 0，可直接分辨）。
+- 失败判据：长度与 30 偏差 > 0.5；或端点 z ≠ 0；或结果端点是源线端点（z = 10）——这直接判定"只回显输入、冒充投影"。
+
+### O2b project_curve：圆柱面投影（有效域与多交点待定义）
+
+- 状态：**候选，定义未冻结**。旧表述"高 20 mm 圆柱承载长 30 mm 源线"几何上不自洽（源线比承载面高），已撤销，不得作为验收 oracle。
+- 后续定义必须同时给出：圆柱的有效域（周向角区间 + 轴向区间）、源线的有效域、投影方向与法向关系、多交点（源线穿过圆柱前后两侧）时的分支选择规则。
+- 在该定义冻结前，圆柱投影只作**探索性观察**，不进入 oracle 计数与通过判据。
+
 
 ### O3 surface_trim：矩形面直线二分 → 面积守恒
 
@@ -434,8 +931,9 @@ PRO_E_FEATURE_TREE
 - 闭式解：矩形被二分，两块各 20 × 20 = 400.0 mm²。
 - 断言（`keep_side="one"`）：`area_before_mm2 == 800.0`（±0.5）；`area_after_mm2 == 400.0`（±0.5）。
 - 守恒断言：再跑一次 `keep_side="two"`，`area_after_mm2 == 400.0`（±0.5），且 `one` 与 `two` 的 `area_after_mm2` 之和 == `area_before_mm2`（±1.0）。
-- **两侧产物必须不同**：两次的 `kept_quilt_id` 必须不同；`kept_side_basis.signed_offset_mm` 必须符号相反。
-- 失败判据：两次 `area_after_mm2` 相同但 `kept_quilt_id` 也相同（两侧产物相同却回报成功）；或面积不守恒；或 `area_before_mm2` 为 0/null。
+- **两侧产物必须不同（S00 R5 修订）**：判据是**实测位置**——`keep_side="one"` 的保留区域覆盖 x∈[0,20]，`keep_side="two"` 覆盖 x∈[20,40]（各 ±0.5），且 `kept_side_basis.signed_offset_mm` 符号相反。**不得**用不同模型（或不同 revision）之间比较 `kept_quilt_id` 数字来证明两侧不同：ID 只对产生它的模型与 revision 有效。
+- 同一模型内两次保留侧运行时，才额外记录 `kept_quilt_id`，并要求两次不同；该字段在该场景外只作诊断。
+- 失败判据：两个保留区域的位置区间相同（两侧其实没变）却回报成功；或面积不守恒；或 `area_before_mm2` 为 0/null。
 
 ---
 
@@ -517,6 +1015,20 @@ PRO_E_FEATURE_TREE
   - **可行** → 回填 §2.2 实际树与 §4.3 的 `side` 绑定；Q09 可开工。
   - **路线不成立** → **只阻断 Q09（project_curve）**；Q10 的 trim 仍可开工，但"投影曲线作为 trim 工具"的子路径一并阻断；**不得用 body 布尔或曲面求交冒充投影曲线**。
 
+#### P2 实测结论（2026-11-04，S04）
+
+- COPYTRIM 族：三个候选树全部被 `ProFeatureWithoptionsCreate` 拒绝（-1）；PROJ_CRV 族四个候选树同样全部拒绝。
+  `ProCurveType` 无投影类型值，`PRO_PROJ_*` 只存在于 `ProElemId.h`。**COPYTRIM/PROJECT 路线不成立**（明细见 §2.2.1）。
+- 替代路线：`ProDtmCrv.h` INTERSECT 树本身可用（`REF_TYPE` 取 `PRO_CURVE_TYPE_INTSRF`），配合"源草图沿方向
+  扫掠出的辅助面"构成真正的投影（明细见 §2.2.2）。这不是用曲面求交冒充投影：扫掠面由源曲线本身产生，
+  交线逐点等于源曲线沿该方向的投影。
+- 实机结果（`build/_live_project_probe2.py`，模型 `e7aadca24d66462c83d4139744b735bf` 等）：
+  源直线 (5,10,10)-(35,10,10)、方向 -Z、目标 z=0 平面 quilt → 曲线长度 **30.000 mm**，
+  端点 **(5,10,0)/(35,10,0)**，作业 `saved_file_reloaded_and_verified=true`；
+  源圆弧（半径 8，圆心 (20,10,10)，0°→180°）→ 长度 **25.133 mm**（π·8），端点 **(12,10,0)/(28,10,0)**；
+  `side="positive"`（方向 +Z，目标在背侧）被拒，消息含 `target quilt lies behind the source curve`。
+- **未实测**：多分支拒绝、非平面目标、方向与草图法向不平行的拒绝、圆柱面目标（O2b 仍待定义）。
+
 ### P3 — surface_trim 元素树探针（目标：keep_side 物理语义）
 
 - **探针目标**：判定 `ProTrim.h` 的 use-quilt 变体能否成功，并确定 `one`/`two` 与工具法向的绑定。
@@ -553,10 +1065,10 @@ PRO_E_FEATURE_TREE
 | 三个 op 的**实际创建元素树** | **未验证**（须 P1–P3） |
 | `PRO_E_BLEND_TYPE` 取值语义 | **未验证** |
 | `TAN_COND_FREE` 是否有可引用符号 | **未验证**（头文件只有文字） |
-| COPYTRIM 族的父子关系与合法值 | **未验证**（本机 SDK 无文档） |
-| `direction_ref` → `PRO_E_DIRECTION_COMPOUND` 的接线方式 | **未验证** |
-| `keep_side` 的 `one`/`two` 物理绑定 | **未验证**（须 P3） |
-| `side` 的 `positive`/`negative` 物理绑定 | **未验证**（须 P2） |
+| COPYTRIM / PROJECT 族的父子关系与合法值 | **已实测不可用**（7 个候选树全部被内核拒绝，见 §2.2.1） |
+| `direction_ref` → `PRO_E_DIRECTION_COMPOUND` 的接线方式 | **未验证**（project_curve 不依赖该容器；方向由扫掠面与包围盒符号距离实测） |
+| `keep_side` 的 `one`/`two` 物理绑定 | **已实测**（S02，见 §2.3） |
+| `side` 的 `positive`/`negative` 物理绑定 | **部分实测**：方向取 `direction_ref` 向量并按 `side` 取反；目标在背侧时实测拒绝 |
 | `PRO_E_BLEND_SECTIONS` / `PRO_E_BLEND_ATTRIBUTES` / `PRO_BLEND_SURF` / `PRO_STD_BLEND` / `ProSurfaceEval` / `ProMeasurable` | **本机 SDK 不存在**（02 方案的这些名字不可用） |
 | 本机 `constants.inc` 未导出 `ProTrim.h` / `Probbl.h` / `ProStdSection.h` / `ProMerge.h` 的符号 | **已核实**（需集成人统一补 `HEADERS` 后重新生成） |
 | Creo 9 / Creo 10 的同名常量与树 | **未验证**（本机只有 12.4） |
@@ -580,3 +1092,50 @@ PRO_E_FEATURE_TREE
 - `PRO_E_CTRL_PTS`/`PRO_E_BLEND_TYPE`、`PRO_E_BNBLN_TAN_COND_TYPE`（`TAN_COND_FREE` 无符号定义）与 trim 的 body/side 组合仍是未定项；本次没有继续试错，避免把未经证明的树写进公开实现。
 - **Q08 / Q09 / Q10 均不开工**，直到重新取得“可行”证据并回填 §2/§3/§4。Q08 只受 P1 阻断，Q09 只受 P2 阻断，Q10 只受 P3 阻断；本次三项同时不成立。
 - 证据：`build/live-0.11.1/p1_probe.json`、`p2_probe.json`、`p3_probe.json` 及对应 `jobs/*/native.log`（本机忽略目录）。
+
+### 9.1 2026-11-04 S04 复测与交付（project_curve）
+
+环境：Creo 12.4.0.0 / Toolkit x86e_win64 / 本机匹配 SDK；分支 `codex/DEV-067-alphai-plan`；
+`bridge.py build` 重新编译执行器后逐条实机运行（先解除门禁取证，取证后按结论落实发布状态）。
+
+| 用例 | 前置 | 结果 | 判定 |
+| --- | --- | --- | --- |
+| 7 个候选投影树 | 40×20 fill + z=10 源草图 + 方向平面 | COPYTRIM×3、PROJ_CRV×4 全部 `-1` | 族不可用 |
+| 直线投影 | 源 (5,10,10)-(35,10,10)，方向 -Z，目标 z=0 | 长度 30.000 mm，端点 (5,10,0)/(35,10,0)，保存重载已验证 | 通过 |
+| 圆弧投影 | 半径 8、圆心 (20,10,10)、0°→180° | 长度 25.133 mm，端点 (12,10,0)/(28,10,0) | 通过 |
+| 反向投影 | 同上但 `side="positive"`（+Z） | 拒绝：`target quilt lies behind the source curve` | 通过（拒绝即期望） |
+
+证据：`build/live_project_probe.json`（7 棵候选树逐条）、`build/live_ref_probe.json`（引用隔离）、
+`build/live_project_probe2.json`（三条几何用例）及对应 `jobs/*/native.log`（本机忽略目录）。
+
+统一驱动 `tools/test_surface_chain.py --case project --live --confirm-session-usable`
+在重启 Creo 会话后跑通（run `20261104-134443-396700`，6 个作业，18 项检查全通过）：
+`session_ready`、直线 30.000 mm/端点精确、圆弧 25.1327 mm/端点精确、两次 `saved_file_reloaded_and_verified`、
+`route=swept_surface_intersect`、`helper_feature_id=95`、`direction_basis=datum_plane_normal`、
+以及 `wrong_side_refused`（`target quilt lies behind the source curve for side 'positive'`）。
+驱动为此修了两处自身缺陷：`wait_ready` 现在只在首次轮询请求一次 retry（否则每次轮询都会重开一个协调器尝试，
+旧状态永远停在 active 相位），提交用作业自身回报的 revision，不再额外发只读刷新作业占住 `pending_job`。
+
+### 9.2 2026-11-04 S04 消费者：surface_trim 的 use-curve 变体
+
+环境同上（Creo 12.4.0.0，重启会话后单通道串行）。
+
+| 用例 | 前置 | 结果 | 判定 |
+| --- | --- | --- | --- |
+| 侧向组合矩阵 | 40×20 填充 + z=0 直线（y=15） | `MATERIAL_SIDE`=1/2 → 200 / 600 mm²；=3 → 两个 quilt；`PRIMARY_QLTSIDE` 无影响；曲线反向交换保留侧 | 语义确定 |
+| 操作符 `flat` | 同一模型经公开 `surface_trim`，工具为草图曲线 `{kind:curve,id:88}` | 面积 800→600，`kept_quilt_id=82`，`saved_file_reloaded_and_verified=true`，`kept_side_basis={tool_kind:curve, side_reference:curve_direction}` | 通过 |
+| 操作符 `projected` | 先投影到该 quilt，再用投影曲线修剪同一 quilt | 修剪几何成立，但保存阶段 `ProMdlnameBackup=-1`，作业回滚、目标仍为 800 | 边界（见 §2.3.2） |
+
+证据：`build/live_usecurve_trim_probe.json`（侧向矩阵，10 个模型）、`build/live_op_trim_probe.json`（两个操作符形态）。
+实现侧同时发现并修正一处真实缺陷：use-curve 特征创建后立即读状态是 `PRO_FEAT_FAILED(6)`，必须先再生的模型再判状态。
+
+### 9.3 2026-11-04 S06 实机：闭合曲面实体化判据
+
+| 用例 | 前置 | 结果 | 判定 |
+| --- | --- | --- | --- |
+| 闭合 quilt 实体化 | 绕 X 轴 360° 旋转 5×20 矩形（surface 模式） | quilt `closed=true`、面积 1000π mm²；实体体积 **6283.185307179587 mm³**（解析 2000π，差 <1e-9）；保存重载已验证 | 通过 |
+| 开放 quilt 实体化 | 40×20 填充面 | 建特征前被拒：`ProQuiltVolumeEval=-18, quilt_is_open`；作业失败并回滚，面仍为 800 mm² 开放 quilt | 通过（拒绝即期望） |
+| 驱动用例 | `--case solidify --live` | run `20261104-145403-398500`，8 项检查全通过 | 通过 |
+
+证据：`build/live_solidify_probe.json`（两个用例的完整量测）与 `build/surface_chain/<run_id>/report.json`。
+解析期望值由**实测外框**推导（半径取 Y 向跨度的一半、高度取 X 向跨度），不写死常数，避免平面映射假设。

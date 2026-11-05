@@ -7,19 +7,14 @@ import re
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
-    BaseModel,
     BeforeValidator,
-    ConfigDict,
     Field,
     TypeAdapter,
-    ValidationError,
-    ValidatorFunctionWrapHandler,
-    WrapValidator,
     field_validator,
     model_validator,
 )
-from pydantic_core import PydanticCustomError
 
+from creo_mechdog import schema_base as _schema_base
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
 from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
@@ -30,34 +25,17 @@ from creo_mechdog.references import (
     validate_planar_reference,
     validate_sketch_plane_frame,
 )
+from creo_mechdog.schema_base import Label, Point2, Point3, Positive, StrictModel
 from creo_mechdog.sheetmetal import first_wall_section_problem
+from creo_mechdog.surface_ops import (
+    ProjectCurveOp,
+    QuiltMergeOp,
+    SurfaceTrimOp,
+    quilt_reference_problem,
+)
 
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-
-
-Point2 = Annotated[list[float], Field(min_length=2, max_length=2)]
-Point3 = Annotated[list[float], Field(min_length=3, max_length=3)]
-_LABEL_PATTERN = r"^[a-z][a-z0-9_]{0,27}$"
-
-
-def _explain_label_pattern(value: Any, handler: ValidatorFunctionWrapHandler) -> str:
-    try:
-        return handler(value)
-    except ValidationError as exc:
-        if any(error["type"] == "string_pattern_mismatch" for error in exc.errors()):
-            raise PydanticCustomError(
-                "string_pattern_mismatch",
-                "Label must start with a lowercase letter, contain only [a-z0-9_], "
-                "and be at most 28 characters; for example i001_part1",
-                {"pattern": _LABEL_PATTERN},
-            ) from None
-        raise
-
-
-Label = Annotated[str, Field(pattern=_LABEL_PATTERN), WrapValidator(_explain_label_pattern)]
-Positive = Annotated[float, Field(gt=0, le=100000)]
+# Compatibility: the label pattern stays reachable from this module.
+_LABEL_PATTERN = _schema_base._LABEL_PATTERN
 
 
 def _rotation_matrix(value: Any) -> Any:
@@ -273,6 +251,22 @@ class SketchOp(StrictModel):
     plane: Literal["XY", "XZ", "YZ"] | dict[str, Any] = "XY"
     offset: float = 0
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensions: list[SketchDimension] = []
     constraints: list[SketchConstraint] = []
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
@@ -373,6 +367,22 @@ class SketchGeometryOp(StrictModel):
     op: Literal["update_sketch_geometry"]
     sketch: Label
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
     # Same fidelity contract as SketchOp; both entries share one definition.
     geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
@@ -1536,6 +1546,23 @@ class ThickenOp(StrictModel):
     new_body: bool = False
 
 
+class SurfaceOffsetOp(StrictModel):
+    op: Literal["surface_offset"]
+    label: Label
+    reference: dict[str, Any]
+    distance: Positive
+    side: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def reference_is_a_quilt(self):
+        # FEAT-039/S07: an offset acts on a surface, so the reference must be a
+        # quilt; a body or a datum plane is refused before a job exists.
+        problem = quilt_reference_problem(self.reference, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_offset reference {problem}")
+        return self
+
+
 class SolidifyOp(StrictModel):
     op: Literal["solidify"]
     label: Label
@@ -1543,6 +1570,18 @@ class SolidifyOp(StrictModel):
     side: Literal["positive", "negative"] = "positive"
     mode: Literal["add", "cut"] = "add"
     new_body: bool = False
+
+    @model_validator(mode="after")
+    def reference_matches_mode(self):
+        # FEAT-039/S06: adding a solid needs one quilt; a body is not a quilt
+        # and the boolean body tools cannot stand in for the quilt semantics.
+        # The cut mode trims a solid with a datum plane and keeps its own
+        # reference spellings.
+        if self.mode == "add":
+            problem = quilt_reference_problem(self.reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"solidify reference {problem}")
+        return self
 
 
 class BooleanOp(StrictModel):
@@ -1639,7 +1678,11 @@ Operation = Annotated[
         PointsOp,
         FillOp,
         ThickenOp,
+        SurfaceOffsetOp,
         SolidifyOp,
+        SurfaceTrimOp,
+        QuiltMergeOp,
+        ProjectCurveOp,
         BooleanOp,
         RibOp,
     ],

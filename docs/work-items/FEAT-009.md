@@ -56,3 +56,9 @@
 ## 2026-11-01 Q15 离线集成状态
 
 离线开发完成，待实机验收。来源及合并提交见 [Q15 集成报告](DEV-053-Q15-integration-2026-11-01.md)。此状态不表示原生构建、Creo 实机、主干合入或发布完成。
+
+## 2026-11-04 S00 增量：S05 派工与契约修订
+
+- [0.11.7 计划](../superpowers/plans/2026-11-04-0.11.7-surface-chain-improvement-plan.md) 的 S05（`surface_loft` 最小两截面曲面放样）派工归本卡；首版两条曲线一个方向、有序且不重复、不产实体，暂不改既有 solid `LoftOp` 的 mode/new_body 语义；S06 边界混合多方向/连续性继续由 FEAT-039 承担。
+- G5 契约按 S00 修订（[§0.1](../development/G5-NATIVE-CONTRACT.md)）：测量字段 `surface_area_mm2`/`surface_area_status` 维持 §4.4.2 冻结；显式 quilt 引用与 ID 类型规则、错误分层新增。P1 旧探针"路线不成立"历史保留为 `route_not_established`，实现前仍须取得可重生成特征的真实树。
+- 本轮离线（文档与契约测试），实机项未验证。

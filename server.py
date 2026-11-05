@@ -130,6 +130,11 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
+    "native/surface_measure.h",
+    "native/quilt_query.h",
+    "native/surface_trim.cpp",
+    "native/quilt_merge.cpp",
+    "native/project_curve.cpp",
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
@@ -2189,7 +2194,7 @@ async def creo_inspect_model(
 
     Use detail=full for geometry; large snapshots return data grouped by section,
     complete=false and next_cursor. Repeat with the same detail/section and cursor.
-    Sections: features, dimensions, surfaces, edges, bodies, datum_planes, datum_axes,
+    Sections: features, dimensions, surfaces, edges, quilts, bodies, datum_planes, datum_axes,
     parameters, aliases, components, feature_geometry, sketch_dimensions.
     Drawings also support sheets/views/notes/tables/models/shown_dimensions;
     metadata preserves additional inspection fields.
@@ -2508,6 +2513,33 @@ async def creo_surface_fill(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_offset(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    reference: dict[str, Any],
+    distance: float,
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Offset a quilt along its surface normal; the result reports the measured offset distance."""
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="surface_offset",
+                label=label,
+                reference=reference,
+                distance=distance,
+                side=side,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_thicken(
     model_id: str,
     expected_revision: int,
@@ -2559,6 +2591,105 @@ async def creo_solidify(
                 side=side,
                 mode=mode,
                 new_body=new_body,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_surface_trim(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+    keep_side: Literal["one", "two"],
+) -> dict[str, Any]:
+    """Trim one quilt with another quilt, a datum plane or a curve.
+
+    target is one quilt ({kind:'quilt',id:...} or {kind:'quilt_feature',label:...});
+    tool is one quilt, one datum plane or one curve ({kind:'curve',id:...}, which is
+    how a projected curve trims the quilt it was projected onto). keep_side is 'one'
+    or 'two'; the physical side is read back through kept_side_basis instead of being
+    named after a GUI view. For a curve tool the two sides follow the curve direction,
+    so kept_side_basis reports side_reference='curve_direction' and no tool_normal.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_trim", label=label, target=target, tool=tool, keep_side=keep_side)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_quilt_merge(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+) -> dict[str, Any]:
+    """Join two quilts into one surface merge.
+
+    Both sides must be explicit quilt references ({kind:'quilt',id:...} or
+    {kind:'quilt_feature',label:...}) and must be distinct. The result reports
+    result_quilt_id, the measured merged area and the real closure status; no
+    tolerance and no gap measurement are offered in this release.
+    This release is registered but gated: the join still needs a live acceptance
+    run, so submissions are refused before a native job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="quilt_merge", label=label, target=target, tool=tool)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_project_curve(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    source: dict[str, Any],
+    direction_ref: dict[str, Any],
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Project one curve onto one quilt along an explicit direction.
+
+    target is one quilt, source is one curve id ({kind:'curve',id:...}) and
+    direction_ref must read a real vector: {kind:'datum_feature',label:...},
+    {kind:'datum_axis_feature',label:...} or a straight {kind:'curve',id:...}.
+    side flips that direction and is named after the measured basis, not a GUI
+    view. The result reports curve_id, the measured curve_length_mm and the two
+    endpoints_mm; a multi-branch or empty projection fails instead of returning
+    a partial curve.
+
+    Construction is reported, not hidden: the projection is built as a real
+    sweep of the source sketch along the direction plus the documented Creo
+    intersect curve, so the model also gains a helper surface feature whose id
+    is returned as helper_feature_id. The direction must therefore be parallel
+    to the source sketch plane normal, the target must lie on the requested
+    side, and the source curve must belong to a curve feature; each of those is
+    refused with a measured reason instead of being approximated.
+    """
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="project_curve",
+                label=label,
+                target=target,
+                source=source,
+                direction_ref=direction_ref,
+                side=side,
             )
         ],
         model_id,

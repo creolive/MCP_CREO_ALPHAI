@@ -90,7 +90,9 @@ def main(argv: list[str] | None = None) -> int:
             f"{TRUSTED_RECORD}; nothing was published."
         )
         return 2
-    archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    sidecar = archive.with_suffix(".zip.sha256")
+    sidecar.write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    print(f"Seed checksum sidecar: {sidecar} (publish it with the archive)")
     print(f"{TRUSTED_RECORD} matches this rebuild; safe to package the source.")
     return 0
 

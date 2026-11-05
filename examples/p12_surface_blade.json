@@ -1,0 +1,89 @@
+{
+  "description": "Surface blade chain: a filled profile, a curve trim that keeps the upper band, and a thickened copy of the profile as a solid. The trim tool is an independent sketch curve, so the model saves and reloads.",
+  "phases": [
+    {
+      "operations": [
+        {
+          "op": "sketch",
+          "label": "blade_profile",
+          "plane": "XY",
+          "entities": [
+            {
+              "type": "rectangle",
+              "name": "blade",
+              "min": [0.0, 0.0],
+              "max": [40.0, 20.0]
+            }
+          ]
+        },
+        {
+          "op": "surface_fill",
+          "label": "blade_face",
+          "sketch": "blade_profile"
+        },
+        {
+          "op": "sketch",
+          "label": "blade_copy",
+          "plane": "XY",
+          "entities": [
+            {
+              "type": "rectangle",
+              "name": "bladecopy",
+              "min": [0.0, 0.0],
+              "max": [40.0, 20.0]
+            }
+          ]
+        },
+        {
+          "op": "surface_fill",
+          "label": "blade_solid_face",
+          "sketch": "blade_copy"
+        },
+        {
+          "op": "sketch",
+          "label": "blade_cut",
+          "plane": "XY",
+          "entities": [
+            {
+              "type": "line",
+              "name": "cutline",
+              "start": [-5.0, 5.0],
+              "end": [45.0, 5.0]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "operations": [
+        {
+          "op": "surface_trim",
+          "label": "blade_trim",
+          "target": {
+            "kind": "quilt_feature",
+            "label": "blade_face"
+          },
+          "tool": {
+            "kind": "curve",
+            "id": "$curve:blade_cut"
+          },
+          "keep_side": "one"
+        }
+      ]
+    },
+    {
+      "operations": [
+        {
+          "op": "thicken",
+          "label": "blade_solid",
+          "reference": {
+            "kind": "quilt_feature",
+            "label": "blade_solid_face"
+          },
+          "thickness": 2.0,
+          "side": "symmetric"
+        }
+      ]
+    }
+  ]
+}

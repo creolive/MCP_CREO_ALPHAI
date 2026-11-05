@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from version import VERSION
 
 REGISTERED_OPERATIONS = (
@@ -55,7 +57,11 @@ REGISTERED_OPERATIONS = (
     "datum_points",
     "surface_fill",
     "thicken",
+    "surface_offset",
     "solidify",
+    "surface_trim",
+    "quilt_merge",
+    "project_curve",
     "boolean_bodies",
     "rib",
     "drawing_model",
@@ -71,7 +77,23 @@ REGISTERED_OPERATIONS = (
     "drawing_delete",
 )
 
-UNAVAILABLE_OPERATIONS = {}
+# FEAT-039: an operation whose native route is not proved on hardware stays out
+# of the published surface chain. surface_trim left this table in 0.12.1 after
+# its live retained-side evidence, and project_curve left it after the live
+# swept-surface route produced measured projections (line and arc, saved and
+# reloaded). The entries below are still waiting for a route that produces
+# measurable geometry, so no client receives a success the release cannot back
+# up.
+UNAVAILABLE_OPERATIONS: dict[str, str] = {
+    "quilt_merge": (
+        "the surface merge is not published: on this machine the documented ProMerge.h array "
+        "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
+        "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
+        "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
+        "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
+        "change nothing, so the joined area and closure cannot be measured or handed to thicken"
+    ),
+}
 
 
 def require_available(operations: list[dict]) -> None:
@@ -86,7 +108,39 @@ def require_available(operations: list[dict]) -> None:
     for op in operations:
         if op["op"] == "loft" and (op.get("mode", "add") != "add" or op.get("new_body", False)):
             raise ValueError(
-                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted"
+                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted - the 2026-11-05 measurement on the seed reference part shows the blend feature has no extractable element tree (ProFeatureElemtreeExtract returned -18), so the panel route is the only route for a blend"
+            )
+        if (
+            op["op"] in ("sketch", "airfoil_sketch", "update_sketch_geometry")
+            and op.get("endpoint_policy") == "weld"
+        ):
+            # FEAT-039/W01: the native side regularises the welded endpoints by
+            # half the gap before it writes them, so the bound the caller gives
+            # is what keeps the move controlled. Without a bound the request is
+            # refused before a job exists.
+            bound = op.get("max_endpoint_move_mm")
+            if (
+                not isinstance(bound, (int, float))
+                or isinstance(bound, bool)
+                or not math.isfinite(float(bound))
+                or float(bound) <= 0.0
+            ):
+                raise ValueError(
+                    "endpoint_policy weld needs max_endpoint_move_mm: the native side "
+                    "moves each welded endpoint by half the gap, so the bound is what "
+                    "keeps the move controlled"
+                )
+        if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
+            # FEAT-039/S07: the documented thin-trim elements are accepted by the
+            # kernel but they do not move the cut on this machine, so a
+            # published distance would be a silent lie.
+            raise ValueError(
+                "surface_trim offset_mm is not published: the documented thin-trim "
+                "elements (PRO_E_THICKNESS with PRO_E_STD_USEQLT_SIDE and "
+                "PRO_E_SRF_OFFS_METHOD) are accepted by the kernel, but the cut does "
+                "not move (2026-11-04: a 5 mm offset on a 40x20 fill still leaves "
+                "400/400 mm2, and a 50 mm offset that cannot intersect the target is "
+                "not refused either), so the requested distance cannot be honoured"
             )
 
 
@@ -462,10 +516,24 @@ def families() -> dict:
             "native_test": "whole solid about a principal datum plane",
             "limits": "whole-part/geometry references only; feature/subtree mirror is rejected",
         },
+        "surface_offset": {
+            "enabled": True,
+            "tool": "creo_surface_offset",
+            "scope": "offset one quilt along its surface normal by a measured distance and direction",
+            "native_test": "40x20 fill offset 5 mm on both sides (2026-11-05 live): the "
+            "offset wall measures 3999.9999999999995 mm3 on the positive and on the negative "
+            "side (area times distance, oracle 800 x 5), the measured distance volume over area "
+            "is 4.999999999999999 mm against the requested 5 mm, and both jobs report "
+            "saved_file_reloaded_and_verified=true",
+            "limits": "one quilt, one explicit side - the receipt direction is the requested "
+            "side and the z sign is not read back from the geometry; the documented "
+            "normal-to-surface offset method; the result is the offset wall, not a standalone "
+            "offset quilt; a closed quilt is not required",
+        },
         "sweep": {
             "enabled": True,
-            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11",
-            "limits": "constant section; compound trajectories, all frame options, capped surfaces and intersections still require local validation; thin is total symmetric wall thickness",
+            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11; the surface mode was measured on 2026-11-05 with a 40x20 profile swept 20 mm: open 2400.000 mm2 (2*(40+20)*20), capped 4000.000 mm2 (walls plus two 40x20 caps) and the capped quilt solidifies to 15999.999999999998 mm3 (40*20*20)",
+            "limits": "constant section (ProSweep.h documents no variable or multi-section sweep), so a boundary blend through several sections is not reachable through this route; compound trajectories, all frame options and intersections still require local validation; thin is total symmetric wall thickness",
         },
         "draft": {
             "enabled": True,

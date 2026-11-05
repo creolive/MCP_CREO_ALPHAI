@@ -136,7 +136,23 @@ DATUM_PLANE_REFERENCE_KIND_DESCRIPTION = (
     "failing inside the executor as a missing JSON key. The executor-internal "
     "{kind:'datum_point_feature',label:...} selection and the external "
     "{thru_points:[...]} spelling are not datum_plane references and are "
-    "rejected before a job is dispatched; convert them to the through_points form."
+    "rejected before a job is dispatched; convert them to the through_points form. "
+    "Only {kind:'datum_feature'} honours a label; the id/axis/normal forms are "
+    "geometric and refuse one."
+)
+
+# Kinds the executor resolves geometrically (by id, axis or normal). A label on
+# one of them used to be dropped silently: the 2026-11-04 trim probe submitted
+# {kind:'datum_plane',label:'RIGHT'} and the default axis filter (axis z,
+# offset 0) selected TOP, so the trim plane landed 20 mm away from the intended
+# one and the feature never regenerated.
+GEOMETRIC_PLANE_REFERENCE_KINDS = frozenset({"datum_plane", "plane", "surface"})
+
+GEOMETRIC_PLANE_LABEL_DESCRIPTION = (
+    "is a geometric plane reference and does not honour a label; the label would be "
+    "dropped and the plane chosen by id/axis/normal filter. Use "
+    "{kind:'datum_feature',label:'plane_label'} for a feature label, or keep the "
+    "geometric form without the label"
 )
 
 THROUGH_POINTS_DESCRIPTION = (
@@ -186,6 +202,7 @@ def validate_datum_plane_reference_kind(value: Any, path: str) -> None:
     kindless reference used to reach the native executor and surface as a JSON
     missing-key error. FEAT-053 adds the through_points form and refuses the
     external/internal spellings that must go through explicit conversion first.
+    A label on a geometric kind is refused rather than dropped (2026-11-04).
     """
     if not isinstance(value, dict) or not isinstance(value.get("kind"), str) or not value["kind"]:
         raise ValueError(f"{path}: " + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION)
@@ -201,6 +218,8 @@ def validate_datum_plane_reference_kind(value: Any, path: str) -> None:
             f"{path}: unsupported datum_plane reference kind '{kind}'; "
             + DATUM_PLANE_REFERENCE_KIND_DESCRIPTION
         )
+    if kind in GEOMETRIC_PLANE_REFERENCE_KINDS and "label" in value:
+        raise ValueError(f"{path}: {{kind:'{kind}',label:...}} {GEOMETRIC_PLANE_LABEL_DESCRIPTION}")
     if kind == "through_points":
         validate_datum_plane_through_points(value, path)
 

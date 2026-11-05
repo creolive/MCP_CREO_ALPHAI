@@ -1,6 +1,6 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04）；公开工具 95→97，默认模板路线保留。目标版本：0.12.0。
+类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；公开工具 95→97，默认模板路线保留。目标版本：0.12.0。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -128,3 +128,8 @@
 
 复核记录收口交付记录：提交 `a297b3e`（同一分支，父提交 `d333f83`，5 个文件、+188/−20，提交时工作区干净）。受测源码指纹（SHA256 前 16 位，CRLF→LF 归一）：`src/creo_mechdog/native_planar_wall.py 6deade694874d8d4`、`server.py b4c41d2aaa41d33e`、`tests/unit/test_native_planar_wall.py d77de3661e6175d4`；未改动的 `native/planar_wall.cpp 3c7c6a7674fdfb0e`、`native/planar_wall.h da6159fa0f9c622e` 与第二笔一致。验证命令与结果见上段（`tools/test_unit.py` 2286 项 OK、`dev_check.py --skip-unit` success、三文件 ruff check/format 通过）。
 
+## 2026-11-04 跨工作树核验与后续动作
+
+main@90dbd6c、v0.12.0@758e87e与两份附件SHA256已独立核验，发布工作树原始实机67/67通过；受测源码与附件无实质差异。A04退出完整开发派工。非矩形/多环、四壁/第二折边、显式支撑面origin、Creo9/10、WorkBuddy范围保留；离线报告实际31条与旧摘要20条差异按后续记录更正，不改已发布标签/附件。完整发布卡记录在main工作树E:\Projects\codex-A04。
+
+详见[核验记录](../development/DEV067-POST0120-AUDIT-2026-11-04.md)和[后续计划](../superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)。本次只改记录/计划，未修改该任务产品代码或进行新实机。

@@ -130,8 +130,40 @@ REJECTED_PROPOSAL_SYMBOLS: list[str] = [
     "ProMeasurable",
 ]
 
-# --- frozen oracles ---------------------------------------------------------
+# Old native routes keep their recorded outcome instead of being silently
+# dropped. "route_not_established" is a fact about the probe, not a failure of
+# a later implementation, and only real evidence may move an entry to feasible.
+ROUTE_HISTORY: list[dict[str, str]] = [
+    {
+        "route": "surface_loft: Probbl.h boundary blend from two straight sections",
+        "task": "S05 / FEAT-009",
+        "status": "route_not_established",
+        "evidence": "the earlier local probe produced no regenerated feature; the "
+        "UNREGENERATED evidence is kept, so a compiled entry is not a capability",
+    },
+    {
+        "route": "project_curve: PRO_E_COPYTRIM_* feature tree",
+        "task": "S04 / FEAT-039",
+        "status": "unverified",
+        "evidence": "no creatable tree has been shown on this machine; the "
+        "ProDtmCrv intersect route is not an equivalent of a curve projection",
+    },
+    {
+        "route": "surface_trim: ProTrim.h use-quilt variant",
+        "task": "S02 / FEAT-039",
+        "status": "feasible",
+        "evidence": "live 2026-11-04 on this machine (Creo 12.4.0.0), two independent "
+        "models: a 40x20 fill cut at x=5 by a datum plane measured 700 mm2 for "
+        "keep_side=one and 100 mm2 for two with the retained bbox on the matching "
+        "side, a cylinder measured 314.16/942.48, both saved and reloaded. The "
+        "binding is driven by PRO_E_MATERIAL_SIDE, not PRO_E_PRIMARY_QLTSIDE alone, "
+        "and a datum-plane tool needs an axis/id reference because a label is not "
+        "honoured; both corrections are in build/_live_trim_report.json and "
+        "build/surface_chain/20261104-094447-635200/report.json",
+    },
+]
 
+# --- frozen oracles ---------------------------------------------------------
 ORACLES: list[dict[str, Any]] = [
     {
         "id": "O1",
@@ -149,16 +181,38 @@ ORACLES: list[dict[str, Any]] = [
     {
         "id": "O2",
         "op": "project_curve",
-        "description": "Line projected radially onto a cylindrical surface",
-        "cylinder": {"radius_mm": 10.0, "height_mm": 20.0},
-        "source_line_mm": {"length": 30.0, "radial_offset_mm": 15.0},
+        "description": "A 30 mm line at z=10 projected along -Z onto a 40x20 planar target at z=0",
+        "target_plane_mm": {"width": 40.0, "height": 20.0, "z": 0.0},
+        "source_line_mm": {
+            "length": 30.0,
+            "from": [5.0, 10.0, 10.0],
+            "to": [35.0, 10.0, 10.0],
+            "z": 10.0,
+        },
+        "direction": [0.0, 0.0, -1.0],
         "expected_curve_length_mm": 30.0,
-        "expected_endpoint_z_span_mm": 30.0,
-        "expected_endpoint_radius_mm": 10.0,
+        "expected_endpoint_z": 0.0,
         "tolerance_mm": 0.5,
+        "endpoint_tolerance_mm": 1e-6,
         "extra_assertions": [
-            "the projected endpoints lie on the cylinder radius, not at the source radius",
-            "positive and negative side produce different endpoints",
+            "the projected endpoints stay inside the target plane's domain",
+            "the projected endpoints are not the source endpoints (z=10)",
+            "projecting the other way yields no intersection and never echoes the source line",
+        ],
+    },
+    {
+        "id": "O2b",
+        "op": "project_curve",
+        "description": "Cylindrical target: definition pending, never a passing criterion",
+        "status": "definition_pending",
+        "withdrawn_oracle": "20 mm tall cylinder carrying a 30 mm source line",
+        "why_withdrawn": "the source line is taller than the carrying surface, so the old "
+        "oracle had no self-consistent expected value",
+        "required_before_freeze": [
+            "cylinder domain: circumferential angular interval and axial interval",
+            "source curve domain",
+            "relation between the projection direction and the surface normal",
+            "branch rule when the source curve crosses both sides of the cylinder",
         ],
     },
     {
@@ -170,9 +224,11 @@ ORACLES: list[dict[str, Any]] = [
         "expected_area_after_mm2": 400.0,
         "tolerance_mm2": 0.5,
         "conservation_tolerance_mm2": 1.0,
+        "kept_side_domains_mm": {"one": [[0.0, 20.0]], "two": [[20.0, 40.0]]},
         "extra_assertions": [
-            "the two keep_side runs keep different quilt geometry items",
+            "each keep_side keeps the measured x interval declared here",
             "the signed offsets of the two runs have opposite signs",
+            "quilt ids are compared only between two runs on the same model and revision",
         ],
     },
 ]
@@ -250,15 +306,16 @@ PROBES: list[dict[str, Any]] = [
         "create": [
             "new part",
             "40 x 20 mm planar rectangle quilt via surface_fill (oracle O3)",
-            "a datum plane through x=20 with normal +X as the trimming tool",
+            "a datum plane at x=5 (normal +X) as the trimming tool, referenced "
+            "geometrically ({kind:'datum_plane',axis:'x'}); a label on that kind is "
+            "dropped by the resolver and must not be used",
             "PRO_E_FEATURE_TYPE=PRO_FEAT_CUT, PRO_E_FEATURE_FORM=PRO_USE_SURFS, "
-            "PRO_E_SRF_TRIM_TYPE=PRO_E_SURF_TRIM_USE_QLT and "
+            "PRO_E_SRF_TRIM_TYPE=PRO_SURF_TRIM_USE_QLT and "
             "PRO_E_SURF_TRIM_TYPE=PRO_SURF_TRIM_USE_QLT, PRO_E_TRIM_QUILT=target, "
             "PRO_E_STD_USEQLT_QLT=datum plane, "
-            "PRO_E_MATERIAL_SIDE=PRO_TRIM_MATL_SIDE_ONE, "
             "PRO_E_KEEP_TRIM_SURF_OPT=PRO_KEEP_TRIM_SURF_OPT_NO",
-            "run twice, PRO_E_PRIMARY_QLTSIDE=PRO_TRIM_PRIM_QLT_SIDE_ONE then "
-            "PRO_TRIM_PRIM_QLT_SIDE_TWO",
+            "run twice: PRO_E_MATERIAL_SIDE=PRO_TRIM_MATL_SIDE_ONE with "
+            "PRO_E_PRIMARY_QLTSIDE=PRO_TRIM_PRIM_QLT_SIDE_ONE, then both TWO",
         ],
         "extract": [
             "extracted element tree and raw error codes",
@@ -266,10 +323,13 @@ PROBES: list[dict[str, Any]] = [
         ],
         "compare": [
             "area before == 800.0 mm2 (+/- 0.5)",
-            "each area after == 400.0 mm2 (+/- 0.5)",
-            "the two area-after values sum to the area before (+/- 1.0)",
-            "the two runs keep different quilt geometry ids",
-            "the two signed offsets have opposite signs",
+            "an asymmetric cut is required: sides of the x=5 cut measure 700 and 100 mm2, "
+            "a cut at x=20 leaves 400 mm2 on both sides and proves nothing",
+            "the two area-after values are 700.0 and 100.0 mm2 (+/- 0.5), summing to the "
+            "area before (+/- 1.0)",
+            "each retained bbox lies on its measured side (x 5..40 and x 0..5)",
+            "the two signed offsets have opposite signs; signed_offset_mm may be null "
+            "when no quilt centroid query exists",
         ],
         "verdicts": ["feasible", "route not established", "unverified"],
         "blocks_on_failure": ["Q10 surface_trim"],
@@ -426,6 +486,12 @@ def check_rejected_proposal_symbols() -> dict:
 # disappears, so a later edit cannot quietly unfreeze part of the surface.
 REQUIRED_CONTRACT_MARKERS: list[str] = [
     "# G5 曲面链路原生契约",
+    "## 0.1 S00 修订记录",
+    "ID 类型规则",
+    "quilt_id",
+    "O2b project_curve",
+    "两侧产物必须不同",
+    "允许已受理 job 失败",
     "## 1. SDK 逐项核实结论表",
     "## 2. 预期原生元素树",
     "## 3. 第一版能力边界",
@@ -495,11 +561,26 @@ def check_oracles() -> dict:
             area = length * separation
             assert abs(area - oracle["expected_area_mm2"]) < 1e-9, oracle
         elif oracle["id"] == "O2":
-            radius = oracle["cylinder"]["radius_mm"]
-            length = oracle["source_line_mm"]["length"]
-            assert oracle["expected_curve_length_mm"] == length, oracle
-            assert oracle["expected_endpoint_radius_mm"] == radius, oracle
-            assert oracle["source_line_mm"]["radial_offset_mm"] != radius, oracle
+            start = oracle["source_line_mm"]["from"]
+            end = oracle["source_line_mm"]["to"]
+            assert abs(start[2] - oracle["source_line_mm"]["z"]) < 1e-9, oracle
+            span = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+            assert abs(span - oracle["source_line_mm"]["length"]) < 1e-9, oracle
+            assert abs(span - oracle["expected_curve_length_mm"]) < 1e-9, oracle
+            # The source line must sit off the target plane, otherwise a real
+            # projection and an echoed input would be indistinguishable.
+            assert abs(start[2] - oracle["target_plane_mm"]["z"]) > 1e-6, oracle
+            # Domain: the projected endpoints must be inside the target surface.
+            half_width = oracle["target_plane_mm"]["width"] / 2.0
+            half_height = oracle["target_plane_mm"]["height"] / 2.0
+            assert 0.0 <= start[0] <= 2 * half_width, oracle
+            assert 0.0 <= end[0] <= 2 * half_width, oracle
+            assert 0.0 <= start[1] <= 2 * half_height, oracle
+            assert 0.0 <= end[1] <= 2 * half_height, oracle
+        elif oracle["id"] == "O2b":
+            # Never a passing criterion: it must stay explicitly unfrozen.
+            assert oracle["status"] == "definition_pending", oracle
+            assert oracle["required_before_freeze"], oracle
         else:
             width = oracle["rectangle_mm"]["width"]
             height = oracle["rectangle_mm"]["height"]
@@ -511,6 +592,10 @@ def check_oracles() -> dict:
                 abs(2 * half - oracle["expected_area_before_mm2"])
                 <= oracle["conservation_tolerance_mm2"]
             ), oracle
+            # The two keep sides must be told apart by measured position, not by
+            # comparing quilt ids across models.
+            domains = oracle["kept_side_domains_mm"]
+            assert domains["one"] != domains["two"], oracle
         rows.append(oracle)
     return {"count": len(rows), "oracles": rows}
 
@@ -526,10 +611,20 @@ def check_reference_rules() -> dict:
     native = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
     assert "quilt_feature" in native
     assert "Feature reference must identify exactly one geometry item" in native
+    # S00 R1: an explicit quilt geometry id is a native resolver kind, not a
+    # schema-only alias, and it is never interchangeable with a surface id.
+    assert 'kind == "quilt"' in native or '|| kind == "quilt"' in native, (
+        "native resolver must accept {kind:'quilt', id}"
+    )
+    contract = CONTRACT.read_text(encoding="utf-8")
+    assert "ID 类型规则" in contract
+    assert "surface_id" in contract and "quilt_id" in contract
     return {
         "allowed_reference_kinds": sorted(allowed),
+        "native_only_reference_kinds": ["quilt"],
         "uniqueness_rule": "exactly one geometry item per reference; zero or many is rejected",
         "body_boolean_not_allowed": True,
+        "quilt_and_surface_ids_interchangeable": False,
     }
 
 
@@ -557,6 +652,20 @@ def check_measurement_apis() -> dict:
             }
         )
     return {"apis": rows, "include_dir": str(include_dir) if include_dir else None}
+
+
+def check_route_history() -> dict:
+    """Old native routes keep an explicit status; none is silently promoted."""
+    statuses = {"feasible", "route_not_established", "unverified"}
+    for entry in ROUTE_HISTORY:
+        assert entry["status"] in statuses, entry
+        assert entry["evidence"], entry
+        assert entry["route"] and entry["task"], entry
+    return {
+        "count": len(ROUTE_HISTORY),
+        "statuses": [entry["status"] for entry in ROUTE_HISTORY],
+        "routes": ROUTE_HISTORY,
+    }
 
 
 def check_probe_plan() -> dict:
@@ -699,6 +808,7 @@ def main(argv: list[str] | None = None) -> int:
         "oracles": check_oracles(),
         "reference_rules": check_reference_rules(),
         "probe_plan": check_probe_plan(),
+        "route_history": check_route_history(),
     }
     write_offline_report(output, run_id, checks)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()

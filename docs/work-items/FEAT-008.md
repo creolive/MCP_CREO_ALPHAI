@@ -406,3 +406,16 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 ## 2026-11-01 Q13 首次实机：未通过
 
 `tools/test_t07_preview.py --live --confirm-session-usable` 在 `disk_cut_pattern` 用例的 `save_and_reload` 阶段失败：作业 `61777b5bc9bb4653b912bb1e2bcdd569` 返回 `ProMdlnameBackup(board, destination)` -1，预览/分页矩阵未继续执行。磁盘剩余约 1.3 TB、会话干净，失败原因未定。同一会话重跑一次（作业 `510b73fb998c4706a7e71b6f170acb8f`）仍在同一用例同一阶段失败，属确定性失败而非偶发。进一步实验：强制 `ProSolidRegenerate(PRO_REGEN_FORCE_REGEN)` 后 Backup 仍 -1；回退 `ProMdlSave` 也 -1。三次 pattern 作业全部失败、同时段 43+ 非 pattern 作业保存正常。已登记 [BUG-099](BUG-099.md)。本卡不宣称 Q13 实机通过。证据：`build/live-0.11.1/q13_preview{,_r2,_r3,_r4,_r5}.json` 与对应 `native.log`。
+
+## 2026-11-05 补证（会话内）：W05 / W06 状态
+
+**W05（extrude 省略参数的实际生效值回执）本批未开工**：`ExtrudeOp` 仍是
+`depth: Positive = 1` 与 `depth_type = "blind"` 缺省，回执里没有 `extrude_depth` 块；
+按计划需新增 requested_depth_type/requested_depth_mm、effective_depth_type/effective_depth_mm、
+defaulted_fields、source/query_code，实际生效值必须来自特征树实读，不可读为 null，
+`through_all` 不得伪造"有效盲深 = 1"。
+
+**W06（预览/回滚/cleanup 保持回归）只完成离线部分**：`tests.unit.test_t07_preview` 与
+`tests.unit.test_failed_model_cleanup` 通过；预览实机三段（空件跳过 → 有几何生成 → 修改后预览）
+与失败编辑回滚（整批回滚、revision 不变、`failed_model_cleanup.reason="not_new_model_job"`）
+需要经 MCP 的预览入口，当前公开工具里没有预览工具，实机部分保持开放。

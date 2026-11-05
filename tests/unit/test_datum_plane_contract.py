@@ -133,6 +133,27 @@ class ReferenceKindTests(unittest.TestCase):
             validate_datum_plane_reference_kind({}, "operations[0].reference")
         self.assertIn("operations[0].reference:", str(caught.exception))
 
+    def test_a_label_on_a_geometric_plane_reference_is_refused(self):
+        # 2026-11-04: {kind:'datum_plane',label:'RIGHT'} was accepted, the label
+        # was dropped by the geometric resolver and the default axis filter
+        # selected TOP, so the trim plane landed elsewhere and never regenerated.
+        for reference in (
+            {"kind": "datum_plane", "label": "RIGHT"},
+            {"kind": "datum_plane", "label": "RIGHT", "axis": "x"},
+            {"kind": "plane", "label": "TOP"},
+            {"kind": "surface", "label": "FRONT"},
+        ):
+            with self.subTest(reference=reference), self.assertRaises(ValueError) as caught:
+                validate_operations([plane_op(reference=reference)])
+            message = str(caught.exception)
+            self.assertIn("does not honour a label", message)
+            self.assertIn("datum_feature", message)
+
+    def test_the_datum_feature_form_still_carries_a_label(self):
+        reference = {"kind": "datum_feature", "label": "plane_label"}
+        validated = validate_operations([plane_op(reference=reference)])[0]
+        self.assertEqual(validated["reference"], reference)
+
     def test_missing_kind_error_is_distinguishable_from_other_contract_errors(self):
         messages = []
         for op in (

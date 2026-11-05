@@ -373,6 +373,23 @@ static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     }
     J geometry = J::array();
     ProFeatureGeomitemVisit(f, PRO_TYPE_UNUSED, collect_geom_ids, nullptr, &geometry);
+    // FEAT-039/S04: a datum curve feature (intersect, projection) reports its
+    // PRO_CURVE items only through a typed visit; PRO_TYPE_UNUSED answers an
+    // empty list for it (live 2026-11-04: feature 120 owned curves 122/123 but
+    // inspection showed zero items, so no client could reference the curve).
+    // Merge the curve visit by id instead of replacing the generic list.
+    J curves = J::array();
+    if (!ProFeatureGeomitemVisit(f, PRO_CURVE, collect_geom_ids, nullptr, &curves))
+        for (auto &entry : curves) {
+            bool seen = false;
+            for (auto &known : geometry)
+                if (known.at("id") == entry.at("id")) {
+                    seen = true;
+                    break;
+                }
+            if (!seen)
+                geometry.push_back(entry);
+        }
     item["geometry_items"] = geometry;
     // T08 dependency evidence: parent/child feature IDs come from the live
     // model, never from a guess based on feature order. Group, pattern and
@@ -559,6 +576,11 @@ static const char *body_state_name(ProSolidBodyState state) {
     return "unknown";
 }
 
+// FEAT-039/S01: quilt enumeration, shared measurements and quilt reference
+// resolution live in quilt_query.h; this is the only include point.
+#include "quilt_query.h"
+#include "endpoint_weld.h"
+
 static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
     gsurfaces = J::array();
@@ -696,7 +718,17 @@ static J inspection(bool require_healthy = true) {
             if (f["type"].get<int>() == PRO_FEAT_COMPONENT)
                 solid = true;
     auto length_units = inspect_length_units(board);
-    J length_unit = length_unit_json(length_units, length_scale_to_mm(board, length_units));
+    auto length_scale = length_scale_to_mm(board, length_units);
+    J length_unit = length_unit_json(length_units, length_scale);
+    // FEAT-055/S01: quilts are enumerated per part with their own statuses.
+    // Assemblies keep null — quilt records are part-level geometry.
+    J quilts = nullptr, quilts_visit = nullptr;
+    if (!isasm) {
+        J collected = collect_model_quilts((ProSolid)board, length_units, length_scale);
+        quilts = collected["records"];
+        collected.erase("records");
+        quilts_visit = collected;
+    }
     // Coordinates/dimensions retain model units. Do not label native in^3 as mm^3.
     J units = length_units.code || !length_units.length.name[0] ? J(nullptr)
                                                                 : J(utf8(length_units.length.name));
@@ -719,6 +751,8 @@ static J inspection(bool require_healthy = true) {
     J result = {{"features", gfeatures},
                 {"surfaces", gsurfaces},
                 {"edges", gedges},
+                {"quilts", quilts},
+                {"quilts_visit", quilts_visit},
                 {"bodies", bodies},
                 {"body_counts", body_counts},
                 {"healthy", healthy},
@@ -797,11 +831,11 @@ static ProSelection resolve(const J &r) {
                         return selection(g["id"], PRO_CSYS);
         throw std::runtime_error("No default coordinate system found");
     }
-    if (r.at("kind") == "quilt_feature" || r.at("kind") == "datum_csys_feature" ||
-        r.at("kind") == "datum_point_feature") {
-        ProType type = r["kind"] == "quilt_feature"        ? PRO_QUILT
-                       : r["kind"] == "datum_csys_feature" ? PRO_CSYS
-                                                           : PRO_POINT;
+    if (r.at("kind") == "quilt_feature")
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (r.at("kind") == "datum_csys_feature" || r.at("kind") == "datum_point_feature") {
+        ProType type = r["kind"] == "datum_csys_feature" ? PRO_CSYS : PRO_POINT;
         ProFeature f = feature(r.at("label"));
         J ids = J::array();
         CK(ProFeatureGeomitemVisit(&f, type, collect_geom_ids, nullptr, &ids));
@@ -817,10 +851,13 @@ static ProSelection resolve(const J &r) {
         CK(ProSelectionAlloc(nullptr, &mi, &s));
         return s;
     }
-    if (kind == "csys" || kind == "point" || kind == "quilt")
-        return selection(r.at("id"), kind == "csys"    ? PRO_CSYS
-                                     : kind == "point" ? PRO_POINT
-                                                       : PRO_QUILT);
+    if (kind == "quilt")
+        // S00 R1: validated against the real quilt collection, with bounded
+        // candidates in the failure message; never a blind PRO_QUILT pick.
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (kind == "csys" || kind == "point")
+        return selection(r.at("id"), kind == "csys" ? PRO_CSYS : PRO_POINT);
     if (kind == "feature")
         return selection(feature_id(r.contains("label") ? r["label"] : r["id"]), PRO_FEATURE);
     if (kind == "body") {
@@ -842,6 +879,16 @@ static ProSelection resolve(const J &r) {
                                                : PRO_DIMENSION);
     }
     if (kind == "plane" || kind == "datum_plane") {
+        // Backstop for the Python contract: this branch resolves by id/axis/
+        // normal only. The 2026-11-04 trim probe submitted
+        // {kind:'datum_plane',label:'RIGHT'}; the label was dropped, the default
+        // axis filter picked TOP, and the trim never regenerated. Refuse the
+        // label instead of choosing a different plane than the caller named.
+        if (r.contains("label"))
+            throw std::runtime_error(
+                std::string("Kind '") + kind +
+                "' plane references resolve by id/axis/normal and do not honour a label; use "
+                "{kind:'datum_feature',label:...} for a plane feature label");
         J state = inspection(false);
         J candidates = kind == "datum_plane" ? state["datum_planes"] : state["surfaces"];
         if (r.contains("id")) {
@@ -1827,7 +1874,11 @@ static J sketch(const J &op) {
                                                construction ? PRO_B_TRUE : PRO_B_FALSE));
         entities[name] = id;
     };
-    for (auto e : op.at("entities")) {
+    // FEAT-039/W01: a controlled weld regularises the request coordinates
+    // before anything is written, so the move is bounded by construction.
+    J spec = op.at("entities");
+    J weld_report = apply_endpoint_weld(op, spec);
+    for (auto e : spec) {
         std::string type = e.at("type"), name = e.at("name");
         bool construction = e.value("construction", false);
         int id = -1;
@@ -2009,6 +2060,11 @@ static J sketch(const J &op) {
     J solver_info = solve_profile(section, solving_op);
     solver_info["requested"] = op.value("dimensioning", "auto");
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
+    // FEAT-039/W01: the weld residual is read back while the solved section is
+    // still the one the entities were written into.
+    double weld_residual = -1.0;
+    if (weld_report.value("applied_pairs", 0) > 0)
+        weld_residual = endpoint_weld_residual(section, entities, weld_report);
     solver_info["section_location"] = section_location;
     if (!coordinate_plan.is_null())
         solver_info["coordinate_geometry"] =
@@ -2097,7 +2153,7 @@ static J sketch(const J &op) {
         {{"entity_ids", ids},
          {"dimension_ids", dims},
          {"solver", solver_info},
-         {"geometry", op["entities"]},
+         {"geometry", spec},
          {"geometry_stale", false},
          {"last_dimensioning", op.value("dimensioning", "auto")},
          {"surface_id", frame.surface},
@@ -2122,6 +2178,20 @@ static J sketch(const J &op) {
                        {"geometry_deviation", geometry_deviation},
                        {"section_location", section_location},
                        {"entity_ids", ids}};
+    // FEAT-039/W01: the endpoint weld is reported with what the native side
+    // actually did. The coordinates were regularised before the entities were
+    // written, so the move is bounded by the request, and the residual is
+    // measured on the solved section.
+    if (solver_info.contains("weld_requested")) {
+        weld_report["epsilon_mm"] = solver_info.value("epsilon_mm", J(nullptr));
+        weld_report["epsilon_source"] = solver_info.value("epsilon_source", J(nullptr));
+        weld_report["max_residual_mm"] = weld_residual >= 0.0 ? J(weld_residual) : J(nullptr);
+        weld_report["applied"] = weld_report.value("applied_pairs", 0) > 0;
+        weld_report["note"] =
+            "the endpoints were regularised before the entities were written, so the move is "
+            "bounded by max_endpoint_move_mm; the residual is measured on the solved section";
+        sketch_result["endpoint_weld_native"] = weld_report;
+    }
     if (!sketch_shifted.is_null())
         sketch_result["sketch_shifted"] = sketch_shifted;
     return sketch_result;
@@ -3281,6 +3351,9 @@ static J choice_inspection(const J &holder, const char *key);
 #include "appearance.h"
 #include "advanced.cpp"
 #include "surfaces.cpp"
+#include "surface_trim.cpp"
+#include "quilt_merge.cpp"
+#include "project_curve.cpp"
 #include "udf.cpp"
 #include "loft_mode.cpp"
 #include "loft_seed.cpp"
@@ -3557,6 +3630,14 @@ static void execute_operation_body(const J &op) {
         generic_fill(op);
     else if (kind == "thicken" || kind == "solidify")
         generic_surface_solid(op);
+    else if (kind == "surface_offset")
+        generic_surface_offset(op);
+    else if (kind == "surface_trim")
+        generic_surface_trim(op);
+    else if (kind == "quilt_merge")
+        generic_quilt_merge(op);
+    else if (kind == "project_curve")
+        generic_project_curve(op);
     else if (kind == "boolean_bodies")
         generic_boolean(op);
     else if (kind == "rib")
