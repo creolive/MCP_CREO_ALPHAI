@@ -213,3 +213,24 @@
 `offset_mm`/`offset_side` 字段保留在 schema（请求良构），但由 `capabilities.require_available`
 在排队前拒绝，消息带实测依据。偏置能力维持门禁，等能真正移动切口的路线（真实偏置曲面树，
 或按法向扫掠构造等距面——与 S04 的扫掠思路同源）。
+
+## 2026-11-05 S08 交付：两条完整曲面链用例（实机）
+
+驱动新增 `--case chain_open` 与 `--case chain_closed`（`tools/surface_chain_chains.py`、
+`tools/surface_chain_closed.py`），每条链的期望都是**解析 oracle**，每个作业都必须
+`saved_file_reloaded_and_verified=true`。
+
+**开放链**（run `20261105-042923-088700`，14 项全通过）：填充 40×20 → 投影 z=10 的源线
+→ 实测投影曲线 **40.000 mm**（源线 50 mm，投影被目标面裁到 40 mm）→ 用同平面的独立直线
+做 use-curve 修剪 → 保留面积 **600.000 mm²**（40×15）→ 查询确认保留 quilt 仍为开放面 →
+对称加厚 2 mm → 体积 **1200.000 mm³**（面积×厚度）→ 陈旧 revision 被拒
+（`Stale revision: current model revision is 4`）。
+
+**闭合链**（run `20261105-043026-636000`，12 项全通过）：绕轴 360° 旋转得到闭合 quilt
+（面积 **3141.592653589793 mm²** = 1000π，oracle 由实测外框推导）→ 实体化体积
+**6283.185307179587 mm³** = 2000π → 改写轮廓（5×20 → 5×30）后重新生成，曲面面积变为
+6597.344572538569 mm² → 失败作业（引用不存在的 quilt）整批回滚，几何保持不变，
+失败消息带真实诊断（列出已知 quilt）。
+
+**未覆盖并已如实标注**：开放链的放样步骤（曲面放样仍 gated）、闭合链的"逐步缝合"
+（`quilt_merge` 仍 gated，闭合面改用旋转曲面得到）。

@@ -36,11 +36,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+try:  # the driver runs as a script and as a package module
+    from surface_chain_chains import case_chain_open_live, case_chain_open_offline
+    from surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
+except ImportError:  # pragma: no cover - the package import path
+    from tools.surface_chain_chains import case_chain_open_live, case_chain_open_offline
+    from tools.surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
 sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts", "trim", "merge", "project", "solidify")
+CASES = ("quilts", "trim", "merge", "project", "solidify", "chain_open", "chain_closed")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -1510,6 +1517,14 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
     if case == "trim":
         return asyncio.run(case_trim_live()) if live else case_trim_offline()
+    if case == "chain_open":
+        return asyncio.run(case_chain_open_live(wait_ready)) if live else case_chain_open_offline()
+    if case == "chain_closed":
+        return (
+            asyncio.run(case_chain_closed_live(wait_ready, SOLIDIFY_CYLINDER_PLAN, "solid_profile"))
+            if live
+            else case_chain_closed_offline(SOLIDIFY_CYLINDER_PLAN)
+        )
     if case == "merge":
         return asyncio.run(case_merge_live()) if live else case_merge_offline()
     if case == "project":
