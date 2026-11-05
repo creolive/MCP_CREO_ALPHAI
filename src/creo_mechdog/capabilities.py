@@ -117,7 +117,10 @@ def require_available(operations: list[dict]) -> None:
             raise ValueError(
                 "endpoint_policy weld is not published: the pairing evidence is "
                 "reported by the report policy, but no native endpoint weld runs "
-                "on this machine, so an applied weld cannot be promised"
+                "on this machine - the 2026-11-05 measurement showed the sketch "
+                "epsilon is not the endpoint coincidence tolerance (a 5e-4 mm gap "
+                "stayed open with the epsilon raised to 2e-3 mm), so a requested "
+                "distance cannot be honoured and no applied weld can be promised"
             )
         if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
             # FEAT-039/S07: the documented thin-trim elements are accepted by the

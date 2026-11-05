@@ -144,6 +144,9 @@ def prepare_endpoint_weld(
             if first["curve"] == second["curve"]:
                 continue
             gap = _distance(first["point"], second["point"])
+            # A candidate is a pair inside the closure diagnostic scale. The
+            # 2026-11-05 live measurement showed the sketch epsilon is not the
+            # coincidence tolerance, so a bound alone cannot widen this.
             if gap <= 0.0 or gap > CLUSTER_TOLERANCE_MM:
                 # An exact join is already one point, not a candidate weld.
                 continue
@@ -295,4 +298,6 @@ def annotate_result(result: dict[str, Any], operations: list[dict[str, Any]]) ->
         )
         if policy == "report" and receipt["accepted_pairs"] == 0:
             continue
+        native_block = entry.get("endpoint_weld_native")
+        receipt["native"] = native_block if isinstance(native_block, dict) else None
         entry["endpoint_weld"] = receipt

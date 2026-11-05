@@ -2168,6 +2168,18 @@ static J sketch(const J &op) {
                        {"geometry_deviation", geometry_deviation},
                        {"section_location", section_location},
                        {"entity_ids", ids}};
+    // FEAT-039/W01: the endpoint weld request is reported with the solver
+    // epsilon it used. The kernel exposes no query for a welded endpoint, so
+    // whether the gap closed is measured from the model after the sketch.
+    if (solver_info.contains("weld_requested"))
+        sketch_result["endpoint_weld_native"] = {
+            {"requested", solver_info.value("weld_requested", false)},
+            {"epsilon_mm", solver_info.value("epsilon_mm", J(nullptr))},
+            {"epsilon_source", solver_info.value("epsilon_source", J(nullptr))},
+            {"applied", J(nullptr)},
+            {"max_residual_mm", J(nullptr)},
+            {"note", "the kernel exposes no welded-endpoint query; the applied flag and the "
+                     "residual are measured from the model after the solve"}};
     if (!sketch_shifted.is_null())
         sketch_result["sketch_shifted"] = sketch_shifted;
     return sketch_result;
