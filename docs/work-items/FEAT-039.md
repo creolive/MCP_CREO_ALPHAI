@@ -314,3 +314,19 @@ S05 缺的不是能力，是**证据**。
 **仍未达成**：多截面放样/边界混合。`ProSweep.h` 文档明确只支持常量截面
 （`PRO_SWEEP_CONST_SECTION`），本机也没有 `ProBlend.h`，所以 `loft` 的 `mode="surface"`
 仍按 §2.8b 的实测理由在排队前被拒，用例里标为 blocked step。
+
+## 2026-11-05 W01 本体交付：受控端点焊接（实机）
+
+子任务勘察确认：内核**没有任何位移上限 API**，所以显式点重合约束无法"受控"；可行且能保证上限的
+只有**坐标规整**——先按请求上限把端点坐标对齐，再让内核求解。
+
+实现：策略层（`creo_mechdog.endpoint_welding`）决定配对并把 `weld_pairs` 交给原生侧；
+原生侧（`native/endpoint_weld.h`）在写入实体前把每对端点各移动 gap/2，超过上限的对**拒绝应用**
+并记录原因；求解后从 section 回读两端点距离作为残差。创建与编辑两条路径同一套实现。
+
+实机（闭合矩形，间隙 5e-5 mm）：焊策略 `applied=true`、`applied_pairs=1`、
+`move_mm=2.4999999999941735e-05`（≤ 上限 1e-4）、**`max_residual_mm=0.0`**、`saved_file_reloaded_and_verified=true`；
+同一轮廓默认路径 `applied=false`、间隙保持。没有 `max_endpoint_move_mm` 的请求在排队前被拒。
+
+**边界**：只处理直线端点（弧端点按"unsupported_entity_or_point"跳过并记录）；配对规则
+（唯一性、不跨环、同圆）仍在策略层；内核自身的合并阈值（≤1e-6 量级）不受本能力影响。

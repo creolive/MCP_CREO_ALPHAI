@@ -46,6 +46,8 @@ SAMPLE_LIMIT = 20
 # closure; it decides which endpoints may be considered one point, not whether
 # the kernel welds them.
 CLUSTER_TOLERANCE_MM = 1e-4
+# The weld plan handed to the native side is bounded like every other receipt field.
+WELD_PLAN_LIMIT = 200
 # The 2026-10-31 feedback: the kernel welded an 8.215e-7 mm gap on Creo 12.4,
 # so the 1e-9 mm bound is a risk flag, never a guarantee.
 OBSERVED_KERNEL_WELD_MM = 8.21534267e-7
@@ -158,6 +160,8 @@ def prepare_endpoint_weld(
                     "end_b": second["end"],
                     "gap_mm": gap,
                     "required_move_mm": gap / 2.0,
+                    "entity_a": curves[first["curve"]].name,
+                    "entity_b": curves[second["curve"]].name,
                     "same_chain": chain_of[first["curve"]] == chain_of[second["curve"]],
                     "arc_consistent": _arc_consistent(
                         curves[first["curve"]], curves[second["curve"]], CLUSTER_TOLERANCE_MM
@@ -206,6 +210,17 @@ def prepare_endpoint_weld(
         "failure_reason": None,
         "pairs": [],
         "refused": [],
+        # The weld plan names the entities and the endpoints, so the native
+        # side can regularise exactly these coordinates before it writes them.
+        "weld_plan": [
+            {
+                "a": {"entity": candidate["entity_a"], "point": candidate["end_a"]},
+                "b": {"entity": candidate["entity_b"], "point": candidate["end_b"]},
+                "gap_mm": candidate["gap_mm"],
+                "required_move_mm": candidate["required_move_mm"],
+            }
+            for candidate in accepted[:WELD_PLAN_LIMIT]
+        ],
         "requested_geometry": {"entity_count": len(entities), "curve_count": len(curves)},
         "actual_geometry": None,
         "note": (
@@ -264,6 +279,11 @@ def prepare_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]
             policy=policy,
             max_move_mm=operation.get("max_endpoint_move_mm"),
         )
+        if policy == "weld":
+            # The weld policy hands the native side the pairs to regularise.
+            # Python still decides and still reports; the native side owns the
+            # coordinates it writes.
+            operation["weld_pairs"] = receipt.get("weld_plan") or []
         if receipt["would_reject"]:
             pairs = receipt["pairs"][:SAMPLE_LIMIT]
             raise ValueError(

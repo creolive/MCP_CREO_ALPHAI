@@ -102,7 +102,12 @@ static void generic_sketch_edit(const J &op) {
     // section: submitted JSON alone is not proof that dimensions stayed put.
     const std::string previous =
         meta.value("last_dimensioning", meta.value("solver", J::object()).value("requested", ""));
-    J geometry = expanded_geometry(op["entities"]), names = J::object();
+    // FEAT-039/W01: the controlled weld regularises the request coordinates
+    // before the geometry is expanded and rebuilt, exactly as on the create
+    // path, so the move stays inside the requested bound.
+    J weld_spec = op.at("entities");
+    J weld_report = apply_endpoint_weld(op, weld_spec);
+    J geometry = expanded_geometry(weld_spec), names = J::object();
     for (auto e : geometry)
         names[e["name"].get<std::string>()] = e["type"];
     if (names.size() != geometry.size() || names.size() != meta.at("entity_ids").size())
@@ -655,7 +660,16 @@ static void generic_sketch_edit(const J &op) {
         meta["airfoil"] = op["profile"];
     else
         meta.erase("airfoil");
+    if (weld_report.value("applied_pairs", 0) > 0) {
+        std::map<std::string, int> weld_ids;
+        for (auto item : meta["entity_ids"].items())
+            weld_ids[item.key()] = item.value().get<int>();
+        const double residual = endpoint_weld_residual(section, weld_ids, weld_report);
+        weld_report["max_residual_mm"] = residual >= 0.0 ? J(residual) : J(nullptr);
+        weld_report["applied"] = true;
+    }
     J sketch_result = {{"op", op["op"]},
+                       {"endpoint_weld_native", weld_report},
                        {"sketch", label},
                        {"preserved_feature_id", f.id},
                        {"parameters", meta.value("airfoil", J::object())}};

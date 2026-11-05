@@ -579,6 +579,7 @@ static const char *body_state_name(ProSolidBodyState state) {
 // FEAT-039/S01: quilt enumeration, shared measurements and quilt reference
 // resolution live in quilt_query.h; this is the only include point.
 #include "quilt_query.h"
+#include "endpoint_weld.h"
 
 static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
@@ -1873,7 +1874,11 @@ static J sketch(const J &op) {
                                                construction ? PRO_B_TRUE : PRO_B_FALSE));
         entities[name] = id;
     };
-    for (auto e : op.at("entities")) {
+    // FEAT-039/W01: a controlled weld regularises the request coordinates
+    // before anything is written, so the move is bounded by construction.
+    J spec = op.at("entities");
+    J weld_report = apply_endpoint_weld(op, spec);
+    for (auto e : spec) {
         std::string type = e.at("type"), name = e.at("name");
         bool construction = e.value("construction", false);
         int id = -1;
@@ -2055,6 +2060,11 @@ static J sketch(const J &op) {
     J solver_info = solve_profile(section, solving_op);
     solver_info["requested"] = op.value("dimensioning", "auto");
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
+    // FEAT-039/W01: the weld residual is read back while the solved section is
+    // still the one the entities were written into.
+    double weld_residual = -1.0;
+    if (weld_report.value("applied_pairs", 0) > 0)
+        weld_residual = endpoint_weld_residual(section, entities, weld_report);
     solver_info["section_location"] = section_location;
     if (!coordinate_plan.is_null())
         solver_info["coordinate_geometry"] =
@@ -2143,7 +2153,7 @@ static J sketch(const J &op) {
         {{"entity_ids", ids},
          {"dimension_ids", dims},
          {"solver", solver_info},
-         {"geometry", op["entities"]},
+         {"geometry", spec},
          {"geometry_stale", false},
          {"last_dimensioning", op.value("dimensioning", "auto")},
          {"surface_id", frame.surface},
@@ -2168,18 +2178,20 @@ static J sketch(const J &op) {
                        {"geometry_deviation", geometry_deviation},
                        {"section_location", section_location},
                        {"entity_ids", ids}};
-    // FEAT-039/W01: the endpoint weld request is reported with the solver
-    // epsilon it used. The kernel exposes no query for a welded endpoint, so
-    // whether the gap closed is measured from the model after the sketch.
-    if (solver_info.contains("weld_requested"))
-        sketch_result["endpoint_weld_native"] = {
-            {"requested", solver_info.value("weld_requested", false)},
-            {"epsilon_mm", solver_info.value("epsilon_mm", J(nullptr))},
-            {"epsilon_source", solver_info.value("epsilon_source", J(nullptr))},
-            {"applied", J(nullptr)},
-            {"max_residual_mm", J(nullptr)},
-            {"note", "the kernel exposes no welded-endpoint query; the applied flag and the "
-                     "residual are measured from the model after the solve"}};
+    // FEAT-039/W01: the endpoint weld is reported with what the native side
+    // actually did. The coordinates were regularised before the entities were
+    // written, so the move is bounded by the request, and the residual is
+    // measured on the solved section.
+    if (solver_info.contains("weld_requested")) {
+        weld_report["epsilon_mm"] = solver_info.value("epsilon_mm", J(nullptr));
+        weld_report["epsilon_source"] = solver_info.value("epsilon_source", J(nullptr));
+        weld_report["max_residual_mm"] = weld_residual >= 0.0 ? J(weld_residual) : J(nullptr);
+        weld_report["applied"] = weld_report.value("applied_pairs", 0) > 0;
+        weld_report["note"] =
+            "the endpoints were regularised before the entities were written, so the move is "
+            "bounded by max_endpoint_move_mm; the residual is measured on the solved section";
+        sketch_result["endpoint_weld_native"] = weld_report;
+    }
     if (!sketch_shifted.is_null())
         sketch_result["sketch_shifted"] = sketch_shifted;
     return sketch_result;

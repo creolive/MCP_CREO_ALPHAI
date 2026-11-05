@@ -500,6 +500,26 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 （理由与实测见 §2.8b）。也就是说：S05 现在有了**可测量的曲面生成**（扫掠），
 但"多个截面之间的曲面"仍然缺参照树。
 
+### 2.8d 受控端点焊接：坐标规整路线（2026-11-05 实机，W01 本体交付）
+
+内核**没有**任何位移上限 API（草图域只有 `ProSectionEpsilonSet`、`ProSecdimValueSet`、
+`ProSectionEntityTranslate` 三个旋钮；全量 includes 检索 `Limit|Tolerance|Deviation|Lock|Frozen`
+在草图/截面域 0 命中），所以**显式点重合约束**（`ProSectionConstraintCreate` +
+`PRO_CONSTRAINT_SAME_POINT`）只能"闭合间隙"，不能保证"移动量 ≤ 请求上限"。
+
+因此受控焊接走**坐标规整**路线：策略层决定配对并给出 `weld_pairs`，原生侧在**写入实体之前**
+把每一对端点各自移动 gap/2（各 2.5e-5 mm，上限 1e-4 mm），再让内核求解已经重合的轮廓；
+求解后从 section 回读两端点距离作为残差。移动量由我们写入的坐标本身保证，**不依赖内核保证**。
+
+实机（`build/_live_weld_probe2.py`，闭合矩形，间隙 5e-5 mm）：
+
+| 场景 | 实测 |
+| --- | --- |
+| `endpoint_policy="weld"`，上限 1e-4 mm | 作业 succeeded、`saved_file_reloaded_and_verified=true`；`applied=true`、`applied_pairs=1`（l1.end↔l2.start）、`gap_mm=4.999999999988347e-05`、`move_mm=2.4999999999941735e-05`（= gap/2 ≤ 上限）、**`max_residual_mm=0.0`**（求解后两端点完全重合） |
+| 默认路径（同一轮廓） | `applied=false`、残差 null：内核不动，间隙保持 |
+
+请求没有 `max_endpoint_move_mm` 时在排队前被拒：上限就是"受控"的含义。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

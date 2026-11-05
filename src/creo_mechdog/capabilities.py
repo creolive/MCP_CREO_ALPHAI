@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from version import VERSION
 
 REGISTERED_OPERATIONS = (
@@ -111,17 +113,22 @@ def require_available(operations: list[dict]) -> None:
             op["op"] in ("sketch", "airfoil_sketch", "update_sketch_geometry")
             and op.get("endpoint_policy") == "weld"
         ):
-            # FEAT-039/W01: the policy layer reports the pairing evidence, but
-            # the native coincidence solver does not exist yet, so an applied
-            # weld cannot be promised.
-            raise ValueError(
-                "endpoint_policy weld is not published: the pairing evidence is "
-                "reported by the report policy, but no native endpoint weld runs "
-                "on this machine - the 2026-11-05 measurement showed the sketch "
-                "epsilon is not the endpoint coincidence tolerance (a 5e-4 mm gap "
-                "stayed open with the epsilon raised to 2e-3 mm), so a requested "
-                "distance cannot be honoured and no applied weld can be promised"
-            )
+            # FEAT-039/W01: the native side regularises the welded endpoints by
+            # half the gap before it writes them, so the bound the caller gives
+            # is what keeps the move controlled. Without a bound the request is
+            # refused before a job exists.
+            bound = op.get("max_endpoint_move_mm")
+            if (
+                not isinstance(bound, (int, float))
+                or isinstance(bound, bool)
+                or not math.isfinite(float(bound))
+                or float(bound) <= 0.0
+            ):
+                raise ValueError(
+                    "endpoint_policy weld needs max_endpoint_move_mm: the native side "
+                    "moves each welded endpoint by half the gap, so the bound is what "
+                    "keeps the move controlled"
+                )
         if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
             # FEAT-039/S07: the documented thin-trim elements are accepted by the
             # kernel but they do not move the cut on this machine, so a

@@ -257,6 +257,9 @@ class SketchOp(StrictModel):
     # refuses a profile whose endpoints could be welded, and "weld" stays
     # refused until the native solver exists.
     endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
     max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
 
     @field_validator("max_endpoint_move_mm", mode="before")
@@ -370,6 +373,9 @@ class SketchGeometryOp(StrictModel):
     # refuses a profile whose endpoints could be welded, and "weld" stays
     # refused until the native solver exists.
     endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
     max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
 
     @field_validator("max_endpoint_move_mm", mode="before")

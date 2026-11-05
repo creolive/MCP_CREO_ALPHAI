@@ -195,7 +195,8 @@ class EndpointWeldContractTests(unittest.TestCase):
         self.assertIsNone(create.get("max_endpoint_move_mm"))
         self.assertIsNone(update.get("max_endpoint_move_mm"))
 
-    def test_weld_policy_is_refused_until_the_native_solver_exists(self):
+    def test_weld_policy_needs_an_explicit_bound(self):
+        """The weld needs max_endpoint_move_mm: the bound is the control."""
         from creo_mechdog.capabilities import require_available
 
         with self.assertRaises(ValueError) as caught:
@@ -211,7 +212,50 @@ class EndpointWeldContractTests(unittest.TestCase):
                     }
                 ]
             )
-        self.assertIn("endpoint_policy weld is not published", str(caught.exception))
+        self.assertIn("max_endpoint_move_mm", str(caught.exception))
+
+    def test_weld_policy_is_accepted_with_a_bound(self):
+        from creo_mechdog.capabilities import require_available
+
+        require_available(
+            [
+                {
+                    "op": "sketch",
+                    "label": "s1",
+                    "entities": [{"type": "line", "name": "l1", "start": [0, 0], "end": [1, 0]}],
+                    "endpoint_policy": "weld",
+                    "max_endpoint_move_mm": 0.001,
+                }
+            ]
+        )
+
+    def test_the_policy_layer_publishes_the_weld_plan(self):
+        """The native side regularises exactly the pairs the policy accepted."""
+        from creo_mechdog.endpoint_welding import prepare_operations
+
+        operations = prepare_operations(
+            [
+                {
+                    "op": "sketch",
+                    "label": "s1",
+                    "entities": [
+                        {"type": "line", "name": "l1", "start": [0, 0], "end": [10, 0]},
+                        {"type": "line", "name": "l2", "start": [10.00005, 0], "end": [10, 10]},
+                        {"type": "line", "name": "l3", "start": [10, 10], "end": [0, 10]},
+                        {"type": "line", "name": "l4", "start": [0, 10], "end": [0, 0]},
+                    ],
+                    "endpoint_policy": "weld",
+                    "max_endpoint_move_mm": 0.001,
+                }
+            ]
+        )
+        plan = operations[0]["weld_pairs"]
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0]["a"]["entity"], "l1")
+        self.assertEqual(plan[0]["a"]["point"], "end")
+        self.assertEqual(plan[0]["b"]["entity"], "l2")
+        self.assertEqual(plan[0]["b"]["point"], "start")
+        self.assertLessEqual(plan[0]["required_move_mm"], 0.001)
 
     def test_unknown_policy_is_refused(self):
         from creo_mechdog.schema import validate_operations
