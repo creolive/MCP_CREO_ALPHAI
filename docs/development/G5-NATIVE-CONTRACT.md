@@ -352,7 +352,11 @@ S06 补的是**判据**，不是新树：
 
 结论：thin-trim 的偏置元素**被内核接受但不产生可测量的偏置**
 
-独立偏置曲面树也一并排除：`ProElemId.h` 里的 `PRO_E_SRF_OFFS_REFQUILT`/`_SRF`/`_OFFSET`/`_TYPE`/`_METHOD`/`_SIDEQUILT` 六个候选（`PRO_FEAT_DATUM_SURF` 根，含/不含 TYPE、METHOD、SIDEQUILT）全部被 `ProFeatureWithoptionsCreate` 以 `-1` 拒绝，与 COPYTRIM、PROJ_CRV 两族一致：元素 ID 存在，但没有可用的父子关系。
+独立偏置曲面树也一并排除：
+第三轮换用特征类型本身：常量表里有 `PRO_FEAT_OFFSET`（偏置特征）与 `PRO_FEAT_GEOM_COPY`（几何复制），`ProFeatForm.h` 里有 `PRO_COPY = 4096`。六个候选（`PRO_FEAT_OFFSET` 配 `_REFQUILT`/`_SRF`/`_OFFSET`、加 `_TYPE`、加 `_METHOD`、加 `_SIDEQUILT`，以及 `PRO_FEAT_GEOM_COPY` + `PRO_COPY` + `PRO_E_SRF_COPY_SRFS` + `_OFFSET`）仍然全部被拒：五种 `-1`，`PRO_E_SRF_COPY_SRFS` 那种是 `-2`（元素加不进树）。至此偏置相关候选共 12 个、混合相关候选共 9 个，全部有据可查地失败。
+
+**不靠人手工建参照树的另一条路**：种子库里存着放样参考件（`seed_library/seeds/**/mechdog_loft_reference.prt.5`、`mechdog_smooth_reference.prt.4`、`db_*.prt.2` 等），它们由 Direct Blend 机制生成，理论上带有一棵混合特征树；用 `creo_open_file` 打开后 `dump_tree` 读回，即可得到参照树而不需要界面操作。本轮已排到打开作业，但 Toolkit 通道被前一轮作业占用，读回未完成；下一步是等通道空闲后读回这三棵树的特征类型与元素 id。
+`ProElemId.h` 里的 `PRO_E_SRF_OFFS_REFQUILT`/`_SRF`/`_OFFSET`/`_TYPE`/`_METHOD`/`_SIDEQUILT` 六个候选（`PRO_FEAT_DATUM_SURF` 根，含/不含 TYPE、METHOD、SIDEQUILT）全部被 `ProFeatureWithoptionsCreate` 以 `-1` 拒绝，与 COPYTRIM、PROJ_CRV 两族一致：元素 ID 存在，但没有可用的父子关系。
 ；公开一个距离会让调用方得到"照做但没生效"的结果。
 因此 `surface_trim` 的 `offset_mm`/`offset_side` 字段留在 schema 里（请求是良构的），但由
 `capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
