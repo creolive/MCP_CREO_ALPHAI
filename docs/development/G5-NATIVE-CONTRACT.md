@@ -362,6 +362,45 @@ S06 补的是**判据**，不是新树：
 `capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
 直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
 
+### 2.8b 放样其实不走特征树：它由 Creo 的 Blend 面板宏驱动（S05 的真正入口，2026-11-05）
+
+`native/blend_create.cpp` 揭示了已交付放样的真实机制，因此 S05 的入口**不是**猜特征树：
+
+1. `resident_blend_callback()` 通过 `ProToolkitTaskExecute` 调用常驻 Toolkit 回调
+   （`MechDogBlendPrepare`），回调写 `callback_request.json`
+   （`protocol` / `model_name` / `command` / `curve_ids`）并选中截面；
+2. 真正的特征由**宏**创建：`ProMacroLoad` 载入一段宏，操作 Creo 的混合面板：
+
+```
+~ Command `ProCmdFtPBlend`;
+~ Activate `main_dlg_cur` `chkbn.blend_sectionspage.0` 1;
+~ Select   `blend_sectionspage.0.0` `PH.sketchselopt` 1 `Selected`;
+~ Focus    `blend_sectionspage.0.0` `PH.curve_coll_repr`; ~ Select ... 0;
+~ Activate `blend_sectionspage.0.0` `PH.chain_btn`;
+~ Select   `chain_dlg` `ChainMethod` 1 `others`;
+~ Select   `chain_dlg` `RuleOptions` 1 `all_curves_in_feature`;
+~ Activate `main_dlg_cur` `chkbn.blend_optionspage.0` 1;
+~ Select   `blend_optionspage.0.0` `PH.blendoptions` 1 `Straight|Smooth`;
+~ Activate `main_dlg_cur` `dashInst0.Done`; ~ Activate `main_dlg_cur` `dashInst0.Quit`;
+```
+
+也就是说：**已交付的放样是"面板驱动"的，面板选项（而不是特征元素）才是放样语义的载体**。
+当前的门禁「Direct Blend supports solid add into the default body only」是**我们自己的限制**，
+不是 SDK 的限制；面板的"结果类型/合并结果"选项才是曲面放样的开关。
+
+S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令常量，命令名要靠宏去试）：
+
+1. 用同一机制试**边界混合**的命令名（`ProCmdFtPBlend` 之外的候选，例如
+   `ProCmdFtPBoundaryBlend`、`ProCmdFtPSurfaceBlend`）：宏载入失败只返回错误，不改模型；
+2. 成功后读回该特征的 `dump_tree`，拿到**真正的混合曲面元素树**（这是本节最缺的东西）；
+3. 用读回的树实现 `loft` 的 `mode="surface"`，并以 2400 mm²（两个 40×20 矩形、间距 20 mm
+   的直纹侧壁面积 = 周长×高 = 2×(40+20)×20）作解析 oracle 实机验证。
+
+同一手法也适用于 S03 缝合：混合/缝合类特征的兄弟特征树可以在同一个面板里拿到。
+
+**界面操作不需要人工**：`ProMacroLoad` 已经在我们的执行器里跑通了，缺的只是一个
+"按给定宏试命令并把结果特征树读回"的探针算子。
+
 ### 2.8 surface_loft：混合曲面树无文档，四个候选全部被拒（2026-11-04，S05 取证）
 
 本机 SDK **没有 `ProBlend.h`**：边界混合（Boundary Blend）与放样曲面的特征树没有任何文档，
