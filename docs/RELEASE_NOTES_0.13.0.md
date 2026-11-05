@@ -1,6 +1,6 @@
-# MCP_CREO_MechDog 0.12.2 版本说明
+# MCP_CREO_MechDog 0.13.0 版本说明
 
-2026-11-04，MINOR；条目：[FEAT-039](work-items/FEAT-039.md)（曲面链 S02 修剪 / S04 投影曲线 / S06 实体化判据），随附 [DEV-045](work-items/DEV-045.md)（发布附件校验）与 [DEV-067](work-items/DEV-067.md)（规划与审计记录）。
+2026-11-05，MINOR；条目：[FEAT-039](work-items/FEAT-039.md)（曲面链 S02 修剪 / S03 join 取证 / S04 投影曲线 / S05 曲面扫掠 / S06 实体化判据 / S08 完整链路与示例），随附 [DEV-045](work-items/DEV-045.md)（发布附件校验）与 [DEV-067](work-items/DEV-067.md)（规划与审计记录）。
 
 新增两个公开算子：`creo_surface_trim`（曲面修剪 / use-quilt）与 `creo_project_curve`（曲线投影到 quilt），公开工具由 97 增至 **99**。两者均在 2026-11-04 本机 Creo 12.4.0.0 上完成实机验收后解除门禁。
 
@@ -14,10 +14,13 @@
 - 曲面偏置（S07）未公开：`surface_trim` 的 `offset_mm`/`offset_side` 字段保留在契约里，但请求在排队前被拒。本机 SDK 只有 `ProTrim.h` 的 thin trim 偏置树（无独立偏置 quilt 特征树），实测请求 5 mm 偏置时作业成功但切口不移动（保留面积仍 400/400 mm²），50 mm 的必不相交偏置也不被拒绝，因此距离无法兑现，见 [G5 契约 §2.7](development/G5-NATIVE-CONTRACT.md)。
 - 曲面扫掠能力补齐实测证据：40×20 截面沿 20 mm 直线扫掠，开放曲面 2400.000 mm²、加盖曲面 4000.000 mm²（闭合）、实体化 15999.999999999998 mm³，统一驱动新增 `--case sweep_surface`（11 项实机通过，oracle 由几何参数推导）；多截面放样（边界混合）仍不可用，原因与实测见开发契约。
 - 统一驱动新增两条完整曲面链用例（`--case chain_open`、`--case chain_closed`），实机分别 14 项与 12 项通过：开放链走填充→投影→曲线修剪→查询→对称加厚，闭合链走旋转闭合面→实体化→改写重生成→失败回滚；放样与缝合两步仍门禁并在用例里标注为 blocked。
-- `creo_quilt_merge` 仍为门禁状态，未公开。版本入口、两份种子清单与受信摘要同步至 **0.12.2**；种子包确定性重建 SHA256 为 `044f1da0f78c52cf3fe11993486184063ceafac82615e77c28a02368f17ea2eb`（24 文件、9 种子），与两份清单一致，详见[发布记录](validation/RELEASE-0.12.2.md)。
+- join 需求已可测量（算子仍门禁）：两张 40×20 填充面重叠 200 mm²，用共享边所在基准面（x=40）修剪出外侧 600 mm² → 并集面积 **1400 mm²**；两片各加厚 2 mm 合入同一 body → 体积 **2799.9999999999995 mm³**（简单相加是 3200 mm³，重叠只算一次），模型只有一个 body 且保存重载通过；统一驱动新增 `--case join`（13 项检查，连续三次复跑稳定）。`creo_quilt_merge` 本身仍为门禁状态：四条原生路线实测都建出 ACTIVE 特征（持有 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`），产出单一合并 quilt 仍需参照树。
+- 新增两个可运行的曲面链示例 `examples/p12_surface_blade.json` 与 `examples/surface_trim_merge.json`：分阶段计划，id 用占位符声明（`$curve:<特征名>` 等，运行前按检查结果解析），统一驱动新增 `--example <file>`；离线条过 schema 且不碰门禁算子，实机逐阶段要求 `succeeded` 与 `saved_file_reloaded_and_verified=true`，两例实机三阶段全通过（修剪面积 800 → 600.000 mm²）。
+- 端点焊接（W01）**仅策略层**交付：创建与更新算子共用 `endpoint_policy`（report/reject/weld）与 `max_endpoint_move_mm`，回执发布配对证据且不改几何；`weld` 策略被明确拒绝——实测草图 epsilon 不是端点重合容差（提到 2e-3 mm 后 5e-4 mm 间隙仍张开，而默认路径自己会合上 8.2e-7 mm），原生受控焊接未完成。
+版本入口、两份种子清单与受信摘要同步至 **0.13.0**；种子包确定性重建 SHA256 为 `e5808ff18049f94a74436636c6633b1867aa487224567dc31738c644c8ad685b`（24 文件、9 种子），与两份清单一致，详见[发布记录](validation/RELEASE-0.13.0.md)。
 
-验证命令为 `python tools/test_unit.py`（2384 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py`、`python tools/test_surface_chain.py --case trim --live --confirm-session-usable`、`python tools/test_surface_chain.py --case project --live --confirm-session-usable`（run `20261104-134443-396700`，18 项检查全通过）与 `python tools/test_surface_chain.py --case solidify --live --confirm-session-usable`（run `20261104-145403-398500`，8 项检查全通过）。结果与受测源码身份见[发布记录](validation/RELEASE-0.12.2.md)。
+验证命令为 `python tools/test_unit.py`（2384 项通过）、`python tools/dev_check.py --skip-unit`、`python bridge.py build`，外加实机 `build/_live_trim.py`、`python tools/test_surface_chain.py --case trim --live --confirm-session-usable`、`python tools/test_surface_chain.py --case project --live --confirm-session-usable`（run `20261104-134443-396700`，18 项检查全通过）与 `python tools/test_surface_chain.py --case solidify --live --confirm-session-usable`（run `20261104-145403-398500`，8 项检查全通过）。结果与受测源码身份见[发布记录](validation/RELEASE-0.13.0.md)。
 
 本版实机验收覆盖修剪的再生、面积/位置、保存与重载，投影曲线的直线与圆弧用例、反向拒绝和保存重载，以及闭合曲面的体积判据与开放曲面的拒绝回滚；修剪结果在重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询，`signed_offset_mm` 保持 null）、失败回滚的实机表现、`use_curve` 投影—修剪串联、投影的多分支拒绝、圆柱/非平面目标与边界裁切，以及 `thicken` 与 cut 模式的体积字段均未验证。Creo 9 无本机 SDK，构建与运行时未验收；Creo 10 不要求独立复测；BUG-001 的既有边界继续适用。
 
-升级使用配套的 `MCP_CREO_MechDog-0.12.2-source.zip` 与 `MCP_CREO_MechDog-0.12.2-seed-library.zip`，按安装说明更新环境并重启 MCP 服务。旧种子包会被版本闸门拒绝；本版新增一个公开工具，无回调注册变化、无参数迁移、无新增原生编译要求。
+升级使用配套的 `MCP_CREO_MechDog-0.13.0-source.zip` 与 `MCP_CREO_MechDog-0.13.0-seed-library.zip`，按安装说明更新环境并重启 MCP 服务。旧种子包会被版本闸门拒绝；本版新增一个公开工具，无回调注册变化、无参数迁移、无新增原生编译要求。
