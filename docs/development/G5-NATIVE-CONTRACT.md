@@ -350,7 +350,10 @@ S06 补的是**判据**，不是新树：
 | 竖直 quilt | `offset_mm=5`, side one / two | 同样 400/400，两个方向的保留区不互换 |
 | 基准面 | `offset_mm=50`（必定不相交） | 作业成功且没有拒绝，切口仍在 x=20 |
 
-结论：thin-trim 的偏置元素**被内核接受但不产生可测量的偏置**；公开一个距离会让调用方得到"照做但没生效"的结果。
+结论：thin-trim 的偏置元素**被内核接受但不产生可测量的偏置**
+
+独立偏置曲面树也一并排除：`ProElemId.h` 里的 `PRO_E_SRF_OFFS_REFQUILT`/`_SRF`/`_OFFSET`/`_TYPE`/`_METHOD`/`_SIDEQUILT` 六个候选（`PRO_FEAT_DATUM_SURF` 根，含/不含 TYPE、METHOD、SIDEQUILT）全部被 `ProFeatureWithoptionsCreate` 以 `-1` 拒绝，与 COPYTRIM、PROJ_CRV 两族一致：元素 ID 存在，但没有可用的父子关系。
+；公开一个距离会让调用方得到"照做但没生效"的结果。
 因此 `surface_trim` 的 `offset_mm`/`offset_side` 字段留在 schema 里（请求是良构的），但由
 `capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
 直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
@@ -370,7 +373,11 @@ S06 补的是**判据**，不是新树：
 | `datum_surface_blend_sec_array_with_type` | 追加 `PRO_E_BLEND_TYPE` | 同上（-18） |
 
 结论：`PRO_E_BLEND_SECTION` 不接受草图的 `PRO_FEATURE` 选择（-18），`PRO_E_BLEND_ITEMS` 不能直接挂在
-特征树根下（-2）。放样/混合曲面的**引用类型**在本机没有文档可依，需要参照树或更多候选形状才能推进；
+特征树根下（-2）。
+第二轮按元素名给出的结构再探五个候选（`ProElemId.h` 还有 `PRO_E_BLEND_SEC_LOC_REF`、`PRO_E_BLEND_SKETSEL_OPT`、`PRO_E_BLEND_SURF_OPTION`、`PRO_E_BLEND_TANG_COND`）：把引用放进 `PRO_E_BLEND_SEC_LOC_REF`、`PRO_E_BLEND_SECTION` 作为复合元素，并分别尝试 `SEC_ARRAY` 与 `ITEMS` 两种容器，结果仍是三种 `-1` 与一种 `-2`（`ITEMS` 不能挂在树根）。
+
+因此边界混合的**引用类型**在本机没有可依据的文档：候选树已经覆盖了「引用直接放在 SECTION」「引用放在 SEC_LOC_REF 子元素」「容器用 SEC_ARRAY 或 ITEMS」「是否追加 BLEND_TYPE」四类形状，全部被内核拒绝。剩下的可靠路线只有一份参照树（在 Creo 里手工建一个 Boundary Blend，再用 `dump_tree` 读回元素树）。
+放样/混合曲面的**引用类型**在本机没有文档可依，需要参照树或更多候选形状才能推进；
 `surface_loft` 保持未开工，`loft` 的曲面模式仍由 `capabilities.require_available` 明确拒绝
 （"Direct Blend supports solid add into the default body only"）。
 
