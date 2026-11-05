@@ -415,8 +415,8 @@ Pydantic 默认值吞掉，回执只能复述 1 mm / blind，`through_all` 更�
 
 | 用例 | 入口 | 体积 | requested | effective | defaulted_fields | source / query_code |
 | --- | --- | --- | --- | --- | --- | --- |
-| `standalone_omitted_both` | `creo_extrude`（不传 depth/depth_type） | **100.000 mm³** | null / null | blind / **1.0 mm** | `["depth","depth_type"]` | feature_tree / 0 |
-| `plan_depth_only` | `creo_execute_plan`（只给 `depth=10`） | **1000.000 mm³** | blind→null / **10.0 mm** | blind / **10.0 mm** | `["depth_type"]` | feature_tree / 0 |
+| `standalone_omitted_both` | `creo_extrude`（不传 depth/depth_type） | 99.99999999999997 mm³（≈100.000） | null / null | blind / **1.0 mm** | `["depth","depth_type"]` | feature_tree / 0 |
+| `plan_depth_only` | `creo_execute_plan`（只给 `depth=10`） | 999.9999999999999 mm³（≈1000.000） | null / **10.0 mm** | blind / **10.0 mm** | `["depth_type"]` | feature_tree / 0 |
 
 两例 `saved_file_reloaded_and_verified=true`，`extrude_depth_receipt="passed"`。
 
