@@ -586,6 +586,22 @@ oracle 为面积 × 距离（40×20 的 quilt 偏置 5 mm → 4000 mm³，偏移
 本机没有独立的"合并面"特征树；`ProMerge.h` 的数组树四条路线建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，
 与本机数据结构不合，合并算子继续门禁。
 
+### 2.8g 受控曲面偏置算子 `surface_offset`（2026-11-05）
+
+按 §2.8f 的规格实现：新建公开算子 `creo_surface_offset`（schema `SurfaceOffsetOp`、
+原生 `generic_surface_offset`），请求为 `reference`（必须是 quilt）、`distance`、`side`
+（positive/negative）。原生侧建树：`PRO_FEAT_PROTRUSION` + `PRO_E_FEATURE_FORM=PRO_USE_SURFS`
++ `PRO_E_FEAT_FORM_ALWAYS_THIN=PRO_THIN` + `PRO_E_STD_USEQLT_QLT` + `PRO_E_THICKNESS=距离`
++ `PRO_E_STD_USEQLT_SIDE`（方向）+ `PRO_E_SRF_OFFS_METHOD=PRO_OFFS_METH_NORMTOSURF`。
+
+回执里的距离是**实测**的，不是回显：偏置前测源 quilt 面积，建特征后测实体体积，
+`measured_offset_distance_mm = volume_after / source_area`（面积 × 距离 = 体积，两个量纲相除
+即距离 ✓，比例尺同时约掉 ✓），另有 `direction`、`offset_method="normal_to_surface"`、
+`source_area_mm2`、`volume_before_mm3`、`volume_after_mm3`。
+
+**验收状态**：实现已完成并编译通过；实机测量待会话恢复后补做（oracle：40×20 的 quilt
+偏置 5 mm → 体积 4000 mm³、实测距离 5.000 mm、方向 positive）。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

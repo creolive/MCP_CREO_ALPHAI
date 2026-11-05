@@ -150,6 +150,64 @@ static void generic_surface_solid(const J &op) {
     stage_operation_result(extra);
     remember(op, f, extra);
 }
+// FEAT-039/S07: a controlled offset of a quilt along its surface normal.
+// The documented route (ProThicken.h) is a protrusion with the surface form,
+// the thin form, the quilt reference, the distance, the normal offset method
+// and one explicit side. The offset distance is measured back from the
+// result instead of being echoed from the request.
+static void generic_surface_offset(const J &op) {
+    ProSelection s = resolve(op["reference"]);
+    int quilt_id = -1;
+    ProModelitem item;
+    CK(ProSelectionModelitemGet(s, &item));
+    quilt_id = item.id;
+    double source_area = 0.0;
+    bool area_known = false;
+    {
+        ProQuilt quilt = nullptr;
+        if (!ProQuiltInit((ProSolid)board, quilt_id, &quilt); quilt) {
+            MeasurementOutcome area = quilt_area_native(quilt);
+            if (area.available) {
+                source_area = area.value;
+                area_known = true;
+            }
+        }
+    }
+    double volume_before = 0.0;
+    bool volume_before_known = true;
+    try {
+        volume_before = volume();
+    } catch (...) {
+        volume_before_known = false;
+    }
+    ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
+    integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_PROTRUSION);
+    integer(root, PRO_E_FEATURE_FORM, PRO_USE_SURFS);
+    text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
+    integer(root, PRO_E_FEAT_FORM_ALWAYS_THIN, PRO_THIN);
+    ref(root, PRO_E_STD_USEQLT_QLT, s);
+    ProSelectionFree(&s);
+    real(root, PRO_E_THICKNESS, op["distance"]);
+    integer(root, PRO_E_STD_USEQLT_SIDE,
+            op["side"] == "negative" ? PRO_THICKEN_SIDE_TWO : PRO_THICKEN_SIDE_ONE);
+    integer(root, PRO_E_SRF_OFFS_METHOD, PRO_OFFS_METH_NORMTOSURF);
+    body_options(root, op);
+    ProFeature f = create(root);
+    ProElementFree(&root);
+    double volume_after = volume();
+    const double measured = area_known;
+    source_area > 0.0 ? volume_after / source_area : -1.0;
+    J extra = {{"target_quilt_id", quilt_id},
+               {"source_area_mm2", area_known ? J(source_area) : J(nullptr)},
+               {"offset_distance_mm", op["distance"]},
+               {"measured_offset_distance_mm", measured >= 0.0 ? J(measured) : J(nullptr)},
+               {"direction", op["side"]},
+               {"offset_method", "normal_to_surface"},
+               {"volume_before_mm3", volume_before_known ? J(volume_before) : J(nullptr)},
+               {"volume_after_mm3", volume_after}};
+    stage_operation_result(extra);
+    remember(op, f, extra);
+}
 static void generic_boolean(const J &op) {
     std::string method = op["method"];
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);

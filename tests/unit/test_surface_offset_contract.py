@@ -1,88 +1,69 @@
-"""FEAT-039/S07: the offset request is well formed but stays gated.
-
-ProTrim.h documents a thin-trim variant that offsets the trimming surface
-before it cuts. On this machine the kernel accepts those elements but the cut
-does not move (2026-11-04: a 5 mm offset on a 40x20 fill still leaves
-400/400 mm2, and a 50 mm offset that cannot intersect is not refused), so the
-request is refused before a job is queued instead of silently doing nothing.
-"""
+"""FEAT-039/S07: the controlled surface offset contract."""
 
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-SURFACE_TRIM = ROOT / "native" / "surface_trim.cpp"
 
-
-def trim_operation(**overrides) -> dict:
-    operation = {
-        "op": "surface_trim",
-        "label": "offset_trim",
-        "target": {"kind": "quilt", "id": 12},
-        "tool": {"kind": "datum_plane", "label": "cut_plane"},
-        "keep_side": "one",
-    }
-    operation.update(overrides)
-    return operation
-
-
-class SurfaceOffsetSchemaTests(unittest.TestCase):
-    def test_accepts_a_distance_with_a_direction(self):
+class SurfaceOffsetContractTests(unittest.TestCase):
+    def test_the_schema_accepts_a_quilt_reference(self):
         from creo_mechdog.schema import validate_operations
 
-        validated = validate_operations([trim_operation(offset_mm=5.0, offset_side="one")])
-        self.assertEqual(validated[0]["offset_mm"], 5.0)
-        self.assertEqual(validated[0]["offset_side"], "one")
+        operations = validate_operations(
+            [
+                {
+                    "op": "surface_offset",
+                    "label": "offset",
+                    "reference": {"kind": "quilt", "id": 3},
+                    "distance": 5.0,
+                }
+            ]
+        )
+        self.assertEqual(operations[0]["distance"], 5.0)
+        self.assertEqual(operations[0]["side"], "positive")
 
-    def test_refuses_a_distance_without_a_direction(self):
-        from creo_mechdog.schema import validate_operations
-
-        with self.assertRaises(ValueError):
-            validate_operations([trim_operation(offset_mm=5.0)])
-
-    def test_refuses_a_direction_without_a_distance(self):
-        from creo_mechdog.schema import validate_operations
-
-        with self.assertRaises(ValueError):
-            validate_operations([trim_operation(offset_side="two")])
-
-    def test_refuses_an_offset_for_a_curve_tool(self):
+    def test_a_body_reference_is_refused(self):
         from creo_mechdog.schema import validate_operations
 
         with self.assertRaises(ValueError):
             validate_operations(
                 [
-                    trim_operation(
-                        tool={"kind": "curve", "id": 7},
-                        offset_mm=5.0,
-                        offset_side="one",
-                    )
+                    {
+                        "op": "surface_offset",
+                        "label": "offset",
+                        "reference": {"kind": "body", "id": 3},
+                        "distance": 5.0,
+                    }
                 ]
             )
 
+    def test_a_non_positive_distance_is_refused(self):
+        from creo_mechdog.schema import validate_operations
 
-class SurfaceOffsetGateTests(unittest.TestCase):
-    def test_offset_requests_are_refused_before_a_job_is_queued(self):
-        from creo_mechdog.capabilities import require_available
+        with self.assertRaises(ValueError):
+            validate_operations(
+                [
+                    {
+                        "op": "surface_offset",
+                        "label": "offset",
+                        "reference": {"kind": "quilt", "id": 3},
+                        "distance": 0.0,
+                    }
+                ]
+            )
 
-        with self.assertRaises(ValueError) as caught:
-            require_available([trim_operation(offset_mm=5.0, offset_side="one")])
-        message = str(caught.exception)
-        self.assertIn("offset_mm is not published", message)
-        # The refusal carries the measured reason, not a generic denial.
-        self.assertIn("400/400", message)
+    def test_the_operator_is_published(self):
+        from creo_mechdog.capabilities import REGISTERED_OPERATIONS, families
 
-    def test_a_plain_trim_is_not_blocked(self):
-        from creo_mechdog.capabilities import require_available
+        self.assertIn("surface_offset", REGISTERED_OPERATIONS)
+        self.assertTrue(families()["surface_offset"]["enabled"])
 
-        require_available([trim_operation()])
-
-    def test_native_uses_the_documented_thin_trim_elements(self):
-        source = SURFACE_TRIM.read_text(encoding="utf-8")
-        self.assertIn("PRO_E_THICKNESS", source)
-        self.assertIn("PRO_E_STD_USEQLT_SIDE", source)
-        self.assertIn("PRO_E_SRF_OFFS_METHOD", source)
-        self.assertIn("PRO_TRIM_SRF_OFFS_METH_NORMTOSURF", source)
+    def test_the_native_side_uses_the_documented_offset_method(self):
+        native = (Path(__file__).resolve().parents[2] / "native" / "surfaces.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("PRO_E_SRF_OFFS_METHOD, PRO_OFFS_METH_NORMTOSURF", native)
+        self.assertIn("PRO_E_STD_USEQLT_SIDE", native)
+        self.assertIn("measured_offset_distance_mm", native)
 
 
 if __name__ == "__main__":

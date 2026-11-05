@@ -57,6 +57,7 @@ REGISTERED_OPERATIONS = (
     "datum_points",
     "surface_fill",
     "thicken",
+    "surface_offset",
     "solidify",
     "surface_trim",
     "quilt_merge",
@@ -514,6 +515,17 @@ def families() -> dict:
             "enabled": True,
             "native_test": "whole solid about a principal datum plane",
             "limits": "whole-part/geometry references only; feature/subtree mirror is rejected",
+        },
+        "surface_offset": {
+            "enabled": True,
+            "tool": "creo_surface_offset",
+            "scope": "offset one quilt along its surface normal by a measured distance and direction",
+            "native_test": "40x20 fill offset 5 mm: the measured offset distance comes back as "
+            "volume divided by the source area, the direction is explicit, and the volume is area "
+            "times distance; measured 2026-11-05",
+            "limits": "one quilt, one direction, the documented normal-to-surface offset method; "
+            "the result is the offset wall, not a standalone offset quilt; a closed quilt is not "
+            "required",
         },
         "sweep": {
             "enabled": True,

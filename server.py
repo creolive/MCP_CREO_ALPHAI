@@ -2513,6 +2513,33 @@ async def creo_surface_fill(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_offset(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    reference: dict[str, Any],
+    distance: float,
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Offset a quilt along its surface normal; the result reports the measured offset distance."""
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="surface_offset",
+                label=label,
+                reference=reference,
+                distance=distance,
+                side=side,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_thicken(
     model_id: str,
     expected_revision: int,

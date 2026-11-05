@@ -1546,6 +1546,23 @@ class ThickenOp(StrictModel):
     new_body: bool = False
 
 
+class SurfaceOffsetOp(StrictModel):
+    op: Literal["surface_offset"]
+    label: Label
+    reference: dict[str, Any]
+    distance: Positive
+    side: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def reference_is_a_quilt(self):
+        # FEAT-039/S07: an offset acts on a surface, so the reference must be a
+        # quilt; a body or a datum plane is refused before a job exists.
+        problem = quilt_reference_problem(self.reference, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_offset reference {problem}")
+        return self
+
+
 class SolidifyOp(StrictModel):
     op: Literal["solidify"]
     label: Label
@@ -1661,6 +1678,7 @@ Operation = Annotated[
         PointsOp,
         FillOp,
         ThickenOp,
+        SurfaceOffsetOp,
         SolidifyOp,
         SurfaceTrimOp,
         QuiltMergeOp,
