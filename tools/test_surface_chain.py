@@ -40,14 +40,16 @@ ROOT = Path(__file__).resolve().parent.parent
 try:  # the driver runs as a script and as a package module
     from surface_chain_chains import case_chain_open_live, case_chain_open_offline
     from surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
+    from surface_chain_join import case_join_live, case_join_offline
 except ImportError:  # pragma: no cover - the package import path
     from tools.surface_chain_chains import case_chain_open_live, case_chain_open_offline
     from tools.surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
+    from tools.surface_chain_join import case_join_live, case_join_offline
 sys.path.insert(0, str(ROOT))
 
 from version import VERSION  # noqa: E402
 
-CASES = ("quilts", "trim", "merge", "project", "solidify", "chain_open", "chain_closed")
+CASES = ("quilts", "trim", "merge", "project", "solidify", "chain_open", "chain_closed", "join")
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
 
@@ -1517,6 +1519,8 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_quilts_live()) if live else case_quilts_offline()
     if case == "trim":
         return asyncio.run(case_trim_live()) if live else case_trim_offline()
+    if case == "join":
+        return asyncio.run(case_join_live(wait_ready)) if live else case_join_offline()
     if case == "chain_open":
         return asyncio.run(case_chain_open_live(wait_ready)) if live else case_chain_open_offline()
     if case == "chain_closed":

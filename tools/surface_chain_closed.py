@@ -13,7 +13,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from surface_chain_chains import make_checks, section, submit_plan
+try:  # the driver runs as a script and as a package module
+    from surface_chain_chains import make_checks, section, submit_plan
+except ImportError:  # pragma: no cover - the package import path
+    from tools.surface_chain_chains import make_checks, section, submit_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 

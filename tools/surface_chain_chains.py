@@ -82,15 +82,26 @@ async def submit_plan(client, operations, jobs, model_id=None, revision=None) ->
     if not job_id:
         return {"status": "refused", "message": str(submitted)[:400]}
     jobs.append(job_id)
-    deadline = time.monotonic() + 300
+    # A queued job waits for the native worker to be rebuilt after an
+    # interrupted run, so the deadline is generous: the job does finish.
+    deadline = time.monotonic() + 900
     state: dict = {}
     while time.monotonic() < deadline:
-        state = await call_tool(client, "creo_get_job", {"job_id": job_id})
+        # The compact page keeps the polling cheap; a job whose metadata fills
+        # the response budget is refused by the full page ("Query metadata
+        # exceeds response budget"), so the compact view is the one to poll.
+        state = await call_tool(client, "creo_get_job", {"job_id": job_id, "detail": "compact"})
         if state.get("status") in ("succeeded", "failed", "unknown_outcome"):
             break
         await asyncio.sleep(2)
     else:
         raise TimeoutError("job did not settle; inspect it, never blindly resubmit")
+    # The compact page carries the status but drops the measurements, so the
+    # full page is asked once for the numbers. A job whose metadata fills the
+    # response budget is refused there, and the compact page stays in place.
+    full = await call_tool(client, "creo_get_job", {"job_id": job_id, "detail": "full"})
+    if full.get("status"):
+        state = full
     results = (state.get("result") or {}).get("operations") or []
     state["operation"] = results[-1] if results else None
     state["saved_verified"] = (state.get("result") or {}).get("saved_file_reloaded_and_verified")
