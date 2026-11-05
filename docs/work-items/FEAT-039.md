@@ -343,3 +343,18 @@ S05 缺的不是能力，是**证据**。
 因此："用元素树实现混合"这条路被实测关闭，`loft` 的 surface 模式与 `quilt_merge` 的门禁
 都改为引用这条判决。种子库清点后确认**没有 Merge/Offset 参照件**，S03/S07 仍需手工件；
 拿到之后上面这个工具一次就能读回元素树。
+
+## 2026-11-05 参照树（自有特征）：偏置与合并元素的真实父子关系
+
+参照树不必来自外部件：**从本服务自己能建出的特征上读回**即可。读回结果见
+[REFERENCE-TREES](../development/REFERENCE-TREES.md)。
+
+- **偏置（S07）**：`PRO_E_SRF_OFFS_METHOD`（=1）、`PRO_E_SRF_OFFS_CTRLFIT`（compound，内含
+  `PRO_E_SRF_OFFS_SCALINGCSYS`）、`PRO_E_SRF_OFFS_AXES`、`PRO_E_SRF_OFFS_HANDLINGS`（数组）
+  挂在**加厚/凸台特征树**下——此前 12 个候选挂在 `PRO_FEAT_DATUM_SURF`/`PRO_FEAT_OFFSET` 下被拒，
+  根因是挂载位置错了。
+- **合并（S03）**：`PRO_E_SMT_MERGE_DATA`（compound，含 `PRO_E_SMT_MERGE_AUTO`、
+  `PRO_E_SMT_MERGE_KEEP_LINES`、`PRO_E_SMT_MERGE_KEEP_BEND_EDGES`）、
+  `PRO_E_SWP_MERGE_ENDS`、`PRO_E_TRIM_QUILT` 出现在**曲面特征树**里——本机似乎没有独立的
+  "合并面"特征，合并语义落在曲面特征的元素上。
+- **混合（S05）**：Direct Blend 的元素树抽取返回 -18，无树可依（面板路线唯一）。
