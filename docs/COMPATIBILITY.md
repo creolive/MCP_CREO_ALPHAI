@@ -12,7 +12,7 @@
 - **仍门禁**：`surface_trim` 的 `offset_mm`（thin trim 实测不移动切口）、多截面放样/边界混合（S05，`ProSweep.h` 只支持常量截面，
   本机无 `ProBlend.h`）、曲面合并 `creo_quilt_merge`（S03，四条原生路线都建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`）。
 - **join 需求可测量**：修剪 + 加厚给出并集面积 1400 mm² 与合并实体体积 2799.9999999999995 mm³（重叠只算一次）。
-- **端点焊接（W01）仅策略层**：配对规则与回执交付，原生受控焊接被明确拒绝（草图 epsilon 实测不是重合容差）。
+- **端点焊接（W01）**：配对规则、回执与本体坐标规整同时交付——原生侧在写入实体前把每对端点各移动 gap/2（超 `max_endpoint_move_mm` 则拒绝应用），求解后回读残差（5e-5 mm 间隙实测 `max_residual_mm=0.0`）。
 - 公开工具数 **100**（运行时 `creo_capabilities` 的 `tool_count`，`creo_surface_offset` 加入后）。
 
 ## 0.12.0 的原生矩形首壁与就地改型（FEAT-058）

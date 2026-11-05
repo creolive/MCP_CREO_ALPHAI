@@ -378,3 +378,88 @@ S03 侧：合并元素属钣金族语义，本机没有独立的"合并面"特�
 **未完成**：实机验收（会话未连接时提交）。oracle 已定：40×20 的 quilt 偏置 5 mm →
 体积 4000 mm³、实测距离 5.000 mm、方向 positive。S03 侧维持门禁（合并元素属钣金族，
 本机无独立合并面特征树）。
+
+## 2026-11-05 W05 交付：`extrude_depth` 回执（requested/effective 分离）
+
+**目的**：拉伸结果此前看不出"调用方到底给了多少"。省略 depth / depth_type 会被
+Pydantic 默认值吞掉，回执只能复述 1 mm / blind，`through_all` 更是无从判断。
+
+**实现**
+
+- `schema.py::ExtrudeOp` 保留 `depth=1`、`depth_type="blind"` 默认（既有归一化契约不变），
+  新增 `dump_plan_operations()`：`creo_execute_plan` 按 `model_fields_set` 丢弃调用方
+  未设置的 depth/depth_type，`validate_operations` 因此仍能识别省略并在归一化输出写
+  `defaulted_fields`。计划文档原定的"默认值下沉到内核"会让既有 `test_t01` 归一化契约
+  断言失效，故改用入口 dump 保留省略——效果相同，边界更小。
+- `server.py::creo_extrude`：`depth` / `depth_type` 改为可省略，仅在显式给出时写入 op；
+  docstring 说明省略按 blind / 1 mm 执行、回执会标 `defaulted_fields`。
+- `native/generic.cpp::extrude_depth_report`：`requested_*` 按 `defaulted_fields` 置 null；
+  `effective_*` 从创建后特征树实读
+  `PRO_E_STD_EXT_DEPTH → PRO_E_EXT_DEPTH_TO → PRO_E_EXT_DEPTH_TO_TYPE / _VALUE`；
+  `through_all` 的 `effective_depth_mm` 恒为 null（不回填 1）；树读失败保留 `query_code`，
+  `source="unknown"`，两个 effective 保持 null，不伪造。
+- `operation_results.normalize_extrude_depth` / `annotate_extrude_depth`：7 键冻结，null 保留，
+  未知键与非法值丢弃，无块不补造；`bridge.py` compact 操作白名单加入 `extrude_depth`。
+- 单测 `tests/unit/test_extrude_depth_receipt.py` 14 项（省略捕获、plan 入口 dump 往返、
+  through_all 不伪造、归一化、工具 schema `default is None`）。
+- 契约测试辅助 `_enum_consts` 支持可空参数在 `anyOf` 中的 `enum`（`creo_extrude` 的
+  `depth_type` 现在是 `Literal[...] | None`）。
+
+**实机（本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK，单会话串行）**
+
+`tools/test_t05_native.py --live --confirm-session-usable --section extrude-depth`，
+报告 `build/w05_live/t05_extrude_depth.json`，SHA256
+`724BE1601190CFECF5CCD8BDB56FBEB0316BB204D18BD44505FA99C8530CB43D`，
+`native_acceptance="partial"`（只跑本段）。最后一次重建执行器后复跑（SHA256
+`A621B45720DA6B3E9D25A94939576F851D7412E792476B9365A672046492B6D8`）结论相同。
+
+| 用例 | 入口 | 体积 | requested | effective | defaulted_fields | source / query_code |
+| --- | --- | --- | --- | --- | --- | --- |
+| `standalone_omitted_both` | `creo_extrude`（不传 depth/depth_type） | **100.000 mm³** | null / null | blind / **1.0 mm** | `["depth","depth_type"]` | feature_tree / 0 |
+| `plan_depth_only` | `creo_execute_plan`（只给 `depth=10`） | **1000.000 mm³** | blind→null / **10.0 mm** | blind / **10.0 mm** | `["depth_type"]` | feature_tree / 0 |
+
+两例 `saved_file_reloaded_and_verified=true`，`extrude_depth_receipt="passed"`。
+
+**未验证**：只跑了本段（`--section extrude-depth`），本轮未重跑完整 metric matrix；
+`through_all` 的 null 只在单测覆盖，未实机取回执；Creo 9 / Creo 10 未测。
+
+## 2026-11-05 W06 交付：只读预览入口与失败编辑回滚（实机）
+
+**入口**：不新增工具。`creo_export_model(format="jpeg")` 即只读预览入口——提交 READ 作业、
+不保存、revision 不推进，作业结果的 `preview` 块（`status`/`path`）供界面显示；
+docstring 已写明空件 `status="skipped_no_geometry"`、渲染失败 `status="failed"` 带
+`failed_step`/`failed_code`。能力清单未变。
+
+**T07 三段预览（本机 Windows x64 / Creo 12.4.0.0）**
+
+`tools/test_t07_preview.py --live --confirm-session-usable`，run `20261106T004546_2a364d3b`，
+报告 `build/post090_n11_preview/20261106T004546_2a364d3b/report.json`，SHA256
+`0EBDA9BA0BA3F59F9995955904C71CDF797653DC8CF5A364EDC825EA0695DF5C`，`preview_acceptance="passed"`。
+
+| 段 | 用例 | 实测 |
+| --- | --- | --- |
+| 空件 | `empty_part` | `status="skipped_no_geometry"`，无图片文件，不报错 |
+| 有几何 | `empty_part_solid` / `disk` | `status="written"`、`file_verified=true`、`preview_code=0`，9 个渲染步骤码全 0 |
+| 修改后 | `disk_cut`（rev 2）、`disk_cut_pattern`（rev 3） | 每次编辑后重新生成预览，图片文件独立 |
+| 只读导出 | `explicit_jpeg_export` | 作业成功，产出 `preview.jpg` 与导出的 jpg 同 sha256，**revision 3→3 未推进**（`read_only_revision_unchanged=true`） |
+
+所有预览用例 `saved_file_reloaded_and_verified=true`。`image_content_verification="human_review_pending"`
+——图片是否"画的是这个件"仍需人工看图，不由本服务断言。
+
+**失败编辑回滚（BUG-096 场景）**
+
+`tools/test_failed_model_cleanup.py --live --confirm-session-usable`，
+run `20261106T004748_84fc913a`，报告
+`build/bug096_failed_model_cleanup/20261106T004748_84fc913a/report.json`，SHA256
+`7DA2D3D93DF260A101E39D0E227CA7E88ABE3D68C28A52301680C7405564050D`，三个场景全 `passed`：
+
+| 场景 | 实测 |
+| --- | --- |
+| `S1_main_path` 新建件建特征失败 | 作业失败（`ProModelitemInit -23`），孤儿模型被擦除（`reason="cleaned"`、`absence_verified=true`、`erase_code=0`），同名重试成功（`revision=1`） |
+| `S2_preexisting_same_name` 同名件已存在 | 冲突作业失败，`reason="preexisting_same_name"`、不谎报"已擦除"，既有件 revision 仍为 1 且可读 |
+| `S3_saved_model_rollback` 已保存件的失败编辑 | `rollback_status="succeeded"`、`failed_model_cleanup.reason="not_new_model_job"`、revision 1→1 不变、模型与文件仍可继续编辑 |
+
+**未验证**：`unknown_outcome` 记为 `not_injected (fault injection forbidden)`——按 BUG-001
+恢复约定不做故障注入，只有离线契约；预览图片内容需人工复核；Creo 9 / Creo 10 未测。
+
+

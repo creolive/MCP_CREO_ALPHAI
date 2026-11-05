@@ -2471,6 +2471,7 @@ static J revolve_axis_report(const J &op, ProFeature &created, ProFeature &sketc
     }
     return report;
 }
+static J extrude_depth_report(ProFeature &f, const J &op);
 static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         validate_revolve_axis(op);
@@ -2546,7 +2547,7 @@ static J extrude_or_revolve(const J &op, bool revolve) {
                 : direction == "symmetric" ? PRO_EXT_DEPTH_SYMMETRIC
                                            : PRO_EXT_DEPTH_TO_BLIND);
         if (!through_all)
-            real(to, PRO_E_EXT_DEPTH_TO_VALUE, op.at("depth"));
+            real(to, PRO_E_EXT_DEPTH_TO_VALUE, op.value("depth", 1.0));
     }
     ProFeature f = {};
     try {
@@ -2571,6 +2572,8 @@ static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         details["revolve_axis"] =
             revolve_axis_report(op, f, sketch_f, revolve_axis_id, revolve_axis_code);
+    else
+        details["extrude_depth"] = extrude_depth_report(f, op);
     if (cut) {
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
         double removed = before_volume - volume();
@@ -2940,6 +2943,64 @@ static ProElement get_optional(ProElement root, std::initializer_list<int> ids, 
     if (path)
         ProElempathFree(&path);
     return result;
+}
+// W05: the request side is what the caller actually sent (null when
+// validate_operations recorded an omission in defaulted_fields, because the
+// operation it hands over already carries the applied default), and the
+// effective side is read from the created feature's own tree. A through-all
+// feature stores no blind value, so effective_depth_mm stays null there
+// instead of repeating the 1 mm default. Unreadable paths keep their raw
+// query code and never fabricate.
+static J extrude_depth_report(ProFeature &f, const J &op) {
+    J defaulted = op.value("defaulted_fields", J::array());
+    J block = {{"source", "unknown"},
+               {"query_code", nullptr},
+               {"requested_depth_type", nullptr},
+               {"requested_depth_mm", nullptr},
+               {"effective_depth_type", nullptr},
+               {"effective_depth_mm", nullptr},
+               {"defaulted_fields", defaulted}};
+    bool type_omitted = false, depth_omitted = false;
+    for (auto field : defaulted) {
+        if (field == "depth_type")
+            type_omitted = true;
+        if (field == "depth")
+            depth_omitted = true;
+    }
+    if (!type_omitted && op.contains("depth_type"))
+        block["requested_depth_type"] = op["depth_type"];
+    if (!depth_omitted && op.contains("depth"))
+        block["requested_depth_mm"] = op["depth"];
+    ProElement tree = nullptr;
+    ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
+    block["query_code"] = (int)code;
+    if (code != PRO_TK_NO_ERROR)
+        return block;
+    block["source"] = "feature_tree";
+    ProError path_code = PRO_TK_NO_ERROR;
+    ProElement type_elem = get_optional(
+        tree, {PRO_E_STD_EXT_DEPTH, PRO_E_EXT_DEPTH_TO, PRO_E_EXT_DEPTH_TO_TYPE}, &path_code);
+    int type = 0;
+    if (path_code == PRO_TK_NO_ERROR && type_elem &&
+        !ProElementIntegerGet(type_elem, nullptr, &type)) {
+        block["effective_depth_type"] = type == PRO_EXT_DEPTH_TO_ALL      ? "through_all"
+                                        : type == PRO_EXT_DEPTH_SYMMETRIC ? "symmetric"
+                                                                          : "blind";
+        if (type != PRO_EXT_DEPTH_TO_ALL) {
+            ProElement value_elem = get_optional(
+                tree, {PRO_E_STD_EXT_DEPTH, PRO_E_EXT_DEPTH_TO, PRO_E_EXT_DEPTH_TO_VALUE},
+                &path_code);
+            double value = 0;
+            if (path_code == PRO_TK_NO_ERROR && value_elem &&
+                !ProElementDoubleGet(value_elem, nullptr, &value))
+                block["effective_depth_mm"] = value;
+            else
+                block["query_code"] = (int)(path_code ? path_code : PRO_TK_GENERAL_ERROR);
+        }
+    } else
+        block["query_code"] = (int)(path_code ? path_code : PRO_TK_GENERAL_ERROR);
+    ProFeatureElemtreeFree(&f, tree);
+    return block;
 }
 // FEAT-051: applied_set_count is proven only by the created feature's own
 // element tree; the requested input count is reported separately and never

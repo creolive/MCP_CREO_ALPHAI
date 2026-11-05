@@ -51,6 +51,7 @@ from creo_mechdog.schema import (
     SketchConstraint,
     SketchDimension,
     SketchOp,
+    dump_plan_operations,
 )
 from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
@@ -819,7 +820,7 @@ async def creo_execute_plan(
     """
     return await invoke(
         general.submit,
-        [op.model_dump(exclude_none=True) for op in operations],
+        dump_plan_operations(operations),
         model_id,
         model_name,
         expected_revision,
@@ -1142,10 +1143,10 @@ async def creo_extrude(
     expected_revision: int,
     label: str,
     sketch: str | int,
-    depth: float = 1,
+    depth: float | None = None,
     mode: Literal["add", "cut", "surface"] = "add",
     direction: Literal["positive", "negative", "symmetric"] = "positive",
-    depth_type: Literal["blind", "through_all"] = "blind",
+    depth_type: Literal["blind", "through_all"] | None = None,
     new_body: bool = False,
     thin: float | None = None,
 ) -> dict[str, Any]:
@@ -1154,18 +1155,24 @@ async def creo_extrude(
     direction is "positive", "negative" or "symmetric". These enums are the same as the plan
     operation {"op":"extrude",...}: this tool submits exactly that operation, so the standalone
     tool and the execute_plan entry accept the same values.
+    Omitting depth or depth_type keeps the existing defaults (1 mm, blind) but is reported honestly:
+    the result operation carries extrude_depth with requested_depth_type/requested_depth_mm (null
+    when omitted), effective_depth_type/effective_depth_mm read from the created feature tree,
+    defaulted_fields and source/query_code. through_all never reports a fabricated blind depth.
     A cut that removes no material (disjoint sketch, wrong direction or already-removed region) fails and rolls back;
     a successful cut reports material_removed_mm3 in its operation details."""
     op = {
         "op": "extrude",
         "label": label,
         "sketch": sketch,
-        "depth": depth,
         "mode": mode,
         "direction": direction,
-        "depth_type": depth_type,
         "new_body": new_body,
     }
+    if depth is not None:
+        op["depth"] = depth
+    if depth_type is not None:
+        op["depth_type"] = depth_type
     if thin is not None:
         op["thin"] = thin
     return await invoke(general.submit, [op], model_id, None, expected_revision)
@@ -2274,7 +2281,15 @@ async def creo_export_model(
     model_id: str,
     format: Literal["step", "stl", "iges", "jpeg", "pdf", "native_bundle"] = "step",
 ) -> dict[str, Any]:
-    """Export STEP/STL/IGES/JPEG, drawing PDF/JPEG, or an explicit native assembly bundle."""
+    """Export STEP/STL/IGES/JPEG, drawing PDF/JPEG, or an explicit native assembly bundle.
+
+    ``format="jpeg"`` is the read-only preview entry: it submits a READ job that
+    renders the current model without saving, so the model revision does not
+    advance. The job result carries a ``preview`` block (``status`` and the
+    rendered ``path``) for the view to display; a model without geometry reports
+    ``status="skipped_no_geometry"`` and a render failure reports ``status="failed"``
+    with ``failed_step``/``failed_code`` instead of a picture.
+    """
     return await invoke(
         general.submit, [{"op": "export", "format": format}], model_id, None, None, None, True
     )

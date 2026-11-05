@@ -1625,6 +1625,7 @@ def compact_job(manifest: dict) -> dict:
                         "material_delta_mm3",
                         "material_measurement",
                         "draft_geometry",
+                        "extrude_depth",
                         "reference_application",
                         "surface_id",
                         "origin",

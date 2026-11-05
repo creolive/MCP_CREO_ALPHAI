@@ -673,6 +673,15 @@ class Acceptance:
         # block that the shared T07 projection attaches to the result.
         record["exported_image"] = self.keep_image("explicit_jpeg_export", Path(operation["file"]))
         record["job_preview"] = self.check_preview("export_job_preview", terminal)
+        # W06: the preview entry is a READ job - submit it and prove the model
+        # revision did not advance before the next edit continues there.
+        inspection = await self.call(
+            "creo_inspect_model", {"model_id": model["model_id"], "detail": "compact"}
+        )
+        record["revision_before_export"] = model.get("revision")
+        record["revision_after_export"] = inspection.get("revision")
+        record["read_only_revision_unchanged"] = inspection.get("revision") == model.get("revision")
+        assert record["read_only_revision_unchanged"], record
         self.report["cases"].append(record)
         self.save()
         return record

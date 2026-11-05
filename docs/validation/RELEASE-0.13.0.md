@@ -1,4 +1,4 @@
-# 0.13.0 发布记录（2026-11-05，开发分支验收；发布未执行）
+# 0.13.0 发布记录（2026-11-05，已合入 main 并发布）
 
 - 条目：[FEAT-039](../work-items/FEAT-039.md)（曲面链 S02/S03/S04/S05/S06/S08/S09/S10）+ W01 策略层；MINOR（功能批），公开工具 **100**（运行时 `creo_capabilities` 的 `tool_count=100`、`enabled_tool_count=100`，2026-11-05 复测；`creo_surface_offset` 加入后从 99 升为 100）。
 - 基线：实际已发布版本是 **0.12.1**（`docs/development/RELEASING.md`；标签 `v0.12.1`）。`0.12.2` 只是从未发布、从未打标签的预置号，本批含新增能力，按 MINOR 提升为 **0.13.0**（`version.py` = 0.13.0，README 与两份种子清单同步）。
@@ -34,9 +34,9 @@
 | S07 偏置 | ✅ 实机公开（`creo_surface_offset`） | 双侧 5 mm：体积 **3999.9999999999995 mm³**、实测距离 **4.999999999999999 mm**、保存重载通过；`surface_trim` 的 `offset_mm` 仍拒（thin trim 实测不移动切口） |
 | S08 完整链路 | ✅ 实机 | 四条用例 + 两个可运行示例 |
 | S09 模块化 | ✅ | `surface_ops` / `schema_base` 拆分，根目录纯兼容导出 |
-| S10 集成与发布交付 | 🟡 **按指派发布执行中** | 本记录 + 黑盒提示词已备；合入、标签、附件与远端核对结果见发布 PR |
+| S10 集成与发布交付 | ✅ **已发布** | 发布 PR #13 合入 `main`（合并提交 `d90d28e163f096f602ca06f60ccd11a91274172a`），标签 `v0.13.0`（附注标签对象 `1ae208066fe7d7a18610425ce17aae34a14a0df5`，指向该合并提交），Release 与四附件已上传、远端核对通过 |
 | W01 端点焊接本体 | ✅ **本体已交付（坐标规整路线）** | 实机：5e-5 mm 间隙 → 移动 2.5e-5 mm（≤ 上限）→ 残差 0.0；默认路径不动；无上限的请求被拒 |
-| W02—W06 | ⚪ **未在本批复核** | draft/angle+offset/origin/extrude 回执与回归保持沿用既有实现，未补证、未复现 |
+| W02—W06 | ⚪ **0.13.0 发布时未复核**（2026-11-05 发布后已补证，见 [FEAT-039](../work-items/FEAT-039.md) 的 W05/W06 段与 BUG-102/094/095） | draft 双向、基准面方向矩阵、草图 origin 矩阵、`extrude_depth` 回执与只读预览均为发布后补证，不属 0.13.0 发布范围 |
 
 ## 未验证范围
 
@@ -49,4 +49,16 @@
 
 发布应有四个文件：`MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256`。发布时逐个列出文件名上传（禁止 `*.zip` 通配），并用 `python tools/check_release_assets.py --tag v0.13.0` 核对四附件齐全、两个 sidecar 与对应 ZIP 摘要一致；远端核对结果记录于发布 PR。
 
-当前状态：**按 2026-11-05 指派执行发布**。四附件在本地构建并用 `python tools/check_release_assets.py --tag v0.13.0 --version 0.13.0 --dir ...` 核对（“four assets present; both sidecars match their ZIP digests”）；种子包确定性指纹见上表，源码包摘要以合并 main 后的源码重建为准（本记录不预写源码包摘要，避免自指）。标签、上传与远端核对结果记录于发布 PR。
+当前状态：**已发布**（2026-11-05）。四附件远端核对：`gh release view v0.13.0` 返回恰好四个附件，`tools/check_release_assets.py --tag v0.13.0` 确认两个 sidecar 与对应 ZIP 摘要一致、标签指向 `main` 合并提交 `d90d28e`。
+
+## 发布执行结果（2026-11-05）
+
+| 项 | 值 |
+| --- | --- |
+| 发布 PR | #13（`codex/DEV-067-alphai-plan` → `main`） |
+| `main` 合并提交 | `d90d28e163f096f602ca06f60ccd11a91274172a` |
+| 标签 | `v0.13.0`（附注标签对象 `1ae208066fe7d7a18610425ce17aae34a14a0df5`） |
+| Release | https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.13.0 （创建于 2026-11-05T14:31:47Z，非草稿、非预发布） |
+| 附件（逐个列名上传） | `MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256` |
+| 远端核对 | 恰四个附件、无多余文件；两 sidecar 与对应 ZIP 摘要一致；标签提交与 `main` 合并提交同一 |
+
