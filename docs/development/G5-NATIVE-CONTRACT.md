@@ -599,8 +599,22 @@ oracle 为面积 × 距离（40×20 的 quilt 偏置 5 mm → 4000 mm³，偏移
 即距离 ✓，比例尺同时约掉 ✓），另有 `direction`、`offset_method="normal_to_surface"`、
 `source_area_mm2`、`volume_before_mm3`、`volume_after_mm3`。
 
-**验收状态**：实现已完成并编译通过；实机测量待会话恢复后补做（oracle：40×20 的 quilt
-偏置 5 mm → 体积 4000 mm³、实测距离 5.000 mm、方向 positive）。
+**实机验收（2026-11-05，双侧）**：40×20 填充面沿法向偏置 5 mm。
+
+| side | 状态 | 体积（oracle 800×5=4000） | 实测距离（体积÷面积） | 保存重载 |
+| --- | --- | --- | --- | --- |
+| positive | succeeded | **3999.9999999999995 mm³** | **4.999999999999999 mm** | true |
+| negative | succeeded | **3999.9999999999995 mm³** | **4.999999999999999 mm** | true |
+
+方向证据的边界（如实记录）：回执 `direction` 是**请求侧**（内核接受
+`PRO_E_STD_USEQLT_SIDE` 的 SIDE_ONE/SIDE_TWO），两侧体积同为单侧 5 mm 壁——对称 2 mm 会是
+1600 mm³——说明材料确实只长在一侧；但 z 符号没有从几何读回（`feature_geometry` 不提供包围盒）。
+
+验收途中修正的两处实现缺陷：① 分发链漏了 `surface_offset`（worker 报
+"Operation is not implemented"），已补上 `generic.cpp` 的分发行；② 实测距离一度误报 1.0
+——三元表达式被书写拆断成 `const double measured = area_known;`（布尔退化为 1.0），已修复并由
+上表复验。另：验收前 Creo 的异步连接槽被一次"连接中途重编 exe"弄脏（`toolkit_code=-4`），
+重启 Creo 后恢复，与算子本身无关。
 
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 

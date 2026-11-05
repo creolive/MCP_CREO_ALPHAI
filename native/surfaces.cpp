@@ -195,8 +195,9 @@ static void generic_surface_offset(const J &op) {
     ProFeature f = create(root);
     ProElementFree(&root);
     double volume_after = volume();
-    const double measured = area_known;
-    source_area > 0.0 ? volume_after / source_area : -1.0;
+    // The wall is the source area swept by the offset distance, so the
+    // volume over the area measures the distance back from the geometry.
+    const double measured = area_known && source_area > 0.0 ? volume_after / source_area : -1.0;
     J extra = {{"target_quilt_id", quilt_id},
                {"source_area_mm2", area_known ? J(source_area) : J(nullptr)},
                {"offset_distance_mm", op["distance"]},

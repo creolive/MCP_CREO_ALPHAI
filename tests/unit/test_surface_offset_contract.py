@@ -55,7 +55,17 @@ class SurfaceOffsetContractTests(unittest.TestCase):
         from creo_mechdog.capabilities import REGISTERED_OPERATIONS, families
 
         self.assertIn("surface_offset", REGISTERED_OPERATIONS)
-        self.assertTrue(families()["surface_offset"]["enabled"])
+        entry = families()["surface_offset"]
+        self.assertTrue(entry["enabled"])
+        # The published evidence is the measured acceptance, not the request.
+        self.assertIn("3999.9999999999995 mm3", entry["native_test"])
+        self.assertIn("4.999999999999999 mm", entry["native_test"])
+
+    def test_the_release_record_lists_s07_as_published(self):
+        record = (
+            Path(__file__).resolve().parents[2] / "docs" / "validation" / "RELEASE-0.13.0.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("| S07 偏置 | ✅ 实机公开（`creo_surface_offset`）", record)
 
     def test_the_native_side_uses_the_documented_offset_method(self):
         native = (Path(__file__).resolve().parents[2] / "native" / "surfaces.cpp").read_text(

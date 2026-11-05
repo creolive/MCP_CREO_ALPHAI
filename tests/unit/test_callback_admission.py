@@ -83,7 +83,9 @@ class CallbackAdmission(unittest.TestCase):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
         # 99 = the 97 published in 0.12.1 plus creo_surface_trim (live P3) and
         # creo_project_curve (live S04), both published by 0.12.2 on 2026-11-04.
-        self.assertEqual(len(tools), 99)
+        # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
+        # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
+        self.assertEqual(len(tools), 100)
         self.assertIn("creo_reconcile_model", tools)
         self.assertTrue(tools["creo_callback_status"].annotations.read_only_hint)
         with (

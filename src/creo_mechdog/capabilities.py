@@ -520,12 +520,15 @@ def families() -> dict:
             "enabled": True,
             "tool": "creo_surface_offset",
             "scope": "offset one quilt along its surface normal by a measured distance and direction",
-            "native_test": "40x20 fill offset 5 mm: the measured offset distance comes back as "
-            "volume divided by the source area, the direction is explicit, and the volume is area "
-            "times distance; measured 2026-11-05",
-            "limits": "one quilt, one direction, the documented normal-to-surface offset method; "
-            "the result is the offset wall, not a standalone offset quilt; a closed quilt is not "
-            "required",
+            "native_test": "40x20 fill offset 5 mm on both sides (2026-11-05 live): the "
+            "offset wall measures 3999.9999999999995 mm3 on the positive and on the negative "
+            "side (area times distance, oracle 800 x 5), the measured distance volume over area "
+            "is 4.999999999999999 mm against the requested 5 mm, and both jobs report "
+            "saved_file_reloaded_and_verified=true",
+            "limits": "one quilt, one explicit side - the receipt direction is the requested "
+            "side and the z sign is not read back from the geometry; the documented "
+            "normal-to-surface offset method; the result is the offset wall, not a standalone "
+            "offset quilt; a closed quilt is not required",
         },
         "sweep": {
             "enabled": True,

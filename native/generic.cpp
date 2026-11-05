@@ -3630,6 +3630,8 @@ static void execute_operation_body(const J &op) {
         generic_fill(op);
     else if (kind == "thicken" || kind == "solidify")
         generic_surface_solid(op);
+    else if (kind == "surface_offset")
+        generic_surface_offset(op);
     else if (kind == "surface_trim")
         generic_surface_trim(op);
     else if (kind == "quilt_merge")

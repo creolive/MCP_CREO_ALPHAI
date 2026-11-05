@@ -7,13 +7,13 @@
 
 本版把曲面链推进到可测量的边界，逐项结论见[发布记录](validation/RELEASE-0.13.0.md)：
 
-- **已公开且实机验证**：`creo_surface_trim`（曲面修剪）、`creo_project_curve`（曲线投影）、`creo_solidify`（实体化判据）、
+- **已公开且实机验证**：`creo_surface_trim`（曲面修剪）、`creo_project_curve`（曲线投影）、`creo_solidify`（实体化判据）、`creo_surface_offset`（法向偏置，双侧实测距离回读）、
   曲面扫掠的 `mode="surface"`（开放 2400.000 mm²、加盖 4000.000 mm² 且闭合、实体化 15999.999999999998 mm³）。
-- **仍门禁**：曲面偏置（S07，thin trim 实测不移动切口）、多截面放样/边界混合（S05，`ProSweep.h` 只支持常量截面，
+- **仍门禁**：`surface_trim` 的 `offset_mm`（thin trim 实测不移动切口）、多截面放样/边界混合（S05，`ProSweep.h` 只支持常量截面，
   本机无 `ProBlend.h`）、曲面合并 `creo_quilt_merge`（S03，四条原生路线都建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`）。
 - **join 需求可测量**：修剪 + 加厚给出并集面积 1400 mm² 与合并实体体积 2799.9999999999995 mm³（重叠只算一次）。
 - **端点焊接（W01）仅策略层**：配对规则与回执交付，原生受控焊接被明确拒绝（草图 epsilon 实测不是重合容差）。
-- 公开工具数 **99**（运行时 `creo_capabilities` 的 `tool_count`）。
+- 公开工具数 **100**（运行时 `creo_capabilities` 的 `tool_count`，`creo_surface_offset` 加入后）。
 
 ## 0.12.0 的原生矩形首壁与就地改型（FEAT-058）
 
