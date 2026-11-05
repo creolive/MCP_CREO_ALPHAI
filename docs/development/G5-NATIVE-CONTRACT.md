@@ -520,6 +520,28 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 
 请求没有 `max_endpoint_move_mm` 时在排队前被拒：上限就是"受控"的含义。
 
+### 2.8e 参照树读取链路与 Direct Blend 的实测判决（2026-11-05）
+
+参照树不再需要人工界面：新增工具 `tools/read_reference_tree.py`
+（`python tools/read_reference_tree.py <file.prt> [--model-id ID] [--feature-id N] [--json out.json]`），
+路线是 **adopt（inspect → apply）→ inspect features → dump_tree**，并把内核自己的判决一起记下来。
+
+对种子库里的放样参照件（`seed_library/seeds/two_straight/mechdog_loft_reference.prt.5`，
+托管副本 `model_id=c416c996171d4759b14fdeb8ca564bb4`）实测：
+
+| 特征 | 类型 | 元素树 |
+| --- | --- | --- |
+| `RIGHT`/`TOP`/`FRONT`/`LOFT_TOP_PLANE` 等 | `PRO_FEAT_DATUM` | 读回成功 |
+| `LOFT_BOTTOM`/`LOFT_TOP` | `PRO_FEAT_CURVE` | 读回成功；截面里带 **`PRO_E_STD_SEC_BLN_VERTS`**（混合顶点的选择） |
+| id 60（Direct Blend 本体） | — | **读取失败**：`ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &root)` 返回 **-18** |
+
+判决：**Direct Blend 没有可抽取的元素树**，因此"用元素树实现混合"这条路被实测关闭，
+面板路线（我们已交付的 `loft` 正是面板驱动）是唯一可用的路线；`loft` 的 surface 模式与
+`quilt_merge` 的门禁消息都带上这条实测依据。
+
+种子库清点：**只有 `two_straight`/`two_smooth` 两个放样（混合）参照件，没有 Merge 或 Offset 参照件**，
+所以 S03/S07 的参照树仍需一份手工建成的 `.prt`——有了它，上面的工具一次就能读回。
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：

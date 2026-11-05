@@ -39,7 +39,7 @@
 
 ## 未验证范围
 
-- 多截面放样/边界混合、单一合并 quilt、偏置：缺参照树或文档树，保持门禁（契约 §2.7/§2.8/§2.8c）。
+- 多截面放样/边界混合、单一合并 quilt、偏置：保持门禁（契约 §2.7/§2.8/§2.8c/§2.8e）。参照树读取链路已产品化（`tools/read_reference_tree.py`），实测 Direct Blend 的元素树抽取返回 -18，即树路线关闭；种子库只有两个放样参照件，Merge/Offset 参照件仍需手工件。
 - W01 原案 gear10 体积基准；端点焊接只覆盖直线端点，弧端点按“unsupported_entity_or_point”跳过。
 - Creo 9 无本机 SDK，构建与运行时未验收；Creo 10 不要求独立复测；BUG-001 既有边界继续适用。
 - WorkBuddy 黑盒验收未执行：提示词见 [WORKBUDDY-0.13.0.md](WORKBUDDY-0.13.0.md)（待执行）。

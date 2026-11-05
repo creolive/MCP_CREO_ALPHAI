@@ -330,3 +330,16 @@ S05 缺的不是能力，是**证据**。
 
 **边界**：只处理直线端点（弧端点按"unsupported_entity_or_point"跳过并记录）；配对规则
 （唯一性、不跨环、同圆）仍在策略层；内核自身的合并阈值（≤1e-6 量级）不受本能力影响。
+
+## 2026-11-05 参照树任务：读取链路产品化 + Direct Blend 实测判决
+
+新增 `tools/read_reference_tree.py`：adopt（inspect → apply）→ inspect features → dump_tree，
+内核拒绝的特征也按原样记录（这是证据，不是猜测）。
+
+对种子放样参照件实测：9 个特征树读回成功（基准面、坐标系、两条 `PRO_FEAT_CURVE` 的
+`LOFT_BOTTOM`/`LOFT_TOP`，其截面里带 `PRO_E_STD_SEC_BLN_VERTS` = 混合顶点的选择）；
+**Direct Blend 本体（id 60）的元素树抽取返回 -18**。
+
+因此："用元素树实现混合"这条路被实测关闭，`loft` 的 surface 模式与 `quilt_merge` 的门禁
+都改为引用这条判决。种子库清点后确认**没有 Merge/Offset 参照件**，S03/S07 仍需手工件；
+拿到之后上面这个工具一次就能读回元素树。

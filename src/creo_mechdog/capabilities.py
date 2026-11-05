@@ -107,7 +107,7 @@ def require_available(operations: list[dict]) -> None:
     for op in operations:
         if op["op"] == "loft" and (op.get("mode", "add") != "add" or op.get("new_body", False)):
             raise ValueError(
-                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted"
+                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted - the 2026-11-05 measurement on the seed reference part shows the blend feature has no extractable element tree (ProFeatureElemtreeExtract returned -18), so the panel route is the only route for a blend"
             )
         if (
             op["op"] in ("sketch", "airfoil_sketch", "update_sketch_geometry")
