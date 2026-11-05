@@ -1,0 +1,86 @@
+{
+  "description": "Surface trim and join chain: two overlapping fills, the shared edge cut with a datum plane, and the first fill thickened. The trim keeps the 600 mm2 outside part, so the union area is 800 + 600 = 1400 mm2.",
+  "phases": [
+    {
+      "operations": [
+        {
+          "op": "sketch",
+          "label": "join_a",
+          "plane": "XY",
+          "entities": [
+            {
+              "type": "rectangle",
+              "name": "ra",
+              "min": [0.0, 0.0],
+              "max": [40.0, 20.0]
+            }
+          ]
+        },
+        {
+          "op": "surface_fill",
+          "label": "join_face_a",
+          "sketch": "join_a"
+        },
+        {
+          "op": "sketch",
+          "label": "join_b",
+          "plane": "XY",
+          "entities": [
+            {
+              "type": "rectangle",
+              "name": "rb",
+              "min": [30.0, 0.0],
+              "max": [70.0, 20.0]
+            }
+          ]
+        },
+        {
+          "op": "surface_fill",
+          "label": "join_face_b",
+          "sketch": "join_b"
+        },
+        {
+          "op": "datum_plane",
+          "label": "join_cut",
+          "reference": {
+            "kind": "datum_plane",
+            "axis": "x",
+            "offset": 0
+          },
+          "offset": 40.0
+        }
+      ]
+    },
+    {
+      "operations": [
+        {
+          "op": "surface_trim",
+          "label": "join_trim",
+          "target": {
+            "kind": "quilt_feature",
+            "label": "join_face_b"
+          },
+          "tool": {
+            "kind": "datum_plane",
+            "label": "join_cut"
+          },
+          "keep_side": "one"
+        }
+      ]
+    },
+    {
+      "operations": [
+        {
+          "op": "thicken",
+          "label": "join_solid_a",
+          "reference": {
+            "kind": "quilt_feature",
+            "label": "join_face_a"
+          },
+          "thickness": 2.0,
+          "side": "symmetric"
+        }
+      ]
+    }
+  ]
+}

@@ -40,10 +40,12 @@ ROOT = Path(__file__).resolve().parent.parent
 try:  # the driver runs as a script and as a package module
     from surface_chain_chains import case_chain_open_live, case_chain_open_offline
     from surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
+    from surface_chain_example import case_example_live, case_example_offline
     from surface_chain_join import case_join_live, case_join_offline
 except ImportError:  # pragma: no cover - the package import path
     from tools.surface_chain_chains import case_chain_open_live, case_chain_open_offline
     from tools.surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
+    from tools.surface_chain_example import case_example_live, case_example_offline
     from tools.surface_chain_join import case_join_live, case_join_offline
 sys.path.insert(0, str(ROOT))
 
@@ -1542,6 +1544,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", default="quilts", help=f"case to run, one of: {', '.join(CASES)}")
     parser.add_argument(
+        "--example",
+        default="",
+        help="run an example plan file (examples/*.json) instead of a case",
+    )
+    parser.add_argument(
         "--live", action="store_true", help="run against the connected Creo session"
     )
     parser.add_argument(
@@ -1550,7 +1557,14 @@ def main() -> int:
         help="second required key that the session was verified usable",
     )
     args = parser.parse_args()
-    if args.case not in CASES:
+    if args.example:
+        example_path = Path(args.example)
+        if not example_path.is_absolute():
+            example_path = ROOT / example_path
+        if not example_path.exists():
+            parser.exit(BUSY_EXIT, f"example file not found: {args.example}\n")
+        args.case = f"example:{example_path.name}"
+    elif args.case not in CASES:
         parser.exit(BUSY_EXIT, f"unknown case: {args.case}; available: {', '.join(CASES)}\n")
     if args.live != args.confirm_session_usable:
         parser.exit(
@@ -1574,7 +1588,14 @@ def main() -> int:
         "command": "tools/test_surface_chain.py " + " ".join(sys.argv[1:]),
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    outcome = run_case(args.case, args.live)
+    if args.example:
+        outcome = (
+            asyncio.run(case_example_live(wait_ready, example_path))
+            if args.live
+            else case_example_offline(example_path)
+        )
+    else:
+        outcome = run_case(args.case, args.live)
     report.update(outcome)
     path = run_dir / "report.json"
     path.write_text(json.dumps(report, indent=2, ensure_ascii=True), encoding="utf-8")

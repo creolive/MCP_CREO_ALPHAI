@@ -281,3 +281,16 @@
 **同时修掉的驱动缺陷**：作业轮询改用 `detail=compact`，并在终态后取一次完整视图——
 体量大的作业用完整视图会被拒（`Query metadata exceeds response budget`），
 而紧凑视图带状态但不带测量值，两者都要才读得到数。
+
+## 2026-11-05 曲面链示例文件：可运行的分阶段计划
+
+计划里点名的 `examples/p12_surface_blade.json` 与 `examples/surface_trim_merge.json` 已补齐，
+并让统一驱动能真正跑它们：`tools/test_surface_chain.py --example <file>`。
+
+示例是**分阶段**的（一个阶段一次作业、同一模型继续），id 用占位符声明
+（`$curve:<特征名>`、`$quilt:<特征名>`、`$body:<特征名>`），运行前按检查结果解析，
+所以示例不写死会话 id、可重放。离线条断言 schema 通过且没有用到被门禁的算子。
+
+实机：`p12_surface_blade.json` 三阶段全通过（修剪面积 800 → **600.000 mm²**，加厚 committed，
+保存重载通过）；`surface_trim_merge.json` 同样三阶段全通过（修剪 800 → 600 mm² = 并集的外侧部分，
+加厚 committed）。测试见 `tests/unit/test_surface_examples.py`。

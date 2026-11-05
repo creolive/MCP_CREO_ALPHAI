@@ -445,6 +445,37 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 这条路线满足"join 需求"，但它产出的是**一个合并后的实体**，不是**单一合并 quilt**；
 后者仍需要 Merge 特征的真实元素树（本机没有，缺口是参照树）。
 
+### 2.10 曲面链示例文件：可运行的分阶段计划（2026-11-05）
+
+`examples/` 里新增两个**可运行**的曲面链示例，配套 `tools/test_surface_chain.py --example <file>`：
+
+```json
+{
+  "description": "...",
+  "phases": [
+    {"operations": [{"op": "sketch", "label": "blade_profile", ...}]},
+    {"operations": [{"op": "surface_trim", "tool": {"kind": "curve", "id": "$curve:blade_cut"}, ...}]}
+  ]
+}
+```
+
+- **阶段**：一个阶段内的算子在同一次作业里跑完，下一阶段在同一个模型上继续；
+- **占位符**：`$curve:<特征名>`、`$quilt:<特征名>`、`$body:<特征名>` 在运行前按检查结果解析成
+  真实 id，示例里不写死会话 id，因此示例是声明式的、可重放的；
+- **离线条**把占位符替换成占位数字再过 schema，并断言没有用到被门禁的算子；
+- **实机条**逐阶段提交，要求每个阶段 `succeeded` 且 `saved_file_reloaded_and_verified=true`。
+
+实机（2026-11-05）：
+
+| 示例 | 阶段 | 实测 |
+| --- | --- | --- |
+| `examples/p12_surface_blade.json` | 1：两张 40×20 填充面 + 切线草图 | 5 个算子全部 committed |
+| | 2：用 `$curve:blade_cut` 修剪 `blade_face` | 面积 **800 → 600.000 mm²** |
+| | 3：加厚 `blade_solid_face` 2 mm | committed，模型保存重载通过 |
+| `examples/surface_trim_merge.json` | 1：两张重叠填充面 + 共享边基准面 | 5 个算子全部 committed |
+| | 2：按共享边修剪第二张面 | 面积 **800 → 600.000 mm²**（重叠 200 mm²） |
+| | 3：加厚第一张面 2 mm | committed，模型保存重载通过 |
+
 ### 2.4 quilt_merge：ProMerge.h 当前（数组）树（结构有文档）
 
 `ProMerge.h` 对本机 SDK 的当前曲面合并树是**完整文档化**的，不再属于"候选"：
