@@ -1,6 +1,6 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；A04 矩形首壁与就地改型已交付（原始实机 67/67），0.12.0 时点公开工具 95→97，默认模板路线保留。**仍开放**：非矩形/多环截面、四壁/第二折边、显式支撑面 origin、Creo 9/10 实机、WorkBuddy 黑盒。目标版本：0.12.0（已发布）。**0.15.0 已交付**：`thickness_validation` / `thickness_loaded_validation` 双上下文回执；缺 API 的原生独立几何兜底仅离线门控，实机未验证。
+类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；A04 矩形首壁与就地改型已交付（原始实机 67/67），0.12.0 时点公开工具 95→97，默认模板路线保留。**仍开放**：非矩形/多环截面、四壁/第二折边、显式支撑面 origin、Creo 9/10 实机、WorkBuddy 黑盒。目标版本：0.12.0（已发布）。**0.17.0 已交付**：可选 `origin` 首壁定位与保持原点的改型（实机 112/112）；显式平面字典 + 非零 `origin` 仍由 schema 拒绝，斜置/非轴对齐 frame 的 resize 未取实机证据。**0.15.0 已交付**：`thickness_validation` / `thickness_loaded_validation` 双上下文回执；缺 API 的原生独立几何兜底仅离线门控，实机未验证。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -184,7 +184,7 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 
 命令：`.\.venv\Scripts\python.exe tools\test_adoption_planar_wall.py --live --confirm-session-usable`；报告 `build/planar_wall/20261106T115256Z/adoption_live.json`（`passed=true`，sha256 `7a981a00d11e9698f0dde8c70a622f6d44a0bf8eeb13f02d5e6f2675def39838`），77/77 检查通过，含 100×60×1 job `0806159…`（体积 6000、厚度 API 读数 1.0、`wall_created_this_job=true`）、185×232×1 `large`、同计划 create→resize 的 `thickness_loaded_validation.context=current_plan` 与保存重载 true，以及 XY/XZ/YZ、负方向、跨作业存档厚度、拒绝后继续编辑。缺 API 的 `geometry_normal_span` 仍只有受控编译与离线判定，Creo 9/10 实机未验。
 
-## 2026-11-06 R10 首壁 origin（代码已实现并实机验收，未提交/未发布）
+## 2026-11-06 R10 首壁 origin（已随 0.17.0 发布）
 
 分支 `codex/R10-first-wall-origin`（基线 `34dbcb1`，`version.py=0.16.1` 已发布）。本轮只改首壁定位与 resize，不改全局坐标求解器。
 
@@ -208,4 +208,4 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 
 测试：`tests/unit/test_native_planar_wall.py` 44 项（新增 origin/envelope/投影/server/native 断言 8 项 + resize 映射 1 项）、`test_t02_operation_results` 18 项；`bridge.py build` 退出 0。离线探针 10/10。
 
-未验证：Creo 9/10 实机；显式平面字典与非零 `origin` 组合（schema 明确拒绝）；WorkBuddy 黑盒；斜置/非轴对齐 frame 的 resize（原生会以“截面轴与记录 frame 不对齐”拒绝，未取实机证据）。本轮未合入 `main`、未发布。
+未验证：Creo 9/10 实机；显式平面字典与非零 `origin` 组合（schema 明确拒绝）；WorkBuddy 黑盒；斜置/非轴对齐 frame 的 resize（原生会以“截面轴与记录 frame 不对齐”拒绝，未取实机证据）。本轮已随 0.17.0 合入 `main` 并发布。

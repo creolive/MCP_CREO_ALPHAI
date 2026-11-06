@@ -1,6 +1,6 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
-> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节。
+> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
 
 ## 2026-11-06：R10 计划内 `edge_geometry` 选边（实机）
 
