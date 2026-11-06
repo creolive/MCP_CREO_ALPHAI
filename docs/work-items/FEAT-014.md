@@ -1,5 +1,7 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
+> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段）。`adjacent_bend_ends` 保护默认行为不变；切角量与角部间隙尺寸仍未量化。
+
 ## 2026-11-06：R09 归因文案、实机对比与能力口径（离线 + 实机第 3 项）
 
 本条只改诊断文案与说明，不改几何、不放宽拒绝条件。**同日已用 `tools/test_sheetmetal_box_live.py` 跑 R09 第 3 项实机对比**（见文末 2026-11-06 节）：自由首壁建成，第三壁在 1 角/2 角上下文均被 `adjacent_bend_ends` 创建前拒绝，`end_trim_mm` 实测被忽略；第 4—6 项仍无可用几何路线。状态口径固定如下：
@@ -251,3 +253,26 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 - `trim_probe` 仍为 `trim_ignored`：完整墙与 `end_trim_mm=20` 修剪墙体积同为 60945.29123405193（job `c0f6c4ffa4f64db2a4ac9e016d594200` / `044db8125d0a49b190739c13fefb1d7d`），`setback_confirmed=false`；trim 不能用于角部让位。
 - **判定**：本轮只执行了 R09 第 3 项（分离资格/邻接/材料干涉）。结论是第三壁在 1 角与 2 角上下文都被既有的创建前邻接保护拒绝，失败发生在 `before_create`，**不构成 corner relief/miter 的几何证据，也不解除任何四壁门禁**。第 4—6 项（真实角部去料/缺口几何、逐 op 重解析、实机四壁保存重载）仍 blocked：没有已实现的 corner relief/miter 路线，且 `end_trim_mm` 实测被忽略。FEAT-014 保持开放，`four_walls_complete=false`。
 - **未验证**：第三壁若绕过保护进入再生的内部机理（截面越界 vs 相邻料重叠）、真实角部缺口几何、材料端释放几何、四壁保存重载。
+
+## 2026-11-06 第二段：miter cuts 路线实现与实机
+
+路线选择：`ProSmtFlangeWall.h` 的 `PRO_E_SMT_MTR_CUTS` 与折边同特征创建，宽度/偏移用 BLIND 直接数值（GAP 实测被重置为 PARAM，见下）；不用需要三条角部引用的独立 `ProSmtCornerRelief` 特征。调研与取舍见 [2026-11-06 计划](../superpowers/plans/2026-11-06-feat-014-miter-cuts-route.md)。
+
+改动：
+
+- 原生 `native/advanced.cpp`：新增 `FlangeMiterRequest`/`flange_miter_request`（`miter_cuts {width, offset}`，布尔/非正/负偏移拒绝）；`adjacent_bend_ends` 保护改为「无 `miter_cuts` 才拒绝」，放行时把原邻接证据带 `allowed_by_miter_cut=true` 记入 `adjacent_bend_ends_allowed`；元素树在 `PRO_E_SMT_BEND_RELIEF` 之后写 `PRO_E_SMT_MTR_CUTS`（ADD=TRUE、WIDTH_TYPE=BLIND、WIDTH_VAL、OFFSET_TYPE=BLIND、OFFSET_VAL；`KEEP_DEF_AREAS` 不设）；创建后从已建特征树回显并逐项核对，不一致即失败。
+- Python：`src/creo_mechdog/schema.py` 新增 `FlangeMiterCuts` 与 `SheetmetalFlangeOp.miter_cuts`（offset 省略等于 width）；`server.py` 增加同名可选参数与 `operation["miter_cuts"]`；`capabilities.py` 与 `docs/REFERENCE_SYNTAX.md` 口径改为「miter_cuts 是唯一放行方式，切角量待定标」。
+- compact 投影：`src/creo_mechdog/job_projection.py` 的 `sheetmetal_flange` 判据增加 `miter_cuts`、`adjacent_bend_ends_allowed`，避免精简轮询丢掉放行证据。
+- 驱动 `tools/test_sheetmetal_box_live.py`：新增 `run_miter_probe`（同一自由首壁带/不带 miter 的两块新模型，按实测体积差分类 `gap_measured`/`no_measurable_cut`）与 `run_miter_box`（`+x`、`-x` 自由，`-y`、`+y` 带 miter，一墙一 job）；`four_walls_complete` 只在四墙全部成功、测量齐全且每墙 `saved_file_reloaded_and_verified=true` 时为 true。
+- 单测：`tests/unit/test_sheetmetal_flange.py` 增加 miter schema 用例与保护放行源码契约；`test_sheetmetal_relief.py` 的「未实现形状」清单移除 `PRO_E_SMT_MTR_CUTS`。
+
+离线验证：`bridge.py build` 通过；`tools/test_unit.py`、`tools/dev_check.py` 通过；`tools/test_sheetmetal_box_live.py` 离线 62 用例通过。
+
+实机（2026-11-06，Creo 12.4.0.0，`--live --confirm-session-usable`，单通道一墙一 job）：
+
+- 首次运行 `build/post090_n05/20261106T161433_254305b2/report.json`：GAP 型提交后 Creo 把宽度/偏移类型重置为 PARAM（-18/-19）并把值清 0，创建后回显核对按设计抛错，任务失败回滚（revision 1→1、体积不变）。这证明回显核对能拦住静默重置，也证明 GAP 不是本上下文的直接数值类型。
+- 改用 BLIND（`PRO_DIM_ENTER = -4`）重编后 `build/post090_n05/20261106T163234_c086ae9d/report.json`（sha256 `a83f6eea…`，整体 `passed=true`、`capability_claim.four_walls_complete=true`；另有一次同结果运行 `20261106T161949_61da6c2a`）：
+  - `miter_probe`：自由首壁带/不带 `miter_cuts` 各建一块新模型，加料体积均为 18025.29 mm³，差值 0 → `classification=no_measurable_cut`。回显 `add=1`、`width_type=-4`、`width_mm=1`、`offset_type=-4`、`offset_mm=1`。自由壁没有重叠可切，此结果只说明该位置无副作用。
+  - `miter_box`：`four_walls_complete=true`。`f_px`、`f_nx` 自由壁成功；`f_ny`（附着边 span 177.92，两端邻接折弯）带 `miter_cuts` 成功，回显 `allowed_by_miter_cut=true` 与两端邻接证据；`f_py` 同样成功。四墙均 `saved_file_reloaded_and_verified=true`，revision 1→5，体积 42920 → 106499.16 mm³。模型树为 `F_PX`/`F_NX`/`F_NY`/`F_PY`，Creo 中可见四壁闭合盒子与角部斜切线。
+- **仍未量化**：`miter_cuts` 的 width/offset 与实际切除量之间的关系（自由壁探针为空操作对照；角部无法做「不传 miter」的反例，因为保护会拒绝）；角部间隙的尺寸、不同板厚/半径下的行为，以及删除/修改后的回滚，均未验证。结论只到「四壁经 miter_cuts 路线建成并保存重载」，不外推切角尺寸。
+

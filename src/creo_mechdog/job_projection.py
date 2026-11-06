@@ -138,6 +138,14 @@ ASSEMBLY_POSE_KEYS = (
     "length_unit",
 )
 
+#: FEAT-014: the miter request echo and the adjacency evidence that it released.
+#: Both are the flange's own judgement fields, so a compact poll keeps them
+#: instead of silently dropping the only record of the guard decision.
+FLANGE_MITER_KEYS = (
+    "miter_cuts",
+    "adjacent_bend_ends_allowed",
+)
+
 _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "assemble_component": ASSEMBLY_POSE_KEYS,
     "component_placement": ASSEMBLY_POSE_KEYS,
@@ -145,6 +153,7 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
     "solidify": SOLIDIFY_KEYS,
+    "sheetmetal_flange": FLANGE_MITER_KEYS,
 }
 
 #: Progress receipt keys from ``native_stage.stall_report``. Log text and any

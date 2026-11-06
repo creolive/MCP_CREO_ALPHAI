@@ -1023,6 +1023,32 @@ class FlangeRelief(StrictModel):
         return self
 
 
+class FlangeMiterCuts(StrictModel):
+    # FEAT-014 2026-11-06. The native miter-cut section of the same flange feature
+    # (ProSmtFlangeWall.h: PRO_E_SMT_MTR_CUTS), GAP width and offset in model
+    # units. A flange whose attachment-edge ends abut existing bends must carry
+    # this request to pass the adjacent_bend_ends guard; without it the guard
+    # keeps refusing before creation. The live geometry meaning of the gap is
+    # measured by the box driver - this request alone claims no cut amount.
+    width: Annotated[float, Field(gt=0, le=100000)]
+    offset: Annotated[float, Field(ge=0, le=100000)] | None = None
+
+    @field_validator("width", "offset", mode="before")
+    @classmethod
+    def numeric_dimension(cls, value: Any) -> Any:
+        # bool is an int in Python; accepting True as a 1 mm gap would be a
+        # silent reinterpretation instead of a rejected request.
+        if isinstance(value, bool):
+            raise ValueError("miter_cuts width and offset are numbers of model units, not booleans")
+        return value
+
+    @model_validator(mode="after")
+    def miter_valid(self):
+        if self.offset is None:
+            self.offset = self.width
+        return self
+
+
 class SheetmetalFlangeOp(StrictModel):
     op: Literal["sheetmetal_flange"]
     label: Label
@@ -1041,6 +1067,11 @@ class SheetmetalFlangeOp(StrictModel):
     flip: bool = False
     y_factor: Annotated[float, Field(gt=0, le=1)] = 0.5
     relief: FlangeRelief | None = None
+    # FEAT-014: optional native miter cuts on the same flange feature. An explicit
+    # request is the only way a wall whose attachment-edge ends abut existing
+    # bends passes the adjacent_bend_ends guard; omitting it keeps the previous
+    # refusal exactly. relief and miter_cuts are orthogonal and may be combined.
+    miter_cuts: FlangeMiterCuts | None = None
     # DEV-051 T05 third-wall contrast: shorten the wall at both chain ends by this
     # absolute model-unit length (both depth sides become blind with this offset).
     # Omitting it keeps the previous full-edge tree. Whether Creo measures the blind

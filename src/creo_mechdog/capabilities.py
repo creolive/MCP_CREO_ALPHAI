@@ -649,8 +649,7 @@ def families() -> dict:
                 "sketch's coordinate dimensions, so it keeps the feature id and gauge but "
                 "refuses unknown labels, walls from other operations and walls with downstream "
                 "dependencies (a flange on the wall counts); a flange attaches to a native "
-                "first wall (live 2026-11-04) but non-rectangular sections and a second flange "
-                "remain unverified; four walls are not delivered in this release; "
+                "first wall (live 2026-11-04) but non-rectangular sections remain unverified; "
                 "creo_sheetmetal_flange relief is bend-end relief only (PRO_E_SMT_BEND_RELIEF per "
                 "bend end, 'none' or 'rectangular' with explicit width/depth), not corner relief "
                 "or a miter, and it is not proven to resolve corner overlap; a flange whose "
@@ -658,8 +657,13 @@ def families() -> dict:
                 "2026-10-30: a free full edge attaches, an edge shortened at even one end by a "
                 "previous bend fails and rolls back), so it is refused before create by the "
                 "adjacent_bend_ends guard, which is a pre-create refusal rule and not a geometry "
-                "or miter proof and still applies when relief is supplied; forms, hems and jogs "
-                "are not high-level tools"
+                "or miter proof and still applies when relief is supplied; passing miter_cuts "
+                "{width, offset} is the only release - it adds the flange's native "
+                "PRO_E_SMT_MTR_CUTS section (literal BLIND width/offset in model units) so "
+                "Creo cuts the end overlap; the four-wall box route is live verified "
+                "2026-11-06 (four walls built, saved and reloaded), while the cut amount "
+                "produced by a given width/offset is not yet quantified; forms, hems and "
+                "jogs are not high-level tools"
             ),
         },
         "assembly": {

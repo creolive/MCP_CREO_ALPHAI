@@ -1366,19 +1366,73 @@ class FlangeWordingTest(unittest.TestCase):
         section = self.flange[self.flange.index(guard) : self.flange.index("ProSection2DAlloc")]
         self.assertNotIn("relief_request", section)
 
-    def test_capabilities_scope_does_not_claim_four_walls_or_corner_relief(self) -> None:
+    def test_capabilities_scope_states_the_miter_route_and_remaining_limits(self) -> None:
         limits = families()["sheetmetal"]["limits"]
-        self.assertIn("four walls are not delivered", limits)
+        self.assertIn("miter_cuts", limits)
+        self.assertIn("PRO_E_SMT_MTR_CUTS", limits)
+        self.assertNotIn("four walls are not delivered", limits)
         self.assertIn("bend-end relief", limits)
         self.assertIn("not corner relief", limits)
         self.assertIn("not a geometry or miter proof", limits)
         self.assertIn("not proven to resolve corner overlap", limits)
         self.assertIn("still applies when relief is supplied", limits)
 
+    def test_adjacent_guard_releases_only_for_an_explicit_miter_request(self) -> None:
+        guard = self.flange[
+            self.flange.index(
+                "J adjacency = flange_adjacent_bend_end_evidence"
+            ) : self.flange.index("ProSection2DAlloc")
+        ]
+        self.assertIn("!miter_request.requested", guard)
+        self.assertIn("allowed_by_miter_cut", guard)
+        self.assertIn("PRO_E_SMT_MTR_CUTS", self.flange)
+
     def test_edge_field_description_names_path_and_example(self) -> None:
         description = SheetmetalFlangeOp.model_fields["edge"].description
         self.assertIn("operations[i].edge", description)
         self.assertIn("{kind:'edge',id:N}", description)
+
+
+class MiterCutsSchemaTest(unittest.TestCase):
+    """FEAT-014: miter_cuts is optional, validated independently of relief."""
+
+    @staticmethod
+    def validated(miter: dict) -> dict:
+        reference = select_wall_edge(box_inspection(), PLATE_BOUNDS, "-y", face="top")
+        operation = flange_op("-y", "f_ny", reference)
+        operation["miter_cuts"] = miter
+        return validate_operations([operation])[0]["miter_cuts"]
+
+    def test_width_and_offset_are_preserved_verbatim(self) -> None:
+        self.assertEqual(
+            self.validated({"width": 1.0, "offset": 0.25}),
+            {"width": 1.0, "offset": 0.25},
+        )
+
+    def test_offset_defaults_to_width(self) -> None:
+        self.assertEqual(self.validated({"width": 1.2}), {"width": 1.2, "offset": 1.2})
+
+    def test_booleans_missing_nonpositive_and_negative_values_are_rejected(self) -> None:
+        for miter in (
+            {"width": True},
+            {"width": 0},
+            {"width": -1.0},
+            {"width": 1.0, "offset": -0.5},
+            {"offset": 1.0},
+            {"width": float("inf")},
+        ):
+            with self.subTest(miter=miter):
+                with self.assertRaises(Exception):
+                    self.validated(miter)
+
+    def test_relief_and_miter_cuts_are_orthogonal(self) -> None:
+        reference = select_wall_edge(box_inspection(), PLATE_BOUNDS, "-y", face="top")
+        operation = flange_op("-y", "f_ny", reference)
+        operation["relief"] = {"type": "rectangular", "width": 1.0, "depth": 0.5}
+        operation["miter_cuts"] = {"width": 1.0}
+        validated = validate_operations([operation])[0]
+        self.assertEqual(validated["relief"]["width"], 1.0)
+        self.assertEqual(validated["miter_cuts"], {"width": 1.0, "offset": 1.0})
 
 
 if __name__ == "__main__":

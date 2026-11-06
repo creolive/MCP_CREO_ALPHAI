@@ -794,9 +794,16 @@ def native_source() -> dict:
         "trim_must_be_positive": "end_trim_mm must be a number greater than 0" in flange,
         "trim_logged": "FLANGE_END_TRIM" in flange,
         "trim_echo_recorded": 'extra["depth_trim"]' in flange,
-        # Scope discipline: the trim is the only new element write.
+        # Scope discipline: the trim and the FEAT-014 miter section are the only
+        # new element writes; the miter section exists only behind its request.
         "no_corner_relief": "PRO_E_SMT_CORNER_RELIEF" not in flange,
-        "no_miter_cuts": "PRO_E_SMT_MTR_CUTS" not in flange,
+        "miter_tree_present": "PRO_E_SMT_MTR_CUTS" in flange,
+        "miter_tree_gated_on_request": "if (miter_request.requested)" in flange,
+        "miter_literal_types": "PRO_MITER_CUT_WIDTH_TYPE_BLIND" in flange
+        and "PRO_MITER_CUT_OFFSET_TYPE_BLIND" in flange,
+        "miter_echo_checked": "flange_miter_expect" in source and 'extra["miter_cuts"]' in flange,
+        "miter_guard_release": "!miter_request.requested" in flange
+        and "allowed_by_miter_cut" in flange,
         "no_edge_rip": "PRO_E_SMT_EDGE_RIP" not in flange,
         "no_to_ref_depth": "PRO_WALL_LEN_TYPE_TO_REF" not in flange,
         "no_blind_sym_depth": "PRO_WALL_LEN_TYPE_BLIND_SYM" not in flange,
@@ -869,6 +876,12 @@ def contract_source() -> dict:
         "schema_rejects_boolean": "end_trim_mm is a length in model units, not a boolean" in schema,
         "server_optional_parameter": "end_trim_mm: Annotated[" in server,
         "server_writes_only_when_present": 'operation["end_trim_mm"] = end_trim_mm' in server,
+        # FEAT-014: the miter contract is schema-validated and forwarded only
+        # when present, exactly like the trim field.
+        "schema_miter_model": "class FlangeMiterCuts" in schema,
+        "schema_miter_field": "miter_cuts: FlangeMiterCuts | None = None" in schema,
+        "server_miter_parameter": "miter_cuts: Annotated[" in server,
+        "server_writes_miter_when_present": 'operation["miter_cuts"] = miter_cuts' in server,
     }
     missing = [name for name, present in checks.items() if not present]
     assert not missing, f"contract source guard missing: {missing}"

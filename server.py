@@ -1822,9 +1822,11 @@ async def creo_sheetmetal_flange(
                 "ends:'both'|'side1'|'side2', width:model units, depth:model units}. "
                 "Omit it for the previous behaviour (no relief on either end). rectangular "
                 "requires width>0 and depth>=0; both are absolute model units and are not "
-                "scaled by the sheet thickness. Rip/stretch/obround/param, corner relief, "
-                "miter cuts and edge rips are not supported. Relief is fixed when the flange "
-                "is created: change it by deleting/re-creating the flange, not in place."
+                "scaled by the sheet thickness. Rip/stretch/obround/param, corner relief "
+                "and edge rips are not supported; miter cuts are only the flange-time "
+                "miter_cuts section, never bend-end relief. "
+                "Relief is fixed when the flange is created: change it by "
+                "deleting/re-creating the flange, not in place."
             )
         ),
     ] = None,
@@ -1839,14 +1841,29 @@ async def creo_sheetmetal_flange(
             )
         ),
     ] = None,
+    miter_cuts: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description=(
+                "Optional native miter cuts {width:model units>0, offset:model units>=0; "
+                "offset defaults to width}, written as the literal BLIND width/offset of "
+                "the flange's own PRO_E_SMT_MTR_CUTS section. This is the only way a flange "
+                "whose attachment-edge ends abut existing bends passes the "
+                "adjacent_bend_ends guard (without it the wall is still refused before "
+                "create). The element-tree echo is read back from the created feature; the "
+                "geometry a given width/offset removes is not quantified yet."
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Attach a native bent flange to a sheetmetal edge. The section exposes named height for dimension edits.
 
     flip=false (the default) bends out of the face the edge belongs to; flip=true bends to
     the opposite, material side. The side is relative to the attachment face, not to a
     global axis. A wall whose attachment-edge end is adjacent to an existing bend is
-    rejected before creation (failure_reason=adjacent_bend_ends); four-wall boxes are not
-    supported yet.
+    rejected before creation (failure_reason=adjacent_bend_ends) unless the request
+    carries miter_cuts; that explicit native miter request releases the guard and lets
+    Creo cut the end overlap (four-wall boxes use this route).
 
     Attachable edges are the boundaries of the green/white wall faces (the wall faces are
     wall_contract.wall_face_ids of the base wall); an edge shared by two side/rim surfaces
@@ -1877,6 +1894,8 @@ async def creo_sheetmetal_flange(
         operation["relief"] = relief
     if end_trim_mm is not None:
         operation["end_trim_mm"] = end_trim_mm
+    if miter_cuts is not None:
+        operation["miter_cuts"] = miter_cuts
     return await invoke(general.submit, [operation], model_id, None, expected_revision)
 
 
