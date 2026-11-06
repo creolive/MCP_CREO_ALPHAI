@@ -1,6 +1,6 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
-> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段）。`adjacent_bend_ends` 保护默认行为不变；切角量与角部间隙尺寸仍未量化。
+> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。
 
 ## 2026-11-06：R09 归因文案、实机对比与能力口径（离线 + 实机第 3 项）
 
@@ -24,7 +24,7 @@ P14 待验：构建后以当前源码运行三组首壁帧对照，按几何选�
 
 离线证据（提交前 dirty 源码）：定向 `unittest` 69/69、`discover -s tests` 1817/1817、改动 Python 文件 Ruff、`native/generic.cpp`/`advanced.cpp` 的 clang-format dry-run 均通过；两份非 live 报告见 `build/post0100_sheetmetal/20261031T224613/`。报告目录属本机生成物，不入库；P14 应按提交后的源码身份重新构建并实机验证。
 
-日期：2026-10-28（Asia/Shanghai）补工作卡，沿用既有 ID。类型：功能。优先级：P2（既有台账）；状态：**有界能力已交付（0.10.0：`adjacent_bend_ends` 创建前拒绝语义，N06 终验 RUN PASSED）；四壁/角部与释放几何保持开放**。历史过程（2026-10-29 第三轮：第一道 `-1` 的根因已定——验收基体实为 232 mm 厚板、所选边不在壁面上——已改基体并在准入层拒绝该类边；修正后两道折边 succeeded 但几何是平铺延伸而非折弯，第三道挂起；四壁与释放能力未完成。2026-10-29 第四轮：截面已按库存 `flange_shapes` 重建（单线、无 centerline、腿在父壁法向）并重建执行器，但实机被会话消失阻塞，折弯仍**未验证**。2026-10-29 第六轮：`direction` 开关从 `PRO_E_SMT_FLANGE_TRAJ_CRV_NORM` 改到 `PRO_E_SMT_FLANGE_SEC_FLIP` 后，`tools/test_flange_direction.py --live` 两例均 `saved_file_reloaded_and_verified=true`、rev 2，默认向外（+X 顶边 +Z 79 mm）、`flip=true` 反向（−Z 79 mm），报告 `passed=true`；四壁在第二道后仍于 `f_ny` 回滚（rev 不变、原码保留），1×1 矩形释放体积差 0.000000、无缺口面）。目标版本：0.10.0（有界能力已交付）；四壁/释放几何未排期。
+日期：2026-10-28（Asia/Shanghai）补工作卡，沿用既有 ID。类型：功能。优先级：P2（既有台账）；状态：**已交付 0.16.0（四壁经 `miter_cuts` 实机建成、`four_walls_complete=true`；`adjacent_bend_ends` 默认拒绝不变，仅显式 `miter_cuts` 放行）；relief 材料几何、切角量/角部间隙仍开放**。历史过程（2026-10-29 第三轮：第一道 `-1` 的根因已定——验收基体实为 232 mm 厚板、所选边不在壁面上——已改基体并在准入层拒绝该类边；修正后两道折边 succeeded 但几何是平铺延伸而非折弯，第三道挂起；四壁与释放能力未完成。2026-10-29 第四轮：截面已按库存 `flange_shapes` 重建（单线、无 centerline、腿在父壁法向）并重建执行器，但实机被会话消失阻塞，折弯仍**未验证**。2026-10-29 第六轮：`direction` 开关从 `PRO_E_SMT_FLANGE_TRAJ_CRV_NORM` 改到 `PRO_E_SMT_FLANGE_SEC_FLIP` 后，`tools/test_flange_direction.py --live` 两例均 `saved_file_reloaded_and_verified=true`、rev 2，默认向外（+X 顶边 +Z 79 mm）、`flip=true` 反向（−Z 79 mm），报告 `passed=true`；四壁在第二道后仍于 `f_ny` 回滚（rev 不变、原码保留），1×1 矩形释放体积差 0.000000、无缺口面）。目标版本：0.16.0（四壁 miter cuts 已交付）；relief 材料几何与切角量仍开放。
 
 来源：[统一台账](../BACKLOG.md)既有 FEAT-014 行、[0.7.0 R1 S3](../validation/feedback-0.7.0-2026-10-28/2026-10-27_CREO_0.7.0_钣金增料与四壁折边仍未修复验收报告.md)、[逐章映射](../validation/feedback-0.7.0-2026-10-28/MAPPING.md)。关联 [BUG-047](BUG-047.md) 的折边方向/材料侧缺陷与 [BUG-032](BUG-032.md) 的有效薄底板契约。
 
