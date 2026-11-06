@@ -242,6 +242,27 @@ static void flex_transform_values(ProElement root, const J &translation, const J
 // geometry the copy actually took. Counts only, never a per-face list.
 static J transform_selection = nullptr;
 
+// BUG-111 T5: the model counts live in the inspection arrays themselves
+// (`features` / `surfaces` / `bodies`), plus `body_counts` for the body
+// split. The old code read a `counts` object that inspection() never
+// publishes, so every count fell back to -1 and hid the real selection
+// growth. A field the inspection genuinely does not carry stays unknown
+// (-1 here, null in the published JSON) instead of becoming a made-up number.
+static int inspection_count(const J &state, const char *key) {
+    if (!state.is_object() || !state.contains(key) || !state[key].is_array())
+        return -1;
+    return (int)state[key].size();
+}
+
+static int inspection_body_active(const J &state) {
+    if (!state.is_object() || !state.contains("body_counts") || !state["body_counts"].is_object())
+        return -1;
+    const J &counts = state["body_counts"];
+    if (!counts.contains("active") || !counts["active"].is_number_integer())
+        return -1;
+    return counts["active"].get<int>();
+}
+
 static void generic_transform(const J &op) {
     transform_selection = nullptr;
     bool body = op["references"][0]["kind"] == "body";
@@ -282,20 +303,25 @@ static void generic_transform(const J &op) {
         J requested_ids = J::array();
         for (int id : requested)
             requested_ids.push_back(id);
-        // inspection() may omit counts (or publish null); never let the evidence
-        // block turn into a second failure mode.
-        J counts =
-            state.contains("counts") && state["counts"].is_object() ? state["counts"] : J::object();
+        // The counts are read from the live inspection arrays; a count the
+        // inspection does not carry stays explicitly unknown (null) instead
+        // of a fabricated -1.
+        int feature_count = inspection_count(state, "features");
+        int surface_count = inspection_count(state, "surfaces");
+        int body_count = inspection_count(state, "bodies");
+        int active_body_count = inspection_body_active(state);
+        J model_counts = {
+            {"features", feature_count < 0 ? J(nullptr) : J(feature_count)},
+            {"surfaces", surface_count < 0 ? J(nullptr) : J(surface_count)},
+            {"bodies", body_count < 0 ? J(nullptr) : J(body_count)},
+            {"active_bodies", active_body_count < 0 ? J(nullptr) : J(active_body_count)}};
         transform_selection = {{"requested_body_ids", requested_ids},
                                {"selected_surface_count", (int)surfaces.size()},
-                               {"model_counts_at_start",
-                                {{"features", counts.value("features", -1)},
-                                 {"surfaces", counts.value("surfaces", -1)},
-                                 {"bodies", counts.value("bodies", -1)}}}};
+                               {"model_counts_at_start", model_counts}};
         log("TRANSFORM_SELECTION bodies=%d selected_faces=%d model_features=%d model_surfaces=%d "
-            "model_bodies=%d\n",
-            (int)requested.size(), (int)surfaces.size(), counts.value("features", -1),
-            counts.value("surfaces", -1), counts.value("bodies", -1));
+            "model_bodies=%d model_active_bodies=%d\n",
+            (int)requested.size(), (int)surfaces.size(), feature_count, surface_count, body_count,
+            active_body_count);
         surface_collection(
             node(node(root, PRO_E_FLEXMOVE_MOVED_GEOMETRY), PRO_E_STD_SURF_COLLECTION_APPL),
             surfaces);

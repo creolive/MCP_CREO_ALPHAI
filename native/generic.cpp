@@ -7,6 +7,7 @@
 #include "axis_geometry.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
+#include "assembly_pose.h"
 #include "constraint_names.h"
 #include "constraint_compare.h"
 #include "preview.h"
@@ -279,6 +280,14 @@ static ProError dimension_cb(ProDimension *dim, ProError status, ProAppData data
         ProDimensionTypeGet(dim, &type);
         ProBoolean relation_driven = PRO_B_FALSE;
         ProError relation_code = ProDimensionIsReldriven(dim, &relation_driven);
+        // FEAT-004: report the owning feature so a guard can pin the owner, and
+        // derive editability from the relation state instead of guessing. Both
+        // stay null when the query fails.
+        ProFeature owner = {};
+        ProError owner_code = ProDimensionOwnerfeatureGet(dim, &owner);
+        ProName owner_name = L"";
+        if (owner_code == PRO_TK_NO_ERROR)
+            ProModelitemNameGet(&owner, owner_name);
         list->push_back(
             {{"id", dim->id},
              {"value", value},
@@ -286,10 +295,147 @@ static ProError dimension_cb(ProDimension *dim, ProError status, ProAppData data
              {"type", (int)type},
              {"relation_query_code", relation_code},
              {"relation_driven",
-              relation_code == PRO_TK_NO_ERROR ? J(relation_driven == PRO_B_TRUE) : J(nullptr)}});
+              relation_code == PRO_TK_NO_ERROR ? J(relation_driven == PRO_B_TRUE) : J(nullptr)},
+             {"owner_feature_id", owner_code == PRO_TK_NO_ERROR ? J(owner.id) : J(nullptr)},
+             {"owner_feature_name",
+              owner_code == PRO_TK_NO_ERROR ? J(utf8(owner_name)) : J(nullptr)},
+             {"owner_query_code", owner_code},
+             {"editable",
+              relation_code == PRO_TK_NO_ERROR ? J(relation_driven != PRO_B_TRUE) : J(nullptr)}});
     }
     return PRO_TK_NO_ERROR;
 }
+// FEAT-004 dimension guards. The tolerance and the refusal contract mirror
+// src/creo_mechdog/dimension_guards.py; both sides must agree.
+static const double kDimensionGuardAbsolute = 1e-8;
+static const double kDimensionGuardRelative = 1e-8;
+
+static std::string guard_number(double value) {
+    char buffer[64] = {};
+    std::snprintf(buffer, sizeof(buffer), "%.10g", value);
+    return buffer;
+}
+
+static double guard_tolerance(double expected) {
+    double relative = std::fabs(expected) * kDimensionGuardRelative;
+    return relative > kDimensionGuardAbsolute ? relative : kDimensionGuardAbsolute;
+}
+
+struct DimensionTarget {
+    ProDimension dim;
+    int id;
+    double current;
+    double requested;
+    bool relation_driven;
+    bool symbol_known;
+    std::string symbol;
+    bool owner_known;
+    int owner_id;
+    std::string owner_name;
+};
+
+static DimensionTarget read_dimension_target(ProMdl board, const J &value) {
+    DimensionTarget target = {};
+    target.id = value["id"].get<int>();
+    target.requested = value["value"].get<double>();
+    CK(ProModelitemInit(board, target.id, PRO_DIMENSION, &target.dim));
+    ProBoolean relation_driven = PRO_B_FALSE;
+    CK(ProDimensionIsReldriven(&target.dim, &relation_driven));
+    target.relation_driven = relation_driven == PRO_B_TRUE;
+    CK(ProDimensionValueGet(&target.dim, &target.current));
+    ProName symbol = L"";
+    target.symbol_known = ProDimensionSymbolGet(&target.dim, symbol) == PRO_TK_NO_ERROR;
+    if (target.symbol_known)
+        target.symbol = utf8(symbol);
+    ProFeature owner = {};
+    target.owner_known = ProDimensionOwnerfeatureGet(&target.dim, &owner) == PRO_TK_NO_ERROR;
+    if (target.owner_known) {
+        target.owner_id = owner.id;
+        ProName owner_name = L"";
+        ProModelitemNameGet(&owner, owner_name);
+        target.owner_name = utf8(owner_name);
+    }
+    return target;
+}
+
+static std::string guard_owner_text(const DimensionTarget &target) {
+    if (!target.owner_known)
+        return "unknown";
+    return target.owner_name + " (id " + std::to_string(target.owner_id) + ")";
+}
+
+// Reads every target before the caller writes the first value, so a mismatch
+// leaves the model untouched instead of half-applied.
+static void check_dimension_targets(const std::vector<DimensionTarget> &targets, const J &values) {
+    for (size_t index = 0; index < targets.size(); ++index) {
+        const DimensionTarget &target = targets[index];
+        const J &value = values[index];
+        if (target.relation_driven)
+            throw std::runtime_error(
+                "Dimension " + std::to_string(target.id) +
+                " is controlled by relations; edit its driving parameter or relation instead");
+        const J *expected_value =
+            value.contains("expected_value") && !value["expected_value"].is_null()
+                ? &value["expected_value"]
+                : nullptr;
+        if (expected_value) {
+            double expected = expected_value->get<double>();
+            if (std::fabs(expected - target.current) > guard_tolerance(expected))
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) + " guard failed on value: expected " +
+                    guard_number(expected) + ", current " + guard_number(target.current) +
+                    ", owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current value");
+        }
+        const J *expected_symbol =
+            value.contains("expected_symbol") && !value["expected_symbol"].is_null()
+                ? &value["expected_symbol"]
+                : nullptr;
+        if (expected_symbol) {
+            std::string expected = expected_symbol->get<std::string>();
+            if (!target.symbol_known)
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) +
+                    " guard failed on symbol: expected \"" + expected +
+                    "\" but the dimension symbol is unknown, owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current symbol");
+            if (expected != target.symbol)
+                throw std::runtime_error(
+                    "Dimension " + std::to_string(target.id) +
+                    " guard failed on symbol: expected \"" + expected + "\", current \"" +
+                    target.symbol + "\", owner " + guard_owner_text(target) +
+                    "; re-read the model and resubmit with the current symbol");
+        }
+        const J *expected_owner =
+            value.contains("expected_owner") && !value["expected_owner"].is_null()
+                ? &value["expected_owner"]
+                : nullptr;
+        if (expected_owner) {
+            if (!target.owner_known)
+                throw std::runtime_error("Dimension " + std::to_string(target.id) +
+                                         " guard failed on owner: the owning feature is unknown; "
+                                         "re-read the model and resubmit with the current owner");
+            if (expected_owner->is_number_integer()) {
+                int expected = expected_owner->get<int>();
+                if (expected != target.owner_id)
+                    throw std::runtime_error(
+                        "Dimension " + std::to_string(target.id) +
+                        " guard failed on owner: expected feature id " + std::to_string(expected) +
+                        ", current " + guard_owner_text(target) +
+                        "; re-read the model and resubmit with the current owner");
+            } else {
+                std::string expected = expected_owner->get<std::string>();
+                if (expected != target.owner_name)
+                    throw std::runtime_error(
+                        "Dimension " + std::to_string(target.id) +
+                        " guard failed on owner: expected \"" + expected + "\", current " +
+                        guard_owner_text(target) +
+                        "; re-read the model and resubmit with the current owner");
+            }
+        }
+    }
+}
+
 static ProError collect_geom_ids(ProGeomitem *item, ProError status, ProAppData data) {
     if (!status)
         ((J *)data)->push_back({{"id", item->id}, {"type", (int)item->type}});
@@ -373,6 +519,23 @@ static ProError inspect_feature(ProFeature *f, ProError status, ProAppData) {
     }
     J geometry = J::array();
     ProFeatureGeomitemVisit(f, PRO_TYPE_UNUSED, collect_geom_ids, nullptr, &geometry);
+    // FEAT-039/S04: a datum curve feature (intersect, projection) reports its
+    // PRO_CURVE items only through a typed visit; PRO_TYPE_UNUSED answers an
+    // empty list for it (live 2026-11-04: feature 120 owned curves 122/123 but
+    // inspection showed zero items, so no client could reference the curve).
+    // Merge the curve visit by id instead of replacing the generic list.
+    J curves = J::array();
+    if (!ProFeatureGeomitemVisit(f, PRO_CURVE, collect_geom_ids, nullptr, &curves))
+        for (auto &entry : curves) {
+            bool seen = false;
+            for (auto &known : geometry)
+                if (known.at("id") == entry.at("id")) {
+                    seen = true;
+                    break;
+                }
+            if (!seen)
+                geometry.push_back(entry);
+        }
     item["geometry_items"] = geometry;
     // T08 dependency evidence: parent/child feature IDs come from the live
     // model, never from a guess based on feature order. Group, pattern and
@@ -559,6 +722,11 @@ static const char *body_state_name(ProSolidBodyState state) {
     return "unknown";
 }
 
+// FEAT-039/S01: quilt enumeration, shared measurements and quilt reference
+// resolution live in quilt_query.h; this is the only include point.
+#include "quilt_query.h"
+#include "endpoint_weld.h"
+
 static J inspection(bool require_healthy = true) {
     gfeatures = J::array();
     gsurfaces = J::array();
@@ -696,7 +864,17 @@ static J inspection(bool require_healthy = true) {
             if (f["type"].get<int>() == PRO_FEAT_COMPONENT)
                 solid = true;
     auto length_units = inspect_length_units(board);
-    J length_unit = length_unit_json(length_units, length_scale_to_mm(board, length_units));
+    auto length_scale = length_scale_to_mm(board, length_units);
+    J length_unit = length_unit_json(length_units, length_scale);
+    // FEAT-055/S01: quilts are enumerated per part with their own statuses.
+    // Assemblies keep null — quilt records are part-level geometry.
+    J quilts = nullptr, quilts_visit = nullptr;
+    if (!isasm) {
+        J collected = collect_model_quilts((ProSolid)board, length_units, length_scale);
+        quilts = collected["records"];
+        collected.erase("records");
+        quilts_visit = collected;
+    }
     // Coordinates/dimensions retain model units. Do not label native in^3 as mm^3.
     J units = length_units.code || !length_units.length.name[0] ? J(nullptr)
                                                                 : J(utf8(length_units.length.name));
@@ -719,6 +897,8 @@ static J inspection(bool require_healthy = true) {
     J result = {{"features", gfeatures},
                 {"surfaces", gsurfaces},
                 {"edges", gedges},
+                {"quilts", quilts},
+                {"quilts_visit", quilts_visit},
                 {"bodies", bodies},
                 {"body_counts", body_counts},
                 {"healthy", healthy},
@@ -797,11 +977,11 @@ static ProSelection resolve(const J &r) {
                         return selection(g["id"], PRO_CSYS);
         throw std::runtime_error("No default coordinate system found");
     }
-    if (r.at("kind") == "quilt_feature" || r.at("kind") == "datum_csys_feature" ||
-        r.at("kind") == "datum_point_feature") {
-        ProType type = r["kind"] == "quilt_feature"        ? PRO_QUILT
-                       : r["kind"] == "datum_csys_feature" ? PRO_CSYS
-                                                           : PRO_POINT;
+    if (r.at("kind") == "quilt_feature")
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (r.at("kind") == "datum_csys_feature" || r.at("kind") == "datum_point_feature") {
+        ProType type = r["kind"] == "datum_csys_feature" ? PRO_CSYS : PRO_POINT;
         ProFeature f = feature(r.at("label"));
         J ids = J::array();
         CK(ProFeatureGeomitemVisit(&f, type, collect_geom_ids, nullptr, &ids));
@@ -817,10 +997,13 @@ static ProSelection resolve(const J &r) {
         CK(ProSelectionAlloc(nullptr, &mi, &s));
         return s;
     }
-    if (kind == "csys" || kind == "point" || kind == "quilt")
-        return selection(r.at("id"), kind == "csys"    ? PRO_CSYS
-                                     : kind == "point" ? PRO_POINT
-                                                       : PRO_QUILT);
+    if (kind == "quilt")
+        // S00 R1: validated against the real quilt collection, with bounded
+        // candidates in the failure message; never a blind PRO_QUILT pick.
+        return resolve_quilt_reference(r, (ProSolid)board, inspect_length_units(board),
+                                       length_scale_to_mm(board, inspect_length_units(board)));
+    if (kind == "csys" || kind == "point")
+        return selection(r.at("id"), kind == "csys" ? PRO_CSYS : PRO_POINT);
     if (kind == "feature")
         return selection(feature_id(r.contains("label") ? r["label"] : r["id"]), PRO_FEATURE);
     if (kind == "body") {
@@ -842,6 +1025,16 @@ static ProSelection resolve(const J &r) {
                                                : PRO_DIMENSION);
     }
     if (kind == "plane" || kind == "datum_plane") {
+        // Backstop for the Python contract: this branch resolves by id/axis/
+        // normal only. The 2026-11-04 trim probe submitted
+        // {kind:'datum_plane',label:'RIGHT'}; the label was dropped, the default
+        // axis filter picked TOP, and the trim never regenerated. Refuse the
+        // label instead of choosing a different plane than the caller named.
+        if (r.contains("label"))
+            throw std::runtime_error(
+                std::string("Kind '") + kind +
+                "' plane references resolve by id/axis/normal and do not honour a label; use "
+                "{kind:'datum_feature',label:...} for a plane feature label");
         J state = inspection(false);
         J candidates = kind == "datum_plane" ? state["datum_planes"] : state["surfaces"];
         if (r.contains("id")) {
@@ -1827,7 +2020,11 @@ static J sketch(const J &op) {
                                                construction ? PRO_B_TRUE : PRO_B_FALSE));
         entities[name] = id;
     };
-    for (auto e : op.at("entities")) {
+    // FEAT-039/W01: a controlled weld regularises the request coordinates
+    // before anything is written, so the move is bounded by construction.
+    J spec = op.at("entities");
+    J weld_report = apply_endpoint_weld(op, spec);
+    for (auto e : spec) {
         std::string type = e.at("type"), name = e.at("name");
         bool construction = e.value("construction", false);
         int id = -1;
@@ -2009,6 +2206,11 @@ static J sketch(const J &op) {
     J solver_info = solve_profile(section, solving_op);
     solver_info["requested"] = op.value("dimensioning", "auto");
     J deviation_regenerate = geometry_deviation_stage(section, deviation_targets);
+    // FEAT-039/W01: the weld residual is read back while the solved section is
+    // still the one the entities were written into.
+    double weld_residual = -1.0;
+    if (weld_report.value("applied_pairs", 0) > 0)
+        weld_residual = endpoint_weld_residual(section, entities, weld_report);
     solver_info["section_location"] = section_location;
     if (!coordinate_plan.is_null())
         solver_info["coordinate_geometry"] =
@@ -2097,7 +2299,7 @@ static J sketch(const J &op) {
         {{"entity_ids", ids},
          {"dimension_ids", dims},
          {"solver", solver_info},
-         {"geometry", op["entities"]},
+         {"geometry", spec},
          {"geometry_stale", false},
          {"last_dimensioning", op.value("dimensioning", "auto")},
          {"surface_id", frame.surface},
@@ -2122,6 +2324,20 @@ static J sketch(const J &op) {
                        {"geometry_deviation", geometry_deviation},
                        {"section_location", section_location},
                        {"entity_ids", ids}};
+    // FEAT-039/W01: the endpoint weld is reported with what the native side
+    // actually did. The coordinates were regularised before the entities were
+    // written, so the move is bounded by the request, and the residual is
+    // measured on the solved section.
+    if (solver_info.contains("weld_requested")) {
+        weld_report["epsilon_mm"] = solver_info.value("epsilon_mm", J(nullptr));
+        weld_report["epsilon_source"] = solver_info.value("epsilon_source", J(nullptr));
+        weld_report["max_residual_mm"] = weld_residual >= 0.0 ? J(weld_residual) : J(nullptr);
+        weld_report["applied"] = weld_report.value("applied_pairs", 0) > 0;
+        weld_report["note"] =
+            "the endpoints were regularised before the entities were written, so the move is "
+            "bounded by max_endpoint_move_mm; the residual is measured on the solved section";
+        sketch_result["endpoint_weld_native"] = weld_report;
+    }
     if (!sketch_shifted.is_null())
         sketch_result["sketch_shifted"] = sketch_shifted;
     return sketch_result;
@@ -2401,6 +2617,7 @@ static J revolve_axis_report(const J &op, ProFeature &created, ProFeature &sketc
     }
     return report;
 }
+static J extrude_depth_report(ProFeature &f, const J &op);
 static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         validate_revolve_axis(op);
@@ -2476,7 +2693,7 @@ static J extrude_or_revolve(const J &op, bool revolve) {
                 : direction == "symmetric" ? PRO_EXT_DEPTH_SYMMETRIC
                                            : PRO_EXT_DEPTH_TO_BLIND);
         if (!through_all)
-            real(to, PRO_E_EXT_DEPTH_TO_VALUE, op.at("depth"));
+            real(to, PRO_E_EXT_DEPTH_TO_VALUE, op.value("depth", 1.0));
     }
     ProFeature f = {};
     try {
@@ -2501,6 +2718,8 @@ static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         details["revolve_axis"] =
             revolve_axis_report(op, f, sketch_f, revolve_axis_id, revolve_axis_code);
+    else
+        details["extrude_depth"] = extrude_depth_report(f, op);
     if (cut) {
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
         double removed = before_volume - volume();
@@ -2870,6 +3089,64 @@ static ProElement get_optional(ProElement root, std::initializer_list<int> ids, 
     if (path)
         ProElempathFree(&path);
     return result;
+}
+// W05: the request side is what the caller actually sent (null when
+// validate_operations recorded an omission in defaulted_fields, because the
+// operation it hands over already carries the applied default), and the
+// effective side is read from the created feature's own tree. A through-all
+// feature stores no blind value, so effective_depth_mm stays null there
+// instead of repeating the 1 mm default. Unreadable paths keep their raw
+// query code and never fabricate.
+static J extrude_depth_report(ProFeature &f, const J &op) {
+    J defaulted = op.value("defaulted_fields", J::array());
+    J block = {{"source", "unknown"},
+               {"query_code", nullptr},
+               {"requested_depth_type", nullptr},
+               {"requested_depth_mm", nullptr},
+               {"effective_depth_type", nullptr},
+               {"effective_depth_mm", nullptr},
+               {"defaulted_fields", defaulted}};
+    bool type_omitted = false, depth_omitted = false;
+    for (auto field : defaulted) {
+        if (field == "depth_type")
+            type_omitted = true;
+        if (field == "depth")
+            depth_omitted = true;
+    }
+    if (!type_omitted && op.contains("depth_type"))
+        block["requested_depth_type"] = op["depth_type"];
+    if (!depth_omitted && op.contains("depth"))
+        block["requested_depth_mm"] = op["depth"];
+    ProElement tree = nullptr;
+    ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
+    block["query_code"] = (int)code;
+    if (code != PRO_TK_NO_ERROR)
+        return block;
+    block["source"] = "feature_tree";
+    ProError path_code = PRO_TK_NO_ERROR;
+    ProElement type_elem = get_optional(
+        tree, {PRO_E_STD_EXT_DEPTH, PRO_E_EXT_DEPTH_TO, PRO_E_EXT_DEPTH_TO_TYPE}, &path_code);
+    int type = 0;
+    if (path_code == PRO_TK_NO_ERROR && type_elem &&
+        !ProElementIntegerGet(type_elem, nullptr, &type)) {
+        block["effective_depth_type"] = type == PRO_EXT_DEPTH_TO_ALL      ? "through_all"
+                                        : type == PRO_EXT_DEPTH_SYMMETRIC ? "symmetric"
+                                                                          : "blind";
+        if (type != PRO_EXT_DEPTH_TO_ALL) {
+            ProElement value_elem = get_optional(
+                tree, {PRO_E_STD_EXT_DEPTH, PRO_E_EXT_DEPTH_TO, PRO_E_EXT_DEPTH_TO_VALUE},
+                &path_code);
+            double value = 0;
+            if (path_code == PRO_TK_NO_ERROR && value_elem &&
+                !ProElementDoubleGet(value_elem, nullptr, &value))
+                block["effective_depth_mm"] = value;
+            else
+                block["query_code"] = (int)(path_code ? path_code : PRO_TK_GENERAL_ERROR);
+        }
+    } else
+        block["query_code"] = (int)(path_code ? path_code : PRO_TK_GENERAL_ERROR);
+    ProFeatureElemtreeFree(&f, tree);
+    return block;
 }
 // FEAT-051: applied_set_count is proven only by the created feature's own
 // element tree; the requested input count is reported separately and never
@@ -3274,6 +3551,9 @@ static J populate_profile(ProSection section, const J &op) {
     return {{"entity_ids", ids}, {"dimension_ids", dims}, {"solver", solver_info}};
 }
 #include "component_transform.h"
+// R05 (BUG-045/FEAT-012): the assembly receipt serializes the transform it just
+// read back, so the row-major matrix helper is forward declared for advanced.cpp.
+static J matrix_json(const ProMatrix matrix);
 // Result split helpers are defined after the feature modules; forward declared
 // here so component sources can resolve controlled detail references (BUG-077).
 static J read_inspection_ref(const J &ref);
@@ -3281,6 +3561,9 @@ static J choice_inspection(const J &holder, const char *key);
 #include "appearance.h"
 #include "advanced.cpp"
 #include "surfaces.cpp"
+#include "surface_trim.cpp"
+#include "quilt_merge.cpp"
+#include "project_curve.cpp"
 #include "udf.cpp"
 #include "loft_mode.cpp"
 #include "loft_seed.cpp"
@@ -3557,6 +3840,14 @@ static void execute_operation_body(const J &op) {
         generic_fill(op);
     else if (kind == "thicken" || kind == "solidify")
         generic_surface_solid(op);
+    else if (kind == "surface_offset")
+        generic_surface_offset(op);
+    else if (kind == "surface_trim")
+        generic_surface_trim(op);
+    else if (kind == "quilt_merge")
+        generic_quilt_merge(op);
+    else if (kind == "project_curve")
+        generic_project_curve(op);
     else if (kind == "boolean_bodies")
         generic_boolean(op);
     else if (kind == "rib")
@@ -3646,17 +3937,13 @@ static void execute_operation_body(const J &op) {
         auto units = inspect_length_units(board);
         details["length_unit"] = length_unit_json(units, length_scale_to_mm(board, units));
     } else if (kind == "set_dimensions") {
-        for (auto v : op["values"]) {
-            ProDimension d;
-            CK(ProModelitemInit(board, v["id"], PRO_DIMENSION, &d));
-            ProBoolean relation_driven = PRO_B_FALSE;
-            CK(ProDimensionIsReldriven(&d, &relation_driven));
-            if (relation_driven)
-                throw std::runtime_error("Dimension " + std::to_string(v["id"].get<int>()) +
-                                         " is controlled by relations; edit its driving parameter "
-                                         "or relation instead");
-            CK(ProDimensionValueSet(&d, v["value"]));
-        }
+        std::vector<DimensionTarget> targets;
+        targets.reserve(op["values"].size());
+        for (const auto &value : op["values"])
+            targets.push_back(read_dimension_target(board, value));
+        check_dimension_targets(targets, op["values"]);
+        for (auto &target : targets)
+            CK(ProDimensionValueSet(&target.dim, target.requested));
         mark_sketch_geometry_stale();
     } else if (kind == "set_sketch_dimensions") {
         ProFeature f = feature(op["sketch"]);
@@ -6127,6 +6414,304 @@ static J transform_failure_report(const J &op) {
     return report;
 }
 
+// FEAT-012/FEAT-008 (0.12.0 P-2/P-3, F04 P5): a failed job publishes one
+// bounded failure context beside failed_operation_index. Only reported facts
+// appear here: an unavailable field stays null instead of being guessed, the
+// raw message is cut at a fixed bound, and a placement failure echoes the
+// caller's own 4x4 row-vector matrix without orthonormalizing, normalizing or
+// transposing it (the batch rollback stays atomic).
+static const int FAILED_OPERATION_MESSAGE_LIMIT = 512;
+
+static std::string bounded_failure_message(const std::string &text) {
+    if ((int)text.size() <= FAILED_OPERATION_MESSAGE_LIMIT)
+        return text;
+    int cut = FAILED_OPERATION_MESSAGE_LIMIT;
+    // Keep the cut on a UTF-8 code point boundary so the receipt stays valid text.
+    while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+        --cut;
+    return text.substr(0, cut);
+}
+
+// BUG-113: a failed save and a failed rollback verification are separate facts
+// and must be readable from the receipt alone. Both blocks below only report
+// what this process observed, stay bounded (20 entries plus total/truncated)
+// and never publish absolute paths or license data.
+static const int RECOVERY_SAMPLE_LIMIT = 20;
+
+static J bounded_directory_names(const std::wstring &directory) {
+    J sample = J::array();
+    int total = 0;
+    bool truncated = false;
+    std::error_code error;
+    std::filesystem::directory_iterator entry(std::filesystem::path(directory), error);
+    const std::filesystem::directory_iterator end;
+    while (!error && entry != end) {
+        std::error_code type_error;
+        if (std::filesystem::is_regular_file(entry->path(), type_error) && !type_error) {
+            ++total;
+            if ((int)sample.size() < RECOVERY_SAMPLE_LIMIT)
+                sample.push_back(utf8(entry->path().filename()));
+            else
+                truncated = true;
+        }
+        entry.increment(error);
+    }
+    if (error)
+        return {{"available", false},
+                {"total", nullptr},
+                {"truncated", nullptr},
+                {"sample", J::array()},
+                {"reason", "the destination directory could not be listed"}};
+    return {{"available", true},
+            {"total", total},
+            {"truncated", truncated},
+            {"sample", sample},
+            {"reason", nullptr}};
+}
+
+// Only a name inside the managed output directory may be published; anything
+// outside it (or any absolute path) stays null instead of leaking a host path.
+static J managed_relative_name(const std::wstring &value, const std::wstring &directory) {
+    if (value.empty())
+        return nullptr;
+    std::error_code error;
+    const std::filesystem::path relative = std::filesystem::relative(
+        std::filesystem::path(value), std::filesystem::path(directory), error);
+    if (error || relative.empty() || relative.is_absolute())
+        return nullptr;
+    if (*relative.begin() == std::filesystem::path(L".."))
+        return nullptr;
+    return J(utf8(relative.generic_wstring()));
+}
+
+static J save_failure_report(ProError code, const char *stage, const std::wstring &checkpoint,
+                             const std::wstring &directory, const std::wstring &model_name,
+                             bool assembly) {
+    const std::wstring extension = assembly ? L".asm" : L".prt";
+    return {{"call", "ProMdlnameBackup"},
+            {"code", code},
+            {"stage", stage},
+            {"destination", utf8(model_name + extension)},
+            {"source_checkpoint", managed_relative_name(checkpoint, directory)},
+            {"candidate_files", bounded_directory_names(directory)}};
+}
+
+static bool collect_ids(const J &state, const char *key, std::set<int> &ids) {
+    if (!state.is_object() || !state.contains(key) || !state[key].is_array())
+        return false;
+    for (const auto &item : state[key]) {
+        if (!item.is_object() || !item.contains("id") || !item["id"].is_number_integer())
+            return false;
+        ids.insert(item["id"].get<int>());
+    }
+    return true;
+}
+
+static J bounded_ids(const std::set<int> &ids) {
+    J sample = J::array();
+    for (auto it = ids.begin(); it != ids.end() && (int)sample.size() < RECOVERY_SAMPLE_LIMIT; ++it)
+        sample.push_back(*it);
+    return {{"total", (int)ids.size()},
+            {"truncated", (int)ids.size() > RECOVERY_SAMPLE_LIMIT},
+            {"sample", sample}};
+}
+
+static J rollback_collection_difference(const J &before, const J &after, const char *key) {
+    std::set<int> before_ids, after_ids;
+    const bool before_ids_ok = collect_ids(before, key, before_ids);
+    const bool after_ids_ok = collect_ids(after, key, after_ids);
+    const bool before_listed = before.is_object() && before.contains(key) && before[key].is_array();
+    const bool after_listed = after.is_object() && after.contains(key) && after[key].is_array();
+    J block = {{"available", false},
+               {"before", before_listed ? J((int)before[key].size()) : J(nullptr)},
+               {"after", after_listed ? J((int)after[key].size()) : J(nullptr)},
+               {"missing_ids", nullptr},
+               {"added_ids", nullptr},
+               {"reason", nullptr}};
+    if (!before_listed || !after_listed) {
+        block["reason"] =
+            std::string(!before_listed ? "baseline" : "restored") + " inspection carries no " + key;
+        return block;
+    }
+    if (!before_ids_ok || !after_ids_ok) {
+        block["reason"] = std::string("one or more ") + key + " records carry no integer id";
+        return block;
+    }
+    std::set<int> missing, added;
+    for (int id : before_ids)
+        if (!after_ids.count(id))
+            missing.insert(id);
+    for (int id : after_ids)
+        if (!before_ids.count(id))
+            added.insert(id);
+    block["available"] = true;
+    block["missing_ids"] = bounded_ids(missing);
+    block["added_ids"] = bounded_ids(added);
+    return block;
+}
+
+static J rollback_volume_difference(const J &before, const J &after) {
+    auto read = [](const J &state) {
+        if (!state.is_object() || !state.contains("volume_mm3") || !state["volume_mm3"].is_number())
+            return J(nullptr);
+        const double value = state["volume_mm3"].get<double>();
+        return std::isfinite(value) ? J(value) : J(nullptr);
+    };
+    const J before_value = read(before), after_value = read(after);
+    J block = {{"available", !before_value.is_null() && !after_value.is_null()},
+               {"before", before_value},
+               {"after", after_value},
+               {"reason", nullptr}};
+    if (!block["available"].get<bool>())
+        block["reason"] = "volume was not measured on both sides, so geometry cannot be compared";
+    return block;
+}
+
+// The difference is diagnostic only: it never changes rollback_succeeded, the
+// operation effect status or the model status. A matched block simply means the
+// bounded evidence found no feature/body/volume difference; the comparison that
+// rejected the rollback stays the authority and its message stays in reason.
+static J rollback_difference_report(const J &baseline, const J &restored,
+                                    const std::string &reason) {
+    J features = rollback_collection_difference(baseline, restored, "features");
+    J bodies = rollback_collection_difference(baseline, restored, "bodies");
+    J volume = rollback_volume_difference(baseline, restored);
+    const bool available = features["available"].get<bool>() && bodies["available"].get<bool>();
+    bool counts_match = true;
+    for (const J *block : {&features, &bodies})
+        if (!((*block)["before"].is_number_integer() && (*block)["after"].is_number_integer() &&
+              (*block)["before"].get<int>() == (*block)["after"].get<int>()))
+            counts_match = false;
+    auto lists_ids = [](const J &block) {
+        return (!block["missing_ids"].is_null() && block["missing_ids"]["total"].get<int>() > 0) ||
+               (!block["added_ids"].is_null() && block["added_ids"]["total"].get<int>() > 0);
+    };
+    const bool volume_changed =
+        volume["available"].get<bool>() &&
+        fabs(volume["before"].get<double>() - volume["after"].get<double>()) > 0.01;
+    const bool mismatch =
+        !counts_match || lists_ids(features) || lists_ids(bodies) || volume_changed;
+    return {{"available", available},
+            {"status", !available ? "unavailable" : (mismatch ? "mismatch" : "matched")},
+            {"reason", reason.empty() ? J(nullptr) : J(bounded_failure_message(reason))},
+            {"features", features},
+            {"bodies", bodies},
+            {"volume_mm3", volume}};
+}
+
+static void failed_placement_matrix(const J &operation, J &block) {
+    double matrix[4][4];
+    try {
+        assembly_rigid_transform(operation, matrix);
+    } catch (...) {
+        // The admission gate may have rejected this pose before the kernel saw
+        // it; echo the caller's own rotation_matrix anyway (never repaired) so
+        // the residual that caused the failure stays visible.
+        if (!operation.contains("rotation_matrix"))
+            return;
+        const J &input = operation.at("rotation_matrix");
+        if (!input.is_array() || input.size() != 3)
+            return;
+        const J zero = J::array({0, 0, 0});
+        const J &translation =
+            operation.contains("translation") ? operation.at("translation") : zero;
+        if (!translation.is_array() || translation.size() != 3)
+            return;
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                matrix[i][j] = 0;
+        matrix[3][3] = 1;
+        for (int i = 0; i < 3; ++i) {
+            if (!input[i].is_array() || input[i].size() != 3)
+                return;
+            for (int j = 0; j < 3; ++j) {
+                if (!input[i][j].is_number() || !std::isfinite(input[i][j].get<double>()))
+                    return;
+                matrix[i][j] = input[i][j].get<double>();
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            if (!translation[j].is_number() || !std::isfinite(translation[j].get<double>()))
+                return;
+            matrix[3][j] = translation[j].get<double>();
+        }
+    }
+    J echo = J::array();
+    for (int i = 0; i < 4; ++i) {
+        J row = J::array();
+        for (int j = 0; j < 4; ++j) {
+            if (!std::isfinite(matrix[i][j]))
+                return;
+            row.push_back(matrix[i][j]);
+        }
+        echo.push_back(std::move(row));
+    }
+    const double det = matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1]) -
+                       matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0]) +
+                       matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
+    double residual = 0;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+            double dot = 0;
+            for (int k = 0; k < 3; ++k)
+                dot += matrix[i][k] * matrix[j][k];
+            residual = std::max(residual, std::abs(dot - (i == j ? 1.0 : 0.0)));
+        }
+    if (!std::isfinite(det) || !std::isfinite(residual))
+        return;
+    block["input_matrix"] = echo;
+    block["matrix_source"] =
+        operation.contains("rotation_matrix") && !operation.at("rotation_matrix").is_null()
+            ? J("rotation_matrix")
+            : J("euler");
+    block["determinant"] = det;
+    block["orthogonality_residual"] = residual;
+}
+
+static J failed_operation_context(const J &operation, int index, bool executing,
+                                  const std::string &stage, const J &pro_error,
+                                  const std::string &pro_error_source,
+                                  const std::string &toolkit_call, const std::string &message) {
+    const bool in_flight = executing && operation.is_object();
+    const std::string kind = in_flight ? operation.value("op", "") : "";
+    J block = {{"index", in_flight ? J(index) : J(nullptr)},
+               {"operation", kind.empty() ? J(nullptr) : J(kind)},
+               {"stage", stage.empty() ? J(nullptr) : J(stage)},
+               {"feature_label", nullptr},
+               {"sketch_name", nullptr},
+               {"toolkit_call", toolkit_call.empty() ? J(nullptr) : J(toolkit_call)},
+               {"pro_error", pro_error},
+               {"pro_error_source", pro_error_source},
+               {"message", nullptr},
+               {"message_truncated", false},
+               {"input_matrix", nullptr},
+               {"matrix_source", nullptr},
+               {"determinant", nullptr},
+               {"orthogonality_residual", nullptr}};
+    if (in_flight) {
+        // Only a string label/reference is a name; an integer sketch id stays
+        // unnamed rather than being turned into a label.
+        if (operation.contains("label") && operation.at("label").is_string()) {
+            std::string label = operation.at("label").get<std::string>();
+            if (!label.empty())
+                block["feature_label"] = label;
+        }
+        if (operation.contains("sketch") && operation.at("sketch").is_string()) {
+            std::string sketch_name = operation.at("sketch").get<std::string>();
+            if (!sketch_name.empty())
+                block["sketch_name"] = sketch_name;
+        }
+        if (kind == "assemble_component" || kind == "component_placement")
+            failed_placement_matrix(operation, block);
+    }
+    if (!message.empty()) {
+        const std::string bounded = bounded_failure_message(message);
+        block["message"] = bounded;
+        block["message_truncated"] = bounded.size() < message.size();
+    }
+    return block;
+}
+
 static int run_generic(const std::wstring &job) {
     generic_job = job;
     generic_phase = "loading_request";
@@ -6142,6 +6727,11 @@ static int run_generic(const std::wstring &job) {
     int operation_index = -1;
     J operation_in_flight;
     bool executing_operation = false;
+    // FEAT-012/FEAT-008: the raw Toolkit code of the caught failure, with its
+    // provenance. A non-Toolkit failure keeps null/"unsupported" instead of the
+    // general error code assigned to toolkit_code.
+    J failure_pro_error = nullptr;
+    std::string failure_pro_error_source = "unsupported";
     std::wstring checkpoint;
     new_model_evidence = NewModelEvidence();
     board_log = _wfsopen((job + L"\\native.log").c_str(), L"w", _SH_DENYNO);
@@ -6193,7 +6783,13 @@ static int run_generic(const std::wstring &job) {
         char empty[] = "";
         ProBoolean random = PRO_B_FALSE;
         generic_stage("connect");
+        // BUG-109/R12: a stage on each side of the Toolkit connect lets the
+        // bounded stall report attribute a slow session attach instead of folding
+        // it into the first operation stage. "connected" carries the elapsed
+        // milliseconds the attach itself took.
+        generic_substage("connect");
         CK(connect_creo(&process));
+        generic_substage("connected");
         connected = true;
         report["connected"] = true;
         int release_numeric = 0;
@@ -6389,7 +6985,14 @@ static int run_generic(const std::wstring &job) {
                 ProPath destination;
                 path(destination, folder);
                 generic_substage("verify_model_save");
-                CK(ProMdlnameBackup(board, destination));
+                // BUG-113: record the failed backup as its own fact before the
+                // throw, so a later rollback verification failure cannot hide it.
+                ProError backup = ProMdlnameBackup(board, destination);
+                if (backup != PRO_TK_NO_ERROR)
+                    report["save_failure"] =
+                        save_failure_report(backup, "verify_model_save", checkpoint, folder,
+                                            model_name, assembly_model());
+                check(backup, "ProMdlnameBackup(board, destination)");
                 saved = latest_model_file();
                 J before = state;
                 generic_substage("verify_model_erase");
@@ -6461,6 +7064,9 @@ static int run_generic(const std::wstring &job) {
         }
     } catch (ProError error) {
         report["toolkit_code"] = error;
+        // FEAT-012/FEAT-008: this is the failing call's own return code.
+        failure_pro_error = J(error);
+        failure_pro_error_source = "toolkit";
         report["message"] = "Toolkit call " + last_toolkit_error + " failed with code " +
                             std::to_string(error) + " during " + generic_phase;
         // BUG-097 L2: a failure with a captured ProErrorlist keeps its bounded
@@ -6507,6 +7113,16 @@ static int run_generic(const std::wstring &job) {
         report["failed_toolkit_call"] =
             last_toolkit_error.empty() ? J(nullptr) : J(last_toolkit_error);
         report["failed_operation_index"] = executing_operation ? J(operation_index) : J(nullptr);
+        // FEAT-012/FEAT-008: bounded structured context for the failing input
+        // (index, operation, stage, names, raw code, bounded text, and the
+        // caller's own placement matrix when applicable).
+        const std::string failure_message =
+            report.contains("message") && report["message"].is_string()
+                ? report["message"].get<std::string>()
+                : std::string();
+        report["failed_operation"] = failed_operation_context(
+            operation_in_flight, operation_index, executing_operation, generic_phase,
+            failure_pro_error, failure_pro_error_source, last_toolkit_error, failure_message);
         // BUG-111: a failed transform names its own backend, angles and reference
         // count instead of leaving only a Toolkit code and the phase name.
         if (executing_operation && operation_in_flight.is_object() &&
@@ -6530,6 +7146,11 @@ static int run_generic(const std::wstring &job) {
         ProError loaded =
             erased ? erased : ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board);
         if (!loaded) {
+            // BUG-113: the baseline and the restored state stay readable in the
+            // catch blocks, so a rejected comparison reports the actual
+            // difference instead of only the comparison's message.
+            J rollback_baseline = nullptr;
+            J rollback_restored = nullptr;
             try {
                 // Restore the model-level feature registries from the request
                 // before verifying the restored state: a partially executed
@@ -6546,12 +7167,13 @@ static int run_generic(const std::wstring &job) {
                 refresh_recorded_suppressed();
                 feature_state_effects = J::object();
                 feature_state_touched = false;
+                rollback_baseline = rollback_model.contains("inspection_ref")
+                                        ? read_inspection_ref(rollback_model.at("inspection_ref"))
+                                        : rollback_model["inspection"];
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 J restored = inspection();
-                verify_saved(rollback_model.contains("inspection_ref")
-                                 ? read_inspection_ref(rollback_model.at("inspection_ref"))
-                                 : rollback_model["inspection"],
-                             restored);
+                rollback_restored = restored;
+                verify_saved(rollback_baseline, restored);
                 // FEAT-052: after the checkpoint reload, compare the restored
                 // appearance against the baseline captured before the first
                 // appearance write; an unprovable or mismatching restore keeps
@@ -6570,13 +7192,22 @@ static int run_generic(const std::wstring &job) {
                 report["rollback_succeeded"] = true;
             } catch (const std::exception &e) {
                 report["rollback_message"] = e.what();
+                report["rollback_difference"] =
+                    rollback_difference_report(rollback_baseline, rollback_restored, e.what());
             } catch (ProError e) {
                 report["rollback_code"] = e;
                 report["rollback_message"] = "Restored file could not be regenerated and verified "
                                              "against its saved baseline";
+                report["rollback_difference"] = rollback_difference_report(
+                    rollback_baseline, rollback_restored,
+                    "Restored file could not be regenerated and verified against its saved "
+                    "baseline");
             }
-        } else
+        } else {
             report["rollback_code"] = loaded;
+            report["rollback_difference"] = rollback_difference_report(
+                nullptr, nullptr, "checkpoint reload failed with code " + std::to_string(loaded));
+        }
     }
     // BUG-096: failed new-model orphan cleanup runs in the same Toolkit lock,
     // after the restore-checkpoint block (the two domains are mutually

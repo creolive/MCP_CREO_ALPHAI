@@ -56,6 +56,12 @@ def window_observations(pids: set[int]) -> dict[int, dict]:
             "visible_count": count,
             "hung_window_observed": any(hung for _, hung in owned),
             "visible_hung_window_observed": any(visible and hung for visible, hung in owned),
+            "hung_implies_modal": False,
+            "window_title": None,
+            "window_title_unavailable_reason": (
+                "Window titles are not read: this observation stays read-only and bounded "
+                "and must not activate windows or send messages."
+            ),
             "scope": "current Windows desktop; window absence does not prove process failure",
         }
     return result

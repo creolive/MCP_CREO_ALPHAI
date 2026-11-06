@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from version import VERSION
 
 REGISTERED_OPERATIONS = (
@@ -55,7 +57,11 @@ REGISTERED_OPERATIONS = (
     "datum_points",
     "surface_fill",
     "thicken",
+    "surface_offset",
     "solidify",
+    "surface_trim",
+    "quilt_merge",
+    "project_curve",
     "boolean_bodies",
     "rib",
     "drawing_model",
@@ -71,7 +77,35 @@ REGISTERED_OPERATIONS = (
     "drawing_delete",
 )
 
-UNAVAILABLE_OPERATIONS = {}
+# FEAT-039: an operation whose native route is not proved on hardware stays out
+# of the published surface chain. surface_trim left this table in 0.12.1 after
+# its live retained-side evidence, and project_curve left it after the live
+# swept-surface route produced measured projections (line and arc, saved and
+# reloaded). The entries below are still waiting for a route that produces
+# measurable geometry, so no client receives a success the release cannot back
+# up.
+
+# The single copy of the reason a thin offset trim is refused. References publish
+# the same text so the contract and the admission gate cannot drift apart.
+SURFACE_TRIM_OFFSET_LIMIT = (
+    "surface_trim offset_mm is not published: the documented Thin tree "
+    "(PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only "
+    "removes a band of that thickness when the tool is a quilt, keeps both "
+    "sides instead of the requested keep_side, and offset_side has no "
+    "observable effect (2026-11-06 six direction variants all produced the "
+    "same band; negative thickness fails regeneration)"
+)
+
+UNAVAILABLE_OPERATIONS: dict[str, str] = {
+    "quilt_merge": (
+        "the surface merge is not published: on this machine the documented ProMerge.h array "
+        "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
+        "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
+        "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
+        "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
+        "change nothing, so the joined area and closure cannot be measured or handed to thicken"
+    ),
+}
 
 
 def require_available(operations: list[dict]) -> None:
@@ -86,8 +120,35 @@ def require_available(operations: list[dict]) -> None:
     for op in operations:
         if op["op"] == "loft" and (op.get("mode", "add") != "add" or op.get("new_body", False)):
             raise ValueError(
-                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted"
+                "Direct Blend supports solid add into the default body only; cut, surface and new_body are not accepted - the 2026-11-05 measurement on the seed reference part shows the blend feature has no extractable element tree (ProFeatureElemtreeExtract returned -18), so the panel route is the only route for a blend"
             )
+        if (
+            op["op"] in ("sketch", "airfoil_sketch", "update_sketch_geometry")
+            and op.get("endpoint_policy") == "weld"
+        ):
+            # FEAT-039/W01: the native side regularises the welded endpoints by
+            # half the gap before it writes them, so the bound the caller gives
+            # is what keeps the move controlled. Without a bound the request is
+            # refused before a job exists.
+            bound = op.get("max_endpoint_move_mm")
+            if (
+                not isinstance(bound, (int, float))
+                or isinstance(bound, bool)
+                or not math.isfinite(float(bound))
+                or float(bound) <= 0.0
+            ):
+                raise ValueError(
+                    "endpoint_policy weld needs max_endpoint_move_mm: the native side "
+                    "moves each welded endpoint by half the gap, so the bound is what "
+                    "keeps the move controlled"
+                )
+        if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
+            # FEAT-039/S07: a distance here is not the published "keep one side"
+            # semantics. The documented Thin tree does honour PRO_E_THICKNESS on a
+            # quilt tool (2026-11-06: 40x20 target -> 700 mm2 at 5 mm), but it
+            # removes a band instead of moving the cut, the direction elements are
+            # inert, and a datum-plane tool ignores the thickness.
+            raise ValueError(SURFACE_TRIM_OFFSET_LIMIT)
 
 
 def families() -> dict:
@@ -405,13 +466,22 @@ def families() -> dict:
                 "request is refused before submission with its equivalent angle (225 -> -135); "
                 "both backends normalize into that same interval, so -135 and 225 address the "
                 "same rotation; a failed transform reports failed_transform with backend, "
-                "requested and normalized angles, translation, keep_original and reference "
-                "count, and the plan rolls back; the fifth keep_original copy in one batch fails "
-                "after regeneration (reproduced on Creo 12.4 at operation index 4 regardless of "
-                "angle or batch length, also reported on Creo 10; cause not identified) so copy at "
-                "most four times per batch and re-reference the current body ID in the next batch; "
-                "body branch can require Flexible Modeling license; copy-original, multiple bodies, "
-                "custom csys, complex quilts and datum/curve combinations require local validation"
+                "requested and normalized angles, translation, keep_original, reference "
+                "count and a bounded selection block (requested body ids, selected surface "
+                "count, model counts at op start), and the plan rolls back; a keep_original "
+                "copy takes the whole current body and accumulates inside it, so an appended "
+                "copy can fail when it overlaps the copies already there (reproduced on Creo "
+                "12.4 in four independent models at operation index 4 with the same angle "
+                "set, also reported on Creo 10; root cause identified as the copy selection "
+                "semantics plus overlap/regeneration, no behavior fix shipped); the failure "
+                "follows the model state and the angle rather than the copy count (the same "
+                "five copies succeed when the first angle differs) and splitting the copies "
+                "into smaller batches does not avoid it, so the former 'at most four copies "
+                "per batch and re-reference the current body ID in the next batch' advice is "
+                "withdrawn; keep one copy set in one plan and use a separate model when a "
+                "fixed-original copy is needed; body branch can require Flexible Modeling "
+                "license; copy-original, multiple bodies, custom csys, complex quilts and "
+                "datum/curve combinations require local validation"
             ),
         },
         "drawing": {
@@ -440,7 +510,34 @@ def families() -> dict:
             "enabled": True,
             "scope": "planar fill, thicken and solidify",
             "native_test": "20 x 10 fill, symmetric thickness 2 to 3; plane cut of a cube",
-            "limits": "closed-quilt solidification, curved-quilt offset/cut and all side options need further validation",
+            "limits": (
+                "closed-quilt solidification is published (measured volume plus rollback "
+                "on an open quilt); thin offset on a trimmed quilt stays gated because "
+                "surface_trim offset_mm removes a band instead of moving the cut; "
+                "curved-quilt thicken side options beyond the published symmetric case "
+                "need further native validation"
+            ),
+        },
+        "surface_chain": {
+            "enabled": True,
+            "tools": ["creo_surface_trim", "creo_project_curve", "creo_surface_offset"],
+            "scope": (
+                "trim one quilt with another quilt, a datum-plane label or a curve "
+                "geometry id; project one curve geometry id onto one quilt along an "
+                "explicit direction reference; offset one quilt along its surface normal"
+            ),
+            "native_test": (
+                "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
+                "project_curve: 40.000 mm and 25.133 mm measured projections, saved and "
+                "reloaded; surface_offset: 40x20 fill offset 5 mm on both sides, "
+                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance"
+            ),
+            "limits": (
+                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); no multi-section loft, "
+                "no boundary blend and no surface loft tool; surface_trim offset_mm stays "
+                "refused; surface_offset returns the offset wall, not a standalone offset "
+                "quilt or a solid thickness wall"
+            ),
         },
         "boolean_bodies": {
             "enabled": True,
@@ -462,10 +559,24 @@ def families() -> dict:
             "native_test": "whole solid about a principal datum plane",
             "limits": "whole-part/geometry references only; feature/subtree mirror is rejected",
         },
+        "surface_offset": {
+            "enabled": True,
+            "tool": "creo_surface_offset",
+            "scope": "offset one quilt along its surface normal by a measured distance and direction",
+            "native_test": "40x20 fill offset 5 mm on both sides (2026-11-05 live): the "
+            "offset wall measures 3999.9999999999995 mm3 on the positive and on the negative "
+            "side (area times distance, oracle 800 x 5), the measured distance volume over area "
+            "is 4.999999999999999 mm against the requested 5 mm, and both jobs report "
+            "saved_file_reloaded_and_verified=true",
+            "limits": "one quilt, one explicit side - the receipt direction is the requested "
+            "side and the z sign is not read back from the geometry; the documented "
+            "normal-to-surface offset method; the result is the offset wall, not a standalone "
+            "offset quilt; a closed quilt is not required",
+        },
         "sweep": {
             "enabled": True,
-            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11",
-            "limits": "constant section; compound trajectories, all frame options, capped surfaces and intersections still require local validation; thin is total symmetric wall thickness",
+            "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11; the surface mode was measured on 2026-11-05 with a 40x20 profile swept 20 mm: open 2400.000 mm2 (2*(40+20)*20), capped 4000.000 mm2 (walls plus two 40x20 caps) and the capped quilt solidifies to 15999.999999999998 mm3 (40*20*20)",
+            "limits": "constant section (ProSweep.h documents no variable or multi-section sweep), so a boundary blend through several sections is not reachable through this route; compound trajectories, all frame options and intersections still require local validation; thin is total symmetric wall thickness",
         },
         "draft": {
             "enabled": True,
@@ -478,7 +589,7 @@ def families() -> dict:
             "scope": "direct native solid Blend from independent MCP-owned XY sketches ordered by increasing Z; create in a feature plan or append to an owned part",
             "interpolation": ["straight", "smooth"],
             "native_test": "3/4/6 straight and smooth factory cases; append 3/smooth to an existing saved base, preserve native IDs, edit dimensions, verify all-section STL, save/erase/reload and failed-append rollback with a live refresh",
-            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
+            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; there is no surface loft tool or surface_loft operation, and mode='surface' is refused before a job; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
             "callback_setup": "creo_capabilities.direct_blend_callback lists the generated registry_file; load/start it via Creo Auxiliary Applications and review the DLL prompt before modeling",
         },
         "loft_seed": {
@@ -538,14 +649,21 @@ def families() -> dict:
                 "sketch's coordinate dimensions, so it keeps the feature id and gauge but "
                 "refuses unknown labels, walls from other operations and walls with downstream "
                 "dependencies (a flange on the wall counts); a flange attaches to a native "
-                "first wall (live 2026-11-04) but non-rectangular sections, a second flange and "
-                "four walls remain unverified; bend relief is a parameter on "
-                "creo_sheetmetal_flange with native echo verification (offline verified, live "
-                "unverified, default none); a flange whose attach-edge ends abut existing bends "
-                "fails to regenerate (live verified 2026-10-30: a free full edge attaches, an "
-                "edge shortened at even one end by a previous bend fails and rolls back), so four "
-                "walls are not supported until corner relief exists; forms, hems and jogs are not "
-                "high-level tools"
+                "first wall (live 2026-11-04) but non-rectangular sections remain unverified; "
+                "creo_sheetmetal_flange relief is bend-end relief only (PRO_E_SMT_BEND_RELIEF per "
+                "bend end, 'none' or 'rectangular' with explicit width/depth), not corner relief "
+                "or a miter, and it is not proven to resolve corner overlap; a flange whose "
+                "attach-edge ends abut existing bends fails to regenerate (live verified "
+                "2026-10-30: a free full edge attaches, an edge shortened at even one end by a "
+                "previous bend fails and rolls back), so it is refused before create by the "
+                "adjacent_bend_ends guard, which is a pre-create refusal rule and not a geometry "
+                "or miter proof and still applies when relief is supplied; passing miter_cuts "
+                "{width, offset} is the only release - it adds the flange's native "
+                "PRO_E_SMT_MTR_CUTS section (literal BLIND width/offset in model units) so "
+                "Creo cuts the end overlap; the four-wall box route is live verified "
+                "2026-11-06 (four walls built, saved and reloaded), while the cut amount "
+                "produced by a given width/offset is not yet quantified; forms, hems and "
+                "jogs are not high-level tools"
             ),
         },
         "assembly": {

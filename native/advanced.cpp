@@ -829,6 +829,42 @@ static FlangeReliefRequest flange_relief_request(const J &op) {
     return request;
 }
 
+// FEAT-014 2026-11-06: the miter-cut route for a wall whose attachment-edge ends
+// meet existing bends. ProSmtFlangeWall.h exposes PRO_E_SMT_MTR_CUTS on the same
+// wall feature, so the cut is requested together with the flange instead of a
+// separate ProSmtCornerRelief feature. Width/offset are written as BLIND
+// (PRO_DIM_ENTER) so the literal value in model units is stored: the first live
+// run wrote GAP, and Creo reset both types to PARAM with values 0, so GAP is not
+// a literal-length type in this context. The live geometry meaning of the value
+// is measured by the box driver before any capability is claimed.
+struct FlangeMiterRequest {
+    bool requested = false;
+    double width = 0;
+    double offset = 0;
+};
+
+static FlangeMiterRequest flange_miter_request(const J &op) {
+    FlangeMiterRequest request;
+    if (!op.contains("miter_cuts") || op.at("miter_cuts").is_null())
+        return request;
+    const J &miter = op.at("miter_cuts");
+    if (!miter.is_object())
+        throw std::runtime_error("miter_cuts must be an object with width and optional offset");
+    if (miter.contains("type") && miter.at("type") != "gap")
+        throw std::runtime_error("Unsupported sheetmetal flange miter_cuts type: " +
+                                 miter.at("type").dump() + " (supported: gap)");
+    request.requested = true;
+    if (!miter.contains("width"))
+        throw std::runtime_error("miter_cuts requires width in model units");
+    request.width = miter.at("width").get<double>();
+    request.offset = miter.contains("offset") ? miter.at("offset").get<double>() : request.width;
+    if (!(request.width > 0))
+        throw std::runtime_error("miter_cuts width must be greater than zero");
+    if (!(request.offset >= 0))
+        throw std::runtime_error("miter_cuts offset must be zero or greater");
+    return request;
+}
+
 static void flange_relief_side(ProElement relief, int side, bool enabled, double width,
                                double depth) {
     ProElement item = node(relief, side);
@@ -886,6 +922,51 @@ static void flange_relief_expect(const char *name, const J &side, bool enabled,
         " depth=" + std::to_string(side.at("depth_mm").get<double>()) + "; requested " +
         (enabled ? "rectangular" : "none") + " width=" + std::to_string(request.width) +
         " depth=" + std::to_string(request.depth));
+}
+
+// FEAT-014: Creo fills omitted tree elements with defaults, so the miter section is
+// read back out of the created feature and the request-vs-created comparison fails
+// the feature when the written values did not persist. KEEP_DEF_AREAS is left
+// unset on purpose (the SDK marks it optional); the echo records what Creo stored
+// so a default it applies is visible instead of guessed.
+static J flange_miter_echo(ProElement miter) {
+    int add = -1, width_type = -1, offset_type = -1;
+    double width = 0, offset = 0;
+    CK(ProElementIntegerGet(get_path(miter, J::array({PRO_E_SMT_MTR_CUTS_ADD})), nullptr, &add));
+    CK(ProElementIntegerGet(
+        get_path(miter, J::array({PRO_E_SMT_MTR_CUTS_WIDTH, PRO_E_SMT_MTR_CUTS_WIDTH_TYPE})),
+        nullptr, &width_type));
+    CK(ProElementDoubleGet(
+        get_path(miter, J::array({PRO_E_SMT_MTR_CUTS_WIDTH, PRO_E_SMT_MTR_CUTS_WIDTH_VAL})),
+        nullptr, &width));
+    CK(ProElementIntegerGet(
+        get_path(miter, J::array({PRO_E_SMT_MTR_CUTS_OFFSET, PRO_E_SMT_MTR_CUTS_OFFSET_TYPE})),
+        nullptr, &offset_type));
+    CK(ProElementDoubleGet(
+        get_path(miter, J::array({PRO_E_SMT_MTR_CUTS_OFFSET, PRO_E_SMT_MTR_CUTS_OFFSET_VAL})),
+        nullptr, &offset));
+    return {{"add", add},
+            {"width_type", width_type},
+            {"width_mm", width},
+            {"offset_type", offset_type},
+            {"offset_mm", offset}};
+}
+
+static void flange_miter_expect(const J &echo, const FlangeMiterRequest &request) {
+    if (echo.at("add").get<int>() == PRO_B_TRUE &&
+        echo.at("width_type").get<int>() == PRO_MITER_CUT_WIDTH_TYPE_BLIND &&
+        echo.at("offset_type").get<int>() == PRO_MITER_CUT_OFFSET_TYPE_BLIND &&
+        fabs(echo.at("width_mm").get<double>() - request.width) <= 1e-6 &&
+        fabs(echo.at("offset_mm").get<double>() - request.offset) <= 1e-6)
+        return;
+    throw std::runtime_error("flange miter cuts did not persist into the created feature: add=" +
+                             std::to_string(echo.at("add").get<int>()) +
+                             " width_type=" + std::to_string(echo.at("width_type").get<int>()) +
+                             " width=" + std::to_string(echo.at("width_mm").get<double>()) +
+                             " offset_type=" + std::to_string(echo.at("offset_type").get<int>()) +
+                             " offset=" + std::to_string(echo.at("offset_mm").get<double>()) +
+                             "; requested gap width=" + std::to_string(request.width) +
+                             " offset=" + std::to_string(request.offset));
 }
 
 // DEV-051 T11 2026-10-30: the only measured value here stays the part thickness; the
@@ -1411,10 +1492,73 @@ static std::string flange_adjacent_ends_summary(const J &evidence) {
     return summary;
 }
 
+// R09 (FEAT-014, 0.13.0 feedback §3.3): the pre-create error must not hand a
+// native_planar model the conversion-only wall_contract recipe. The first-wall
+// source is recorded in the model's aliases: wall_contract only for the
+// thin-extrusion conversion (creo_sheetmetal_wall), planar_wall only for
+// creo_sheetmetal_planar_wall. When neither is present the source is unknown,
+// so no first-wall recipe is offered instead of defaulting to the old one.
+static std::string flange_first_wall_guide() {
+    bool planar = false, conversion = false;
+    for (auto item = aliases.begin(); item != aliases.end(); ++item) {
+        const J &record = item.value();
+        if (!record.is_object())
+            continue;
+        if (record.contains("planar_wall") && record["planar_wall"].is_object())
+            planar = true;
+        if (record.contains("wall_contract") && record["wall_contract"].is_object())
+            conversion = true;
+    }
+    if (planar && !conversion)
+        return "This model's first wall was created by creo_sheetmetal_planar_wall "
+               "(template='native_planar'); that wall's result carries the measured frame "
+               "(origin/u_axis/v_axis/normal) and envelope. Pick an edge on a green/white wall "
+               "face boundary of that wall; this model has no wall_contract.";
+    if (conversion && !planar)
+        return "Frame contract: depth grows one-sided along the signed sketch normal and "
+               "thickness is the sheet gauge spread centered on the sketch line, so the "
+               "green/white wall faces are the gauge faces (see wall_contract.wall_face_ids). "
+               "To build a horizontal base plate whose large faces are the wall faces, sketch "
+               "on the YZ plane (or a YZ plane with offset) one line along +Y and call "
+               "sheetmetal_wall with depth=plate size along the normal and thickness=sheet "
+               "thickness; the frozen recipe with coordinates is "
+               "examples/sheetmetal_base_yz.json. Confirm the result via wall_contract.frame "
+               "and wall_face_ids before attaching flanges.";
+    return "This model does not report which first wall created it, so no first-wall recipe is "
+           "given here. Re-read the wall faces with creo_inspect_model and pick an edge on a "
+           "green/white wall face boundary.";
+}
+
+static std::string flange_edge_reference_contract() {
+    const int index = generated_identity_index();
+    return "operations[i].edge must be a bare edge reference {kind:'edge',id:N} whose id is "
+           "the current edge id read from creo_inspect_model; here i=" +
+           std::to_string(index) + " (operations[" + std::to_string(index) + "].edge)";
+}
+
 static void generic_sheetmetal_flange(const J &op) {
     // Validate the relief request before any feature exists so an unsupported
     // combination cannot leave a created-but-wrong wall behind.
     FlangeReliefRequest relief_request = flange_relief_request(op);
+    // FEAT-014: the miter request is the only documented release for the
+    // adjacent-bend-ends guard below; it is validated here for the same reason.
+    FlangeMiterRequest miter_request = flange_miter_request(op);
+    J adjacent_allowed;
+    // R09: name the plan position and the required reference shape before the
+    // generic resolver can answer with a bare {kind:...} message.
+    {
+        J edge_ref = op.value("edge", J());
+        bool valid = edge_ref.is_object() && edge_ref.contains("kind") &&
+                     edge_ref["kind"].is_string() && edge_ref["kind"] == "edge" &&
+                     edge_ref.contains("id") && edge_ref["id"].is_number_integer();
+        if (valid) {
+            const long long id = edge_ref["id"].get<long long>();
+            valid = id >= 0 && id <= 2147483647LL;
+        }
+        if (!valid)
+            throw std::runtime_error("sheetmetal_flange " + flange_edge_reference_contract() +
+                                     "; got " + edge_ref.dump());
+    }
     // DEV-051 T05/T11: a flange can only attach to an edge that borders a sheetmetal
     // wall face. Creo's own query answers PRO_TK_BAD_CONTEXT (-8) for an edge of a side
     // (rim) surface, and ProFeatureWithoptionsCreate then fails with a bare -1 and an
@@ -1437,28 +1581,27 @@ static void generic_sheetmetal_flange(const J &op) {
         log("FLANGE_ATTACH_EDGE id=%d smt_contour_code=%d smt_contour=%d\n", item.id, code, count);
         if (code == PRO_TK_BAD_CONTEXT)
             throw std::runtime_error(
-                "sheetmetal_flange cannot attach to edge " + std::to_string(item.id) +
-                ": ProSmtedgeContourGet returned PRO_TK_BAD_CONTEXT (-8), so this edge is not "
+                "sheetmetal_flange cannot attach to edge " + std::to_string(item.id) + " (" +
+                flange_edge_reference_contract() +
+                "): ProSmtedgeContourGet returned PRO_TK_BAD_CONTEXT (-8), so this edge is not "
                 "on a sheetmetal wall face (green/white contour). Pick an edge on a wall face "
-                "boundary: an edge shared by two side/rim surfaces cannot carry a flange. "
-                "Frame contract: depth grows one-sided along the signed sketch normal and "
-                "thickness is the sheet gauge spread centered on the sketch line, so the "
-                "green/white wall faces are the gauge faces (see wall_contract.wall_face_ids). "
-                "To build a horizontal base plate whose large faces are the wall faces, sketch "
-                "on the YZ plane (or a YZ plane with offset) one line along +Y and call "
-                "sheetmetal_wall with depth=plate size along the normal and thickness=sheet "
-                "thickness; the frozen recipe with coordinates is examples/sheetmetal_base_yz"
-                ".json. Confirm the result via wall_contract.frame and wall_face_ids before "
-                "attaching flanges.");
+                "boundary: an edge shared by two side/rim surfaces cannot carry a flange. " +
+                flange_first_wall_guide());
     }
     // DEV-052 N06 (FEAT-014): the confirmed trigger shape - an attachment-edge
     // end adjacent to an existing bend - is refused here, before any feature
     // exists, instead of failing inside regeneration and rolling back. See
     // flange_adjacent_bend_end_evidence for the dual-evidence criterion and its
     // default compatibility: a silent check never blocks the stock path.
+    // R09 (0.13.0 feedback §3.1): a supplied bend-end relief parameter
+    // (relief_request) never bypasses the refusal, because that relief is not
+    // proven to remove corner overlap. FEAT-014 (2026-11-06) adds exactly one
+    // release: an explicit miter_cuts request, which puts PRO_E_SMT_MTR_CUTS on
+    // the same wall feature so Creo cuts the overlap itself. Without that
+    // request the guard behaves exactly as before.
     {
         J adjacency = flange_adjacent_bend_end_evidence(op);
-        if (!adjacency.empty()) {
+        if (!adjacency.empty() && !miter_request.requested) {
             adjacency["failure_reason"] = "adjacent_bend_ends";
             std::string summary = flange_adjacent_ends_summary(adjacency);
             stage_operation_result({{"flange_failure_evidence", adjacency}});
@@ -1471,10 +1614,22 @@ static void generic_sheetmetal_flange(const J &op) {
                 " has end(s) adjacent to existing bends: " + summary +
                 ". The 2026-10-31 live probes proved this shape fails inside regeneration "
                 "(feature_status=6, no geometry) and the failure evidence cannot separate "
-                "section overrun from neighbouring-material overlap; this build implements "
-                "no corner relief or miter, so the wall is refused before submission. Attach "
-                "the flange to an edge whose ends are clear of existing bends; four-wall "
-                "boxes are not supported yet (FEAT-014 stays open).");
+                "section overrun from neighbouring-material overlap. The current bend-end relief "
+                "is not proven to resolve this corner "
+                "overlap: it trims a bend end, not "
+                "a corner run or miter. To build such a wall, pass miter_cuts {width, offset} "
+                "(FEAT-014): that adds the native PRO_E_SMT_MTR_CUTS gap to this flange so Creo "
+                "cuts the end overlap; without it the adjacent guard refuses the wall before "
+                "submission whatever relief the caller passes. Attach the flange to an edge "
+                "whose ends are clear of existing bends, or request miter_cuts.");
+        }
+        if (!adjacency.empty()) {
+            // Allowed only by the explicit miter request; the evidence is kept in
+            // the operation extra so the release is visible in the result.
+            adjacency["failure_reason"] = "adjacent_bend_ends";
+            adjacency["allowed_by_miter_cut"] = true;
+            log("FLANGE_ADJACENT_BEND_ALLOWED edge=%d miter=on\n", adjacency["edge_id"].get<int>());
+            adjacent_allowed = adjacency;
         }
     }
     ProSection section;
@@ -1584,6 +1739,19 @@ static void generic_sheetmetal_flange(const J &op) {
                        relief_request.width, relief_request.depth);
     flange_relief_side(relief, PRO_E_SMT_BEND_RELIEF_SIDE2, relief_request.side2,
                        relief_request.width, relief_request.depth);
+    // FEAT-014: the miter section is written only when requested, so a call
+    // without miter_cuts keeps the pre-FEAT-014 element tree byte-for-byte.
+    // KEEP_DEF_AREAS is intentionally omitted (SDK: optional).
+    if (miter_request.requested) {
+        ProElement miter = node(root, PRO_E_SMT_MTR_CUTS);
+        integer(miter, PRO_E_SMT_MTR_CUTS_ADD, PRO_B_TRUE);
+        ProElement miter_width = node(miter, PRO_E_SMT_MTR_CUTS_WIDTH);
+        integer(miter_width, PRO_E_SMT_MTR_CUTS_WIDTH_TYPE, PRO_MITER_CUT_WIDTH_TYPE_BLIND);
+        real(miter_width, PRO_E_SMT_MTR_CUTS_WIDTH_VAL, miter_request.width);
+        ProElement miter_offset = node(miter, PRO_E_SMT_MTR_CUTS_OFFSET);
+        integer(miter_offset, PRO_E_SMT_MTR_CUTS_OFFSET_TYPE, PRO_MITER_CUT_OFFSET_TYPE_BLIND);
+        real(miter_offset, PRO_E_SMT_MTR_CUTS_OFFSET_VAL, miter_request.offset);
+    }
     ProElement dev = node(root, PRO_E_SMT_DEV_LEN_CALCULATION);
     integer(dev, PRO_E_SMT_DEV_LEN_SOURCE, PRO_DVL_SRC_FEAT_YF_ONLY);
     real(node(dev, PRO_E_SMT_DEV_LEN_Y_FACTOR), PRO_E_SMT_DEV_LEN_Y_FACTOR_VALUE,
@@ -1609,24 +1777,44 @@ static void generic_sheetmetal_flange(const J &op) {
     // tree. A silent Creo-side reset to the part defaults would otherwise leave a plain
     // wall while the request echo still says rectangular, so divergence fails here
     // instead of passing a relief that is not in the model.
-    if (relief_request.side1 || relief_request.side2) {
+    if (relief_request.side1 || relief_request.side2 || miter_request.requested) {
         ProElement created = nullptr;
         CK(ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &created));
-        ProElement relief_tree = get_path(created, J::array({PRO_E_SMT_BEND_RELIEF}));
-        J side1 = flange_relief_side_echo(relief_tree, PRO_E_SMT_BEND_RELIEF_SIDE1);
-        J side2 = flange_relief_side_echo(relief_tree, PRO_E_SMT_BEND_RELIEF_SIDE2);
+        J side1, side2;
+        if (relief_request.side1 || relief_request.side2) {
+            ProElement relief_tree = get_path(created, J::array({PRO_E_SMT_BEND_RELIEF}));
+            side1 = flange_relief_side_echo(relief_tree, PRO_E_SMT_BEND_RELIEF_SIDE1);
+            side2 = flange_relief_side_echo(relief_tree, PRO_E_SMT_BEND_RELIEF_SIDE2);
+        }
+        J miter_echo;
+        if (miter_request.requested) {
+            ProElement miter_tree = get_path(created, J::array({PRO_E_SMT_MTR_CUTS}));
+            miter_echo = flange_miter_echo(miter_tree);
+        }
         CK(ProFeatureElemtreeFree(&f, created));
-        flange_relief_expect("side1", side1, relief_request.side1, relief_request);
-        flange_relief_expect("side2", side2, relief_request.side2, relief_request);
-        log("SHEETMETAL_FLANGE_RELIEF_ELEMS side1_type=%d side1_width=%.6f "
-            "side1_depth_type=%d side1_depth=%.6f side1_length_type=%d side2_type=%d "
-            "side2_width=%.6f side2_depth_type=%d side2_depth=%.6f side2_length_type=%d\n",
-            side1.at("type").get<int>(), side1.at("width_mm").get<double>(),
-            side1.at("depth_type").get<int>(), side1.at("depth_mm").get<double>(),
-            side1.at("length_type").get<int>(), side2.at("type").get<int>(),
-            side2.at("width_mm").get<double>(), side2.at("depth_type").get<int>(),
-            side2.at("depth_mm").get<double>(), side2.at("length_type").get<int>());
-        extra["relief_element_echo"] = {{"side1", side1}, {"side2", side2}};
+        if (relief_request.side1 || relief_request.side2) {
+            flange_relief_expect("side1", side1, relief_request.side1, relief_request);
+            flange_relief_expect("side2", side2, relief_request.side2, relief_request);
+            log("SHEETMETAL_FLANGE_RELIEF_ELEMS side1_type=%d side1_width=%.6f "
+                "side1_depth_type=%d side1_depth=%.6f side1_length_type=%d side2_type=%d "
+                "side2_width=%.6f side2_depth_type=%d side2_depth=%.6f side2_length_type=%d\n",
+                side1.at("type").get<int>(), side1.at("width_mm").get<double>(),
+                side1.at("depth_type").get<int>(), side1.at("depth_mm").get<double>(),
+                side1.at("length_type").get<int>(), side2.at("type").get<int>(),
+                side2.at("width_mm").get<double>(), side2.at("depth_type").get<int>(),
+                side2.at("depth_mm").get<double>(), side2.at("length_type").get<int>());
+            extra["relief_element_echo"] = {{"side1", side1}, {"side2", side2}};
+        }
+        if (miter_request.requested) {
+            flange_miter_expect(miter_echo, miter_request);
+            log("SHEETMETAL_FLANGE_MITER_ELEMS add=%d width_type=%d width=%.6f "
+                "offset_type=%d offset=%.6f\n",
+                miter_echo.at("add").get<int>(), miter_echo.at("width_type").get<int>(),
+                miter_echo.at("width_mm").get<double>(), miter_echo.at("offset_type").get<int>(),
+                miter_echo.at("offset_mm").get<double>());
+            miter_echo["requested"] = true;
+            extra["miter_cuts"] = miter_echo;
+        }
     }
     extra["section_path"] = J::array({PRO_E_STD_SECTION, PRO_E_SKETCHER});
     if (trim_requested)
@@ -1641,6 +1829,10 @@ static void generic_sheetmetal_flange(const J &op) {
     extra["flip_input"] = op.value("flip", false);
     if (op.contains("relief") && !op.at("relief").is_null())
         extra["relief"] = flange_relief_record(op, relief_request);
+    // FEAT-014: the adjacency evidence that the miter request released. It is an
+    // operation extra, never a failure block: the wall was created.
+    if (!adjacent_allowed.is_null())
+        extra["adjacent_bend_ends_allowed"] = adjacent_allowed;
     remember(op, f, extra);
 }
 static void fix_component(ProAsmcomp *c) {
@@ -1805,6 +1997,21 @@ static void verify_rebuild_binding(const J &op, const J &source) {
                                  "); collect a new snapshot and plan again instead of rebuilding "
                                  "from a different revision");
 }
+// R05 (BUG-045/FEAT-012): the placement receipt names the row-vector convention
+// and reports the transform the kernel actually stored — a fresh query, never a
+// copy of the requested pose. An unreadable transform stays null with its raw
+// query code instead of echoing the request as if it had been measured.
+static J assembly_pose_receipt(ProAsmcomp *component) {
+    ProMatrix position = {};
+    const ProError code = component_to_assembly_transform(component, position);
+    auto units = inspect_length_units((ProMdl)board);
+    MillimeterScale scale = length_scale_to_mm((ProMdl)board, units);
+    return {{"rotation_convention", assembly_rotation_convention()},
+            {"transform", code ? J(nullptr) : matrix_json(position)},
+            {"transform_source", "component_to_assembly"},
+            {"transform_code", (int)code},
+            {"length_unit", length_unit_json(units, scale)}};
+}
 static void assemble_component(const J &op) {
     ProMatrix position;
     assembly_rigid_transform(op, position);
@@ -1865,6 +2072,7 @@ static void assemble_component(const J &op) {
     ProName name;
     wcscpy_s(name, wide(op["label"]).c_str());
     CK(ProModelitemNameSet(&comp, name));
+    stage_operation_result(assembly_pose_receipt(&comp));
     remember(op, comp,
              {{"source_model_id", op["source_model_id"]},
               {"source_revision", source["revision"]},
@@ -2024,6 +2232,7 @@ static void modify_component(const J &op) {
         CK(ProAsmcompAllConstrRemove(&comp));
         CK(ProAsmcompPositionSet(nullptr, &comp, position));
         fix_component(&comp);
+        stage_operation_result(assembly_pose_receipt(&comp));
     } else {
         int *ids = nullptr;
         ProFeatureDeleteOptions *options = nullptr;

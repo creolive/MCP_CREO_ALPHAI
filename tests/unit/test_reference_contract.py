@@ -12,6 +12,11 @@ from unittest.mock import Mock, patch
 import bridge
 import generic_bridge as general
 import server
+from creo_mechdog.capabilities import (
+    REGISTERED_OPERATIONS,
+    SURFACE_TRIM_OFFSET_LIMIT,
+    require_available,
+)
 from creo_mechdog.references import reference_capabilities
 from creo_mechdog.schema import AxisPatternOp, validate_operations
 
@@ -165,9 +170,142 @@ class ReferenceContractTests(unittest.TestCase):
             with self.subTest(operation=operation):
                 validate_operations([operation])
 
+    def test_surface_chain_by_tool_contracts_match_the_published_schemas(self):
+        """R07: the three published surface tools publish their real references."""
+        tools = reference_capabilities()["by_tool"]
+        self.assertTrue(
+            {"creo_surface_trim", "creo_project_curve", "creo_surface_offset", "creo_loft"}
+            <= set(tools)
+        )
+
+        trim = tools["creo_surface_trim"]
+        for target_key in ("target", "target_by_label"):
+            for tool_key in (
+                "tool_quilt",
+                "tool_quilt_by_label",
+                "tool_datum_plane",
+                "tool_curve",
+            ):
+                with self.subTest(target=target_key, tool=tool_key):
+                    validated = validate_operations(
+                        [
+                            {
+                                "op": "surface_trim",
+                                "label": "trim_main",
+                                "target": trim[target_key],
+                                "tool": trim[tool_key],
+                                "keep_side": "one",
+                            }
+                        ]
+                    )
+                    self.assertEqual(validated[0]["keep_side"], "one")
+        self.assertIn("curve_direction", trim["keep_side"]["meaning"])
+        self.assertIn("tool_plane_normal", trim["keep_side"]["meaning"])
+        self.assertIn("datum_plane", trim["rejected"]["datum_plane_id"])
+        self.assertIn("label", trim["rejected"]["labels_on_geometry_kinds"])
+        self.assertEqual(trim["rejected"]["execute_plan_offset_mm"], SURFACE_TRIM_OFFSET_LIMIT)
+        with self.assertRaisesRegex(ValueError, "offset_mm is not published"):
+            require_available(
+                validate_operations(
+                    [
+                        {
+                            "op": "surface_trim",
+                            "label": "trim_offset",
+                            "target": trim["target"],
+                            "tool": trim["tool_quilt"],
+                            "keep_side": "one",
+                            "offset_mm": 5,
+                            "offset_side": "one",
+                        }
+                    ]
+                )
+            )
+
+        project = tools["creo_project_curve"]
+        for direction_key in (
+            "direction_plane_label",
+            "direction_axis_label",
+            "direction_curve",
+        ):
+            with self.subTest(direction=direction_key):
+                validate_operations(
+                    [
+                        {
+                            "op": "project_curve",
+                            "label": "project_main",
+                            "target": project["target"],
+                            "source": project["source"],
+                            "direction_ref": project[direction_key],
+                        }
+                    ]
+                )
+        self.assertIn("edge", project["rejected"]["edge_or_axis_source"])
+        self.assertIn("datum_plane", project["rejected"]["direction_datum_plane"])
+        with self.assertRaisesRegex(ValueError, "curve"):
+            validate_operations(
+                [
+                    {
+                        "op": "project_curve",
+                        "label": "project_edge",
+                        "target": project["target"],
+                        "source": {"kind": "edge", "id": 12},
+                        "direction_ref": project["direction_plane_label"],
+                    }
+                ]
+            )
+        with self.assertRaisesRegex(ValueError, "datum_plane"):
+            validate_operations(
+                [
+                    {
+                        "op": "project_curve",
+                        "label": "project_plane_direction",
+                        "target": project["target"],
+                        "source": project["source"],
+                        "direction_ref": {"kind": "datum_plane", "label": "TOP"},
+                    }
+                ]
+            )
+
+        offset = tools["creo_surface_offset"]
+        for key in ("reference", "reference_by_label"):
+            with self.subTest(reference=key):
+                validated = validate_operations(
+                    [
+                        {
+                            "op": "surface_offset",
+                            "label": "offset",
+                            "reference": offset[key],
+                            "distance": offset["distance"],
+                        }
+                    ]
+                )
+                self.assertEqual(validated[0]["distance"], 5.0)
+        self.assertIn("distance", offset["rejected"]["offset_mm"])
+        self.assertIn("offset wall", offset["result"])
+        self.assertIn(SURFACE_TRIM_OFFSET_LIMIT, offset["rejected"]["offset_mm"])
+
+        loft = tools["creo_loft"]
+        self.assertIn("surface_loft", loft["surface_mode"])
+        self.assertNotIn("surface_loft", REGISTERED_OPERATIONS)
+        with self.assertRaisesRegex(ValueError, "cut, surface"):
+            require_available(
+                validate_operations(
+                    [
+                        {
+                            "op": "loft",
+                            "label": "surface_loft",
+                            "sections": ["first", "second"],
+                            "mode": "surface",
+                        }
+                    ]
+                )
+            )
+
     def test_schema_examples_list_all_three_axis_forms(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
-        self.assertEqual(len(tools), 97)
+        # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
+        # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
+        self.assertEqual(len(tools), 100)
         axis = tools["creo_axis_pattern"].input_schema["properties"]["axis"]
         self.assertEqual(
             {form["properties"]["kind"]["const"] for form in axis["oneOf"]},

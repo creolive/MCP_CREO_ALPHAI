@@ -1,6 +1,6 @@
 # FEAT-023：控制工具返回体积——capabilities 摘要与分页实施卡
 
-日期：2026-10-20 细化（原为统一台账条目）；2026-10-31 0.10.0 更新。类型：功能。优先级：P2。状态：T09A 已交付（0.10.0：组件身份投影与保存重载/删除重插实机通过）；capabilities 子项已闭环；其余体积议题未完成。目标版本：0.4.2（用户指定 PATCH 例外，同 FEAT-044）/0.10.0。
+日期：2026-10-20 细化（原为统一台账条目）；2026-10-31 0.10.0 更新。类型：功能。优先级：P2。状态：T09A 已交付（0.10.0：组件身份投影与保存重载/删除重插实机通过）；capabilities 子项已闭环；**0.15.0 已交付** compact 判据白名单、列表预算与 `full_detail_hint`（离线，真实 stdio 字节核对未跑）；其余体积议题未完成。目标版本：0.4.2（用户指定 PATCH 例外，同 FEAT-044）/0.10.0/0.15.0。
 
 ## 当前剩余范围（2026-10-21）
 
@@ -83,3 +83,21 @@ capabilities摘要/分页已随0.4.2交付、0.4.4补验收闭环；0.4.5的READ
 - **`id_renumbering` 半场景限制保持**：本轮 live 矩阵不含独立的 `id_renumbering` 判定行，原生在保存路径上拒绝重编号，**只能观察拒绝、不得整体记为实机通过**的限制不变。
 
 本卡"组件清单内联业务 label 及 source_model_id/source_revision"子项的实机四例本轮全部按预期通过；本卡其余体积议题（jobs compact 日志、翼型/履带请求体量、union 校验错误）仍未做，整卡保持开放。
+
+## 2026-11-06 compact sections 投影（Q06/R04，离线实现，未实机）
+
+- 新增 `src/creo_mechdog/compact_sections.py`：从 `bridge.compact_job` 抽出结果块/操作块名单，提供 `resolve_sections`（非法名报错并列出全部已知块）与 `apply_sections`（只删未点名块、不改数据、不增数据）。
+- `creo_get_job` 与 `creo_list_jobs`（detail=compact）新增可选 `sections: list[str]`；响应顶层新增 `sections_applied` 与 `omitted_sections`；`sections=[]` 只留结果证据；未点名块不出现；`detail=full` 传 `sections` 直接拒绝。
+- 证据字段不可被裁：status/revision/message/code/toolkit_code、回滚与保存重载证据、每条 operation 的身份与失败证据（`feature_errors`/`failed_stage`/`failed_toolkit_call`/`failed_operation`）恒保留；投影先于 32 KiB 预算与 20 条采样上限执行。
+- 未知块名在读取 job 目录前拒绝，`job.json` 字节不变（单测断言）。
+- 验证：新增 `tests/unit/test_compact_sections.py` 14 项；连同既有 compact/budget/分页回归 109 项通过；全量 `tools/test_unit.py` 2477 项通过（0 失败 0 错误）；`dev_check.py --skip-unit` `success=true`。
+- 未验证：实机 Creo、MCP stdio 客户端、WorkBuddy 黑盒均未跑。本卡其余体积议题（jobs compact 日志、翼型/履带请求体量、union 校验错误）仍开放。
+
+## 2026-11-06 R04：compact 判据可见、列表项有界（FEAT-023/FEAT-039，离线实现）
+
+- 新增 `src/creo_mechdog/job_projection.py`：`compact_operation`/`compact_progress`/`compact_job_list_item` 纯白名单投影，只复制原生已产生的键，`null` 与 `reason` 原样保留，缺失不补 0。判据键：`surface_trim` 的面积前后值与状态、`kept_side_basis`/`kept_quilt_*`；`surface_offset` 的 `source_area_mm2`/`source_area_status`/`measured_offset_distance_mm`/`direction`/`offset_method`/`target_quilt_id`；`project_curve` 的 `source_length_mm`/`curve_length_mm`/`endpoints_mm`/`curve_id`/`helper_*`/`route`；`solidify` 的 `closure`。
+- compact 不再返回 `native_log_tail`，`native_progress` 只留阶段/计时（不含 `log_tail`）；`detail=full` 的日志与分页路径不变。compact 顶层新增 `full_detail_hint`，写明 `detail="full", section="operations_result", limit, cursor`。
+- 顺序：先按 `sections` 选块，再做 operation 投影与采样/32 KiB 预算；`sections=[]` 仍只留结果证据。每条 operation 的 `failed_operation` 加入失败证据白名单；预算裁剪额外保留样本窗外的失败记录（仍以 `operations_total`/`operations_truncated` 报总体）。
+- `creo_list_jobs` 的 compact 改为固定有界条目（job/model id、status、stage、时间、outcome、≤200 字 message；`job_id` 即详情入口）。`sections` 仅为兼容校验，对固定条目不再生效，需用 `creo_get_job` 取块。实测 50 条最大单条 618 B、整列表 32102 B；1000 op 的 compact 为 5828 B（保留 20 条 + 总体标记）。这一变化取代本节 2026-11-06 sections 段中“list_jobs compact 应用 sections”的描述。
+- 验证：新增 `tests/unit/test_job_projection.py` 18 项，更新 `test_compact_sections.py`/`test_job_query.py` 的列表与日志断言；连同既有 compact/budget/分页/operation 回归 91 项通过。
+- 未验证：实机 Creo、MCP stdio、WorkBuddy、native 实测判据值均未跑；本卡其余体积议题仍开放。

@@ -18,9 +18,19 @@ success value is fabricated for the missing field.
 
 import unittest
 
+from creo_mechdog.operation_results import normalize_operations
+from creo_mechdog.schema import validate_operations
 from tools.test_assembly_matrix import verify_rolled_back_failure
 
 ASSEMBLY_REVISION = 34
+
+# R05: the 17.9-degree row-vector pose rounded to six decimals (still inside the
+# 1e-6 orthogonality/determinant gate, so it must never be "fixed" by the caller).
+ROTATION_17_9 = [
+    [0.951594, 0.307357, 0.0],
+    [-0.307357, 0.951594, 0.0],
+    [0.0, 0.0, 1.0],
+]
 
 
 def failed_manifest(revision=...):
@@ -101,6 +111,91 @@ class RolledBackFailureVerification(unittest.TestCase):
         failed["status"] = "succeeded"
         with self.assertRaises(AssertionError):
             verify_rolled_back_failure(failed, ASSEMBLY_REVISION, listed(), listed())
+
+
+def matrix_failed_manifest():
+    """R05: the same rolled-back job, with its placement failure context."""
+    manifest = failed_manifest()
+    manifest["result"].update(
+        {
+            "failed_operation_index": 1,
+            "failed_operation": {
+                "index": 1,
+                "operation": "component_placement",
+                "stage": "execute_component_placement",
+                "feature_label": "i032",
+                "sketch_name": None,
+                "toolkit_call": "ProAsmcompPositionSet",
+                "pro_error": -2,
+                "pro_error_source": "toolkit",
+                "input_matrix": [row + [0.0] for row in ROTATION_17_9] + [[0.0, 0.0, 0.0, 1.0]],
+                "matrix_source": "rotation_matrix",
+                "determinant": 1.0,
+                "orthogonality_residual": 5.4e-7,
+                "message": "Toolkit call ProAsmcompPositionSet failed with code -2",
+                "message_truncated": False,
+            },
+        }
+    )
+    return manifest
+
+
+class MatrixFailureRollback(unittest.TestCase):
+    """R05: a refused matrix costs the whole batch, never a partial commit."""
+
+    def test_the_matrix_context_survives_the_rollback_check(self):
+        failed = matrix_failed_manifest()
+        verify_rolled_back_failure(failed, ASSEMBLY_REVISION, listed(), listed())
+        block = failed["result"]["failed_operation"]
+        self.assertEqual(block["operation"], "component_placement")
+        self.assertEqual(block["toolkit_call"], "ProAsmcompPositionSet")
+        # The caller's matrix is echoed untouched, with its measured arithmetic.
+        self.assertEqual(block["input_matrix"][:3], [row + [0.0] for row in ROTATION_17_9])
+        self.assertAlmostEqual(block["determinant"], 1.0, delta=1e-6)
+        self.assertLess(block["orthogonality_residual"], 1e-6)
+        self.assertNotIn("revision", failed)
+
+    def test_a_trailing_operation_is_rolled_back_or_not_executed(self):
+        operations = [
+            {"index": 0, "op": "assemble_component", "succeeded": True},
+            {"index": 1, "op": "component_placement", "succeeded": False},
+            {
+                "index": 2,
+                "op": "component_placement",
+                "succeeded": False,
+                "execution_status": "not_executed",
+            },
+        ]
+        normalized = normalize_operations(
+            operations,
+            job_status="failed",
+            rollback_confirmed=True,
+            failed_index=1,
+        )
+        self.assertEqual(
+            [op["effect_status"] for op in normalized], ["rolled_back", "rolled_back", "no_effect"]
+        )
+        self.assertEqual(normalized[0]["execution_status"], "succeeded")
+        self.assertEqual(normalized[1]["execution_status"], "failed")
+
+    def test_a_legal_edit_after_the_rollback_keeps_the_same_revision(self):
+        verify_rolled_back_failure(matrix_failed_manifest(), ASSEMBLY_REVISION, listed(), listed())
+        # The rollback restored revision 34, so the planned follow-up edit is
+        # admitted against 34 and only its own commit advances the model.
+        follow_up = {
+            "op": "component_placement",
+            "component": "i032",
+            "rotation_matrix": ROTATION_17_9,
+        }
+        validate_operations([follow_up])
+        self.assertEqual(listed()["revision"], ASSEMBLY_REVISION)
+        self.assertEqual(ASSEMBLY_REVISION + 1, 35)
+        # The stale check still matters: once the edit lands, 34 no longer
+        # describes the model.
+        with self.assertRaises(AssertionError):
+            verify_rolled_back_failure(
+                matrix_failed_manifest(), ASSEMBLY_REVISION, listed(), listed(35)
+            )
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@
 
 两种原生后端统一归一为 `(-180, 180]`，因此 `-135` 与 `225` 指向同一旋转（旧实现把负角 `+360`，两者走了不同路径）。失败回执带 `failed_transform`（`backend`、`rotation_deg`、`rotation_normalized_deg`、`translation_mm`、`keep_original`、`reference_count`、`reference_kinds`）。
 
-**`keep_original` 批量复制**：单个计划里对同一 body 连续复制超过 **4 个**时，第 5 个副本失败并整批回滚。本机 Creo 12.4 已两轮复现：5 op 与 7 op 批次都在 `operation_index=4` 失败，`failed_stage=execute_geometry_transform`、消息为 `Regeneration produced a failed, suppressed or incomplete feature`，前 4 个 op `effect_status=rolled_back`；与旋转角无关（−135 在范围内同样失败）、与批次长度无关。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**根因未定**。大批量复制请拆成 ≤4 个/批，并在下一批重新引用当前 body；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。
+**`keep_original` 批量复制（BUG-111，0.11.7 定因口径）**：`keep_original` 复制的是**整个当前体**，副本累积在**同一个 body** 内（特征数 +1/副本，不新增 body）。追加副本能否成功取决于"既有副本集合 × 该角度"，**不是副本数量上限**：本机 Creo 12.4 四个独立模型（C2/C3/C5 与 C6 批 B）同型失败于 `operation_index=4`（`failed_stage=execute_geometry_transform`，消息 `Regeneration produced a failed, suppressed or incomplete feature`，前序 op `effect_status=rolled_back`），而把 −135 放在首位的 C4 五个副本**全部成功**、拆成 4+3 两批的 C6 仍在批 B 首个 op 失败。**"单批 ≤4 个副本、下一批重新引用当前 body"的变通建议已作废**（拆批实测无效）：把副本集放在同一计划里提交即可；需要"固定原件"的副本时应另建模型。失败回执的 `failed_transform` 给出 `backend`、`rotation_deg`/`rotation_normalized_deg`、`keep_original`、`reference_count`，并附有界 `selection` 块（`requested_body_ids`、`selected_surface_count`、`model_counts_at_start`：`features`/`surfaces`/`bodies`/`active_bodies`，取自 op 开始时的巡检，巡检未提供的项记 `null`）；`failed_operation_index` 与 `failed_transform.label` 指明是哪一步失败。Creo 10 报告方在 `ProFeatureWithoptionsCreate` 上拿到裸 `-1`，位置相同，**Creo 10/9 行为仍未验证**。
 
 ## 回转轴（revolve.axis，BUG-083）
 
@@ -101,6 +101,48 @@
 第一种引用同一模型中**先创建**的基准轴特征（例如先用 `datum_axis` 操作或 `creo_datum_axis` 创建，再回转引用其标签），推荐使用；第二种是模型巡检取得的几何轴 ID。axis_pattern 专用的 `datum_feature` 兼容别名不适用于回转。
 
 **省略 axis 或显式传 null**：回转轴取草图自身的构造中心线，此时草图必须恰含一条 centerline（示例 [examples/turned_part.json](../examples/turned_part.json)）。**空对象 `{}`、缺 `kind` 的结构（如 `{"entity":"ax"}`）、非轴 kind、缺失 id/label 会在入口被拒绝**：错误信息含字段路径与上述可用示例，且不派发原生作业；`{"entity":"ax"}` 不会被静默猜测为外部轴。原生执行器对同类非法结构保留第二道边界防御，作业以结构化错误结束（含失败阶段与操作序号），不再透出 nlohmann JSON 异常文本。高层工具与 execute_plan 使用同一规范化逻辑，revision 防护保持有效；显式外部轴示例见 [examples/revolve_external_axis.json](../examples/revolve_external_axis.json)。
+
+## 曲面链引用（surface trim / project curve / surface offset，FEAT-039 / DEV-069）
+
+三个已发布曲面工具都只接受**裸引用对象**，不增加 `reference`/`entity` 包装。几何对象用几何 ID，特征标签用 `quilt_feature`；`quilt`、`curve` 等几何 kind 不接受 `label`。下面的 ID 仅为类型示例，实际值须从目标模型本次巡检取得。
+
+```json
+// creo_surface_trim：target 是 quilt；tool 是 quilt、基准面标签或曲线几何 ID
+{"target": {"kind": "quilt", "id": 21},
+ "tool": {"kind": "quilt_feature", "label": "trim_fill"},
+ "keep_side": "one"}
+
+// tool 也可以是基准面标签或曲线 ID（曲线修剪走 use-curve 变体）
+{"target": {"kind": "quilt_feature", "label": "blade_quilt"},
+ "tool": {"kind": "datum_plane", "label": "FRONT"},
+ "keep_side": "two"}
+{"target": {"kind": "quilt", "id": 21}, "tool": {"kind": "curve", "id": 41}, "keep_side": "one"}
+```
+
+`keep_side` 只有 `one`/`two`，表示保留哪一侧，不是 GUI 视图名。终态 `kept_side_basis` 报告实际依据：quilt 或基准面工具为 `side_reference="tool_plane_normal"`，曲线工具为 `"curve_direction"`（反向曲线会交换保留区域）；`tool_normal` 只在基准面工具上是真实向量。`target` 与 `tool` 必须不同，且只接受一个 tool。
+
+```json
+// creo_project_curve：一张 quilt、一条曲线几何 ID、一个能读出真实方向的方向引用
+{"target": {"kind": "quilt", "id": 21},
+ "source": {"kind": "curve", "id": 7},
+ "direction_ref": {"kind": "datum_feature", "label": "TOP"},
+ "side": "positive"}
+```
+
+`direction_ref` 接受 `datum_feature`/`datum_axis_feature` 标签，或直的 `{"kind":"curve","id":N}`。`side` 只翻转该方向，只有 `positive`/`negative`。投影按“源草图沿方向扫掠 + 官方相交曲线”构造，模型会多一个辅助曲面特征，其 ID 由 `helper_feature_id` 返回；方向须平行于源草图平面法向，目标须在请求一侧，源曲线须属于曲线特征。`source` 只接受 `curve` 几何 ID，**不接受** `edge` 或 `axis`；`direction_ref` **不接受** `{"kind":"datum_plane","label":...}`（该解析器会丢掉标签并取默认平面）或裸向量。
+
+```json
+// creo_surface_offset：源 quilt，沿曲面法向偏移
+{"reference": {"kind": "quilt_feature", "label": "fill_label"},
+ "distance": 5.0,
+ "side": "positive"}
+```
+
+`creo_surface_offset` 的结果是**偏置壁**，按“面积 × 距离”计量，既不是独立偏置 quilt，也不是 `creo_thicken`/`creo_solidify` 那种实体厚度壁；后者从 quilt 生成实体，前者只把 quilt 沿法向移动。`side` 只回显请求侧，几何 z 符号不回读。该工具用 `distance`，不吃 `offset_mm`；`surface_trim` 的 `offset_mm` 是另一条被门禁的薄修剪路线，当前拒绝文案为：
+
+> surface_trim offset_mm is not published: the documented Thin tree (PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only removes a band of that thickness when the tool is a quilt, keeps both sides instead of the requested keep_side, and offset_side has no observable effect (2026-11-06 six direction variants all produced the same band; negative thickness fails regeneration)
+
+**loft 的表面模式仍不可用**：`creo_loft` 只接受 `mode="add"`；`mode="surface"`、`cut` 与 `new_body=true` 都在入队前拒绝。没有 `creo_surface_loft` 工具，也没有 `surface_loft` 已注册操作；多截面放样/边界混合曲面仍未发布。
 
 ## 各工具的外层形状
 
@@ -116,10 +158,14 @@
 | solidify.reference | 裸平面/曲面参考，可用已验证平面的 `plane.id` 几何 ID；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
 | surface_fill.sketch | 草图特征标签或特征 ID（字符串或整数），无需 `{kind:...}` 对象 |
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |
-| sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`；参数内部不再加 edge/reference 包装 |
+| surface_trim.target/tool | target 一个 quilt；tool 一个 quilt、基准面标签或曲线几何 ID；`keep_side` 只用 `one`/`two`，实际依据见 `kept_side_basis`；`offset_mm` 仍拒绝 |
+| project_curve.target/source/direction_ref | target 一个 quilt；source 只接受 `{"kind":"curve","id":N}`（不接受 edge/axis 或曲线标签）；direction_ref 接受 `datum_feature`/`datum_axis_feature` 标签或曲线 ID，不接受 `datum_plane` 标签或裸向量 |
+| surface_offset.reference | 裸 quilt 或 quilt_feature 引用；距离字段是 `distance`，结果按面积×距离计量的偏置壁，不是独立 quilt 或实体厚度壁 |
+| sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`（计划路径 `operations[i].edge`），`id` 取当前 `creo_inspect_model` 的边 ID；参数内部不再加 edge/reference 包装。缺 `kind` 或写成 `{"id":N}` 时错误会给出该位置与 `{kind:'edge',id:N}` 示例。首壁来源为 `native_planar` 时，报错只指向 `creo_sheetmetal_planar_wall` 的 frame/envelope；只有 `sheetmetal_wall` 转换首壁才引用 `wall_contract`；来源未知不给旧首壁配方 |
 | sheetmetal_unbend/flat_pattern/bend_back.fixed_surface | 裸面引用，如 `{"kind":"surface","id":N}`，取自当前巡检；`references` 省略时作用全部折弯，能否固定由原生执行判定 |
-| sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放、斜接与边撕裂不支持。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |
+| sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放与边撕裂不支持。这是 **bend-end relief**，不是 corner relief 或斜接，当前未证明能解决角部重叠；传入它也不会跳过 `adjacent_bend_ends` 创建前拒绝。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |
 | sheetmetal_flange.end_trim_mm | 可选正数（`>0`，上限 100000，布尔拒绝），模型单位；省略时元素树与旧行为逐字一致。**Creo 把它读作「距链端各内缩 setback」还是「自截面起算的壁长」尚未实机确认**，属诊断参数：先在自由壁上用实测体积分类再依赖修剪几何（开发分支未发布） |
+| sheetmetal_flange.miter_cuts | 可选对象 `{width:>0, offset:>=0}`（模型单位，布尔拒绝；`offset` 省略时等于 `width`）。写入折边自身 `PRO_E_SMT_MTR_CUTS` 的 **BLIND（`PRO_DIM_ENTER`）数值**宽度/偏移，创建时由 Creo 切掉墙端与相邻折弯的重叠。**这是 `adjacent_bend_ends` 创建前拒绝的唯一放行方式**：不传 `miter_cuts` 的请求照旧被拒；传入后放行并回显 `miter_cuts` 与放行证据 `adjacent_bend_ends_allowed`。实测（2026-11-06）：GAP 型会被 Creo 重置为 PARAM 且值清 0，故改用 BLIND；四壁盒子四墙均建成并保存重载，但 1 mm 宽度/偏移在自由首壁探针上无可测体积变化，切角量尚未定标 |
 | feature_state.action / targets | `action` ∈ `delete`/`suppress`/`resume`；`targets` 是特征标签或非负特征 ID 的数组，同一批目标必须互不相同。仅用于零件/钣金模型；装配组件走 `creo_remove_component` |
 | component_placement.component / component_constraints 引用 | 组件**业务标签**（如 `part_alpha`）；标签是业务名不是身份，身份是模型身份 + feature_id，删除重插后旧标签不误指新组件 |
 | round/chamfer.references | **集合对象数组**：`[{"edge":{"kind":"edge","id":N}}]`，或 `[{"surfaces":[{"kind":"surface","id":A},{"kind":"surface","id":B}]}]`；裸边数组不等于集合数组 |

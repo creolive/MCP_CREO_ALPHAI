@@ -42,8 +42,11 @@ class SeedArchiveFixture(unittest.TestCase):
         shutil.copy2(ROOT / "LICENSE", self.root / "LICENSE")
         shutil.copy2(ROOT / "README.md", self.root / "README.md")
         (self.root / "version.py").write_text(f'VERSION = "{VERSION}"\n', encoding="utf-8")
-        self.archive = self.temp / "seed-library.zip"
+        self.archive = self.temp / f"MCP_CREO_MechDog-{VERSION}-seed-library.zip"
         self.digest = build_seed_archive(self.root, self.archive)
+        release_integrity.write_sidecar(
+            self.archive.with_suffix(".zip.sha256"), self.digest, self.archive.name
+        )
         self.write_record(self.digest, VERSION)
 
     def write_record(self, digest: str, version: str, name: str | None = None):
@@ -247,11 +250,11 @@ class SeedPackagingGateTests(SeedArchiveFixture):
         self.assertFalse((self.temp / "source.zip.sha256").exists())
 
     def test_valid_seed_archive_packages_the_source_with_the_explicit_output(self):
-        output = self.temp / "source.zip"
+        output = self.temp / f"MCP_CREO_MechDog-{VERSION}-source.zip"
         result = self.run_package("--seed-archive", str(self.archive), "--output", str(output))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(output.is_file())
-        self.assertTrue((self.temp / "source.zip.sha256").is_file())
+        self.assertTrue(output.with_suffix(".zip.sha256").is_file())
         with zipfile.ZipFile(output) as archive:
             names = archive.namelist()
         self.assertIn("MCP_CREO_MechDog/version.py", names)
@@ -275,7 +278,7 @@ class SeedPackagingGateTests(SeedArchiveFixture):
             "--seed-archive",
             str(self.archive),
             "--output",
-            str(self.temp / "source.zip"),
+            str(self.temp / f"MCP_CREO_MechDog-{VERSION}-source.zip"),
             "--stage",
             str(stage),
         )

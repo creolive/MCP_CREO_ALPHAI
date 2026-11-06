@@ -20,15 +20,27 @@ static J solve_profile(ProSection section, const J &op) {
             "Experimental sketch solver requests are disabled pending native acceptance");
     std::string mode = op.value("dimensioning", "auto");
     CK(ProSectionIntentManagerModeSet(section, PRO_B_FALSE));
-    CK(ProSectionEpsilonSet(section, mode == "coordinates" ? 0.000000001 : 0.0001));
+    // FEAT-039/W01: the sketch epsilon is reported for the record. The
+    // 2026-11-05 live measurement showed it is NOT the endpoint coincidence
+    // tolerance: a 5e-4 mm gap stayed open with the epsilon raised to 2e-3 mm,
+    // while an 8.2e-7 mm gap closes in the default path. The epsilon is
+    // therefore left at the mode default and the controlled weld stays gated.
+    double epsilon = mode == "coordinates" ? 0.000000001 : 0.0001;
+    bool weld_requested = op.value("endpoint_policy", "report") == "weld";
+    CK(ProSectionEpsilonSet(section, epsilon));
     // BUG-097 L2: this solve is the section-error provenance for a possible
     // CompleteFeature failure later in the same operation; start a fresh
     // bounded capture so a previous operation's messages cannot leak in.
     reset_section_error_capture();
     ProWSecerror error = nullptr;
     CK(ProSecerrorAlloc(&error));
-    J info = {
-        {"requested", mode}, {"used", mode}, {"final_units", "mm"}, {"coordinate_scaling", false}};
+    J info = {{"requested", mode},
+              {"used", mode},
+              {"final_units", "mm"},
+              {"coordinate_scaling", false},
+              {"epsilon_mm", epsilon},
+              {"weld_requested", weld_requested},
+              {"epsilon_source", "mode_default"}};
     try {
         ProError solved = ProSectionSolve(section, &error);
         log("SKETCH_SOLVE=%d mode=%s\n", solved, mode.c_str());

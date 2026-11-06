@@ -25,7 +25,8 @@ import copy
 import unittest
 from pathlib import Path
 
-from creo_mechdog.schema import validate_operations
+from creo_mechdog.capabilities import families
+from creo_mechdog.schema import SheetmetalFlangeOp, validate_operations
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -1301,6 +1302,137 @@ class OriginalEvidenceTest(unittest.TestCase):
                 self.assertEqual(row["effect_status"], "rolled_back")
         record = judgement_template("f_ny", 4, "-y")
         self.assertIn("rolled_back_rebuild_required", record)
+
+
+class FlangeWordingTest(unittest.TestCase):
+    """R09 (0.13.0 feedback §3.1/§3.3/§3.5): wording only, no geometry or Creo."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = (REPO_ROOT / "native" / "advanced.cpp").read_text(encoding="utf-8")
+        cls.flange = cls.source[cls.source.index("static void generic_sheetmetal_flange(") :]
+        cls.guide = cls.source[
+            cls.source.index("static std::string flange_first_wall_guide()") : cls.source.index(
+                "static std::string flange_edge_reference_contract()"
+            )
+        ]
+
+    def test_reference_error_names_the_plan_path_and_example(self) -> None:
+        self.assertIn("operations[i].edge", self.source)
+        self.assertIn("{kind:'edge',id:", self.source)
+        self.assertIn("edge_ref.dump()", self.flange)
+
+    def test_native_planar_guide_never_offers_the_conversion_recipe(self) -> None:
+        planar = self.guide[
+            self.guide.index("if (planar && !conversion)") : self.guide.index(
+                "if (conversion && !planar)"
+            )
+        ]
+        self.assertIn("creo_sheetmetal_planar_wall", planar)
+        self.assertIn("no wall_contract", planar)
+        self.assertNotIn("examples/sheetmetal_base_yz.json", planar)
+        self.assertNotIn("YZ plane", planar)
+        self.assertNotIn("see wall_contract", planar)
+
+    def test_conversion_guide_keeps_the_wall_contract_recipe(self) -> None:
+        conversion = self.guide[
+            self.guide.index("if (conversion && !planar)") : self.guide.index(
+                'return "This model does not report'
+            )
+        ]
+        self.assertIn("wall_contract.wall_face_ids", conversion)
+        self.assertIn("examples/sheetmetal_base_yz.json", conversion)
+
+    def test_unknown_source_gets_no_old_recipe(self) -> None:
+        unknown = self.guide[self.guide.index('return "This model does not report') :]
+        self.assertIn("no first-wall recipe", unknown)
+        self.assertNotIn("examples/sheetmetal_base_yz.json", unknown)
+        self.assertNotIn("see wall_contract", unknown)
+
+    def test_adjacent_guard_says_relief_is_unproven(self) -> None:
+        section = self.flange[
+            self.flange.index(
+                "J adjacency = flange_adjacent_bend_end_evidence"
+            ) : self.flange.index("ProSection2DAlloc")
+        ]
+        self.assertIn("not proven to resolve this corner", section)
+        self.assertIn("resolve this corner", section)
+        self.assertIn("bend-end relief", section)
+        self.assertNotIn("implements no corner relief", section)
+
+    def test_adjacent_guard_is_not_bypassed_by_a_supplied_relief(self) -> None:
+        guard = "\n        J adjacency = flange_adjacent_bend_end_evidence(op);\n"
+        self.assertIn(guard, self.flange)
+        section = self.flange[self.flange.index(guard) : self.flange.index("ProSection2DAlloc")]
+        self.assertNotIn("relief_request", section)
+
+    def test_capabilities_scope_states_the_miter_route_and_remaining_limits(self) -> None:
+        limits = families()["sheetmetal"]["limits"]
+        self.assertIn("miter_cuts", limits)
+        self.assertIn("PRO_E_SMT_MTR_CUTS", limits)
+        self.assertNotIn("four walls are not delivered", limits)
+        self.assertIn("bend-end relief", limits)
+        self.assertIn("not corner relief", limits)
+        self.assertIn("not a geometry or miter proof", limits)
+        self.assertIn("not proven to resolve corner overlap", limits)
+        self.assertIn("still applies when relief is supplied", limits)
+
+    def test_adjacent_guard_releases_only_for_an_explicit_miter_request(self) -> None:
+        guard = self.flange[
+            self.flange.index(
+                "J adjacency = flange_adjacent_bend_end_evidence"
+            ) : self.flange.index("ProSection2DAlloc")
+        ]
+        self.assertIn("!miter_request.requested", guard)
+        self.assertIn("allowed_by_miter_cut", guard)
+        self.assertIn("PRO_E_SMT_MTR_CUTS", self.flange)
+
+    def test_edge_field_description_names_path_and_example(self) -> None:
+        description = SheetmetalFlangeOp.model_fields["edge"].description
+        self.assertIn("operations[i].edge", description)
+        self.assertIn("{kind:'edge',id:N}", description)
+
+
+class MiterCutsSchemaTest(unittest.TestCase):
+    """FEAT-014: miter_cuts is optional, validated independently of relief."""
+
+    @staticmethod
+    def validated(miter: dict) -> dict:
+        reference = select_wall_edge(box_inspection(), PLATE_BOUNDS, "-y", face="top")
+        operation = flange_op("-y", "f_ny", reference)
+        operation["miter_cuts"] = miter
+        return validate_operations([operation])[0]["miter_cuts"]
+
+    def test_width_and_offset_are_preserved_verbatim(self) -> None:
+        self.assertEqual(
+            self.validated({"width": 1.0, "offset": 0.25}),
+            {"width": 1.0, "offset": 0.25},
+        )
+
+    def test_offset_defaults_to_width(self) -> None:
+        self.assertEqual(self.validated({"width": 1.2}), {"width": 1.2, "offset": 1.2})
+
+    def test_booleans_missing_nonpositive_and_negative_values_are_rejected(self) -> None:
+        for miter in (
+            {"width": True},
+            {"width": 0},
+            {"width": -1.0},
+            {"width": 1.0, "offset": -0.5},
+            {"offset": 1.0},
+            {"width": float("inf")},
+        ):
+            with self.subTest(miter=miter):
+                with self.assertRaises(Exception):
+                    self.validated(miter)
+
+    def test_relief_and_miter_cuts_are_orthogonal(self) -> None:
+        reference = select_wall_edge(box_inspection(), PLATE_BOUNDS, "-y", face="top")
+        operation = flange_op("-y", "f_ny", reference)
+        operation["relief"] = {"type": "rectangular", "width": 1.0, "depth": 0.5}
+        operation["miter_cuts"] = {"width": 1.0}
+        validated = validate_operations([operation])[0]
+        self.assertEqual(validated["relief"]["width"], 1.0)
+        self.assertEqual(validated["miter_cuts"], {"width": 1.0, "offset": 1.0})
 
 
 if __name__ == "__main__":

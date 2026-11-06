@@ -160,6 +160,41 @@ def check_trim_probe() -> dict:
     }
 
 
+def check_miter_plan() -> dict:
+    """FEAT-014 offline: the miter request validates and the plan order is fixed."""
+    reference = fx.select_wall_edge(fx.box_inspection(), fx.PLATE_BOUNDS, "+x", face="top")
+    miter = {"width": MITER_GAP_MM, "offset": MITER_GAP_MM}
+    first = fx.flange_op("+x", "f_px", reference)
+    mitered = fx.flange_op("+x", "f_px", reference)
+    mitered["miter_cuts"] = miter
+    plain = fx.validate_operations([first])[0]
+    validated = fx.validate_operations([mitered])[0]
+    assert "miter_cuts" not in plain
+    assert validated["miter_cuts"] == miter
+    assert [label for _, label, _ in MITER_BOX_SEQUENCE] == [
+        "f_px",
+        "f_nx",
+        "f_ny",
+        "f_py",
+    ]
+    assert [use for _, _, use in MITER_BOX_SEQUENCE] == [False, False, True, True]
+    return {
+        "miter_gap_mm": MITER_GAP_MM,
+        "request": miter,
+        "box_sequence": [
+            {"side": side, "label": label, "miter_cuts": miter if use else None}
+            for side, label, use in MITER_BOX_SEQUENCE
+        ],
+        "validated": validated["miter_cuts"],
+        "validated_without_miter": "miter_cuts" not in plain,
+        "gating": (
+            "run_miter_probe classifies the literal width/offset semantics from two "
+            "measured free walls before run_miter_box is judged; four_walls_complete needs "
+            "all four walls to succeed with saved_file_reloaded_and_verified=true"
+        ),
+    }
+
+
 def check_admission() -> dict:
     plans = box.group_plans_validate()
     probe, _ = box.trim_probe_plan()
@@ -217,11 +252,11 @@ def check_live_probe_plan() -> dict:
             "statement": (
                 "this live entry is a diagnostic; the proven trigger condition is enforced "
                 "by the N06 native pre-check, which rejects a wall whose edge end abuts an "
-                "existing bend before create (failure_reason=adjacent_bend_ends). That "
-                "rejection is the expected boundary outcome (adjacent_bend_ends_rejected); "
-                "trigger_reproduced is reserved for an unmarked regeneration failure. "
-                "Corner relief/miter stays unimplemented and four-wall boxes are not "
-                "supported"
+                "existing bend before create (failure_reason=adjacent_bend_ends) unless the "
+                "request carries miter_cuts. That rejection is still the expected boundary "
+                "outcome without miter (adjacent_bend_ends_rejected); trigger_reproduced is "
+                "reserved for an unmarked regeneration failure. The FEAT-014 miter route is "
+                "implemented and only reported complete by a passing miter_box group"
             ),
         },
     }
@@ -496,6 +531,7 @@ async def submit_wall(
     label: str,
     plate_bounds: tuple,
     end_trim_mm: float | None = None,
+    miter_cuts: dict | None = None,
 ) -> tuple[dict, dict, dict]:
     """One wall, one job: fresh inspection for the edge, submit, wait, snapshot.
 
@@ -524,6 +560,8 @@ async def submit_wall(
     }
     if end_trim_mm is not None:
         request["end_trim_mm"] = end_trim_mm
+    if miter_cuts is not None:
+        request["miter_cuts"] = miter_cuts
     submitted = await runner.submit(f"{case_name}:{label}", "creo_sheetmetal_flange", request)
     terminal = await runner.wait_job(submitted["job_id"], budget=box.HANG_BUDGET_SECONDS)
     after = await runner.snapshot(model_id)
@@ -728,6 +766,203 @@ async def run_wall_group(runner: LiveRunner, group: str) -> dict:
     return runner.case(verdict)
 
 
+MITER_GAP_MM = fx.PLATE_THICKNESS_MM
+
+#: FEAT-014: the four-wall order the 2026-11-06 evidence left blocked. The first
+#: two walls attach to free edges; the third and fourth abut existing bends, so
+#: they carry the explicit miter request. One job per wall, fresh edge each time.
+MITER_BOX_SEQUENCE = (
+    ("+x", "f_px", False),
+    ("-x", "f_nx", False),
+    ("-y", "f_ny", True),
+    ("+y", "f_py", True),
+)
+
+
+async def run_miter_probe(runner: LiveRunner) -> dict:
+    """GAP semantics probe first: the same free wall with and without miter_cuts.
+
+    The end_trim_mm lesson (a requested value the kernel ignored) is why the
+    miter section is never trusted from the request echo: two fresh models, one
+    free +x wall each, and the added-volume difference classifies whether the
+    gap changes the built geometry at all.
+    """
+    verdict = {
+        "group": "miter_probe",
+        "miter_gap_mm": MITER_GAP_MM,
+        "passed": False,
+        "four_walls_complete": False,
+    }
+    plain_case = await build_base(runner, "miter_plain")
+    if plain_case[1] is None:
+        verdict.update(plain={"not_executed": "the plain base wall did not succeed"})
+        return runner.case(verdict)
+    plain_base = plain_case[0]
+    plain_bounds = fx.active_bbox(LiveRunner.inspection(plain_case[1]))
+    plain_ref, plain_terminal, plain_after = await submit_wall(
+        runner, "miter_plain", plain_base["model_id"], "+x", "f_px", plain_bounds
+    )
+    plain_added = (
+        LiveRunner.volume(plain_after) - plain_base["base_volume_mm3"]
+        if LiveRunner.volume(plain_after) is not None
+        and plain_base.get("base_volume_mm3") is not None
+        else None
+    )
+    plain_entry = {
+        "wall": "f_px_plain",
+        **wall_record(
+            "f_px",
+            "+x",
+            plain_ref,
+            plain_terminal,
+            plain_after,
+            plain_base.get("base_revision_after"),
+            plain_base.get("base_volume_mm3"),
+            None,
+        ),
+        "added_mm3": plain_added,
+    }
+    gap_case = await build_base(runner, "miter_gap")
+    if gap_case[1] is None:
+        verdict.update(plain=plain_entry, gap={"not_executed": "the miter base failed"})
+        return runner.case(verdict)
+    gap_base = gap_case[0]
+    gap_bounds = fx.active_bbox(LiveRunner.inspection(gap_case[1]))
+    miter = {"width": MITER_GAP_MM, "offset": MITER_GAP_MM}
+    gap_ref, gap_terminal, gap_after = await submit_wall(
+        runner,
+        "miter_gap",
+        gap_base["model_id"],
+        "+x",
+        "f_px",
+        gap_bounds,
+        miter_cuts=miter,
+    )
+    gap_added = (
+        LiveRunner.volume(gap_after) - gap_base["base_volume_mm3"]
+        if LiveRunner.volume(gap_after) is not None and gap_base.get("base_volume_mm3") is not None
+        else None
+    )
+    gap_entry = {
+        "wall": "f_px_miter",
+        "miter_cuts": miter,
+        **wall_record(
+            "f_px",
+            "+x",
+            gap_ref,
+            gap_terminal,
+            gap_after,
+            gap_base.get("base_revision_after"),
+            gap_base.get("base_volume_mm3"),
+            None,
+        ),
+        "added_mm3": gap_added,
+    }
+    delta = gap_added - plain_added if gap_added is not None and plain_added is not None else None
+    if delta is None:
+        classification = "unmeasured"
+    elif abs(delta) <= 0.5:
+        classification = "no_measurable_cut"
+    else:
+        classification = "gap_measured"
+    verdict.update(
+        plain=plain_entry,
+        gap=gap_entry,
+        gap_minus_plain_mm3=delta,
+        classification=classification,
+        statement=(
+            "the request echo only proves the element tree accepted the literal BLIND "
+            "section; whether width/offset cut the built wall is classified from the "
+            "measured added-volume difference, never assumed. The 2026-11-06 live probe "
+            "measured no change on a free wall, where there is no overlap to cut"
+        ),
+        passed=(
+            plain_terminal.get("status") == "succeeded"
+            and gap_terminal.get("status") == "succeeded"
+            and delta is not None
+        ),
+    )
+    return runner.case(verdict)
+
+
+async def run_miter_box(runner: LiveRunner) -> dict:
+    """The four-wall box through the FEAT-014 miter route (one job per wall).
+
+    Unlike the earlier groups, this one can report four_walls_complete=true, but
+    only when every wall succeeded, every required measurement is present and
+    every wall reports saved_file_reloaded_and_verified=true.
+    """
+    base_entry, snapshot = await build_base(runner, "miter_box")
+    verdict = {"group": "miter_box", "four_walls_complete": False, "passed": False}
+    if snapshot is None:
+        verdict.update(walls=[], statement="the base wall did not succeed")
+        return runner.case(verdict)
+    revision = snapshot.get("revision")
+    volume = LiveRunner.volume(snapshot)
+    plate_bounds = fx.active_bbox(LiveRunner.inspection(snapshot))
+    miter = {"width": MITER_GAP_MM, "offset": MITER_GAP_MM}
+    records = []
+    for side, label, use_miter in MITER_BOX_SEQUENCE:
+        try:
+            reference, terminal, after = await submit_wall(
+                runner,
+                "miter_box",
+                base_entry["model_id"],
+                side,
+                label,
+                plate_bounds,
+                miter_cuts=miter if use_miter else None,
+            )
+        except fx.EdgeSelectionError as error:
+            records.append(
+                {
+                    "label": label,
+                    "side": side,
+                    "outcome": "driver_edge_selection_error",
+                    "terminal_status": None,
+                    "error": f"EdgeSelectionError: {error}",
+                    "note": "probe selection defect, recorded as a driver failure",
+                }
+            )
+            break
+        record = wall_record(
+            label,
+            side,
+            reference,
+            terminal,
+            after,
+            revision,
+            volume,
+            read_native_log(terminal.get("job_id", terminal.get("id"))),
+        )
+        record["outcome"] = box.wall_outcome(record)
+        if record["outcome"] == "failed" and box.driver_selection_error(record):
+            record["outcome"] = "driver_edge_selection_error"
+        elif record["outcome"] == "failed" and box.adjacency_rejection(record):
+            record["outcome"] = "adjacent_bend_ends_rejected"
+        record["miter_requested"] = use_miter
+        records.append(record)
+        if terminal.get("status") == "succeeded":
+            revision = record["revision_after"]
+            volume = record["volume_after_mm3"]
+    complete = len(records) == len(MITER_BOX_SEQUENCE) and all(
+        record["outcome"] == "succeeded" and record.get("saved_file_reloaded_and_verified") is True
+        for record in records
+    )
+    verdict.update(
+        base=base_entry,
+        miter_cuts=miter,
+        walls=records,
+        four_walls_complete=complete,
+        passed=complete,
+        statement=(
+            "four walls count only when all four succeeded with measurements and "
+            "saved_file_reloaded_and_verified=true on every wall"
+        ),
+    )
+    return runner.case(verdict)
+
+
 async def live_box(output: Path, run_id: str) -> int:
     """The formal live entry: dual-switch gated, serial, diagnostic only."""
     from mcp import Client
@@ -753,10 +988,12 @@ async def live_box(output: Path, run_id: str) -> int:
         runner.report["capability_claim"] = {
             "four_walls_complete": False,
             "statement": (
-                "a diagnostic run; a wall whose edge end is adjacent to an existing bend "
-                "is rejected before create (failure_reason=adjacent_bend_ends, proven "
-                "2026-10-30/31, enforced by the N06 pre-check); corner relief/miter "
-                "remains unimplemented and four-wall boxes are not supported"
+                "a diagnostic run: the earlier groups keep their known boundary (a wall "
+                "whose edge end is adjacent to an existing bend is rejected before create "
+                "unless miter_cuts is supplied); the miter_probe classifies the literal "
+                "width/offset semantics from measured volumes and the miter_box is the only "
+                "case that may report four_walls_complete=true, and only when every wall "
+                "saved, reloaded and verified"
             ),
         }
         try:
@@ -764,10 +1001,19 @@ async def live_box(output: Path, run_id: str) -> int:
             await run_trim_probe(runner)
             for group in ("ny_first", "px_then_ny", "px_nx_then_ny"):
                 await run_wall_group(runner, group)
+            await run_miter_probe(runner)
+            await run_miter_box(runner)
         except (LiveStop, BaseException) as error:
             runner.report["stopped"] = f"{type(error).__name__}: {error}"
             runner.finish()
             raise
+    miter_box = next(
+        (case for case in runner.report["cases"] if case.get("group") == "miter_box"),
+        None,
+    )
+    runner.report["capability_claim"]["four_walls_complete"] = bool(
+        miter_box and miter_box.get("four_walls_complete")
+    )
     summary = runner.finish()
     print(json.dumps(summary, ensure_ascii=False))
     return 0 if runner.report["passed"] else 1
@@ -932,7 +1178,9 @@ def write_offline_report(output: Path, run_id: str, results: dict) -> dict:
                 "N05 adds bounded native failure forensics on the failing paths only; "
                 "N06 adds the adjacent-bend-ends pre-check, which explicitly rejects a "
                 "wall whose attachment-edge end abuts an existing bend before create "
-                "(failure_reason=adjacent_bend_ends); free-edge behaviour is unchanged"
+                "(failure_reason=adjacent_bend_ends); FEAT-014 adds the opt-in "
+                "miter_cuts request (PRO_E_SMT_MTR_CUTS GAP) as the only release of that "
+                "guard; free-edge behaviour is unchanged"
             ),
             "statement": (
                 "Offline only: the designs, contracts, verdict locks and forensics guards "
@@ -961,8 +1209,10 @@ def write_offline_report(output: Path, run_id: str, results: dict) -> dict:
             "groups are unrun here",
             "the trimmed third wall of the offline design stays gated on the measured "
             "setback classification",
-            "four-wall capability remains open: unbend/bend-back, edit, reload and "
-            "rollback are all untested",
+            "the miter_probe and miter_box live cases are unrun here; the GAP width/"
+            "offset semantics stay unmeasured, so no cut amount is claimed",
+            "four-wall capability remains open until the miter_box run reports every wall "
+            "succeeded with saved_file_reloaded_and_verified=true",
             "the native forensics fields are compile-verified only; their live values "
             "are unmeasured until the assigned live run",
         ],
@@ -999,6 +1249,7 @@ def main(argv: list[str] | None = None) -> int:
         "contrast_design": check_contrast_design(),
         "oracle_rows": check_oracle_rows(),
         "trim_probe": check_trim_probe(),
+        "miter_plan": check_miter_plan(),
         "admission": check_admission(),
         "native_trim_branch": check_native_trim_branch(),
         "contract": check_contract(),

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "work_item": "FEAT-055",
+  "task": "Q00",
+  "archived_at": "2026-11-06",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "plan": "docs/superpowers/plans/2026-11-04-0.12.0-feedback-reconciliation-plan.md",
+  "archive_policy": "Four originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. The source folder mixes report versions: F01 is titled 0.11.7 (report-side naming) and already differs from every file in feedback-0.11.7-2026-11-04, so it is archived here instead of appended to that batch. This archive stays separate from feedback-0.11.7-2026-11-04, feedback-0.11.5-2026-11-03, feedback-0.11.1-2026-11-02, feedback-0.11.0-2026-11-01, feedback-0.13.0-2026-11-06 and the two feedback-0.10.0 directories; the eight directories are never merged.",
+  "source_baseline": {
+    "version": "0.14.0",
+    "public_tools": 100,
+    "branch": "codex/FEAT-039-w02-w06-live",
+    "head": "7002575",
+    "dirty": true,
+    "dirty_note": "Archive time working tree carries only documentation edits for the 0.12.0 reconciliation plan, the concurrent DEV-069 batch (docs/BACKLOG.md, plan/design, docs/validation/feedback-0.13.0-2026-11-06/) and the untracked .trae/ directory. None of these enter this archive.",
+    "release_note": "v0.14.0 (main c774fa2) is the current published baseline. This archive only records external feedback received against 0.11.7 and 0.12.0; it does not reuse, overwrite or republish any earlier version."
+  },
+  "reported_against": [
+    "0.11.7 (F01, reporter Creo 10.0.0.0, server_version 0.11.7)",
+    "0.12.0 (F02/F03/F04, reporter upgrade 0.11.7 -> 0.12.0, main 90dbd6c33e9f)"
+  ],
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.12.0",
+  "archive_root": "docs/validation/feedback-0.12.0-2026-11-06/originals",
+  "file_count": 4,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads, plus full byte sequence comparison",
+    "length_match": "4/4",
+    "sha256_match": "4/4",
+    "byte_identical": "4/4"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-11-04+CREO+0.11.7+旋转矩阵转置与装配失败诊断缺失.md",
+      "source_relative_path": "2026-11-04+CREO+0.11.7+旋转矩阵转置与装配失败诊断缺失.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.12.0\\2026-11-04+CREO+0.11.7+旋转矩阵转置与装配失败诊断缺失.md",
+      "bytes": 16653,
+      "sha256": "5deb38e2e57b5ae2ae5866458cf9a02b8775e35e974da29dec115050022087a9",
+      "reported_against": "0.11.7",
+      "content_note": "Creo 10.0.0.0 履带车底盘重建（31 零件 / 70 实例）：28 件建成保存、70 实例装配成功、四锚点与包围盒 0.000 mm。四项核心问题：P-1 rotation_matrix 按行向量解释未声明（整机转置、沿车长偏 154 mm）；P-2 非置换阵 ProAsmcompAssemble 返回 -2 且 failed operation 的 error 为 {}/整批回滚；P-3 拉伸/切除失败只有一句 Regeneration 文本、failed_operation 为 null；P-4 through_all 仍要求 depth 且方向朝外时无提示。次要项 P-5 compact 仍内联完整 geometry_deviation、P-6 装配无 bbox、P-7 组件名无 source_model_id、P-8 health=unknown/stale、P-9 session_status 占建模通道、P-10 managed 无 delete/rename、P-11 execute_plan 入参回显约 25 KB。"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/2026-11-04CREO10.0.0.0-0.12.0-sidecar连续二次缺失已定位到上传环节与种子闸门再收紧.md",
+      "source_relative_path": "2026-11-04CREO10.0.0.0-0.12.0-sidecar连续二次缺失已定位到上传环节与种子闸门再收紧.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.12.0\\2026-11-04CREO10.0.0.0-0.12.0-sidecar连续二次缺失已定位到上传环节与种子闸门再收紧.md",
+      "bytes": 6131,
+      "sha256": "8be1aee5c74098a1b36054c3527e9e882f45dc2de4d3e3399d17b1a7825b4c2f",
+      "reported_against": "0.12.0",
+      "content_note": "安装/打包面（静态验证，遵守停止新 Toolkit 连接约束）：v0.12.0 Release 仍只有两个 ZIP、缺 .sha256 sidecar（0.11.7 起连续第二次）；本轮读码证明 tools/package.py 本地已生成 sidecar，缺口在上传与发布清单，建议把四附件数量核对写进流水线。正面肯定 0.12.0 的种子闸门顺序（先确定性构建、回填 docs/seed_package.json、重建验哈希、再制作源码包）与五种前置失败。0.12.0 主体记录：新增两个钣金工具（95→97）、实机 67/67、Creo 10 零补丁编译、两包摘要与 Release body 一致。"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/2026-11-04CREO10.0.0.0-0.12.0-钣金两工具实机通过但板厚回读通道缺失且G5七版未动.md",
+      "source_relative_path": "2026-11-04CREO10.0.0.0-0.12.0-钣金两工具实机通过但板厚回读通道缺失且G5七版未动.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.12.0\\2026-11-04CREO10.0.0.0-0.12.0-钣金两工具实机通过但板厚回读通道缺失且G5七版未动.md",
+      "bytes": 9943,
+      "sha256": "ff12de6bc7bc3b305dc1b9ba9b06f7ea68c61434541d044006c2830269331291",
+      "reported_against": "0.12.0",
+      "content_note": "Creo 10 实机验收：三个作业全通过（斜面草图+刚性平移回归 job 3294f5a4；首壁 d746a606 体积 19200 = 120×80×2；存盘后改型 8dce9ede 体积 23400 = 130×90×2，feature id 49 不变）。核心新发现：本机 Creo 10 SDK 未声明 ProSmtBodyThicknessValueGet，native 哨兵 -1 使 thickness_loaded_mm/thickness_measured_mm 恒 null、resize 的存档板厚守卫永不触发（回执 thickness_verified=false 仍诚实）；建议以 volume/(length×width) 反推（实测两次精确）并给 thickness_source=volume_derived。另报 G5 三 op 第七版缺席、钣金拒绝文案缺解锁指引（须 creo_new_sheetmetal + template=native_planar 并等终态）、同作业 create→resize 的 null 与结构性 null 无法区分；P12 已装机、体积 +3.83% 归因配方侧。"
+    },
+    {
+      "id": "F04",
+      "relative_path": "originals/2026-11-04_CREO_0.12.0_单线首壁仅两端可挂折边_建议支持闭合矩形首壁.md",
+      "source_relative_path": "2026-11-04_CREO_0.12.0_单线首壁仅两端可挂折边_建议支持闭合矩形首壁.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.12.0\\2026-11-04_CREO_0.12.0_单线首壁仅两端可挂折边_建议支持闭合矩形首壁.md",
+      "bytes": 6674,
+      "sha256": "5f8944aea100677d018be488bcb51b15bb930d915150a0b4241fac06f87b9c50",
+      "reported_against": "0.12.0",
+      "content_note": "第十一轮回归（模型 acc120_sm）：R1/S5 保持（V=42 920、cog [0,0,0.5]），N3 preview 正常，诊断增强被肯定（wall_contract、weldability、geometry_deviation、verify_stages、datum_display、native_progress）。R2/S3 仍未解决但首次定因：单线首壁只有与草图线垂直的两条端边可挂折边，与草图线平行的两条长边 ProSmtedgeContourGet 报 -8；因此四壁开口箱建不成，建议支持闭合矩形/闭合多段首壁（即 TXT §4.1 原意），并补 flange_available 标记、bend relief、wall_contract.part_thickness_synced 文档；另列历史项 S2 flip、S6 unbend fixed_surface、P3 dict plane offset≠0、P5 装配旋转、P11 native_bundle。"
+    }
+  ]
+}

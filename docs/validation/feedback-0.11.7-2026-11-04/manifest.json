@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "work_item": "FEAT-055",
+  "task": "S00",
+  "archived_at": "2026-11-04",
+  "timezone": "Asia/Shanghai",
+  "mapping": "MAPPING.md",
+  "plan": "docs/superpowers/plans/2026-11-04-0.11.7-surface-chain-improvement-plan.md",
+  "archive_policy": "Four originals copied byte for byte into originals/. Nothing was rewritten, reformatted or re-encoded; no locally generated file is listed here. This archive is the 0.11.7 batch and stays separate from feedback-0.11.5-2026-11-03, feedback-0.11.1-2026-11-02, feedback-0.11.0-2026-11-01, feedback-0.10.0-2026-10-31 and feedback-0.10.0-2026-11-01; the six directories are never merged.",
+  "source_baseline": {
+    "version": "0.11.7",
+    "public_tools": 95,
+    "branch": "codex/DEV-067-alphai-plan",
+    "head": "376cdbd",
+    "dirty": true,
+    "dirty_note": "Working tree at archive time carries only the modified session_activity.json (runtime activity log still tracked since 0.4.6) and the untracked plan document docs/superpowers/plans/2026-11-04-0.11.7-surface-chain-improvement-plan.md. Neither enters the archive.",
+    "release_note": "v0.11.7 is the current published baseline (tag v0.11.7). This batch does not reuse or overwrite it, and does not publish a new version."
+  },
+  "source_root": "C:\\Users\\Administrator\\Downloads\\0.11.7",
+  "archive_root": "docs/validation/feedback-0.11.7-2026-11-04/originals",
+  "file_count": 4,
+  "verification": {
+    "method": "per-file byte length + SHA256 against the source files in Downloads, plus full byte sequence comparison",
+    "length_match": "4/4",
+    "sha256_match": "4/4",
+    "byte_identical": "4/4"
+  },
+  "files": [
+    {
+      "id": "F01",
+      "relative_path": "originals/2026-11-03CREO10.0.0.0-0.11.7-刚性平移已修G5六版未动.md",
+      "source_relative_path": "2026-11-03CREO10.0.0.0-0.11.7-刚性平移已修G5六版未动.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.7\\2026-11-03CREO10.0.0.0-0.11.7-刚性平移已修G5六版未动.md",
+      "bytes": 9438,
+      "sha256": "eaa23b508cfde749e611700db374b237da009735ace65a3f56694d0ef8230a24",
+      "content_note": "Creo 10 实机建模验收：刚性平移被判失败已按建议闭环（0.01 mm 放行 + sketch_shifted 成功回执）、rotation 越界前置拒绝并给出等价角；keep_original 第 5 副本仍失败但已写进能力边界；G5 曲面三 op 六版未动（建议先做 project_curve）；装配失败恢复仍是死路（reconciliation.py:531）；P12 整台风扇已建成（体积 +3.83%、单片 +3.41%），两处偏差报告方自述为配方侧剪裁口径与草图 Z 极性"
+    },
+    {
+      "id": "F02",
+      "relative_path": "originals/2026-11-03CREO10.0.0.0-0.11.7-无新缺陷但附件sha256sidecar回退DEV045承诺.md",
+      "source_relative_path": "2026-11-03CREO10.0.0.0-0.11.7-无新缺陷但附件sha256sidecar回退DEV045承诺.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.7\\2026-11-03CREO10.0.0.0-0.11.7-无新缺陷但附件sha256sidecar回退DEV045承诺.md",
+      "bytes": 6796,
+      "sha256": "7341cf4e2e31167d434e02893883a208599728b9e14bef4d1887aaadd2762e02",
+      "content_note": "安装/编译/打包面：连续第二版零新缺陷，回调注册连续第二十版稳定；唯一问题是 v0.11.7 Release 只有两个 ZIP、缺 .sha256 sidecar（DEV-045 定名与校验承诺回退），建议把 sidecar 生成并进 tools/package.py 或把四附件核对写进 RELEASING.md；实机项按冻结约束全部记未验证"
+    },
+    {
+      "id": "F03",
+      "relative_path": "originals/2026-11-03CREO10.0.0.0-0.11.7曲面链仍不可用与quilt引用同码复现.md",
+      "source_relative_path": "2026-11-03CREO10.0.0.0-0.11.7曲面链仍不可用与quilt引用同码复现.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.7\\2026-11-03CREO10.0.0.0-0.11.7曲面链仍不可用与quilt引用同码复现.md",
+      "bytes": 8964,
+      "sha256": "ecb2bb9343d952ae209b701de9cd9d06f685b7aba4f52943e8a8e98eeb555d18",
+      "content_note": "Creo 10 曲面专项：低层 10 元素树修剪成功并保存重载，随后 merge 引用修剪结果在两版同码失败（ProFeatureGeomitemVisit -4）；inspect_model 无 quilts 分区、sections_available 与 0.11.5 逐项相同；建议二选一：加 section=quilts 或放宽 quilt_feature 多候选；另报 verify_model_start 无子阶段、connect 期间 idle_seconds=null、终态与运行态进度字段名不统一"
+    },
+    {
+      "id": "F04",
+      "relative_path": "originals/20261104_CREO_v0.11.7_巩固版稳定_R3保持_端点焊接本体连续第6轮未动.md",
+      "source_relative_path": "20261104_CREO_v0.11.7_巩固版稳定_R3保持_端点焊接本体连续第6轮未动.md",
+      "source_absolute_path": "C:\\Users\\Administrator\\Downloads\\0.11.7\\20261104_CREO_v0.11.7_巩固版稳定_R3保持_端点焊接本体连续第6轮未动.md",
+      "bytes": 3142,
+      "sha256": "b69cbaee9e0a2f0cc8f4bac9714fbd25478c021fadf2a19f3963544428b312d4",
+      "content_note": "第 13 轮（报告方轮次）：R3 空模型 preview skipped_no_geometry 保持通过；R1 gear10.json 原始几何 add 10 仍 -1、失败文案与 0.11.5 逐字相同，端点焊接本体连续第 6 轮未实现，吸附对照组本轮未重跑（历史体积 1849.8028532376422 只作对照来源）；N2/D3/D4/D5/N3 均标未复测；正面清单为 native_progress、verify_stages 13 项、rollback 与 failed_model_cleanup 一致"
+    }
+  ]
+}

@@ -538,6 +538,302 @@ class CounterexampleTest(unittest.TestCase):
         self.assertIsNone(nan_gauge["thickness_measured_mm"])
 
 
+def validation_block(**overrides) -> dict:
+    block = {
+        "status": "verified",
+        "source": "api",
+        "value_mm": 1.0,
+        "reason": None,
+        "context": "current_plan",
+    }
+    block.update(overrides)
+    return block
+
+
+RESIZE_ENVELOPE = {
+    "u": {"min": 0.0, "max": 120.0},
+    "v": {"min": 0.0, "max": 80.0},
+    "n": {"min": 0.0, "max": 1.0},
+}
+
+
+def resized_result(**overrides) -> dict:
+    result = {
+        "op": pwall.PLANAR_WALL_RESIZE_OP,
+        "length": 120.0,
+        "width": 80.0,
+        "volume_mm3": 9600.0,
+        "feature_id_before": 49,
+        "thickness_loaded_mm": 1.0,
+        "envelope": RESIZE_ENVELOPE,
+    }
+    result.update(overrides)
+    return create_result(**result)
+
+
+class GaugeReceiptTest(unittest.TestCase):
+    """FEAT-058/R03: the gauge receipt stays readable and never invents evidence."""
+
+    def test_verified_receipt_is_published_with_both_contexts(self):
+        create = pwall.result_projection(create_result(thickness_validation=validation_block()))
+        self.assertTrue(create["verified"], create["problems"])
+        self.assertEqual(
+            create["thickness_validation"],
+            {
+                "status": "verified",
+                "source": "api",
+                "value_mm": 1.0,
+                "reason": None,
+                "context": "current_plan",
+            },
+        )
+
+        resize = pwall.result_projection(
+            resized_result(
+                thickness_validation=validation_block(),
+                thickness_loaded_validation=validation_block(context="saved_loaded"),
+            )
+        )
+        self.assertTrue(resize["verified"], resize["problems"])
+        self.assertEqual(resize["thickness_validation"]["context"], "current_plan")
+        self.assertEqual(
+            resize["thickness_loaded_validation"],
+            {
+                "status": "verified",
+                "source": "api",
+                "value_mm": 1.0,
+                "reason": None,
+                "context": "saved_loaded",
+            },
+        )
+
+    def test_missing_api_is_unverified_and_carries_no_value(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_body_code=-1,
+                thickness_validation=validation_block(
+                    status="unverified",
+                    source="missing_api",
+                    value_mm=None,
+                    reason="thickness_api_unavailable",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertIsNone(projection["thickness_measured_mm"])
+        self.assertEqual(
+            projection["thickness_validation"],
+            {
+                "status": "unverified",
+                "source": "missing_api",
+                "value_mm": None,
+                "reason": "thickness_api_unavailable",
+                "context": "current_plan",
+            },
+        )
+        self.assertTrue(
+            any("thickness_api_unavailable" in item for item in projection["problems"]),
+            projection["problems"],
+        )
+
+    def test_api_failure_is_unavailable_not_missing_api(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_body_code=-2,
+                thickness_validation=validation_block(
+                    status="unavailable",
+                    source="api",
+                    value_mm=None,
+                    reason="thickness_api_query_failed",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_validation"]["source"], "api")
+        self.assertEqual(projection["thickness_validation"]["status"], "unavailable")
+        self.assertIsNone(projection["thickness_validation"]["value_mm"])
+
+    def test_ambiguous_material_body_is_unavailable(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                material_bodies=2,
+                thickness_validation=validation_block(
+                    status="unavailable",
+                    source="not_measured",
+                    value_mm=None,
+                    reason="thickness_material_body_not_unique",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_validation"]["source"], "not_measured")
+        self.assertIsNone(projection["thickness_validation"]["value_mm"])
+
+    def test_disagreeing_reading_is_a_mismatch(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=2.0,
+                thickness_validation=validation_block(
+                    status="mismatch", value_mm=2.0, reason="thickness_measured_mismatch"
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_validation"]["status"], "mismatch")
+        self.assertEqual(projection["thickness_validation"]["value_mm"], 2.0)
+
+    def test_non_finite_or_unitless_values_are_degraded(self):
+        cases = {
+            "nan": (float("nan"), "thickness_validation_non_finite_value"),
+            "inf": (float("inf"), "thickness_validation_non_finite_value"),
+            "unit unknown": ("1.0", "thickness_validation_invalid_value"),
+        }
+        for name, (value, expected) in cases.items():
+            with self.subTest(case=name):
+                projection = pwall.result_projection(
+                    create_result(thickness_validation=validation_block(value_mm=value))
+                )
+                self.assertFalse(projection["verified"])
+                block = projection["thickness_validation"]
+                self.assertEqual(block["status"], "unavailable")
+                self.assertEqual(block["source"], "not_measured")
+                self.assertIsNone(block["value_mm"])
+                self.assertEqual(block["reason"], expected)
+
+        unknown_source = pwall.result_projection(
+            create_result(thickness_validation=validation_block(source="unitless", value_mm=None))
+        )
+        self.assertFalse(unknown_source["verified"])
+        self.assertEqual(
+            unknown_source["thickness_validation"]["reason"],
+            "thickness_validation_unknown_source",
+        )
+
+    def test_malformed_receipts_are_degraded_without_a_value(self):
+        cases = {
+            "not an object": "verified",
+            "unknown status": validation_block(status="ok"),
+            "unknown source": validation_block(source="caliper"),
+            "wrong context": validation_block(context="saved_loaded"),
+            "verified without a value": validation_block(value_mm=None),
+            "verified without the api": validation_block(source="not_measured"),
+            "not verified without a reason": validation_block(
+                status="unavailable", value_mm=None, reason=None
+            ),
+        }
+        for name, raw in cases.items():
+            with self.subTest(case=name):
+                projection = pwall.result_projection(create_result(thickness_validation=raw))
+                self.assertFalse(projection["verified"])
+                block = projection["thickness_validation"]
+                self.assertEqual(block["status"], "unavailable")
+                self.assertEqual(block["source"], "not_measured")
+                self.assertIsNone(block["value_mm"])
+                self.assertEqual(block["context"], "current_plan")
+                self.assertTrue(
+                    str(block["reason"]).startswith("thickness_validation_"),
+                    block["reason"],
+                )
+
+    def test_missing_saved_receipt_read_back_is_not_verified(self):
+        projection = pwall.result_projection(
+            resized_result(
+                thickness_loaded_mm=None,
+                thickness_loaded_validation=validation_block(
+                    status="unavailable",
+                    source="api",
+                    value_mm=None,
+                    reason="thickness_api_query_failed",
+                    context="saved_loaded",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_loaded_validation"]["status"], "unavailable")
+        self.assertTrue(
+            any("saved wall" in item for item in projection["problems"]),
+            projection["problems"],
+        )
+
+    def test_resize_does_not_inherit_the_create_receipt(self):
+        create = create_result(thickness_validation=validation_block())
+        self.assertTrue(pwall.result_projection(create)["verified"])
+
+        resize = resized_result(
+            thickness_validation=validation_block(),
+            thickness_loaded_validation=validation_block(
+                status="unverified",
+                source="missing_api",
+                value_mm=None,
+                reason="thickness_api_unavailable",
+                context="saved_loaded",
+            ),
+        )
+        projection = pwall.result_projection(resize)
+        self.assertEqual(projection["thickness_validation"]["status"], "verified")
+        self.assertEqual(projection["thickness_loaded_validation"]["status"], "unverified")
+        self.assertFalse(projection["verified"])
+
+        # Copying the create receipt into the loaded slot is refused by its
+        # context, so a create-stage result cannot stand in for the saved read.
+        borrowed = dict(resize, thickness_loaded_validation=validation_block())
+        projection = pwall.result_projection(borrowed)
+        self.assertFalse(projection["verified"])
+        self.assertEqual(
+            projection["thickness_loaded_validation"]["reason"],
+            "thickness_validation_context_mismatch",
+        )
+
+    def test_old_executor_without_receipts_is_unchanged(self):
+        projection = pwall.result_projection(create_result())
+        self.assertTrue(projection["verified"], projection["problems"])
+        self.assertNotIn("thickness_validation", projection)
+
+        resized = pwall.result_projection(resized_result())
+        self.assertTrue(resized["verified"], resized["problems"])
+        self.assertNotIn("thickness_loaded_validation", resized)
+
+    def test_compact_poll_keeps_the_receipts(self):
+        import bridge
+
+        result = {
+            "operations": [
+                resized_result(
+                    thickness_validation=validation_block(),
+                    thickness_loaded_validation=validation_block(context="saved_loaded"),
+                )
+            ]
+        }
+        pwall.annotate_result(result)
+        summary = bridge.compact_job({"job_id": "j", "status": "succeeded", "result": result})
+        planar = summary["result"]["planar_wall"]
+        self.assertEqual(planar["thickness_validation"]["status"], "verified")
+        self.assertEqual(planar["thickness_loaded_validation"]["context"], "saved_loaded")
+
+    def test_native_publishes_one_receipt_per_operation(self):
+        wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
+        create_call = 'planar_wall_thickness_validation(bodies, thickness, "current_plan")'
+        loaded_call = 'planar_wall_thickness_validation(loaded, thickness, "saved_loaded")'
+        self.assertEqual(wall.count(create_call), 2, "create and resize each publish a receipt")
+        self.assertEqual(wall.count(loaded_call), 1)
+        self.assertIn('"thickness_loaded_validation"', wall)
+        for reason in (
+            "thickness_api_unavailable",
+            "thickness_api_query_failed",
+            "thickness_material_body_not_unique",
+            "thickness_value_not_finite",
+            "thickness_measured_mismatch",
+        ):
+            with self.subTest(reason=reason):
+                self.assertIn(reason, wall)
+
+
 class RuntimeIdentityTest(unittest.TestCase):
     """Review finding (2026-11-04): the planar wall sources missed the identity."""
 

@@ -87,3 +87,18 @@ T2 处置：按计划走"完善诊断和边界"分支——`native/placement.cpp
 2. **BUG-108**：`accepted_rigid=true` 分支未实机出现（不靠故障注入制造）；触发后的尺寸编辑/重载未执行（无样本）。
 3. **BUG-110**：零件与装配 `ack_success` 均未实机发生；不变性、幂等、后续可用性在实机层无证据（判定逻辑由单测覆盖）。
 4. **通用**：WorkBuddy 黑盒验收未执行；`docs/validation/` 历史原件逐字节未改；0.11.6 实机证据仍属那次批次，不外推为本轮结论；本批不合 main、不改版本、不发布。
+
+## T5 口径与诊断计数修正（2026-11-03 续，发布后修正）
+
+复审 0.11.7 交付时发现两处与 T1/T2 定因结论不符，本轮修正并复核。
+
+| 目标 | 本轮结果 | 状态 |
+| --- | --- | --- |
+| 对外文案撤销"≤4/批"建议 | 工具描述、能力边界（placement 段）、[语法参考](../REFERENCE_SYNTAX.md) 均已改写为 C6 结论；兼容矩阵 0.11.6 历史段标注被 0.11.7 段取代 | 已修正（离线断言护栏） |
+| 选集诊断计数取数 | 原读 `state["counts"]`（巡检从不发布）→ 一律 -1；改为读 `features`/`surfaces`/`bodies` 数组长度 + `body_counts.active`，缺失项记 `null` | 已修正 |
+| 最终执行器复核 C2/C4 | C2 失败于 index 4、整批干净回滚、后续合法编辑成功；C4 五副本全部成功、保存重载 true；失败回执计数为实际值（12/26/1/1） | 实机通过（与前轮行为一致） |
+
+- 身份：分支 `codex/BUG-111-doc-and-counts-fix`（基线 `main@8ab0641`，dirty）；三次重编（`c3ddf6de…` → `55af1174…` → `cb6f3345…`，第三次只改注释编号），以**最终执行器 `cb6f3345…`（13 329 920 B，源码指纹 `7d0bc254…`）**复跑为准；环境 Windows x64 / Python 3.12.14 / Creo 12.4.0.0（`release_numeric=44`）/ 匹配 SDK；用户当次授权会话，单一 Toolkit 通道串行，无故障注入、无 unknown 保护清理。
+- 复核命令与报告：`tools/test_geometry_transform_copies.py --confirmed-session-usable --phase reproduce --cases C2,C4 --model-suffix t7 --output build/r13_followup_20261103T1836/t5_rerun_final.json` → `verdict=pass`、`success=true`；C2 作业 `4aef9f4c…` 的 `native.log` 逐 op 记录 `TRANSFORM_SELECTION`（被选面 6→9→15→23→26、features 8→9→10→11→12），作业回执 `result.failed_transform.selection.model_counts_at_start` = `{features:12, surfaces:26, bodies:1, active_bodies:1}`（修正前为 -1/-1/-1）。
+- 离线：全量 **2276 项**单测 0 失败/0 错误（起点 2268，新增 `tests/unit/test_transform_selection_diagnostics.py` 8 项）、`tools/dev_check.py --work-item BUG-111-doc-and-counts-fix` `success=true`（无新增语言问题，风格基线未改）。
+- 未验证范围（不变）：Creo 9/10 行为；"恰好重合 vs 部分交叠"的内核判据；`body_pattern` 未实现；WorkBuddy 黑盒；**BUG-108 `accepted_rigid=true` 仍未触发（9/9）、BUG-110 `ack_success` 仍未实机发生**，两者保持开放）；本轮不合 main、不改版本号、不发布。

@@ -51,6 +51,7 @@ from creo_mechdog.schema import (
     SketchConstraint,
     SketchDimension,
     SketchOp,
+    dump_plan_operations,
 )
 from creo_mechdog.session_assembly import inspect_session_assembly
 from creo_mechdog.session_erase import erase_session_models
@@ -91,7 +92,10 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/adoption.py",
     "src/creo_mechdog/file_adoption.py",
     "src/creo_mechdog/component_changes.py",
+    "src/creo_mechdog/compact_sections.py",
+    "src/creo_mechdog/job_projection.py",
     "src/creo_mechdog/operation_results.py",
+    "src/creo_mechdog/failure_context.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/stdio_lifecycle.py",
@@ -130,6 +134,12 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
+    "native/surface_measure.h",
+    "native/quilt_gauge_guard.h",
+    "native/quilt_query.h",
+    "native/surface_trim.cpp",
+    "native/quilt_merge.cpp",
+    "native/project_curve.cpp",
     "native/component_transform.h",
     "native/assembly_pose.h",
     "native/constraint_names.h",
@@ -372,9 +382,26 @@ async def creo_get_job(
     section: str | None = None,
     limit: int = Field(default=50, ge=1, le=200),
     cursor: str | None = None,
+    sections: list[str] | None = None,
+    wait_seconds: Annotated[
+        int,
+        Field(
+            ge=0,
+            le=30,
+            strict=True,
+            description=(
+                "FEAT-007 long poll: 0 returns immediately; 1-30 waits at most that many seconds "
+                "for a terminal status. The wait reads only the job record, holds no Toolkit channel "
+                "lock, creates no job, changes no timeout and resubmits nothing. On expiry the current "
+                "status returns with wait_expired=true; an interruption ends only the wait."
+            ),
+        ),
+    ] = 0,
 ) -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
-    return await invoke(bridge.get_job, job_id, detail, section, limit, cursor)
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Compact keeps the measured surface-chain criteria (surface_trim area_before/area_after with their status and kept_side_basis, surface_offset source_area/measured_offset_distance/direction/offset_method, project_curve length/endpoints/curve/helper/route and the solidify closure) but omits raw log text; full_detail_hint names the paginated full read (detail="full", section="operations_result", limit, cursor). Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job. wait_seconds (0-30, default 0) long-polls the persisted job record only: terminal statuses return immediately, expiry returns the current status with wait_seconds/waited_seconds/wait_expired, and the wait never creates a job, holds the Toolkit channel lock, changes a timeout, resubmits or cancels the job when interrupted."""
+    return await invoke(
+        bridge.get_job, job_id, detail, section, limit, cursor, sections, wait_seconds
+    )
 
 
 @mcp.tool(annotations=CREATE)
@@ -549,10 +576,12 @@ async def creo_migrate_registry(
 
 @mcp.tool(annotations=READ)
 async def creo_list_jobs(
-    limit: int = 10, detail: Literal["compact", "full"] = "compact"
+    limit: int = 10,
+    detail: Literal["compact", "full"] = "compact",
+    sections: list[str] | None = None,
 ) -> dict[str, Any]:
-    """List recent jobs, including jobs that continue after their MCP client disconnects."""
-    return {"jobs": await invoke(bridge.list_jobs, limit, detail)}
+    """List recent jobs, including jobs that continue after their MCP client disconnects. detail=compact returns one bounded item per job (job_id, model_id, status, stage, created/finished times, outcome classification and a message capped at 200 characters and by bytes); call creo_get_job with that job_id for result blocks, revision, rollback, save/reload evidence, failure context or pagination. limit is 1-50. sections is accepted for compatibility only and applies to creo_get_job detail=compact, not to these fixed list items; an unknown block name is still rejected with isError listing every known name."""
+    return {"jobs": await invoke(bridge.list_jobs, limit, detail, sections)}
 
 
 def _support_status() -> dict[str, Any]:
@@ -814,7 +843,7 @@ async def creo_execute_plan(
     """
     return await invoke(
         general.submit,
-        [op.model_dump(exclude_none=True) for op in operations],
+        dump_plan_operations(operations),
         model_id,
         model_name,
         expected_revision,
@@ -1024,7 +1053,7 @@ async def creo_transform_geometry(
     coordinate_system: dict[str, Any] | None = None,
     keep_original: bool = False,
 ) -> dict[str, Any]:
-    """Create a native rigid transform of whole solid bodies or quilts/datums/curves. Rotation X,Y,Z precedes translation, about fixed supplied csys axes. Each rotation component must stay inside -180..180 degrees: a larger request is refused before submission and the error names the equivalent angle (225 becomes -135), because the kernel only uses that interval. keep_original copies are native features: a plan that copies the same body more than four times in one batch may fail at the fifth copy, so split large copy sets and re-reference the current body IDs. A failure carries failed_transform with the backend, requested and normalized angles, reference count and keep_original; the whole plan rolls back. Body moves use FlexMove and may require Flexible Modeling license. Does not rotate the camera."""
+    """Create a native rigid transform of whole solid bodies or quilts/datums/curves. Rotation X,Y,Z precedes translation, about fixed supplied csys axes. Each rotation component must stay inside -180..180 degrees: a larger request is refused before submission and the error names the equivalent angle (225 becomes -135), because the kernel only uses that interval. keep_original copies are native features that accumulate inside the same body: every copy takes the whole current body, so an appended copy can fail when it overlaps the copies already there. The failure follows the model state and the angle, not the copy count, and splitting the copies into smaller batches does not avoid it (measured on Creo 12.4), so keep one copy set in one plan and use a separate model when a fixed-original copy is needed. A failure carries failed_transform with the backend, requested and normalized angles, reference count, keep_original and a bounded selection block (requested body ids, selected surface count, model counts at op start); the whole plan rolls back. Body moves use FlexMove and may require Flexible Modeling license. Does not rotate the camera."""
     return await invoke(
         general.submit,
         [
@@ -1137,10 +1166,10 @@ async def creo_extrude(
     expected_revision: int,
     label: str,
     sketch: str | int,
-    depth: float = 1,
+    depth: float | None = None,
     mode: Literal["add", "cut", "surface"] = "add",
     direction: Literal["positive", "negative", "symmetric"] = "positive",
-    depth_type: Literal["blind", "through_all"] = "blind",
+    depth_type: Literal["blind", "through_all"] | None = None,
     new_body: bool = False,
     thin: float | None = None,
 ) -> dict[str, Any]:
@@ -1149,18 +1178,24 @@ async def creo_extrude(
     direction is "positive", "negative" or "symmetric". These enums are the same as the plan
     operation {"op":"extrude",...}: this tool submits exactly that operation, so the standalone
     tool and the execute_plan entry accept the same values.
+    Omitting depth or depth_type keeps the existing defaults (1 mm, blind) but is reported honestly:
+    the result operation carries extrude_depth with requested_depth_type/requested_depth_mm (null
+    when omitted), effective_depth_type/effective_depth_mm read from the created feature tree,
+    defaulted_fields and source/query_code. through_all never reports a fabricated blind depth.
     A cut that removes no material (disjoint sketch, wrong direction or already-removed region) fails and rolls back;
     a successful cut reports material_removed_mm3 in its operation details."""
     op = {
         "op": "extrude",
         "label": label,
         "sketch": sketch,
-        "depth": depth,
         "mode": mode,
         "direction": direction,
-        "depth_type": depth_type,
         "new_body": new_body,
     }
+    if depth is not None:
+        op["depth"] = depth
+    if depth_type is not None:
+        op["depth_type"] = depth_type
     if thin is not None:
         op["thin"] = thin
     return await invoke(general.submit, [op], model_id, None, expected_revision)
@@ -1447,7 +1482,7 @@ async def creo_shell(
 async def creo_set_dimensions(
     model_id: str, expected_revision: int, values: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Modify native model dimensions by IDs returned in inspection. values=[{id:int,value:float}]. Regenerate, save and verify."""
+    """Modify native model dimensions by IDs returned in inspection. values=[{id:int,value:float,expected_value?:float,expected_symbol?:str,expected_owner?:str|int}]. Optional expected_* pins are checked against the live dimension before the first write: a mismatch, an unknown pin target (symbol/owner/value not readable) or a relation-driven dimension refuses the whole plan, so a stale plan cannot move a shifted dimension. Regenerate, save and verify."""
     return await invoke(
         general.submit,
         [{"op": "set_dimensions", "values": values}],
@@ -1787,9 +1822,11 @@ async def creo_sheetmetal_flange(
                 "ends:'both'|'side1'|'side2', width:model units, depth:model units}. "
                 "Omit it for the previous behaviour (no relief on either end). rectangular "
                 "requires width>0 and depth>=0; both are absolute model units and are not "
-                "scaled by the sheet thickness. Rip/stretch/obround/param, corner relief, "
-                "miter cuts and edge rips are not supported. Relief is fixed when the flange "
-                "is created: change it by deleting/re-creating the flange, not in place."
+                "scaled by the sheet thickness. Rip/stretch/obround/param, corner relief "
+                "and edge rips are not supported; miter cuts are only the flange-time "
+                "miter_cuts section, never bend-end relief. "
+                "Relief is fixed when the flange is created: change it by "
+                "deleting/re-creating the flange, not in place."
             )
         ),
     ] = None,
@@ -1804,14 +1841,29 @@ async def creo_sheetmetal_flange(
             )
         ),
     ] = None,
+    miter_cuts: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description=(
+                "Optional native miter cuts {width:model units>0, offset:model units>=0; "
+                "offset defaults to width}, written as the literal BLIND width/offset of "
+                "the flange's own PRO_E_SMT_MTR_CUTS section. This is the only way a flange "
+                "whose attachment-edge ends abut existing bends passes the "
+                "adjacent_bend_ends guard (without it the wall is still refused before "
+                "create). The element-tree echo is read back from the created feature; the "
+                "geometry a given width/offset removes is not quantified yet."
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Attach a native bent flange to a sheetmetal edge. The section exposes named height for dimension edits.
 
     flip=false (the default) bends out of the face the edge belongs to; flip=true bends to
     the opposite, material side. The side is relative to the attachment face, not to a
     global axis. A wall whose attachment-edge end is adjacent to an existing bend is
-    rejected before creation (failure_reason=adjacent_bend_ends); four-wall boxes are not
-    supported yet.
+    rejected before creation (failure_reason=adjacent_bend_ends) unless the request
+    carries miter_cuts; that explicit native miter request releases the guard and lets
+    Creo cut the end overlap (four-wall boxes use this route).
 
     Attachable edges are the boundaries of the green/white wall faces (the wall faces are
     wall_contract.wall_face_ids of the base wall); an edge shared by two side/rim surfaces
@@ -1842,6 +1894,8 @@ async def creo_sheetmetal_flange(
         operation["relief"] = relief
     if end_trim_mm is not None:
         operation["end_trim_mm"] = end_trim_mm
+    if miter_cuts is not None:
+        operation["miter_cuts"] = miter_cuts
     return await invoke(general.submit, [operation], model_id, None, expected_revision)
 
 
@@ -2189,7 +2243,7 @@ async def creo_inspect_model(
 
     Use detail=full for geometry; large snapshots return data grouped by section,
     complete=false and next_cursor. Repeat with the same detail/section and cursor.
-    Sections: features, dimensions, surfaces, edges, bodies, datum_planes, datum_axes,
+    Sections: features, dimensions, surfaces, edges, quilts, bodies, datum_planes, datum_axes,
     parameters, aliases, components, feature_geometry, sketch_dimensions.
     Drawings also support sheets/views/notes/tables/models/shown_dimensions;
     metadata preserves additional inspection fields.
@@ -2269,7 +2323,15 @@ async def creo_export_model(
     model_id: str,
     format: Literal["step", "stl", "iges", "jpeg", "pdf", "native_bundle"] = "step",
 ) -> dict[str, Any]:
-    """Export STEP/STL/IGES/JPEG, drawing PDF/JPEG, or an explicit native assembly bundle."""
+    """Export STEP/STL/IGES/JPEG, drawing PDF/JPEG, or an explicit native assembly bundle.
+
+    ``format="jpeg"`` is the read-only preview entry: it submits a READ job that
+    renders the current model without saving, so the model revision does not
+    advance. The job result carries a ``preview`` block (``status`` and the
+    rendered ``path``) for the view to display; a model without geometry reports
+    ``status="skipped_no_geometry"`` and a render failure reports ``status="failed"``
+    with ``failed_step``/``failed_code`` instead of a picture.
+    """
     return await invoke(
         general.submit, [{"op": "export", "format": format}], model_id, None, None, None, True
     )
@@ -2508,6 +2570,33 @@ async def creo_surface_fill(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_offset(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    reference: dict[str, Any],
+    distance: float,
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Offset a quilt along its surface normal; the result reports the measured offset distance."""
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="surface_offset",
+                label=label,
+                reference=reference,
+                distance=distance,
+                side=side,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_thicken(
     model_id: str,
     expected_revision: int,
@@ -2559,6 +2648,105 @@ async def creo_solidify(
                 side=side,
                 mode=mode,
                 new_body=new_body,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_surface_trim(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+    keep_side: Literal["one", "two"],
+) -> dict[str, Any]:
+    """Trim one quilt with another quilt, a datum plane or a curve.
+
+    target is one quilt ({kind:'quilt',id:...} or {kind:'quilt_feature',label:...});
+    tool is one quilt, one datum plane or one curve ({kind:'curve',id:...}, which is
+    how a projected curve trims the quilt it was projected onto). keep_side is 'one'
+    or 'two'; the physical side is read back through kept_side_basis instead of being
+    named after a GUI view. For a curve tool the two sides follow the curve direction,
+    so kept_side_basis reports side_reference='curve_direction' and no tool_normal.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_trim", label=label, target=target, tool=tool, keep_side=keep_side)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_quilt_merge(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    tool: dict[str, Any],
+) -> dict[str, Any]:
+    """Join two quilts into one surface merge.
+
+    Both sides must be explicit quilt references ({kind:'quilt',id:...} or
+    {kind:'quilt_feature',label:...}) and must be distinct. The result reports
+    result_quilt_id, the measured merged area and the real closure status; no
+    tolerance and no gap measurement are offered in this release.
+    This release is registered but gated: the join still needs a live acceptance
+    run, so submissions are refused before a native job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="quilt_merge", label=label, target=target, tool=tool)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_project_curve(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    source: dict[str, Any],
+    direction_ref: dict[str, Any],
+    side: Literal["positive", "negative"] = "positive",
+) -> dict[str, Any]:
+    """Project one curve onto one quilt along an explicit direction.
+
+    target is one quilt, source is one curve id ({kind:'curve',id:...}) and
+    direction_ref must read a real vector: {kind:'datum_feature',label:...},
+    {kind:'datum_axis_feature',label:...} or a straight {kind:'curve',id:...}.
+    side flips that direction and is named after the measured basis, not a GUI
+    view. The result reports curve_id, the measured curve_length_mm and the two
+    endpoints_mm; a multi-branch or empty projection fails instead of returning
+    a partial curve.
+
+    Construction is reported, not hidden: the projection is built as a real
+    sweep of the source sketch along the direction plus the documented Creo
+    intersect curve, so the model also gains a helper surface feature whose id
+    is returned as helper_feature_id. The direction must therefore be parallel
+    to the source sketch plane normal, the target must lie on the requested
+    side, and the source curve must belong to a curve feature; each of those is
+    refused with a measured reason instead of being approximated.
+    """
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="project_curve",
+                label=label,
+                target=target,
+                source=source,
+                direction_ref=direction_ref,
+                side=side,
             )
         ],
         model_id,

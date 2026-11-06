@@ -15,6 +15,7 @@ from creo_mechdog.release_integrity import (
     assert_repo_record_matches,
     read_version,
     seed_library_files,
+    write_sidecar,
 )
 from creo_mechdog.seed_distribution import seed_file_bytes
 from version import VERSION
@@ -90,7 +91,9 @@ def main(argv: list[str] | None = None) -> int:
             f"{TRUSTED_RECORD}; nothing was published."
         )
         return 2
-    archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    sidecar = archive.with_suffix(".zip.sha256")
+    write_sidecar(sidecar, digest, archive.name)
+    print(f"Seed checksum sidecar: {sidecar} (publish it with the archive)")
     print(f"{TRUSTED_RECORD} matches this rebuild; safe to package the source.")
     return 0
 

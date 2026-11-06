@@ -15,7 +15,9 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shipped_summaries_match_registered_tools_and_family_modes(self):
         tools = {tool.name for tool in await server.mcp.list_tools()}
-        self.assertEqual(len(tools), 97)
+        # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
+        # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
+        self.assertEqual(len(tools), 100)
         status = server._support_status()
         families = capabilities.families()
         for summary, family in (
@@ -45,6 +47,25 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(server, "families", return_value=families):
             self.assertEqual(server._support_status()["file_adoption"]["status"], "not_available")
 
+    async def test_operation_and_gated_counts_agree_with_registration(self):
+        listed = await server.mcp.list_tools()
+        payload = server._capabilities_payload(
+            [{"name": tool.name, "description": tool.description} for tool in listed]
+        )
+        registered = list(capabilities.REGISTERED_OPERATIONS)
+        gated = set(capabilities.UNAVAILABLE_OPERATIONS)
+        self.assertEqual(payload["registered_operations"], registered)
+        self.assertEqual(payload["operations"], [op for op in registered if op not in gated])
+        self.assertEqual(len(registered), len(payload["operations"]) + len(gated))
+        self.assertEqual(
+            payload["unavailable_tools"],
+            ["creo_" + name for name in capabilities.UNAVAILABLE_OPERATIONS],
+        )
+        self.assertEqual(payload["tool_count"], payload["enabled_tool_count"])
+        tools = {tool.name for tool in listed}
+        self.assertEqual(payload["tool_count"], len(tools))
+        self.assertTrue(set(payload["unavailable_tools"]).isdisjoint(tools))
+
     async def test_compact_and_full_reconstruct_the_same_public_summary_under_budget(self):
         compact = await server.creo_capabilities()
         registered = {tool.name for tool in await server.mcp.list_tools()}
@@ -64,6 +85,8 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(compact["support_status"], overview["support_status"])
         self.assertEqual(compact["release_status"], overview["release_status"])
         self.assertEqual(compact["complete_creo_coverage"], overview["complete_creo_coverage"])
+        self.assertEqual(compact["unavailable_tools"], overview["unavailable_tools"])
+        self.assertEqual(compact["unavailable_operations"], overview["unavailable_operations"])
 
 
 class SheetmetalInspectionProjectionTests(unittest.IsolatedAsyncioTestCase):
@@ -159,11 +182,22 @@ class LocalReleaseStatusTests(unittest.TestCase):
 
 
 def _enum_consts(prop: dict) -> set:
-    """Collect literal values from a tool/op schema property (enum or anyOf-const)."""
+    """Collect literal values from a tool/op schema property (enum or anyOf).
+
+    A nullable argument (``Literal[...] | None``) is published as anyOf with
+    the enum on one branch and null on the other; both forms must yield the
+    same literal set so the contract check still compares the values.
+    """
     values = prop.get("enum")
     if values is not None:
         return set(values)
-    return {item["const"] for item in prop.get("anyOf", []) if "const" in item}
+    collected = set()
+    for item in prop.get("anyOf", []):
+        if "const" in item:
+            collected.add(item["const"])
+        elif "enum" in item:
+            collected.update(item["enum"])
+    return collected
 
 
 class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):

@@ -1,6 +1,6 @@
 # FEAT-012：装配定位、源件更新与嵌套子装配
 
-日期：2026-10-17 补全，2026-10-24 Task 4 更新，2026-10-26 实机验收更新，2026-10-26 0.6.0收口更新。类型：功能。优先级：P2。状态：矩阵子项开发者实机已通过、随 0.6.0 交付（WorkBuddy 黑盒经用户 2026-10-26 决定取消，未执行、不记通过）；源件更新与嵌套待规划。目标版本：矩阵子项 0.6.0。
+日期：2026-10-17 补全，2026-10-24 Task 4 更新，2026-10-26 实机验收更新，2026-10-26 0.6.0收口更新。类型：功能。优先级：P2。状态：矩阵子项开发者实机已通过、随 0.6.0 交付（WorkBuddy 黑盒经用户 2026-10-26 决定取消，未执行、不记通过）；**0.15.0 已交付**：`rotation_convention="row_vectors_local_to_parent"`、`assembly_pose_receipt` 实读回执与矩阵失败上下文（原生装配回读未跑）；源件更新与嵌套待规划。目标版本：矩阵子项 0.6.0/0.15.0。
 
 来源：既有台账范围；新增[0.3.3 反馈补录](../validation/FEEDBACK-0.3.3-2026-10-17.md)报告 B 第 7、8 节。关联 BUG-036/041/045、FEAT-008/023/031。
 
@@ -116,3 +116,18 @@ Release 与附件由控制者执行。
 R1 §5 P1-4（矩阵直入/Euler输出）是0.5.2旧请求；矩阵子项已随0.6.0交付，R3 §1.2/§7显式位姿重建正例不等于新矩阵接口或约束保真验收。T12/T13核对既有矩阵/已知点回归；Euler附加输出建议未承诺新增，显式源件更新与嵌套继续在父卡开放范围。
 
 共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
+
+## 2026-11-06 装配/放置失败上下文（Q02/R05，离线实现，未实机）
+
+- `failed_operation` 已覆盖 `assemble_component` / `component_placement` 失败：回显调用方 `input_matrix`（4×4 行向量，16 浮点）、`matrix_source`、`determinant`（3×3）与 `orthogonality_residual`（`max|R·Rᵀ − I|`）。
+- 不自动正交化、不归一化、不转置；`schema.py` 的提交期 1e-6 正交与 det=+1 校验不变，内核返回 -2 时只做诊断、不改写调用方几何；整批原子回滚不变。
+- `pro_error` 只在实际捕获 `ProError` 时给出（例如 -2），否则 null + `pro_error_source="unsupported"`；`feature_label`/`sketch_name` 取不到即 null，不用整数 ID 冒充名称。
+- 验证：`tests/unit/test_failed_operation_context.py` 24 项与相关回归 109 项通过；全量 2477 项通过；`bridge.py build` 退出 0。未验证：实机 -2 未复现，`Euler` 展开路径（`matrix_source="euler"`）只有单测。
+
+## 2026-11-06 R05 离线实现（旋转约定、放置回执与投影，未构建、未实机）
+
+- 契约：`AssemblyPose.rotation`/`rotation_matrix`/`translation` 的 Field description 统一透出 `p_parent = p_local * rotation_matrix + translation`；`assemble_component` 与 `component_placement` 两支 description 逐字一致，并写明 3×3、正交与 det=+1（1e-6）、与 Euler 互斥、不转置/不自动修复。
+- 回执：创建与更新成功后新增 `rotation_convention="row_vectors_local_to_parent"`，并回显实读 `transform`（`component_to_assembly` 4×4）、`transform_source`、`transform_code`、`length_unit`；读取失败只留 null + 查询码。
+- 投影：`job_projection.ASSEMBLY_POSE_KEYS` 并入 compact 白名单（两个 op 分支），`compact_operation`/`compact_job` 不丢既有 op/index/effect_status 与 `failed_operation`。
+- 验证（离线）：`tests/unit/test_assembly_matrix_poses.py` 12 项（含 17.9° 完整精度与六位舍入、非对称点与基向量、创建/更新、非法矩阵受理期拒绝）、`tests/unit/test_assembly_matrix_rollback.py` 11 项（整批回滚、后续合法编辑同一 revision）、`tests/unit/test_failed_operation_context.py` 31 项通过。
+- 未验证：原生编译（`bridge.py build` 由编排方统一执行）、实机放置/更新回读与 revision、Creo 10、WorkBuddy。

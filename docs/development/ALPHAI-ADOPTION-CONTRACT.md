@@ -150,6 +150,19 @@ E:\Projects\MCP_CREO_MechDog\.venv\Scripts\python.exe bridge.py build
 - 若 `bridge.py build` 报找不到 SDK/编译器，先核 `config.json` 的 `creo_root`、`vcvars64` 与本机一致。
 - 未设置 `PYTHONPATH` 时会导入主工作树的 editable 包，单元测试结果无效——交接里必须写明使用了哪条导入路径。
 
+### 实测修订（2026-11-03，A02/A03 执行后）
+
+只设 `PYTHONPATH` **不够**：`server.py:65-70` 有源码身份守卫，子进程测试（`unit.test_adoption` 等 22 项）按 `SOURCE_PATHS.resource_root` 判定“包属于另一个 checkout”而失败。可用做法是复制主环境（98 MB）并改指向：
+
+```powershell
+Copy-Item E:\Projects\MCP_CREO_MechDog\.venv <worktree>\.venv -Recurse -Force
+# 复制后把 .venv\Lib\site-packages\__editable___mcp_creo_mechdog_0_11_5_finder.py 的 MAPPING
+# 中 'E:\\Projects\\MCP_CREO_MechDog' 全部替换为本工作树路径（纯文本替换，勿用 pip 重装：环境内无 setuptools）
+<worktree>\.venv\Scripts\python.exe tools\dev_check.py --work-item <ID>
+```
+
+改完后 `import creo_mechdog` 与 `SOURCE_PATHS.resource_root` 均指向本工作树，`dev_check` 全量单测可通过（A02、A03 已实测 `unit_tests=passed`、`success=true`）。
+
 ## 六 本次未冻结（只允许研究）
 
 - **A04** 原生矩形平面壁：`sheetmetal_planar_wall` / `resize_sheetmetal_planar_wall` 的元素树与尺寸身份映射，需先完成离线 SDK 核验并按用户决定“仅离线”；探针结论记“未验证”，不开放工具。
@@ -165,3 +178,9 @@ E:\Projects\MCP_CREO_MechDog\.venv\Scripts\python.exe bridge.py build
 - [x] 给出隔离 worktree 的环境准备与导入陷阱。
 - [ ] 用户指派各任务负责人与执行顺序（负责人当前仍 `unassigned`）。
 - [ ] A01/A02/A03 分支创建与首次推送（待用户指派后执行）。
+
+## 2026-11-04 当前状态与待重新冻结项
+
+以上章节为2026-11-03首轮冻结/授权时点。A04已于2026-11-04随0.12.0独立交付，原“只离线/未开放工具”不再描述当前main。当前正式基线main@90dbd6c/97工具；本规划checkout仍0.11.7，不能将工作树与运行时身份混认。
+
+A01用户已确认的可选显式density_g_cm3有分支记录；同步等待/g字段/op与原P00仍有差异，数值守卫与真实材料重心待收口。A03标准孔当前实现使用shoulder深度及冻结ISO表，和原tip/安装孔表解析约定不等价，需按[后续计划](../superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)重新冻结后集成。B01已有事务日志子项，骨架身份/原生入口仍待验证；不把旧“未冻结”当作日志从未实现。具体证据见[核验记录](DEV067-POST0120-AUDIT-2026-11-04.md)。本次没有修改产品代码或进行新实机。

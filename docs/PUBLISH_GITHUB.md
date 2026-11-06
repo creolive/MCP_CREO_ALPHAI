@@ -4,6 +4,28 @@
 
 当前成果版本为 **v0.2.5**。本地生成了源码 ZIP、九种子 ZIP、两份 SHA256，以及可直接上传的公开源码目录。本地打包不修改 GitHub；历史标签和附件可以保留。
 
+## 发布附件（所有新版本固定四个）
+
+每个版本的 Release 附件都必须是四个文件，其中两个 `.sha256` sidecar 由打包脚本在 ZIP 同目录生成：
+
+- `MCP_CREO_MechDog-<版本>-source.zip`
+- `MCP_CREO_MechDog-<版本>-source.zip.sha256`
+- `MCP_CREO_MechDog-<版本>-seed-library.zip`
+- `MCP_CREO_MechDog-<版本>-seed-library.zip.sha256`
+
+sidecar 内容为一行 `<64 位 SHA256>  <ZIP 文件名>`。上传时逐个列出四个文件名，不要用 `*.zip` 通配（会漏掉 sidecar）：
+
+```powershell
+gh release create v<版本> `
+  MCP_CREO_MechDog-<版本>-source.zip `
+  MCP_CREO_MechDog-<版本>-source.zip.sha256 `
+  MCP_CREO_MechDog-<版本>-seed-library.zip `
+  MCP_CREO_MechDog-<版本>-seed-library.zip.sha256 `
+  --title "MCP_CREO_MechDog <版本>" --notes-file <Release 正文文件>
+```
+
+上传后运行 `python tools\check_release_assets.py --tag v<版本>`（或 `gh release view <tag> --json assets`）核对四个附件齐全、sidecar 哈希与对应 ZIP 摘要一致；缺任何一个 sidecar 都视为未完成发布。0.11.7 与 0.12.0 曾只上传两个 ZIP，属于该缺口，新版本不得重复。
+
 ## 更新仓库文件
 
 1. 使用 `MCP_CREO_MechDog-0.2.5-github-upload` 内的**内容**更新仓库根目录。根目录应直接看到 `README.md`、`server.py`、`setup.ps1`，不要再包一层目录，也不要把整个源码 ZIP 当成仓库源码上传。
@@ -15,7 +37,7 @@
 
 仓库源码更新完成后，新建标签 **v0.2.5**，选择包含本次源码的提交。标题填写 **MCP_CREO_MechDog v0.2.5 — MIT 源码与九种子库**，说明使用 [RELEASE_NOTES_0.2.5.md](RELEASE_NOTES_0.2.5.md) 的内容。完整 Creo 覆盖尚未完成，建议保持 **Pre-release**。
 
-上传四个附件：
+0.2.5 历史示例的上传清单（文件名按当时版本；新版本按上节规则）：
 
 - `MCP_CREO_MechDog-0.2.5-source.zip`
 - `MCP_CREO_MechDog-0.2.5-source.zip.sha256`

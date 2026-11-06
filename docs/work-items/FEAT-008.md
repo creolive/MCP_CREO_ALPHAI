@@ -1,6 +1,6 @@
 # FEAT-008：工具输入、引用与能力说明的一致性
 
-日期：2026-10-16 补全，2026-10-26 0.6.0收口更新，2026-10-31 0.10.0 更新。类型：功能。优先级：P2。状态：T09B 已交付（0.10.0：`entity_ids` 发布与中心线用户线计数，N08 实机通过）；第二批官方装配重建管线配套已随 0.6.0 交付（开发者实机通过、WorkBuddy 黑盒经用户 2026-10-26 决定取消未执行）；其余首批范围待规划。目标版本：0.6.0/0.10.0。
+日期：2026-10-16 补全，2026-10-26 0.6.0收口更新，2026-10-31 0.10.0 更新。类型：功能。优先级：P2。状态：T09B 已交付（0.10.0：`entity_ids` 发布与中心线用户线计数，N08 实机通过）；第二批官方装配重建管线配套已随 0.6.0 交付（开发者实机通过、WorkBuddy 黑盒经用户 2026-10-26 决定取消未执行）；**0.15.0 已交付**：`failed_operation` 上下文、矩阵行向量公式透出与曲面引用契约；其余首批范围待规划。目标版本：0.6.0/0.10.0/0.15.0。
 
 ## 当前进度（2026-10-21）
 
@@ -406,3 +406,35 @@ R1 §4.1能力摘要、§4.2成熟度、§3.3/§4.3 unchanged、§5五旧请求�
 ## 2026-11-01 Q13 首次实机：未通过
 
 `tools/test_t07_preview.py --live --confirm-session-usable` 在 `disk_cut_pattern` 用例的 `save_and_reload` 阶段失败：作业 `61777b5bc9bb4653b912bb1e2bcdd569` 返回 `ProMdlnameBackup(board, destination)` -1，预览/分页矩阵未继续执行。磁盘剩余约 1.3 TB、会话干净，失败原因未定。同一会话重跑一次（作业 `510b73fb998c4706a7e71b6f170acb8f`）仍在同一用例同一阶段失败，属确定性失败而非偶发。进一步实验：强制 `ProSolidRegenerate(PRO_REGEN_FORCE_REGEN)` 后 Backup 仍 -1；回退 `ProMdlSave` 也 -1。三次 pattern 作业全部失败、同时段 43+ 非 pattern 作业保存正常。已登记 [BUG-099](BUG-099.md)。本卡不宣称 Q13 实机通过。证据：`build/live-0.11.1/q13_preview{,_r2,_r3,_r4,_r5}.json` 与对应 `native.log`。
+
+## 2026-11-05 补证（会话内）：W05 / W06 状态
+
+**W05（extrude 省略参数的实际生效值回执）本批未开工**：`ExtrudeOp` 仍是
+`depth: Positive = 1` 与 `depth_type = "blind"` 缺省，回执里没有 `extrude_depth` 块；
+按计划需新增 requested_depth_type/requested_depth_mm、effective_depth_type/effective_depth_mm、
+defaulted_fields、source/query_code，实际生效值必须来自特征树实读，不可读为 null，
+`through_all` 不得伪造"有效盲深 = 1"。
+
+**W06（预览/回滚/cleanup 保持回归）只完成离线部分**：`tests.unit.test_t07_preview` 与
+`tests.unit.test_failed_model_cleanup` 通过；预览实机三段（空件跳过 → 有几何生成 → 修改后预览）
+与失败编辑回滚（整批回滚、revision 不变、`failed_model_cleanup.reason="not_new_model_job"`）
+需要经 MCP 的预览入口，当前公开工具里没有预览工具，实机部分保持开放。
+
+## 2026-11-06 failed_operation 结构化上下文（Q02，离线实现，未实机）
+
+- 原生 `native/generic.cpp` 在失败收尾时写出 `failed_operation`；Python `src/creo_mechdog/failure_context.py` 归一化并对旧执行器结果按 `failed_operation_index`/`failed_stage`/`failed_toolkit_call`/请求 ops 回填，不编造错误码。
+- 固定 14 键：`index`、`operation`、`stage`、`feature_label`、`sketch_name`、`toolkit_call`、`pro_error`、`pro_error_source`（`toolkit`/`unsupported`）、`message`（截断 512，附 `message_truncated`）、`input_matrix`、`matrix_source`、`determinant`、`orthogonality_residual`；成功结果不出现该键。
+- 矩阵只回显：按调用方行向量逐值返回，不做正交化、归一化或转置；行列式与正交残差只计算。整批原子回滚语义未改。
+- `pro_error` 仅在实际捕获 `ProError` 时非空；`std::exception` 路径为 null + `unsupported`，不沿用 `toolkit_code` 的通用错误码。
+- 验证：新增 `tests/unit/test_failed_operation_context.py` 24 项；`bridge.py build` 退出 0 并重建执行器；全量 `tools/test_unit.py` 2477 项通过；`dev_check.py --skip-unit` 通过。
+- 未验证：实机 `ProAsmcompAssemble` 返回 -2 的失败场景未复现，真实错误码与真实矩阵/残差只做到编译级与源码级。
+- 更正上文状态：W06 预览三段与失败编辑回滚已于 2026-11-04/05 实机补证并随 0.14.0 交付，上文"实机部分保持开放"为当时记录。
+
+## 2026-11-06 R05 离线实现（失败上下文与 compact 投影，未构建、未实机）
+
+- 共面相切（零体积）extrude 与实际失败调用：仍按同一 14 键 `failed_operation` 发布，`toolkit_call`/`pro_error` 取真实失败调用与其返回码。
+- cut 未命中材料：`std::runtime_error` 路径无失败 Toolkit 调用，`toolkit_call`/`pro_error` 均为 null 且 `pro_error_source="unsupported"`，不把通用 -1 冒充 Toolkit 子码；两种失败的键集合由单测断言完全一致。
+- 成功路径不变：`success=true` 仍移除该键；`annotate_native_result` 对所有失败结果（含未产生操作记录）统一投影。
+- compact：`job_projection.ASSEMBLY_POSE_KEYS` 保留放置回执（`rotation_convention`/`transform`/`transform_source`/`transform_code`/`length_unit`），`failed_operation` 仍整块保留，既有字段不丢。
+- 验证（离线）：`tests/unit/test_failed_operation_context.py` 31 项通过（新增两项失败结构、键集合一致与 compact 回执可见性）。
+- 未验证：原生编译与实机共面 extrude/cut-miss 复现、Creo 10；本次未启动 Creo 或新建 Toolkit 连接。

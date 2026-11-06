@@ -1,6 +1,6 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04）；公开工具 95→97，默认模板路线保留。目标版本：0.12.0。
+类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；A04 矩形首壁与就地改型已交付（原始实机 67/67），0.12.0 时点公开工具 95→97，默认模板路线保留。**仍开放**：非矩形/多环截面、四壁/第二折边、显式支撑面 origin、Creo 9/10 实机、WorkBuddy 黑盒。目标版本：0.12.0（已发布）。**0.15.0 已交付**：`thickness_validation` / `thickness_loaded_validation` 双上下文回执；缺 API 的原生独立几何兜底仅离线门控，实机未验证。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -128,3 +128,40 @@
 
 复核记录收口交付记录：提交 `a297b3e`（同一分支，父提交 `d333f83`，5 个文件、+188/−20，提交时工作区干净）。受测源码指纹（SHA256 前 16 位，CRLF→LF 归一）：`src/creo_mechdog/native_planar_wall.py 6deade694874d8d4`、`server.py b4c41d2aaa41d33e`、`tests/unit/test_native_planar_wall.py d77de3661e6175d4`；未改动的 `native/planar_wall.cpp 3c7c6a7674fdfb0e`、`native/planar_wall.h da6159fa0f9c622e` 与第二笔一致。验证命令与结果见上段（`tools/test_unit.py` 2286 项 OK、`dev_check.py --skip-unit` success、三文件 ruff check/format 通过）。
 
+## 2026-11-04 跨工作树核验与后续动作
+
+main@90dbd6c、v0.12.0@758e87e与两份附件SHA256已独立核验，发布工作树原始实机67/67通过；受测源码与附件无实质差异。A04退出完整开发派工。非矩形/多环、四壁/第二折边、显式支撑面origin、Creo9/10、WorkBuddy范围保留；离线报告实际31条与旧摘要20条差异按后续记录更正，不改已发布标签/附件。完整发布卡记录在main工作树E:\Projects\codex-A04。
+
+详见[核验记录](../development/DEV067-POST0120-AUDIT-2026-11-04.md)和[后续计划](../superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)。本次只改记录/计划，未修改该任务产品代码或进行新实机。
+
+## 2026-11-06 板厚 validation 回执（离线）
+
+来源：0.13.0 外部反馈指出，SDK 缺 `ProSmtBodyThicknessValueGet` 时回执只有一个 `null` 或一句通用错误，无法区分“SDK 缺 API”“测量失败”和“测量值与请求不符”；参数或体积推算也不能冒充板厚测量。本轮按 R03 只做回执契约与反例隔离，不含需要实机验证的几何兜底。
+
+改动（离线，未编译、未连 Creo）：
+
+- `native/planar_wall.cpp`：`PlanarWallBodies` 增加 `gauge_source`/`gauge_reason`；新增 `planar_wall_thickness_validation()` 与 `planar_wall_gauge_failure()`；创建结果新增 `thickness_validation`，改型结果同时新增 `thickness_validation`（本计划）与 `thickness_loaded_validation`（存档读回）；`PLANAR_WALL_BODIES` 日志追加 `gauge_source`/`gauge_reason`；无法读回时的拒绝文案改为带具体原因。
+- `src/creo_mechdog/native_planar_wall.py`：新增 `gauge_validation()` 归一化与 `_validation_problems()` 判定；`result_projection` 逐 op 保留两个回执块；旧执行器没有该块时不生成、不新增判据。
+- `tests/unit/test_native_planar_wall.py`：新增 `GaugeReceiptTest`（10 项）。
+
+回执固定键（两个块相同）：`status`、`source`、`value_mm`、`reason`、`context`。
+
+| status | source | value_mm | 含义 / 典型 reason |
+| --- | --- | --- | --- |
+| `verified` | `api` | 有限数且等于请求厚度 | 板厚由壁体 API 独立读回 |
+| `unverified` | `missing_api` | null | SDK 未声明该 API：`thickness_api_unavailable` |
+| `mismatch` | `api` | 有限实测值，但不等于请求厚度 | `thickness_measured_mismatch`（正常会被原生拒绝，不产出成功结果） |
+| `unavailable` | `api` | null | API 存在但调用失败 `thickness_api_query_failed`，或读数非有限 `thickness_value_not_finite` |
+| `unavailable` | `not_measured` | null | 没有唯一的承载材料 body：`thickness_material_body_not_unique` |
+
+`context` 固定为 `current_plan`（创建/改型本计划测量）或 `saved_loaded`（改型前从存档读回）；逐 op 发布，改型不得用创建阶段的结果充数，投影也会把 context 不符的块降级。
+
+拒绝条件保持不变（冻结 Q01）：实测值与请求不符仍拒绝；SDK 声明了 API 但读不到仍拒绝（含本次收紧的“承载材料 body 不唯一”）；SDK 缺 API 时仍不改为成功，`thickness_verified=false`、`thickness_measured_mm=null`，Python 侧据此判为未验证。未新增几何兜底、参数推算或体积反推，也没有为了让作业成功而放宽拒绝。行为变化仅一处：此前多材料 body 时读取最大 body 的厚度，现在改为不读数并给出 `thickness_material_body_not_unique`，避免把无法归属的数值当成该壁的板厚。
+
+Python 归一化：缺字段、非对象、未知 `status`/`source`、context 不符、`verified`/`mismatch` 无值、`verified` 非 `api`、非 `verified` 无 reason、NaN/Inf 或非数值（单位无法确认）都降级为 `{status: unavailable, source: not_measured, value_mm: null, reason: thickness_validation_*}`，不编造 Toolkit code 或数值；存在但非 verified 的块本身记为 problem。`planar_wall` 块整体进入 compact 白名单，测试确认 `creo_get_job(detail=compact)` 保留两个回执，未改 `compact_sections.py` 名单。
+
+反例覆盖（均断言得不到 `verified`）：缺 API、API 返回非 0、无唯一材料 body、API 读数与请求不符、NaN/Inf、单位未知（非数值/未知 source）、缺保存读回、同计划 create→resize 不得复用创建回执，另有 7 类畸形回执降级与旧执行器无块兼容。
+
+验证：`.\.venv\Scripts\python.exe -m unittest tests.unit.test_native_planar_wall -v` 30 项 OK；`tools\test_adoption_planar_wall.py` 默认离线通过（`build/planar_wall/20261106T044614Z/adoption_offline.json`，`passed=true`、`failed=[]`）；两个 Python 文件 `ruff check`/`ruff format` 通过，`native/planar_wall.cpp` 已按 `.clang-format` 格式化。
+
+未验证：本轮按编排要求未运行 `bridge.py build`，原生 C++ 未经编译验证；未连 Creo、未做任何实机建模或保存重载，`thickness_validation` 的实机读数、缺 API 模式（Creo 9/10）与 `saved_loaded` 路径均未验收；未运行 `tools/dev_check.py`、全量 `tools/test_unit.py` 或 WorkBuddy。后续实机需在会话可用且获授权时执行原驱动正例（100×60×1→120×80×1、185×232×1、XY/XZ/YZ/负方向、保存后改型及失败后继续编辑）并记录直接 API/缺 API 模式；缺 API 兜底（纯矩形唯一材料 body 的独立法向几何读取）仍未实现，不属本轮范围。

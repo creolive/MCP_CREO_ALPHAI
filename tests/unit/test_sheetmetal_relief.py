@@ -606,7 +606,6 @@ class NativeTreeTest(unittest.TestCase):
             "PRO_BEND_RLF_PARAM",
             "PRO_BEND_RLF_DEPTH_TAN_TO_BEND",
             "PRO_E_SMT_CORNER_RELIEF",
-            "PRO_E_SMT_MTR_CUTS",
             "PRO_E_SMT_EDGE_RIP",
         ):
             self.assertNotIn(token, self.flange + self.side + self.record)

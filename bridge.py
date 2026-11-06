@@ -39,6 +39,14 @@ from creo_mechdog.build_support import (
     validate_local_path,
 )
 from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
+from creo_mechdog.compact_sections import RESULT_KEYS, apply_sections, resolve_sections
+from creo_mechdog.job_projection import (
+    FULL_DETAIL_HINT,
+    compact_job_list_item,
+    compact_operation,
+    compact_progress,
+    operation_keys,
+)
 from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.recovery import job_evidence, process_identity
 
@@ -47,6 +55,10 @@ JOBS = ROOT / "jobs"
 HIDDEN = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 JOB_ID = re.compile(r"[a-f0-9]{32}\Z")
 MODEL_NAME = re.compile(r"[a-z0-9][a-z0-9_]{0,30}\Z")
+#: FEAT-007: a job is final in these states; a long poll returns immediately.
+TERMINAL_JOB_STATUSES = ("succeeded", "failed", "cancelled", "aborted", "unknown_outcome")
+MAX_JOB_WAIT_SECONDS = 30
+JOB_WAIT_POLL_SECONDS = 0.25
 MODEL_NAME_RULE = (
     "model_name must be 1-31 characters of lowercase letters, digits and "
     "underscores, starting with a letter or digit; uppercase input is normalized "
@@ -885,7 +897,7 @@ def build_native() -> Path:
         ""
         if reuse_callback
         else f'''
-cl /nologo /MD /EHsc /std:c++17 /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_sync.cpp"}" /Fo"{build / "blend_sync.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_sync.cpp"}" /Fo"{build / "blend_sync.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /DLL /MACHINE:X64 /OUT:"{blend_dll}" "{build / "blend_sync.obj"}" kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -895,7 +907,7 @@ if errorlevel 1 exit /b 3
         ""
         if reuse_loader
         else f'''
-cl /nologo /MD /EHsc /std:c++17 /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_loader.cpp"}" /Fo"{build / "blend_loader.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_loader.cpp"}" /Fo"{build / "blend_loader.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /DLL /MACHINE:X64 /OUT:"{loader_dll}" "{build / "blend_loader.obj"}" {dll_libs} kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -908,7 +920,7 @@ setlocal DisableDelayedExpansion
 {compiler_setup_script(c)}
 "{sys.executable}" "{ROOT / "tools/compiler_preflight.py"}"
 if errorlevel 1 exit /b 4
-cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{exe}" "{build / "worker.obj"}" {libs} bcrypt.lib kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -1348,15 +1360,86 @@ def _run_job_dispatch(job_id: str) -> None:
     write_json(directory / "job.json", manifest)
 
 
+def _validate_wait_seconds(value: object) -> int:
+    """FEAT-007: wait_seconds is an explicit integer in 0..30 (no floats/bools)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"wait_seconds must be an integer between 0 and {MAX_JOB_WAIT_SECONDS}")
+    if not 0 <= value <= MAX_JOB_WAIT_SECONDS:
+        raise ValueError(f"wait_seconds must be an integer between 0 and {MAX_JOB_WAIT_SECONDS}")
+    return value
+
+
+def _manifest_status(job_id: str) -> str | None:
+    """Read only the persisted job status for the long-poll loop (FEAT-007)."""
+    path = job_path(job_id) / "job.json"
+    if not path.exists():
+        return None
+    return read_json(path).get("status")
+
+
 def get_job(
     job_id: str,
     detail: str = "full",
     section: str | None = None,
     limit: int = 50,
     cursor: str | None = None,
+    sections: list[str] | None = None,
+    wait_seconds: int = 0,
+    *,
+    clock=time.monotonic,
+    sleep=time.sleep,
+) -> dict:
+    """Read one job, optionally waiting for a terminal state (FEAT-007).
+
+    ``wait_seconds`` long-polls only the persisted job record: it never creates
+    a job, holds the Toolkit channel lock, changes a timeout or resubmits.
+    Terminal statuses return immediately; expiry returns the current status
+    with ``wait_expired=true``, never a completion claim. An interruption only
+    ends the wait and cannot cancel the job.
+    """
+    wait_seconds = _validate_wait_seconds(wait_seconds)
+    started = clock()
+    view = _read_job(job_id, detail, section, limit, cursor, sections)
+    waited = 0.0
+    expired = False
+    if wait_seconds and view.get("status") not in TERMINAL_JOB_STATUSES:
+        deadline = started + wait_seconds
+        while True:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                expired = True
+                break
+            sleep(min(JOB_WAIT_POLL_SECONDS, remaining))
+            status = _manifest_status(job_id)
+            if status is None or status in TERMINAL_JOB_STATUSES:
+                break
+        waited = max(waited, clock() - started)
+        view = _read_job(job_id, detail, section, limit, cursor, sections)
+    terminal = view.get("status") in TERMINAL_JOB_STATUSES
+    view["wait_seconds"] = wait_seconds
+    view["waited_seconds"] = round(waited, 3)
+    view["wait_expired"] = bool(
+        wait_seconds and not terminal and (expired or waited >= wait_seconds)
+    )
+    return view
+
+
+def _read_job(
+    job_id: str,
+    detail: str = "full",
+    section: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+    sections: list[str] | None = None,
 ) -> dict:
     if detail not in ("compact", "full"):
         raise ValueError("detail must be compact or full")
+    if sections is not None:
+        if detail != "compact":
+            raise ValueError("sections require detail=compact")
+        # FEAT-023: reject unknown block names before reading the job directory,
+        # so a rejected selection never touches the job (read-only query).
+        sections = resolve_sections(sections)
     if detail == "compact" and (section is not None or cursor is not None):
         raise ValueError("section/cursor require detail=full")
     directory = job_path(job_id)
@@ -1450,7 +1533,7 @@ def get_job(
 
         rollback_status.ensure_rollback_status(manifest)
     if detail == "compact":
-        manifest = compact_job(manifest)
+        manifest = compact_job(manifest, sections)
         return manifest
     # FEAT-008/BUG-088: detail=full keeps the whole manifest view when it fits
     # the response budget and pages the rest through the shared query cursor,
@@ -1460,7 +1543,7 @@ def get_job(
     return job_page(manifest, section=section, limit=limit, cursor=cursor)
 
 
-def compact_job(manifest: dict) -> dict:
+def compact_job(manifest: dict, sections: list[str] | None = None) -> dict:
     """Bound polling payloads without losing the outcome or recovery information.
 
     FEAT-008/BUG-088: every value is projected through the shared bounded
@@ -1468,9 +1551,22 @@ def compact_job(manifest: dict) -> dict:
     is held to the 32 KiB response budget. Failure reasons, revision, rollback
     and save/reload evidence are never cut; truncations carry their
     total/truncated markers.
+
+    FEAT-023: an optional ``sections`` selection keeps only the named result
+    blocks (``compact_sections``) and adds ``sections_applied`` plus
+    ``omitted_sections`` to the response. The projection runs before the
+    budget enforcement, so it never bypasses the shared trimming.
+
+    R04: the operation records are projected onto the shared whitelist
+    (``job_projection.compact_operation``), which keeps the surface-chain
+    criteria the native executor measured. Raw log text (top-level
+    ``native_log_tail`` and any nested ``log_tail``) is not part of compact;
+    ``detail=full`` keeps the original log and pagination path.
     """
     from creo_mechdog.operation_results import bounded_summary, enforce_compact_budget
 
+    if sections is not None:
+        sections = resolve_sections(sections)
     manifest = dict(manifest)
     apply_terminal_stage(manifest)
     keys = (
@@ -1523,61 +1619,7 @@ def compact_job(manifest: dict) -> dict:
     summary["operation_count"] = len(manifest.get("operations", []))
     result = manifest.get("result")
     if result:
-        result_keys = (
-            "success",
-            "seed_load_evidence",
-            # FEAT-058: the planar wall verdict rides the polling payload; the
-            # tools return a queued job, so compact polling is where the caller
-            # reads feature identity, dimensions and the signed envelope from.
-            "planar_wall",
-            "loft_seed_feature",
-            "creo_release_numeric",
-            "creo_release_query_code",
-            "code",
-            "toolkit_code",
-            "message",
-            "part_file",
-            "sha256",
-            "saved_file_reloaded_and_verified",
-            "rollback_succeeded",
-            "rollback_status",
-            "model_unchanged",
-            "rollback_message",
-            "rollback_code",
-            "failed_model_cleanup",
-            "preview_file",
-            "preview_status",
-            "preview_code",
-            "preview",
-            "connected",
-            "volume_mm3",
-            "expected_volume_mm3",
-            "extrude_count",
-            "round_count",
-            "hole_count",
-            "failed_stage",
-            "failed_toolkit_call",
-            "failed_operation_index",
-            "inspection_source",
-            "adoption",
-            "adopted",
-            "open_file",
-            "session_erase",
-            "loaded",
-            "session_fingerprint",
-            "feature_tombstones",
-            "suppressed_features",
-            "inspection_warnings",
-            # FEAT-008/BUG-088: new operation diagnostics ride the same
-            # bounded summary (Q02 geometry_deviation, Q03 failed_model_cleanup,
-            # Q06 feature_errors; color/surface receipts follow when present).
-            "geometry_deviation",
-            "failed_model_cleanup",
-            "feature_errors",
-            "verify_stages",
-            "failed_transform",
-        )
-        native = {key: result[key] for key in result_keys if key in result}
+        native = {key: result[key] for key in RESULT_KEYS if key in result}
         from creo_mechdog.model_queries import inspection_summary
 
         # Legacy results inline a full inspection; split results carry only a
@@ -1598,73 +1640,10 @@ def compact_job(manifest: dict) -> dict:
             if inline is not None:
                 visible.setdefault("inspection_summary", inspection_summary(inline))
             native["live"] = visible
+        # R04: carry every compact key plus the surface-chain criteria so the
+        # optional ``sections`` selection sees the full set before projection.
         native["operations"] = [
-            bounded_summary(
-                {
-                    key: op[key]
-                    for key in (
-                        "op",
-                        "index",
-                        "label",
-                        "succeeded",
-                        "execution_status",
-                        "effect_status",
-                        "unchanged",
-                        "native_geometry_verified",
-                        "size",
-                        "file",
-                        "feature_id",
-                        "preserved_feature_id",
-                        "reordered",
-                        "sheet",
-                        "parameters",
-                        "metadata",
-                        "material_removed_mm3",
-                        "volume_before_mm3",
-                        "volume_after_mm3",
-                        "material_delta_mm3",
-                        "material_measurement",
-                        "draft_geometry",
-                        "reference_application",
-                        "surface_id",
-                        "origin",
-                        "normal",
-                        "u_axis",
-                        "v_axis",
-                        "datum_axes",
-                        "axes_query_code",
-                        "length_unit",
-                        "profile",
-                        "native_section",
-                        "preview_code",
-                        "preview",
-                        "feature_state",
-                        "targets",
-                        "target_count",
-                        "requested_target_count",
-                        "targets_complete",
-                        "elapsed_seconds",
-                        "message",
-                        # FEAT-008/BUG-088: bounded new diagnostics.
-                        "geometry_deviation",
-                        # BUG-108: top-level post-solve shift verdict.
-                        "sketch_shifted",
-                        "feature_errors",
-                        "failed_model_cleanup",
-                        # FEAT-035 increment: which depth basis the created
-                        # hole actually used, and the tree element it came from.
-                        "depth_basis",
-                        "depth_scheme_code",
-                        "depth_scheme_query",
-                        # BUG-102: request vs applied draft flip plus the
-                        # failure classification when the create is rejected.
-                        "requested_flip",
-                        "effective_flip",
-                        "draft_failure",
-                    )
-                    if key in op
-                }
-            )
+            {key: op[key] for key in operation_keys(op) if key in op}
             for op in result.get("operations", [])
         ]
         if "operations" in native:
@@ -1682,21 +1661,52 @@ def compact_job(manifest: dict) -> dict:
             if key != "operations":
                 native[key] = bounded_summary(native[key])
         summary["result"] = native
-    if "native_log_tail" in manifest:
-        summary["native_log_tail"] = manifest["native_log_tail"][-2000:]
+    if "native_progress" in summary:
+        summary["native_progress"] = compact_progress(summary["native_progress"])
     summary["full_result_available"] = bool(result)
+    summary["full_detail_hint"] = FULL_DETAIL_HINT
     for key in list(summary):
-        if key != "result":
+        if key not in ("result", "full_detail_hint"):
             summary[key] = bounded_summary(summary[key])
+    if sections is not None:
+        summary = apply_sections(summary, sections)
+    # R04: sections select blocks first; the operation whitelist and sampling
+    # run afterwards, so a named block is never re-expanded and failure
+    # evidence stays on every record.
+    projected_result = summary.get("result")
+    if isinstance(projected_result, dict) and isinstance(projected_result.get("operations"), list):
+        projected_result["operations"] = [
+            bounded_summary(compact_operation(op)) for op in projected_result["operations"]
+        ]
     return enforce_compact_budget(summary)
 
 
-def list_jobs(limit: int = 10, detail: str = "compact") -> list[dict]:
+def list_jobs(
+    limit: int = 10, detail: str = "compact", sections: list[str] | None = None
+) -> list[dict]:
+    """List recent jobs without inlining each job's result.
+
+    R04: ``detail=compact`` returns one bounded item per job
+    (``job_projection.compact_job_list_item``): identity, status, times, stage,
+    outcome classification and a bounded message. The result, revision,
+    rollback and failure context are read with ``creo_get_job(job_id)``, so a
+    list entry never trades detail for the detail entry. ``detail=full`` keeps
+    the previous per-job view. ``sections`` is validated for compatibility but
+    applies to ``creo_get_job`` polls, not to these fixed items.
+    """
     if not 1 <= limit <= 50:
         raise ValueError("limit must be 1–50")
     if detail not in ("compact", "full"):
         raise ValueError("detail must be compact or full")
+    if sections is not None:
+        if detail != "compact":
+            raise ValueError("sections require detail=compact")
+        sections = resolve_sections(sections)
     paths = sorted(JOBS.glob("*/job.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if detail == "compact":
+        return [
+            compact_job_list_item(get_job(p.parent.name, detail="compact")) for p in paths[:limit]
+        ]
     return [get_job(p.parent.name, detail=detail) for p in paths[:limit]]
 
 

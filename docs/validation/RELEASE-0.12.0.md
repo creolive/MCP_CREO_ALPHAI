@@ -15,6 +15,10 @@
 
 发布后用 `gh release download v0.12.0 --dir build\verify\0120 --clobber` 下载两份远端附件，`Get-FileHash -Algorithm SHA256` 与本地构建逐字节一致（源码包 `f18f5437…`、种子包 `4385fa21…`），与 Release body 记载一致。
 
+**2026-11-06 补注（sidecar 补传与后续版本区分）：** 0.12.0 首发只上传两个 ZIP，缺 `.sha256` sidecar（外部反馈 [0.12.0 F02](../../validation/feedback-0.12.0-2026-11-06/MAPPING.md) 记录了连续第二次缺失）。经用户特批，两个 sidecar 已在同一 `v0.12.0` 标签下补传，两个 ZIP 未重建、未覆盖，标签指向未改；2026-11-06 远端核对 `python tools/check_release_assets.py --tag v0.12.0` 返回 `four assets present; both sidecars match their ZIP digests`。**本表仍只记录首发实测的两个 ZIP 大小与摘要**，sidecar 内容即对应 ZIP 摘要，不另立新数值。
+
+后续版本各自独立：[0.13.0](RELEASE-0.13.0.md) 四附件发布，含曲面链 `creo_surface_trim`/`creo_project_curve`/`creo_surface_offset`；[0.14.0](RELEASE-0.14.0.md) 四附件发布，含 W05 `extrude_depth` 回执与 W06 只读预览/失败回滚，另附 W02—W04 补证与偏置 Thin 树复测。这些均属 0.13.0/0.14.0 范围，**不回填为 0.12.0 内容**，也不复用 0.12.0 的附件。
+
 种子包 24 个文件 / 9 个种子，摘要已回填 `docs/seed_package.json`（`compatible_server_version=0.12.0`），重建一次复现同一摘要。两份附件均由标签提交源码构建；发布后下载远端附件复核 SHA256 并回填本表。
 
 ## 构建与核验命令

@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -370,6 +371,166 @@ class CreoStartupTests(unittest.TestCase):
             self.assertTrue(value["startup"]["retry_allowed"])
             start.assert_not_called()
             self.launch.assert_not_called()
+        self.assertEqual(value["mode"], "explicit_live")
+        self.assertTrue(value["live_probe"]["performed"])
+        self.assertEqual(value["channel_policy"], "single_channel_busy_rejects_immediately")
+
+    def test_session_status_reports_busy_probe_without_queueing_a_second_channel(self):
+        self.probe.side_effect = bridge.ToolkitBusy(
+            holder={"job_id": "job" * 8, "model_id": "model_busy", "operation": "execute_plan"}
+        )
+        value = self.startup.session_status()
+        self.assertFalse(value["connected"])
+        self.assertEqual(value["connection_state"], "busy")
+        self.assertEqual(value["mode"], "explicit_live")
+        self.assertTrue(value["live_probe"]["busy"])
+        self.assertFalse(value["live_probe"]["queued"])
+        self.assertFalse(value["live_probe"]["second_channel_opened"])
+        self.assertEqual(value["channel_policy"], "busy_rejects_immediately")
+        self.launch.assert_not_called()
+
+    def test_reused_session_keeps_launch_attempt_and_reports_attempt_identity(self):
+        bridge.write_json(
+            self.coordinator / "state.json",
+            {"state": "timeout", "launch_reserved": True, "launch_attempt": 17},
+        )
+        self.inventory.return_value = self.existing()
+        state = self.drive(retry=True)
+        self.assertEqual(state["state"], "ready")
+        self.assertEqual(state["launch_attempt"], 17)
+        self.launch.assert_not_called()
+        self.assertEqual(state["phase"], "ready")
+        self.assertTrue(state["retry_id"])
+        datetime.fromisoformat(state["started_at"])
+        self.assertIsNone(state["failure_code"])
+        self.assertIsNone(state["terminal_reason"])
+        self.assertEqual(state["budget_scope"], "total")
+        self.assertEqual(state["phase_budget_scope"], "phase")
+        self.assertIsNone(state["next_allowed_retry_at"])
+        self.assertIn("No retry is needed", state["next_allowed_retry_reason"])
+
+    def test_status_polling_never_starts_another_retry(self):
+        fake_thread = Mock()
+        fake_thread.is_alive.return_value = True
+        self.startup._thread = fake_thread
+        first = self.startup.start(retry=True)
+        with patch.object(creo_startup.threading, "Thread") as thread:
+            second = self.startup.start(retry=True)
+            third = self.startup.start(retry=False)
+            thread.assert_not_called()
+        self.assertEqual(first["retry_id"], second["retry_id"])
+        self.assertEqual(second["retry_id"], third["retry_id"])
+        self.launch.assert_not_called()
+        self.probe.assert_not_called()
+
+    def test_status_during_a_toolkit_probe_reports_phase_and_blocks_retry(self):
+        self.inventory.return_value = self.existing()
+        seen = {}
+
+        def probe(**kwargs):
+            seen.update(self.startup.status())
+            return READY
+
+        self.probe.side_effect = probe
+        self.assertEqual(self.drive(retry=True)["state"], "ready")
+        self.assertEqual(seen["state"], "waiting_for_connection")
+        self.assertEqual(seen["phase"], "waiting_for_connection")
+        self.assertFalse(seen["retry_allowed"])
+        self.assertEqual(seen["retry_blocked_by"], "startup_in_progress")
+        self.assertIsNone(seen["next_allowed_retry_at"])
+        self.assertIn("No retry time can be guaranteed", seen["next_allowed_retry_reason"])
+        self.assertTrue(seen["retry_id"])
+
+    def test_busy_toolkit_probe_times_out_with_busy_evidence(self):
+        self.inventory.return_value = self.existing()
+        self.probe.side_effect = bridge.ToolkitBusy(
+            holder={"job_id": "job" * 8, "model_id": "model_busy", "operation": "execute_plan"}
+        )
+        state = self.drive(retry=True)
+        self.assertEqual(state["state"], "timeout")
+        self.assertEqual(state["busy"]["blocking_job_id"], "job" * 8)
+        self.assertEqual(state["busy"]["blocking_operation"], "execute_plan")
+        self.assertEqual(state["failure_code"], "startup_timeout")
+        self.assertTrue(state["retry_allowed"])
+        self.assertEqual(state["launch_attempt"], 0)
+        self.launch.assert_not_called()
+
+    def test_process_with_unreadable_ipc_times_out_with_an_explicit_receipt(self):
+        self.inventory.return_value = self.existing()
+        self.probe.return_value = ABSENT
+        self.startup._attempt_deadline = self.clock.elapsed + 10
+        state = self.drive()
+        self.assertEqual(state["state"], "timeout")
+        self.assertEqual(state["phase"], "waiting_for_connection")
+        self.assertEqual(state["failure_code"], "startup_timeout")
+        self.assertEqual(state["terminal_reason"], state["message"])
+        self.assertEqual(state["budget_scope"], "total")
+        self.assertEqual(state["phase_budget_scope"], "phase")
+        self.assertEqual(state["launch_attempt"], 0)
+        self.assertTrue(state["retry_id"])
+        datetime.fromisoformat(state["started_at"])
+        datetime.fromisoformat(state["deadline_at"])
+        datetime.fromisoformat(state["phase_deadline_at"])
+        self.launch.assert_not_called()
+
+    def test_no_process_with_automatic_start_disabled_is_explained_without_probe(self):
+        self.config["auto_start_creo"] = False
+        state = self.drive()
+        self.assertEqual(state["state"], "disabled")
+        self.assertEqual(state["failure_code"], "automatic_startup_disabled")
+        self.assertTrue(state["retry_allowed"])
+        self.assertEqual(state["launch_attempt"], 0)
+        self.assertIsNone(state["retry_blocked_by"])
+        self.probe.assert_not_called()
+        self.launch.assert_not_called()
+
+    def test_status_reports_both_budget_scopes_while_running(self):
+        fake_thread = Mock()
+        fake_thread.is_alive.return_value = True
+        self.startup._thread = fake_thread
+        self.startup._attempt_deadline = 12.0
+        self.startup._phase_deadline = 5.0
+        self.startup._publish("waiting_for_connection", "waiting", shared=False)
+        self.clock.elapsed = 2.0
+        state = self.startup.status()
+        self.assertEqual(state["remaining_budget_seconds"], 10)
+        self.assertEqual(state["phase_remaining_budget_seconds"], 3)
+        self.assertEqual(state["budget_scope"], "total")
+        self.assertEqual(state["phase_budget_scope"], "phase")
+        self.assertTrue(state["budget_active"])
+        self.assertEqual(state["retry_blocked_by"], "coordinator_running")
+        self.assertIn("No retry time can be guaranteed", state["next_allowed_retry_reason"])
+
+    def test_expired_budget_is_terminal_but_cannot_allow_a_second_retry(self):
+        fake_thread = Mock()
+        fake_thread.is_alive.return_value = True
+        self.startup._thread = fake_thread
+        self.startup._attempt_deadline = 10.0
+        self.startup._phase_deadline = 10.0
+        self.startup._publish("waiting_for_connection", "waiting", shared=False)
+        self.clock.elapsed = 10.0
+        state = self.startup.status()
+        self.assertEqual(state["state"], "timeout")
+        self.assertEqual(state["phase"], "waiting_for_connection")
+        self.assertEqual(state["failure_code"], "startup_timeout")
+        self.assertEqual(state["remaining_budget_seconds"], 0)
+        self.assertEqual(state["phase_remaining_budget_seconds"], 0)
+        self.assertFalse(state["retry_allowed"])
+        self.assertEqual(state["retry_blocked_by"], "coordinator_running")
+        self.assertIsNone(state["next_allowed_retry_at"])
+        self.launch.assert_not_called()
+
+    def test_window_observation_reports_unreadable_title_without_activation(self):
+        from creo_mechdog import window_observations as windows
+
+        with patch.object(windows, "_enumerate_windows", return_value=[(1, True, True)]):
+            value = windows.window_observations({1})
+        row = value[1]
+        self.assertEqual(row["state"], "visible")
+        self.assertTrue(row["visible_hung_window_observed"])
+        self.assertFalse(row["hung_implies_modal"])
+        self.assertIsNone(row["window_title"])
+        self.assertIn("not read", row["window_title_unavailable_reason"])
 
 
 class WindowsCoordinationTests(unittest.TestCase):

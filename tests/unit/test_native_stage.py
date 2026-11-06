@@ -130,6 +130,15 @@ class NativeSubStageSource(unittest.TestCase):
     def test_phase_lines_are_not_removed(self):
         self.assertIn('log("PHASE=%s\\n", phase.c_str());', self.source)
 
+    def test_connect_is_bracketed_by_timed_substages(self):
+        # R12/BUG-109: connect time has to be attributable on its own, so a slow
+        # session attach is not folded into the first operation stage.
+        connect = self.source.index("CK(connect_creo(&process));")
+        before = self.source.rfind('generic_substage("connect");', 0, connect)
+        after = self.source.find('generic_substage("connected");', connect)
+        self.assertGreater(before, 0)
+        self.assertGreater(after, connect)
+
 
 if __name__ == "__main__":
     unittest.main()

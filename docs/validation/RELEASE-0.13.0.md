@@ -1,0 +1,64 @@
+# 0.13.0 发布记录（2026-11-05，已合入 main 并发布）
+
+- 条目：[FEAT-039](../work-items/FEAT-039.md)（曲面链 S02/S03/S04/S05/S06/S08/S09/S10）+ W01 策略层；MINOR（功能批），公开工具 **100**（运行时 `creo_capabilities` 的 `tool_count=100`、`enabled_tool_count=100`，2026-11-05 复测；`creo_surface_offset` 加入后从 99 升为 100）。
+- 基线：实际已发布版本是 **0.12.1**（`docs/development/RELEASING.md`；标签 `v0.12.1`）。`0.12.2` 只是从未发布、从未打标签的预置号，本批含新增能力，按 MINOR 提升为 **0.13.0**（`version.py` = 0.13.0，README 与两份种子清单同步）。
+- 本分支：`codex/DEV-067-alphai-plan`，基线提交 `1acf5a1ecbb5c815e0405d50c641b7f85da1fbce`。
+- 目标版本：标签 `v0.13.0`、Release 与四份附件。按 S10 规则，本记录先前只覆盖开发验收；2026-11-05 获得发布指派，按 `docs/development/RELEASING.md` 合入 main、打标签、上传附件并做远端核对，远端核对结果记录于对应发布 PR（不再向 main 追加提交）。
+
+## 验收范围
+
+| 项目 | 结果 |
+| --- | --- |
+| 全量单元测试 `python tools/test_unit.py` | **2425 项通过** |
+| 语言与格式 `python tools/dev_check.py --skip-unit` | `success: true`，无新增回归 |
+| 原生编译 `python bridge.py build` | 通过，`build/creo_worker.exe` 重建 |
+| 实机 `--case chain_open` | 13/13，run `20261105-054951-149100` |
+| 实机 `--case chain_closed` | 11/11，run `20261105-055037-085600` |
+| 实机 `--case join` | 13/13，runs `20261105-055327-176100`、`20261105-055415-518700`（连续三次复跑稳定） |
+| 实机 `--case sweep_surface` | 11/11，run `20261105-073051-135500`（开放 2400.000 mm²、加盖 4000.000 mm² 且闭合、实体化 15999.999999999998 mm³） |
+| 实机 `creo_surface_offset`（40×20 偏置 5 mm，双侧） | 两侧 succeeded：体积 **3999.9999999999995 mm³**、实测距离 **4.999999999999999 mm**、保存重载通过 |
+| 实机 `--example examples/p12_surface_blade.json` / `examples/surface_trim_merge.json` | 各三阶段通过（修剪 800 → 600.000 mm²、加厚 committed、保存重载通过） |
+| 种子包 | 24 文件、9 种子；确定性重建两次同指纹 SHA256 `e5808ff18049f94a74436636c6633b1867aa487224567dc31738c644c8ad685b`；`docs/seed_package.json`、`docs/seed_manifest.json`、`seed_library/seed_manifest.json` 三方一致 |
+
+源码身份（本次检查）：`version.py` = 0.13.0；`tools/dev_check.py` 受检源码指纹 `a05ab16a9c612a3715f690fb299e4ee6161fa507347a637cafca669f2f1dfd05`；基线提交 `1acf5a1e`，工作区 `dirty=true`（本版改动尚未提交）；最终受测提交以合并到主干后的提交为准。
+
+## 交付清单（逐项区分完成度）
+
+| 条目 | 完成度 | 依据 |
+| --- | --- | --- |
+| S02 曲面修剪 | ✅ 实机公开 | `creo_surface_trim`，保留侧语义由实机测定 |
+| S03 join | 🟡 **需求可测量、算子仍门禁** | trim+加厚给出 1400 mm² / 2800 mm³；`creo_quilt_merge` 四条原生路线均建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT` |
+| S04 投影曲线 | ✅ 实机公开 | `creo_project_curve`，实测 40.000 mm 与 25.133 mm |
+| S05 曲面生成 | 🟡 **曲面扫掠实机公开、多截面放样仍缺** | 2400/4000 mm²、16000 mm³；`ProSweep.h` 只支持常量截面，本机无 `ProBlend.h` |
+| S06 实体化判据 | ✅ 实机公开 | 体积 6283.185307179587 mm³（2000π）、开放面拒绝回滚 |
+| S07 偏置 | ✅ 实机公开（`creo_surface_offset`） | 双侧 5 mm：体积 **3999.9999999999995 mm³**、实测距离 **4.999999999999999 mm**、保存重载通过；`surface_trim` 的 `offset_mm` 仍拒（thin trim 实测不移动切口） |
+| S08 完整链路 | ✅ 实机 | 四条用例 + 两个可运行示例 |
+| S09 模块化 | ✅ | `surface_ops` / `schema_base` 拆分，根目录纯兼容导出 |
+| S10 集成与发布交付 | ✅ **已发布** | 发布 PR #13 合入 `main`（合并提交 `d90d28e163f096f602ca06f60ccd11a91274172a`），标签 `v0.13.0`（附注标签对象 `1ae208066fe7d7a18610425ce17aae34a14a0df5`，指向该合并提交），Release 与四附件已上传、远端核对通过 |
+| W01 端点焊接本体 | ✅ **本体已交付（坐标规整路线）** | 实机：5e-5 mm 间隙 → 移动 2.5e-5 mm（≤ 上限）→ 残差 0.0；默认路径不动；无上限的请求被拒 |
+| W02—W06 | ⚪ **0.13.0 发布时未复核**（2026-11-05 发布后已补证，见 [FEAT-039](../work-items/FEAT-039.md) 的 W05/W06 段与 BUG-102/094/095） | draft 双向、基准面方向矩阵、草图 origin 矩阵、`extrude_depth` 回执与只读预览均为发布后补证，不属 0.13.0 发布范围 |
+
+## 未验证范围
+
+- 多截面放样/边界混合、单一合并 quilt：保持门禁（契约 §2.7/§2.8/§2.8c/§2.8e）；quilt 偏置已由 `creo_surface_offset` 公开（§2.8f/§2.8g），但 `surface_trim` 的 `offset_mm` 仍拒。参照树读取链路已产品化（`tools/read_reference_tree.py`），实测 Direct Blend 的元素树抽取返回 -18，即树路线关闭；种子库只有两个放样参照件，Merge/Offset 参照件仍需手工件。
+- W01 原案 gear10 体积基准；端点焊接只覆盖直线端点，弧端点按“unsupported_entity_or_point”跳过。
+- Creo 9 无本机 SDK，构建与运行时未验收；Creo 10 不要求独立复测；BUG-001 既有边界继续适用。
+- WorkBuddy 黑盒验收未执行：提示词见 [WORKBUDDY-0.13.0.md](WORKBUDDY-0.13.0.md)（待执行）。
+
+## 附件与远端核对
+
+发布应有四个文件：`MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256`。发布时逐个列出文件名上传（禁止 `*.zip` 通配），并用 `python tools/check_release_assets.py --tag v0.13.0` 核对四附件齐全、两个 sidecar 与对应 ZIP 摘要一致；远端核对结果记录于发布 PR。
+
+当前状态：**已发布**（2026-11-05）。四附件远端核对：`gh release view v0.13.0` 返回恰好四个附件，`tools/check_release_assets.py --tag v0.13.0` 确认两个 sidecar 与对应 ZIP 摘要一致、标签指向 `main` 合并提交 `d90d28e`。
+
+## 发布执行结果（2026-11-05）
+
+| 项 | 值 |
+| --- | --- |
+| 发布 PR | #13（`codex/DEV-067-alphai-plan` → `main`） |
+| `main` 合并提交 | `d90d28e163f096f602ca06f60ccd11a91274172a` |
+| 标签 | `v0.13.0`（附注标签对象 `1ae208066fe7d7a18610425ce17aae34a14a0df5`） |
+| Release | https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.13.0 （创建于 2026-11-05T14:31:47Z，非草稿、非预发布） |
+| 附件（逐个列名上传） | `MCP_CREO_MechDog-0.13.0-source.zip`、`MCP_CREO_MechDog-0.13.0-source.zip.sha256`、`MCP_CREO_MechDog-0.13.0-seed-library.zip`、`MCP_CREO_MechDog-0.13.0-seed-library.zip.sha256` |
+| 远端核对 | 恰四个附件、无多余文件；两 sidecar 与对应 ZIP 摘要一致；标签提交与 `main` 合并提交同一 |
+

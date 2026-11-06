@@ -7,19 +7,14 @@ import re
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
-    BaseModel,
     BeforeValidator,
-    ConfigDict,
     Field,
     TypeAdapter,
-    ValidationError,
-    ValidatorFunctionWrapHandler,
-    WrapValidator,
     field_validator,
     model_validator,
 )
-from pydantic_core import PydanticCustomError
 
+from creo_mechdog import schema_base as _schema_base
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
 from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
@@ -30,34 +25,17 @@ from creo_mechdog.references import (
     validate_planar_reference,
     validate_sketch_plane_frame,
 )
+from creo_mechdog.schema_base import Label, Point2, Point3, Positive, StrictModel
 from creo_mechdog.sheetmetal import first_wall_section_problem
+from creo_mechdog.surface_ops import (
+    ProjectCurveOp,
+    QuiltMergeOp,
+    SurfaceTrimOp,
+    quilt_reference_problem,
+)
 
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-
-
-Point2 = Annotated[list[float], Field(min_length=2, max_length=2)]
-Point3 = Annotated[list[float], Field(min_length=3, max_length=3)]
-_LABEL_PATTERN = r"^[a-z][a-z0-9_]{0,27}$"
-
-
-def _explain_label_pattern(value: Any, handler: ValidatorFunctionWrapHandler) -> str:
-    try:
-        return handler(value)
-    except ValidationError as exc:
-        if any(error["type"] == "string_pattern_mismatch" for error in exc.errors()):
-            raise PydanticCustomError(
-                "string_pattern_mismatch",
-                "Label must start with a lowercase letter, contain only [a-z0-9_], "
-                "and be at most 28 characters; for example i001_part1",
-                {"pattern": _LABEL_PATTERN},
-            ) from None
-        raise
-
-
-Label = Annotated[str, Field(pattern=_LABEL_PATTERN), WrapValidator(_explain_label_pattern)]
-Positive = Annotated[float, Field(gt=0, le=100000)]
+# Compatibility: the label pattern stays reachable from this module.
+_LABEL_PATTERN = _schema_base._LABEL_PATTERN
 
 
 def _rotation_matrix(value: Any) -> Any:
@@ -89,10 +67,40 @@ RotationMatrix = Annotated[
 ]
 
 
+#: BUG-045/FEAT-012: the one published mapping. Every pose field below states
+#: it verbatim so the execute_plan schema (both assembly branches) cannot drift
+#: from the native row-vector implementation.
+ROTATION_CONVENTION = "row_vectors_local_to_parent"
+ROTATION_FORMULA = "p_parent = p_local * rotation_matrix + translation"
+
+
 class AssemblyPose(StrictModel):
-    translation: Point3 = [0, 0, 0]
-    rotation: Point3 | None = None
-    rotation_matrix: RotationMatrix | None = None
+    translation: Point3 = Field(
+        default=[0, 0, 0],
+        description=(
+            "Translation in the parent frame's units (mm), added after the rotation: "
+            f"{ROTATION_FORMULA}."
+        ),
+    )
+    rotation: Point3 | None = Field(
+        default=None,
+        description=(
+            "Euler angles in degrees, applied X then Y then Z and expanded to the same "
+            "row-vector matrix; mutually exclusive with rotation_matrix. "
+            f"Mapping: {ROTATION_FORMULA}."
+        ),
+    )
+    rotation_matrix: RotationMatrix | None = Field(
+        default=None,
+        description=(
+            f"Row-vector local-to-parent rotation: {ROTATION_FORMULA} "
+            "(p_local is a row vector; the matrix is not a column-vector transpose). "
+            "It is a 3x3 matrix whose rows are the local X/Y/Z axes in the parent frame, "
+            "must be orthogonal (R*R^T = I) with determinant +1 within 1e-6, and is "
+            "mutually exclusive with rotation (Euler). The values are applied exactly as "
+            "given: never transposed, orthonormalized or repaired."
+        ),
+    )
 
     @model_validator(mode="after")
     def orientation_valid(self):
@@ -273,6 +281,22 @@ class SketchOp(StrictModel):
     plane: Literal["XY", "XZ", "YZ"] | dict[str, Any] = "XY"
     offset: float = 0
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensions: list[SketchDimension] = []
     constraints: list[SketchConstraint] = []
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
@@ -373,6 +397,22 @@ class SketchGeometryOp(StrictModel):
     op: Literal["update_sketch_geometry"]
     sketch: Label
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
+    # FEAT-039/W01: the endpoint weld policy. The create and the update
+    # entry share one definition, so the same request means the same thing
+    # on both paths. "report" only reports the pairing evidence, "reject"
+    # refuses a profile whose endpoints could be welded, and "weld" stays
+    # refused until the native solver exists.
+    endpoint_policy: Literal["report", "reject", "weld"] = "report"
+    # The weld plan the policy layer derived: the native side regularises
+    # exactly these endpoint pairs before it writes the entities.
+    weld_pairs: list[dict[str, Any]] = []
+    max_endpoint_move_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("max_endpoint_move_mm", mode="before")
+    @classmethod
+    def _endpoint_move_is_finite_positive(cls, value):
+        return validate_tolerance_mm(value)
+
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
     # Same fidelity contract as SketchOp; both entries share one definition.
     geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
@@ -701,6 +741,29 @@ class ShellOp(StrictModel):
 class DimensionValue(StrictModel):
     id: int
     value: float
+    # FEAT-004 guards: pin what the plan observed so a shifted dimension is
+    # refused instead of moved. All three are optional, so old payloads keep
+    # their exact behaviour.
+    expected_value: float | None = None
+    expected_symbol: str | None = None
+    expected_owner: str | int | None = None
+
+    @field_validator("value", "expected_value", mode="before")
+    @classmethod
+    def numeric_value(cls, value: Any) -> Any:
+        # bool is an int in Python; True would otherwise become 1.0 mm.
+        if isinstance(value, bool):
+            raise ValueError("dimension values are numbers of model units, not booleans")
+        return value
+
+    @field_validator("expected_owner", mode="before")
+    @classmethod
+    def owner_reference(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("expected_owner is a feature id or label, not a boolean")
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("expected_owner must not be empty")
+        return value
 
 
 class DimensionsOp(StrictModel):
@@ -946,6 +1009,9 @@ class FlangeRelief(StrictModel):
     # pre-T11 tree) and "rectangular" with an explicit blind width and depth are
     # admitted: width and depth stay absolute model units, are never derived from
     # the sheet thickness, and no corner rule is guessed from the edge geometry.
+    # This is bend-end relief, not corner relief or a miter: it is not proven to
+    # resolve corner overlap, and the adjacent_bend_ends guard still refuses such
+    # a flange when this relief is supplied.
     # Rip/stretch/obround/param, corner relief, miter cuts and edge rips remain
     # unsupported and are rejected instead of being silently replaced by "none".
     type: Literal["none", "rectangular"] = "none"
@@ -980,16 +1046,55 @@ class FlangeRelief(StrictModel):
         return self
 
 
+class FlangeMiterCuts(StrictModel):
+    # FEAT-014 2026-11-06. The native miter-cut section of the same flange feature
+    # (ProSmtFlangeWall.h: PRO_E_SMT_MTR_CUTS), GAP width and offset in model
+    # units. A flange whose attachment-edge ends abut existing bends must carry
+    # this request to pass the adjacent_bend_ends guard; without it the guard
+    # keeps refusing before creation. The live geometry meaning of the gap is
+    # measured by the box driver - this request alone claims no cut amount.
+    width: Annotated[float, Field(gt=0, le=100000)]
+    offset: Annotated[float, Field(ge=0, le=100000)] | None = None
+
+    @field_validator("width", "offset", mode="before")
+    @classmethod
+    def numeric_dimension(cls, value: Any) -> Any:
+        # bool is an int in Python; accepting True as a 1 mm gap would be a
+        # silent reinterpretation instead of a rejected request.
+        if isinstance(value, bool):
+            raise ValueError("miter_cuts width and offset are numbers of model units, not booleans")
+        return value
+
+    @model_validator(mode="after")
+    def miter_valid(self):
+        if self.offset is None:
+            self.offset = self.width
+        return self
+
+
 class SheetmetalFlangeOp(StrictModel):
     op: Literal["sheetmetal_flange"]
     label: Label
-    edge: dict[str, Any]
+    # Bare current-geometry edge reference. The plan path is operations[i].edge;
+    # the value is {kind:'edge',id:N} with the edge id read from the current
+    # creo_inspect_model (no edge/reference wrapper, no historical id).
+    edge: dict[str, Any] = Field(
+        description=(
+            "Bare edge reference {kind:'edge',id:N}; the plan path is operations[i].edge and "
+            "the id must be the current edge id from creo_inspect_model"
+        )
+    )
     height: Positive
     angle: Annotated[float, Field(gt=0, lt=180)] = 90
     radius: Positive = 1
     flip: bool = False
     y_factor: Annotated[float, Field(gt=0, le=1)] = 0.5
     relief: FlangeRelief | None = None
+    # FEAT-014: optional native miter cuts on the same flange feature. An explicit
+    # request is the only way a wall whose attachment-edge ends abut existing
+    # bends passes the adjacent_bend_ends guard; omitting it keeps the previous
+    # refusal exactly. relief and miter_cuts are orthogonal and may be combined.
+    miter_cuts: FlangeMiterCuts | None = None
     # DEV-051 T05 third-wall contrast: shorten the wall at both chain ends by this
     # absolute model-unit length (both depth sides become blind with this offset).
     # Omitting it keeps the previous full-edge tree. Whether Creo measures the blind
@@ -1536,6 +1641,23 @@ class ThickenOp(StrictModel):
     new_body: bool = False
 
 
+class SurfaceOffsetOp(StrictModel):
+    op: Literal["surface_offset"]
+    label: Label
+    reference: dict[str, Any]
+    distance: Positive
+    side: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def reference_is_a_quilt(self):
+        # FEAT-039/S07: an offset acts on a surface, so the reference must be a
+        # quilt; a body or a datum plane is refused before a job exists.
+        problem = quilt_reference_problem(self.reference, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_offset reference {problem}")
+        return self
+
+
 class SolidifyOp(StrictModel):
     op: Literal["solidify"]
     label: Label
@@ -1543,6 +1665,18 @@ class SolidifyOp(StrictModel):
     side: Literal["positive", "negative"] = "positive"
     mode: Literal["add", "cut"] = "add"
     new_body: bool = False
+
+    @model_validator(mode="after")
+    def reference_matches_mode(self):
+        # FEAT-039/S06: adding a solid needs one quilt; a body is not a quilt
+        # and the boolean body tools cannot stand in for the quilt semantics.
+        # The cut mode trims a solid with a datum plane and keeps its own
+        # reference spellings.
+        if self.mode == "add":
+            problem = quilt_reference_problem(self.reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"solidify reference {problem}")
+        return self
 
 
 class BooleanOp(StrictModel):
@@ -1639,7 +1773,11 @@ Operation = Annotated[
         PointsOp,
         FillOp,
         ThickenOp,
+        SurfaceOffsetOp,
         SolidifyOp,
+        SurfaceTrimOp,
+        QuiltMergeOp,
+        ProjectCurveOp,
         BooleanOp,
         RibOp,
     ],
@@ -1648,14 +1786,48 @@ Operation = Annotated[
 OPERATIONS = TypeAdapter(list[Operation])
 
 
+def dump_plan_operations(operations) -> list[dict]:
+    """Dump validated plan models so extrude omissions stay visible (W05).
+
+    ExtrudeOp applies the 1 mm / blind defaults for execution, but the receipt
+    must distinguish an omitted field from an explicit one, so a depth or
+    depth_type the caller never set is dropped here. validate_operations
+    re-applies the defaults and marks them in defaulted_fields.
+    """
+    dumped = []
+    for op in operations:
+        data = op.model_dump(exclude_none=True)
+        provided = getattr(op, "model_fields_set", ())
+        if data.get("op") == "extrude":
+            for field in ("depth", "depth_type"):
+                if field not in provided:
+                    data.pop(field, None)
+        dumped.append(data)
+    return dumped
+
+
 def validate_operations(operations: list[dict]) -> list[dict]:
     if not 0 <= len(operations) <= 200:
         raise ValueError("A plan supports at most 200 operations")
+    # W05: the model below applies the depth/depth_type defaults, which would
+    # erase the difference between "omitted" and "explicitly 1 / blind". The
+    # omission is therefore captured from the caller's dicts (dump_plan_operations
+    # already removed the keys the plan entry never set) and marked on the
+    # normalized operation for the native receipt.
+    defaulted_extrude_fields: dict[int, list[str]] = {}
+    for index, raw in enumerate(operations):
+        if not isinstance(raw, dict) or raw.get("op") != "extrude":
+            continue
+        missing = [field for field in ("depth", "depth_type") if field not in raw]
+        if missing:
+            defaulted_extrude_fields[index] = missing
     result = OPERATIONS.validate_python(operations)
     labels = [x.label for x in result if hasattr(x, "label")]
     if len(labels) != len(set(labels)):
         raise ValueError("Feature labels must be unique within a plan")
     dumped = [x.model_dump(exclude_none=True) for x in result]
+    for index, missing in defaulted_extrude_fields.items():
+        dumped[index]["defaulted_fields"] = missing
 
     def finite(x):
         if isinstance(x, float) and not math.isfinite(x):

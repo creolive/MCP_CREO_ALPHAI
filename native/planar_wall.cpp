@@ -107,6 +107,11 @@ struct PlanarWallBodies {
     double thickness = 0;
     bool thickness_known = false;
     int thickness_code = 0;
+    // FEAT-058/R03: how the gauge was (or was not) obtained. A missing SDK
+    // declaration and a failed call both used to publish one null, so the
+    // receipt could not say which had happened.
+    std::string gauge_source = "not_measured";
+    std::string gauge_reason;
     bool linked = false;
     bool linked_known = false;
 };
@@ -139,16 +144,31 @@ static PlanarWallBodies planar_wall_bodies() {
             material_index = i;
         }
     }
-    if (material_index >= 0) {
+    if (evidence.material != 1) {
+        // The gauge belongs to the wall, so exactly one body may carry its
+        // material. Reading the largest of several would publish a number that
+        // cannot be attributed to this wall.
+        evidence.gauge_reason = "thickness_material_body_not_unique";
+    } else {
 #ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+        evidence.gauge_source = "api";
         double value = 0;
         evidence.thickness_code = ProSmtBodyThicknessValueGet(&bodies[material_index], &value);
-        evidence.thickness_known = evidence.thickness_code == PRO_TK_NO_ERROR;
+        evidence.thickness_known =
+            evidence.thickness_code == PRO_TK_NO_ERROR && std::isfinite(value);
+        if (evidence.thickness_code != PRO_TK_NO_ERROR)
+            evidence.gauge_reason = "thickness_api_query_failed";
+        else if (!std::isfinite(value))
+            evidence.gauge_reason = "thickness_value_not_finite";
         if (evidence.thickness_known)
             evidence.thickness = value;
 #else
         evidence.thickness_code = -1; // -1: this SDK generation declares no body gauge read
+        evidence.gauge_source = "missing_api";
+        evidence.gauge_reason = "thickness_api_unavailable";
 #endif
+    }
+    if (material_index >= 0) {
 #ifdef MECHDOG_HAS_ProSmtBodyIsLinkedToPart
         ProBoolean linked = PRO_B_FALSE;
         if (ProSmtBodyIsLinkedToPart(&bodies[material_index], &linked) == PRO_TK_NO_ERROR) {
@@ -163,10 +183,48 @@ static PlanarWallBodies planar_wall_bodies() {
 
 static void planar_wall_log_bodies(const PlanarWallBodies &bodies, const char *phase) {
     log("PLANAR_WALL_BODIES phase=%s total=%d sheetmetal=%d material=%d thickness_mm=%.9f "
-        "thickness_known=%d thickness_code=%d linked=%d linked_known=%d\n",
+        "thickness_known=%d thickness_code=%d gauge_source=%s gauge_reason=%s linked=%d "
+        "linked_known=%d\n",
         phase, bodies.total, bodies.sheetmetal, bodies.material, bodies.thickness,
-        (int)bodies.thickness_known, bodies.thickness_code, (int)bodies.linked,
+        (int)bodies.thickness_known, bodies.thickness_code, bodies.gauge_source.c_str(),
+        bodies.gauge_reason.empty() ? "-" : bodies.gauge_reason.c_str(), (int)bodies.linked,
         (int)bodies.linked_known);
+}
+
+// Why the gauge could not be read, for the refusal message. The reason is kept
+// next to the raw Toolkit code instead of being replaced by it.
+static std::string planar_wall_gauge_failure(const PlanarWallBodies &bodies) {
+    if (!bodies.gauge_reason.empty())
+        return bodies.gauge_reason;
+    return "ProSmtBodyThicknessValueGet=" + std::to_string(bodies.thickness_code);
+}
+
+// FEAT-058/R03: one gauge receipt per operation. ``status`` separates a
+// verified reading from a missing SDK declaration (unverified), a reading that
+// disagrees (mismatch) and a gauge that could not be measured at all
+// (unavailable); ``source`` says whether the API answered, was absent or was
+// never asked; ``context`` ties the value to this plan or to the loaded file.
+// Nothing here invents a value: an unreadable gauge publishes null.
+static J planar_wall_thickness_validation(const PlanarWallBodies &bodies, double thickness,
+                                          const char *context) {
+    J block = {{"status", "unavailable"},
+               {"source", bodies.gauge_source},
+               {"value_mm", nullptr},
+               {"reason", bodies.gauge_reason.empty() ? J(nullptr) : J(bodies.gauge_reason)},
+               {"context", context}};
+    if (bodies.thickness_known) {
+        block["value_mm"] = bodies.thickness;
+        if (fabs(bodies.thickness - thickness) <= 1e-6) {
+            block["status"] = "verified";
+            block["reason"] = nullptr;
+        } else {
+            block["status"] = "mismatch";
+            block["reason"] = "thickness_measured_mismatch";
+        }
+    } else if (bodies.gauge_source == "missing_api") {
+        block["status"] = "unverified";
+    }
+    return block;
 }
 
 // A span-only envelope accepted a wall that grew on the opposite side of the
@@ -374,9 +432,8 @@ static void generic_sheetmetal_planar_wall(const J &op) {
                                  " mm; the sheetmetal gauge was not applied");
 #ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
     if (!bodies.thickness_known)
-        throw std::runtime_error("The wall body thickness could not be read (ProSmtBody"
-                                 "ThicknessValueGet=" +
-                                 std::to_string(bodies.thickness_code) +
+        throw std::runtime_error("The wall body thickness could not be read (" +
+                                 planar_wall_gauge_failure(bodies) +
                                  "); the gauge cannot be verified independently");
 #endif
 
@@ -415,6 +472,8 @@ static void generic_sheetmetal_planar_wall(const J &op) {
          {"thickness_measured_mm", bodies.thickness_known ? J(bodies.thickness) : J(nullptr)},
          {"thickness_verified", bodies.thickness_known},
          {"thickness_body_code", bodies.thickness_code},
+         {"thickness_validation",
+          planar_wall_thickness_validation(bodies, thickness, "current_plan")},
          {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
 }
 
@@ -447,8 +506,8 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
                                  " mm; the sheetmetal gauge did not survive save/reload");
 #ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
     if (!loaded.thickness_known)
-        throw std::runtime_error("The saved wall body thickness could not be read (code " +
-                                 std::to_string(loaded.thickness_code) +
+        throw std::runtime_error("The saved wall body thickness could not be read (" +
+                                 planar_wall_gauge_failure(loaded) +
                                  "); the gauge cannot be verified before resizing");
 #endif
 
@@ -583,5 +642,9 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
          {"thickness_verified", bodies.thickness_known},
          {"thickness_body_code", bodies.thickness_code},
          {"thickness_loaded_mm", loaded.thickness_known ? J(loaded.thickness) : J(nullptr)},
+         {"thickness_validation",
+          planar_wall_thickness_validation(bodies, thickness, "current_plan")},
+         {"thickness_loaded_validation",
+          planar_wall_thickness_validation(loaded, thickness, "saved_loaded")},
          {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
 }

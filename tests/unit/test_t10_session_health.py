@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import bridge
+import creo_startup
 from creo_mechdog import session_health
 
 NOW = datetime(2026, 10, 26, 12, 0, 0, tzinfo=timezone.utc)
@@ -241,6 +242,88 @@ class HealthStatusRules(HealthFixture):
         self.assertFalse(value["historic_damage_signals"][0]["current_session"])
 
 
+class HealthFactProvenance(HealthFixture):
+    def test_facts_carry_source_time_and_staleness(self):
+        self.save_job("c" * 31 + "a", "session-a", 30)
+        value = self.snapshot()
+        for fact in (value["facts"]["last_connection"], value["facts"]["last_save"]):
+            self.assertEqual(fact["source"], "recorded_job")
+            self.assertEqual(fact["at"], self.at(30))
+            self.assertFalse(fact["stale"])
+            self.assertGreaterEqual(fact["age_seconds"], 0)
+        self.assertFalse(value["session"]["identity_stale"])
+        self.assertEqual(value["session"]["identity_observed_at"], self.at(30))
+        self.assertEqual(value["path"], "local_evidence")
+        self.assertIn("no Toolkit connection", value["path_note"])
+        self.assertEqual(value["toolkit_connections"], 0)
+
+    def test_probe_attributed_and_recorded_sources_are_distinguishable(self):
+        self.save_job("c" * 31 + "b", "session-a", 120)
+        self.readonly_job("c" * 31 + "c", "session-a", 90)
+        self.write_job(
+            "c" * 31 + "d",
+            {
+                "status": "succeeded",
+                "model_id": "model_plate",
+                "finished_at": self.at(60),
+                "result": {
+                    "success": True,
+                    "connected": True,
+                    "saved_file_reloaded_and_verified": True,
+                    "part_file": "output/plate.prt",
+                },
+            },
+        )
+        (self.root / "build" / "toolkit_health.json").write_text(
+            json.dumps(
+                {
+                    "connected": True,
+                    "connection_state": "connected",
+                    "checked_at": self.at(10),
+                }
+            ),
+            encoding="utf-8",
+        )
+        value = self.snapshot()
+        self.assertEqual(value["facts"]["last_connection"]["source"], "toolkit_probe")
+        self.assertEqual(value["facts"]["last_save"]["source"], "attributed")
+        self.assertEqual(len(value["facts"]["historic_saves"]), 1)
+        self.assertEqual(value["facts"]["historic_saves"][0]["source"], "recorded_job")
+        self.assertFalse(value["facts"]["historic_saves"][0]["stale"])
+
+    def test_historic_failure_does_not_erase_the_current_connected_fact(self):
+        self.failed_save_job("c" * 31 + "e", "session-a", 900)
+        self.readonly_job("c" * 31 + "f", "session-b", 20)
+        value = self.snapshot()
+        self.assertEqual(value["status"], "unknown")
+        self.assertNotEqual(value["status"], "ok")
+        connection = value["facts"]["last_connection"]
+        self.assertEqual(connection["outcome"], "connected")
+        self.assertEqual(connection["source"], "recorded_job")
+        self.assertFalse(connection["stale"])
+        self.assertEqual(len(value["historic_damage_signals"]), 1)
+        historic = value["historic_damage_signals"][0]
+        self.assertTrue(historic["stale"])
+        self.assertEqual(historic["source"], "recorded_job")
+        self.assertFalse(value["session"]["identity_stale"])
+
+    def test_worker_file_time_is_listed_as_suspected_evidence_only(self):
+        (self.root / "build" / "creo_worker.exe").write_bytes(b"fixture")
+        self.save_job("c" * 31 + "g", "session-a", 30)
+        value = self.snapshot()
+        worker = value["facts"]["worker"]
+        self.assertTrue(worker["available"])
+        self.assertEqual(worker["causality"], "suspected_only")
+        self.assertIn("only suspected", worker["note"])
+        self.assertIn("suspected correlation", " ".join(value["caveats"]))
+
+    def test_missing_worker_file_is_reported_without_a_probe(self):
+        self.save_job("c" * 31 + "h", "session-a", 30)
+        value = self.snapshot()
+        self.assertFalse(value["facts"]["worker"]["available"])
+        self.assertEqual(value["facts"]["worker"]["causality"], "unproven")
+
+
 class HealthEvidenceBounds(HealthFixture):
     def test_unreadable_evidence_is_unknown(self):
         self.save_job("7" * 32, "session-a", 30)
@@ -326,6 +409,10 @@ class HealthIsReadOnly(HealthFixture):
             patch.object(bridge, "session_status", side_effect=AssertionError("probe made")),
             patch.object(bridge, "build_native", side_effect=AssertionError("worker built")),
             patch.object(bridge, "write_json", side_effect=AssertionError("file written")),
+            patch.object(
+                creo_startup, "launch_creo", side_effect=AssertionError("process started")
+            ),
+            patch.object(creo_startup, "inventory", side_effect=AssertionError("process scanned")),
         ):
             first = self.snapshot()
             second = self.snapshot()
@@ -333,6 +420,8 @@ class HealthIsReadOnly(HealthFixture):
         self.assertTrue(first["read_only"])
         self.assertEqual(first["toolkit_connections"], 0)
         self.assertEqual(second["toolkit_connections"], 0)
+        self.assertEqual(first["path"], "local_evidence")
+        self.assertIn("separate explicit creo_session_status", first["path_note"])
 
     def test_cached_evidence_still_reports_current_ages(self):
         self.save_job("b" * 31 + "b", "session-a", 30)
