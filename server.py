@@ -1482,7 +1482,7 @@ async def creo_shell(
 async def creo_set_dimensions(
     model_id: str, expected_revision: int, values: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Modify native model dimensions by IDs returned in inspection. values=[{id:int,value:float}]. Regenerate, save and verify."""
+    """Modify native model dimensions by IDs returned in inspection. values=[{id:int,value:float,expected_value?:float,expected_symbol?:str,expected_owner?:str|int}]. Optional expected_* pins are checked against the live dimension before the first write: a mismatch, an unknown pin target (symbol/owner/value not readable) or a relation-driven dimension refuses the whole plan, so a stale plan cannot move a shifted dimension. Regenerate, save and verify."""
     return await invoke(
         general.submit,
         [{"op": "set_dimensions", "values": values}],

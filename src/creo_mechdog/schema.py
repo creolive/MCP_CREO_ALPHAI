@@ -741,6 +741,29 @@ class ShellOp(StrictModel):
 class DimensionValue(StrictModel):
     id: int
     value: float
+    # FEAT-004 guards: pin what the plan observed so a shifted dimension is
+    # refused instead of moved. All three are optional, so old payloads keep
+    # their exact behaviour.
+    expected_value: float | None = None
+    expected_symbol: str | None = None
+    expected_owner: str | int | None = None
+
+    @field_validator("value", "expected_value", mode="before")
+    @classmethod
+    def numeric_value(cls, value: Any) -> Any:
+        # bool is an int in Python; True would otherwise become 1.0 mm.
+        if isinstance(value, bool):
+            raise ValueError("dimension values are numbers of model units, not booleans")
+        return value
+
+    @field_validator("expected_owner", mode="before")
+    @classmethod
+    def owner_reference(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("expected_owner is a feature id or label, not a boolean")
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("expected_owner must not be empty")
+        return value
 
 
 class DimensionsOp(StrictModel):
