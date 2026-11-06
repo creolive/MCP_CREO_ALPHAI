@@ -47,6 +47,25 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(server, "families", return_value=families):
             self.assertEqual(server._support_status()["file_adoption"]["status"], "not_available")
 
+    async def test_operation_and_gated_counts_agree_with_registration(self):
+        listed = await server.mcp.list_tools()
+        payload = server._capabilities_payload(
+            [{"name": tool.name, "description": tool.description} for tool in listed]
+        )
+        registered = list(capabilities.REGISTERED_OPERATIONS)
+        gated = set(capabilities.UNAVAILABLE_OPERATIONS)
+        self.assertEqual(payload["registered_operations"], registered)
+        self.assertEqual(payload["operations"], [op for op in registered if op not in gated])
+        self.assertEqual(len(registered), len(payload["operations"]) + len(gated))
+        self.assertEqual(
+            payload["unavailable_tools"],
+            ["creo_" + name for name in capabilities.UNAVAILABLE_OPERATIONS],
+        )
+        self.assertEqual(payload["tool_count"], payload["enabled_tool_count"])
+        tools = {tool.name for tool in listed}
+        self.assertEqual(payload["tool_count"], len(tools))
+        self.assertTrue(set(payload["unavailable_tools"]).isdisjoint(tools))
+
     async def test_compact_and_full_reconstruct_the_same_public_summary_under_budget(self):
         compact = await server.creo_capabilities()
         registered = {tool.name for tool in await server.mcp.list_tools()}
@@ -66,6 +85,8 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(compact["support_status"], overview["support_status"])
         self.assertEqual(compact["release_status"], overview["release_status"])
         self.assertEqual(compact["complete_creo_coverage"], overview["complete_creo_coverage"])
+        self.assertEqual(compact["unavailable_tools"], overview["unavailable_tools"])
+        self.assertEqual(compact["unavailable_operations"], overview["unavailable_operations"])
 
 
 class SheetmetalInspectionProjectionTests(unittest.IsolatedAsyncioTestCase):

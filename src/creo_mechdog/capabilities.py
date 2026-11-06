@@ -84,6 +84,18 @@ REGISTERED_OPERATIONS = (
 # reloaded). The entries below are still waiting for a route that produces
 # measurable geometry, so no client receives a success the release cannot back
 # up.
+
+# The single copy of the reason a thin offset trim is refused. References publish
+# the same text so the contract and the admission gate cannot drift apart.
+SURFACE_TRIM_OFFSET_LIMIT = (
+    "surface_trim offset_mm is not published: the documented Thin tree "
+    "(PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only "
+    "removes a band of that thickness when the tool is a quilt, keeps both "
+    "sides instead of the requested keep_side, and offset_side has no "
+    "observable effect (2026-11-06 six direction variants all produced the "
+    "same band; negative thickness fails regeneration)"
+)
+
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
     "quilt_merge": (
         "the surface merge is not published: on this machine the documented ProMerge.h array "
@@ -136,14 +148,7 @@ def require_available(operations: list[dict]) -> None:
             # quilt tool (2026-11-06: 40x20 target -> 700 mm2 at 5 mm), but it
             # removes a band instead of moving the cut, the direction elements are
             # inert, and a datum-plane tool ignores the thickness.
-            raise ValueError(
-                "surface_trim offset_mm is not published: the documented Thin tree "
-                "(PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only "
-                "removes a band of that thickness when the tool is a quilt, keeps both "
-                "sides instead of the requested keep_side, and offset_side has no "
-                "observable effect (2026-11-06 six direction variants all produced the "
-                "same band; negative thickness fails regeneration)"
-            )
+            raise ValueError(SURFACE_TRIM_OFFSET_LIMIT)
 
 
 def families() -> dict:
@@ -496,7 +501,34 @@ def families() -> dict:
             "enabled": True,
             "scope": "planar fill, thicken and solidify",
             "native_test": "20 x 10 fill, symmetric thickness 2 to 3; plane cut of a cube",
-            "limits": "closed-quilt solidification, curved-quilt offset/cut and all side options need further validation",
+            "limits": (
+                "closed-quilt solidification is published (measured volume plus rollback "
+                "on an open quilt); thin offset on a trimmed quilt stays gated because "
+                "surface_trim offset_mm removes a band instead of moving the cut; "
+                "curved-quilt thicken side options beyond the published symmetric case "
+                "need further native validation"
+            ),
+        },
+        "surface_chain": {
+            "enabled": True,
+            "tools": ["creo_surface_trim", "creo_project_curve", "creo_surface_offset"],
+            "scope": (
+                "trim one quilt with another quilt, a datum-plane label or a curve "
+                "geometry id; project one curve geometry id onto one quilt along an "
+                "explicit direction reference; offset one quilt along its surface normal"
+            ),
+            "native_test": (
+                "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
+                "project_curve: 40.000 mm and 25.133 mm measured projections, saved and "
+                "reloaded; surface_offset: 40x20 fill offset 5 mm on both sides, "
+                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance"
+            ),
+            "limits": (
+                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); no multi-section loft, "
+                "no boundary blend and no surface loft tool; surface_trim offset_mm stays "
+                "refused; surface_offset returns the offset wall, not a standalone offset "
+                "quilt or a solid thickness wall"
+            ),
         },
         "boolean_bodies": {
             "enabled": True,
@@ -548,7 +580,7 @@ def families() -> dict:
             "scope": "direct native solid Blend from independent MCP-owned XY sketches ordered by increasing Z; create in a feature plan or append to an owned part",
             "interpolation": ["straight", "smooth"],
             "native_test": "3/4/6 straight and smooth factory cases; append 3/smooth to an existing saved base, preserve native IDs, edit dimensions, verify all-section STL, save/erase/reload and failed-append rollback with a live refresh",
-            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
+            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; there is no surface loft tool or surface_loft operation, and mode='surface' is refused before a job; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
             "callback_setup": "creo_capabilities.direct_blend_callback lists the generated registry_file; load/start it via Creo Auxiliary Applications and review the DLL prompt before modeling",
         },
         "loft_seed": {

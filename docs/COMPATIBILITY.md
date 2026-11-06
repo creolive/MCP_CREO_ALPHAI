@@ -14,7 +14,8 @@
   本机无 `ProBlend.h`）、曲面合并 `creo_quilt_merge`（S03，四条原生路线都建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`）。
 - **join 需求可测量**：修剪 + 加厚给出并集面积 1400 mm² 与合并实体体积 2799.9999999999995 mm³（重叠只算一次）。
 - **端点焊接（W01）**：配对规则、回执与本体坐标规整同时交付——原生侧在写入实体前把每对端点各移动 gap/2（超 `max_endpoint_move_mm` 则拒绝应用），求解后回读残差（5e-5 mm 间隙实测 `max_residual_mm=0.0`）。
-- 公开工具数 **100**（运行时 `creo_capabilities` 的 `tool_count`，`creo_surface_offset` 加入后）。
+- **引用契约（离线文档，2026-11-06）**：`creo_surface_trim` 的 target 只接受 quilt/quilt_feature，tool 再接受基准面标签或曲线几何 ID；`creo_project_curve` 的 source 只接受 `{"kind":"curve","id":N}`（不接受 edge/axis 或曲线标签），`direction_ref` 接受 `datum_feature`/`datum_axis_feature` 标签或曲线 ID，不接受 `datum_plane` 标签或裸向量；`creo_surface_offset` 用 `distance`，结果是面积×距离的偏置壁，不是独立偏置 quilt 或实体厚度壁。没有 `creo_surface_loft` 工具，也没有 `surface_loft` 已注册操作。详见[引用格式](REFERENCE_SYNTAX.md)。
+- 公开工具数 **100**（运行时 `creo_capabilities` 的 `tool_count`，`creo_surface_offset` 加入后；`creo_quilt_merge` 在导入时由 `UNAVAILABLE_OPERATIONS` 移除，不计入）；已注册操作 **68**，其中 67 个可提交、`quilt_merge` 1 个门禁（`unavailable_tools` 同名单列，`operations` 已剔除）。
 
 ## 0.12.0 的原生矩形首壁与就地改型（FEAT-058）
 

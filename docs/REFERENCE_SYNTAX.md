@@ -102,6 +102,48 @@
 
 **省略 axis 或显式传 null**：回转轴取草图自身的构造中心线，此时草图必须恰含一条 centerline（示例 [examples/turned_part.json](../examples/turned_part.json)）。**空对象 `{}`、缺 `kind` 的结构（如 `{"entity":"ax"}`）、非轴 kind、缺失 id/label 会在入口被拒绝**：错误信息含字段路径与上述可用示例，且不派发原生作业；`{"entity":"ax"}` 不会被静默猜测为外部轴。原生执行器对同类非法结构保留第二道边界防御，作业以结构化错误结束（含失败阶段与操作序号），不再透出 nlohmann JSON 异常文本。高层工具与 execute_plan 使用同一规范化逻辑，revision 防护保持有效；显式外部轴示例见 [examples/revolve_external_axis.json](../examples/revolve_external_axis.json)。
 
+## 曲面链引用（surface trim / project curve / surface offset，FEAT-039 / DEV-069）
+
+三个已发布曲面工具都只接受**裸引用对象**，不增加 `reference`/`entity` 包装。几何对象用几何 ID，特征标签用 `quilt_feature`；`quilt`、`curve` 等几何 kind 不接受 `label`。下面的 ID 仅为类型示例，实际值须从目标模型本次巡检取得。
+
+```json
+// creo_surface_trim：target 是 quilt；tool 是 quilt、基准面标签或曲线几何 ID
+{"target": {"kind": "quilt", "id": 21},
+ "tool": {"kind": "quilt_feature", "label": "trim_fill"},
+ "keep_side": "one"}
+
+// tool 也可以是基准面标签或曲线 ID（曲线修剪走 use-curve 变体）
+{"target": {"kind": "quilt_feature", "label": "blade_quilt"},
+ "tool": {"kind": "datum_plane", "label": "FRONT"},
+ "keep_side": "two"}
+{"target": {"kind": "quilt", "id": 21}, "tool": {"kind": "curve", "id": 41}, "keep_side": "one"}
+```
+
+`keep_side` 只有 `one`/`two`，表示保留哪一侧，不是 GUI 视图名。终态 `kept_side_basis` 报告实际依据：quilt 或基准面工具为 `side_reference="tool_plane_normal"`，曲线工具为 `"curve_direction"`（反向曲线会交换保留区域）；`tool_normal` 只在基准面工具上是真实向量。`target` 与 `tool` 必须不同，且只接受一个 tool。
+
+```json
+// creo_project_curve：一张 quilt、一条曲线几何 ID、一个能读出真实方向的方向引用
+{"target": {"kind": "quilt", "id": 21},
+ "source": {"kind": "curve", "id": 7},
+ "direction_ref": {"kind": "datum_feature", "label": "TOP"},
+ "side": "positive"}
+```
+
+`direction_ref` 接受 `datum_feature`/`datum_axis_feature` 标签，或直的 `{"kind":"curve","id":N}`。`side` 只翻转该方向，只有 `positive`/`negative`。投影按“源草图沿方向扫掠 + 官方相交曲线”构造，模型会多一个辅助曲面特征，其 ID 由 `helper_feature_id` 返回；方向须平行于源草图平面法向，目标须在请求一侧，源曲线须属于曲线特征。`source` 只接受 `curve` 几何 ID，**不接受** `edge` 或 `axis`；`direction_ref` **不接受** `{"kind":"datum_plane","label":...}`（该解析器会丢掉标签并取默认平面）或裸向量。
+
+```json
+// creo_surface_offset：源 quilt，沿曲面法向偏移
+{"reference": {"kind": "quilt_feature", "label": "fill_label"},
+ "distance": 5.0,
+ "side": "positive"}
+```
+
+`creo_surface_offset` 的结果是**偏置壁**，按“面积 × 距离”计量，既不是独立偏置 quilt，也不是 `creo_thicken`/`creo_solidify` 那种实体厚度壁；后者从 quilt 生成实体，前者只把 quilt 沿法向移动。`side` 只回显请求侧，几何 z 符号不回读。该工具用 `distance`，不吃 `offset_mm`；`surface_trim` 的 `offset_mm` 是另一条被门禁的薄修剪路线，当前拒绝文案为：
+
+> surface_trim offset_mm is not published: the documented Thin tree (PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only removes a band of that thickness when the tool is a quilt, keeps both sides instead of the requested keep_side, and offset_side has no observable effect (2026-11-06 six direction variants all produced the same band; negative thickness fails regeneration)
+
+**loft 的表面模式仍不可用**：`creo_loft` 只接受 `mode="add"`；`mode="surface"`、`cut` 与 `new_body=true` 都在入队前拒绝。没有 `creo_surface_loft` 工具，也没有 `surface_loft` 已注册操作；多截面放样/边界混合曲面仍未发布。
+
 ## 各工具的外层形状
 
 | 工具 / 参数 | 完整形状或规则 |
@@ -116,6 +158,9 @@
 | solidify.reference | 裸平面/曲面参考，可用已验证平面的 `plane.id` 几何 ID；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
 | surface_fill.sketch | 草图特征标签或特征 ID（字符串或整数），无需 `{kind:...}` 对象 |
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |
+| surface_trim.target/tool | target 一个 quilt；tool 一个 quilt、基准面标签或曲线几何 ID；`keep_side` 只用 `one`/`two`，实际依据见 `kept_side_basis`；`offset_mm` 仍拒绝 |
+| project_curve.target/source/direction_ref | target 一个 quilt；source 只接受 `{"kind":"curve","id":N}`（不接受 edge/axis 或曲线标签）；direction_ref 接受 `datum_feature`/`datum_axis_feature` 标签或曲线 ID，不接受 `datum_plane` 标签或裸向量 |
+| surface_offset.reference | 裸 quilt 或 quilt_feature 引用；距离字段是 `distance`，结果按面积×距离计量的偏置壁，不是独立 quilt 或实体厚度壁 |
 | sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`；参数内部不再加 edge/reference 包装 |
 | sheetmetal_unbend/flat_pattern/bend_back.fixed_surface | 裸面引用，如 `{"kind":"surface","id":N}`，取自当前巡检；`references` 省略时作用全部折弯，能否固定由原生执行判定 |
 | sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放、斜接与边撕裂不支持。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |

@@ -40,6 +40,42 @@ ACTIVE = {
 }
 PREPARATION_BUDGET = 180
 READY_FRESHNESS_SECONDS = 30
+FAILURE_CODES = {
+    "disabled": "automatic_startup_disabled",
+    "launch_failed": "launch_failed",
+    "configuration_error": "configuration_error",
+    "selection_required": "session_selection_required",
+    "lock_error": "coordination_lock_access",
+    "timeout": "startup_timeout",
+}
+
+
+def _deadline_at(monotonic_deadline: float | None) -> str | None:
+    """Convert a monotonic budget deadline to wall-clock ISO-8601 when known."""
+    if monotonic_deadline is None:
+        return None
+    remaining = monotonic_deadline - time.monotonic()
+    return (datetime.now(timezone.utc) + timedelta(seconds=remaining)).isoformat()
+
+
+def _retry_explanation(state: str, *, allowed: bool, blocked_by: str | None, running: bool) -> dict:
+    """Explain retry timing without inventing a schedule the service cannot keep."""
+    if state == "ready":
+        reason = "No retry is needed while state=ready; readiness is never rechecked automatically."
+    elif allowed:
+        reason = (
+            "The service never schedules an automatic retry. retry_allowed=true means an "
+            "explicit creo_startup_status(retry=true) may be requested now; no future time "
+            "is promised."
+        )
+    else:
+        blocked = blocked_by or "the current phase is not terminal"
+        reason = (
+            f"No retry time can be guaranteed while {blocked}; the service does not "
+            "queue or schedule retries. Poll creo_startup_status"
+            + (" until the coordinator call returns." if running else " for a terminal phase.")
+        )
+    return {"next_allowed_retry_at": None, "next_allowed_retry_reason": reason}
 
 
 @dataclass(frozen=True)
@@ -389,13 +425,33 @@ class CreoStartup:
         self._attempt_started: float | None = None
         self._phase_deadline: float | None = None
         self._requested_at = bridge.now()
+        self._retry_id = self._new_retry_id()
         self._expired = False
         self._state = {
             "state": "checking",
+            "phase": "checking",
             "connected": False,
             "message": "Startup detection has not completed",
             "retry_allowed": False,
+            "retry_id": self._retry_id,
+            "started_at": self._requested_at,
+            "deadline_at": None,
+            "phase_deadline_at": None,
+            "failure_code": None,
+            "terminal_reason": None,
+            "retry_blocked_by": "startup_in_progress",
+            "budget_scope": "total",
+            "phase_budget_scope": "phase",
+            **_retry_explanation(
+                "checking", allowed=False, blocked_by="startup_in_progress", running=True
+            ),
         }
+
+    @staticmethod
+    def _new_retry_id() -> str:
+        """Stable identity for one explicit startup/retry attempt."""
+        material = f"{os.getpid()}:{time.monotonic_ns()}:{bridge.now()}"
+        return hashlib.sha256(material.encode()).hexdigest()[:12]
 
     def _publish(self, state: str, message: str, *, shared: bool = True, **fields) -> dict:
         with self._mutex:
@@ -430,12 +486,35 @@ class CreoStartup:
                         if key in self._state
                     }
                 )
+            retry_allowed = state not in ACTIVE and state != "ready"
+            blocked_by = fields.get("retry_blocked_by")
+            if blocked_by is None and state in ACTIVE:
+                blocked_by = "startup_in_progress"
+            previous_phase = self._state.get("phase") or self._state.get("state")
+            phase = (
+                retained.get("in_flight_phase") or previous_phase or state
+                if state == "timeout"
+                else state
+            )
             value = {
                 **retained,
                 "state": state,
+                "phase": phase,
                 "connected": state == "ready",
                 "message": message,
-                "retry_allowed": state not in ACTIVE and state != "ready",
+                "retry_allowed": retry_allowed,
+                "retry_id": self._retry_id,
+                "started_at": self._requested_at,
+                "deadline_at": _deadline_at(self._attempt_deadline),
+                "phase_deadline_at": _deadline_at(self._phase_deadline),
+                "failure_code": FAILURE_CODES.get(state),
+                "terminal_reason": message if retry_allowed else None,
+                "retry_blocked_by": blocked_by,
+                "budget_scope": "total",
+                "phase_budget_scope": "phase",
+                **_retry_explanation(
+                    state, allowed=retry_allowed, blocked_by=blocked_by, running=True
+                ),
                 "updated_at": bridge.now(),
                 "coordinator_pid": os.getpid(),
                 "phase_deadline_monotonic": self._phase_deadline,
@@ -464,19 +543,23 @@ class CreoStartup:
                 value["remaining_budget_seconds"] = max(
                     0, self._attempt_deadline - time.monotonic()
                 )
+                value["deadline_at"] = _deadline_at(self._attempt_deadline)
                 if phase_deadline is not None:
                     value["phase_remaining_budget_seconds"] = max(
                         0, phase_deadline - time.monotonic()
                     )
+                    value["phase_deadline_at"] = _deadline_at(phase_deadline)
                 if time.monotonic() >= effective_deadline:
                     self._expired = True
                     value.update(
                         state="timeout",
+                        phase=value.get("in_flight_phase") or value.get("phase") or "timeout",
                         connected=False,
                         retry_allowed=False,
                         in_flight_phase=self._state.get(
                             "in_flight_phase", self._state.get("state")
                         ),
+                        failure_code=FAILURE_CODES["timeout"],
                         message="Startup phase/total budget expired while the coordinator call is still in flight. No second coordinator or Creo will be started; inspect its phase, occupying job and build logs. Retry after that call returns. If it never returns, preserve jobs/models and restart the MCP connector; do not delete reservations or terminate Creo as automatic recovery.",
                     )
                     self._state = dict(value)
@@ -509,6 +592,38 @@ class CreoStartup:
                 stale=not value.get("connected") or age is None or age > READY_FRESHNESS_SECONDS,
                 coordinator_running=running,
             )
+            if self._phase_deadline is not None:
+                value["phase_deadline_at"] = _deadline_at(self._phase_deadline)
+            value.setdefault("retry_id", self._retry_id)
+            value.setdefault("started_at", self._requested_at)
+            value.setdefault("phase", value.get("state"))
+            value.setdefault("deadline_at", None)
+            value.setdefault("phase_deadline_at", None)
+            value.setdefault("remaining_budget_seconds", None)
+            value.setdefault("phase_remaining_budget_seconds", None)
+            value["budget_scope"] = "total"
+            value["phase_budget_scope"] = "phase"
+            value["budget_active"] = running and self._attempt_deadline is not None
+            current_state = value.get("state")
+            allowed = bool(value.get("retry_allowed"))
+            blocked_by = None
+            if not allowed and current_state != "ready":
+                blocked_by = (
+                    "coordinator_running"
+                    if running
+                    else "startup_in_progress"
+                    if current_state in ACTIVE
+                    else None
+                )
+            value["retry_blocked_by"] = blocked_by
+            value.update(
+                _retry_explanation(
+                    current_state, allowed=allowed, blocked_by=blocked_by, running=running
+                )
+            )
+            terminal = current_state not in ACTIVE and current_state != "ready"
+            value["failure_code"] = FAILURE_CODES.get(current_state) if terminal else None
+            value["terminal_reason"] = value.get("message") if terminal else None
             value.pop("phase_deadline_monotonic", None)
             return value
 
@@ -543,14 +658,29 @@ class CreoStartup:
             self._expired = False
             self._attempt_started = time.monotonic()
             self._requested_at = bridge.now()
+            # One identity per started attempt; polling status never creates a new one.
+            self._retry_id = self._new_retry_id()
             self._attempt_deadline = None
             self._phase_deadline = None
             self._stop.clear()
             self._state = {
                 "state": "checking",
+                "phase": "checking",
                 "connected": False,
                 "message": "Checking Creo startup and connection",
                 "retry_allowed": False,
+                "retry_id": self._retry_id,
+                "started_at": self._requested_at,
+                "deadline_at": None,
+                "phase_deadline_at": None,
+                "failure_code": None,
+                "terminal_reason": None,
+                "retry_blocked_by": "startup_in_progress",
+                "budget_scope": "total",
+                "phase_budget_scope": "phase",
+                **_retry_explanation(
+                    "checking", allowed=False, blocked_by="startup_in_progress", running=True
+                ),
             }
             self._thread = threading.Thread(
                 target=self._run, args=(retry,), name="creo-startup", daemon=True
@@ -574,7 +704,17 @@ class CreoStartup:
             running = bool(self._thread and self._thread.is_alive())
         if running:
             state = self.status()
-            return {**state.get("native", {}), **state, "startup": state}
+            return {
+                **state.get("native", {}),
+                **state,
+                "mode": "startup_snapshot",
+                "live_probe": {
+                    "performed": False,
+                    "queued": False,
+                    "reason": "startup coordinator is running; no second Toolkit probe was started",
+                },
+                "startup": state,
+            }
         try:
             settings = Settings.load()
             snapshot = process_snapshot(settings)
@@ -588,6 +728,18 @@ class CreoStartup:
                 "connected": False,
                 "connection_state": "busy",
                 **exc.payload,
+                "mode": "explicit_live",
+                "channel_policy": "busy_rejects_immediately",
+                "live_probe": {
+                    "performed": False,
+                    "busy": True,
+                    "queued": False,
+                    "second_channel_opened": False,
+                    "reason": (
+                        "another operation holds the single Toolkit channel; this probe "
+                        "returned immediately without queueing, retrying or opening a second channel"
+                    ),
+                },
                 "creo_process_snapshot": snapshot,
                 "startup": self.status(),
             }
@@ -615,7 +767,14 @@ class CreoStartup:
             )
         # This read-only tool can recognize a manually opened session, but must
         # not turn a failed query into an implicit GUI launch/recovery request.
-        return {**native, "creo_process_snapshot": snapshot, "startup": self.status()}
+        return {
+            **native,
+            "mode": "explicit_live",
+            "channel_policy": "single_channel_busy_rejects_immediately",
+            "live_probe": {"performed": True, "busy": False, "queued": False},
+            "creo_process_snapshot": snapshot,
+            "startup": self.status(),
+        }
 
     def _run(self, retry: bool) -> None:
         try:
@@ -1016,7 +1175,23 @@ class CreoStartup:
                         "basis": "no Creo process in this Windows session; Toolkit not yet probed",
                     }
                 else:
+                    self._publish(
+                        "waiting_for_connection",
+                        "Probing the single Toolkit channel for an existing session",
+                        launch_attempt=attempt,
+                        probe="session_status",
+                    )
                     native = bridge.session_status(connect_timeout_seconds=2, build_worker=False)
+            except bridge.ToolkitBusy as exc:
+                self._publish(
+                    "waiting_for_connection",
+                    "The single Toolkit channel is busy; this startup probe waits "
+                    "without queueing a second channel or launching another Creo",
+                    busy=exc.payload,
+                    launch_attempt=attempt,
+                )
+                self._stop.wait(0.5)
+                continue
             except RuntimeError:
                 self._publish(
                     "waiting_for_connection",

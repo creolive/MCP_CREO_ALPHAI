@@ -152,6 +152,52 @@ class StartupRetry(unittest.TestCase):
             bridge.read_json(self.fixture.coordinator / "state.json")["launch_reserved"]
         )
 
+    def test_retry_reuses_existing_session_without_incrementing_launch_attempt(self):
+        bridge.write_json(
+            self.fixture.coordinator / "state.json",
+            {"state": "timeout", "launch_attempt": 17, "launch_reserved": True},
+        )
+        self.fixture.inventory.return_value = self.fixture.existing()
+        self.fixture.probe.return_value = startup_tests.READY
+        controller = self.controller()
+        controller.start(retry=True)
+        controller._thread.join(2)
+        state = controller.status()
+        self.assertEqual(state["state"], "ready")
+        self.assertEqual(state["launch_attempt"], 17)
+        self.assertEqual(state["phase"], "ready")
+        self.fixture.launch.assert_not_called()
+        self.fixture.probe.assert_called_once_with(connect_timeout_seconds=2, build_worker=False)
+
+    def test_polling_keeps_the_retry_id_and_a_new_retry_gets_a_new_one(self):
+        self.fixture.inventory.return_value = self.fixture.existing()
+        self.fixture.probe.return_value = startup_tests.READY
+        controller = self.controller()
+        controller.start(retry=True)
+        controller._thread.join(2)
+        first = controller.status()
+        self.assertEqual(first["retry_id"], controller.status()["retry_id"])
+        controller.start(retry=True)
+        controller._thread.join(2)
+        second = controller.status()
+        self.assertNotEqual(first["retry_id"], second["retry_id"])
+        self.assertEqual(self.fixture.probe.call_count, 2)
+        self.fixture.launch.assert_not_called()
+
+    def test_busy_probe_during_retry_does_not_open_a_second_channel(self):
+        self.fixture.inventory.return_value = self.fixture.existing()
+        self.fixture.probe.side_effect = [
+            bridge.ToolkitBusy(holder={"job_id": "job" * 8, "operation": "execute_plan"}),
+            startup_tests.READY,
+        ]
+        controller = self.controller()
+        controller.start(retry=True)
+        controller._thread.join(5)
+        state = controller.status()
+        self.assertEqual(state["state"], "ready")
+        self.assertEqual(self.fixture.probe.call_count, 2)
+        self.fixture.launch.assert_not_called()
+
     def test_retry_dispatch_does_not_block_the_async_protocol_loop(self):
         entered, release = threading.Event(), threading.Event()
 

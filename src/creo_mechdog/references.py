@@ -7,6 +7,8 @@ from typing import Annotated, Any
 
 from pydantic import BeforeValidator, WithJsonSchema
 
+from creo_mechdog.capabilities import SURFACE_TRIM_OFFSET_LIMIT
+
 AXIS_DESCRIPTION = (
     "Bare axis selection: {kind:'axis',id:N} from model inspection, or "
     "{kind:'datum_axis_feature',label:'axis_label'}. In axis_pattern only, "
@@ -375,6 +377,145 @@ def reference_capabilities() -> dict[str, Any]:
                 "requires": "Sketch feature label or feature ID, not a {kind:...} selection object",
             },
             "creo_thicken": {"reference": {"kind": "quilt_feature", "label": "fill_label"}},
+            "creo_surface_trim": {
+                "target": {"kind": "quilt", "id": 21},
+                "target_by_label": {"kind": "quilt_feature", "label": "blade_quilt"},
+                "tool_quilt": {"kind": "quilt", "id": 22},
+                "tool_quilt_by_label": {"kind": "quilt_feature", "label": "trim_fill"},
+                "tool_datum_plane": {"kind": "datum_plane", "label": "FRONT"},
+                "tool_curve": {"kind": "curve", "id": 41},
+                "keep_side": {
+                    "values": ["one", "two"],
+                    "meaning": (
+                        "one/two name the retained region, not a GUI view; the receipt's "
+                        "kept_side_basis.side_reference is 'tool_plane_normal' for a quilt "
+                        "or datum-plane tool and 'curve_direction' for a curve tool, where "
+                        "reversing the curve swaps the retained region. tool_normal is a "
+                        "real vector only for a datum-plane tool"
+                    ),
+                },
+                "requires": (
+                    "one quilt target and one tool: a quilt ({kind:'quilt',id:N} or "
+                    "{kind:'quilt_feature',label:...}), a datum plane by label only, or a "
+                    "curve geometry id; target and tool must differ, and one tool only"
+                ),
+                "rejected": {
+                    "labels_on_geometry_kinds": (
+                        "geometry kinds take no label: {kind:'quilt',label:...} and "
+                        "{kind:'curve',label:...} are refused; use quilt_feature for a "
+                        "quilt label and the curve geometry id for a curve"
+                    ),
+                    "datum_plane_id": (
+                        "{kind:'datum_plane',id:N} is refused for tool: a datum-plane tool "
+                        "requires a label"
+                    ),
+                    "plane_surface_body_kinds": (
+                        "{kind:'plane'}, {kind:'surface'} and {kind:'body'} are not quilts "
+                        "and are refused as target or tool"
+                    ),
+                    "tool_lists": "a list of tools is refused; trim takes exactly one tool",
+                    "execute_plan_offset_mm": SURFACE_TRIM_OFFSET_LIMIT,
+                },
+            },
+            "creo_project_curve": {
+                "target": {"kind": "quilt", "id": 21},
+                "target_by_label": {"kind": "quilt_feature", "label": "blade_quilt"},
+                "source": {"kind": "curve", "id": 7},
+                "direction_plane_label": {"kind": "datum_feature", "label": "TOP"},
+                "direction_axis_label": {"kind": "datum_axis_feature", "label": "axis_label"},
+                "direction_curve": {"kind": "curve", "id": 8},
+                "side": {
+                    "values": ["positive", "negative"],
+                    "meaning": (
+                        "flips the vector read from direction_ref; the reported basis is "
+                        "measured, not named after a GUI view"
+                    ),
+                },
+                "construction": (
+                    "the projection is built as a real sweep of the source sketch along "
+                    "the direction plus the documented intersect curve, so the model also "
+                    "gains a helper surface feature reported as helper_feature_id; the "
+                    "direction must be parallel to the source sketch plane normal, the "
+                    "target must lie on the requested side, and the source curve must "
+                    "belong to a curve feature"
+                ),
+                "requires": (
+                    "one quilt target ({kind:'quilt',id:N} or "
+                    "{kind:'quilt_feature',label:...}), one source curve geometry id, and "
+                    "one direction reference that yields a real vector"
+                ),
+                "rejected": {
+                    "source_label": (
+                        "{kind:'curve',label:...} is refused: a sketch feature may own "
+                        "several curves, so the source must be one curve geometry id"
+                    ),
+                    "edge_or_axis_source": (
+                        "{kind:'edge',id:N} and {kind:'axis',id:N} are not projection "
+                        "sources; source accepts only {kind:'curve',id:N}"
+                    ),
+                    "direction_datum_plane": (
+                        "{kind:'datum_plane',label:...} is refused for direction_ref: that "
+                        "resolver drops the label and picks the default plane; use "
+                        "{kind:'datum_feature',label:...} for a plane feature"
+                    ),
+                    "raw_vector": (
+                        "a bare [x,y,z] vector or an unsupported kind is refused; the "
+                        "direction must come from a datum plane/axis label or a curve id"
+                    ),
+                    "target_surface_kind": (
+                        "{kind:'surface'}, {kind:'plane'} and {kind:'body'} are not quilts "
+                        "and are refused as target"
+                    ),
+                },
+            },
+            "creo_surface_offset": {
+                "reference": {"kind": "quilt", "id": 21},
+                "reference_by_label": {"kind": "quilt_feature", "label": "fill_label"},
+                "distance": 5.0,
+                "side": {
+                    "values": ["positive", "negative"],
+                    "meaning": (
+                        "explicit offset side; the receipt echoes the requested side, and "
+                        "the geometric z sign is not read back"
+                    ),
+                },
+                "result": (
+                    "the offset wall, measured as area times distance; it is neither a "
+                    "standalone offset quilt nor a solid thickness wall. creo_thicken / "
+                    "creo_solidify build a solid wall from a quilt, while this operator "
+                    "moves the quilt along its surface normal"
+                ),
+                "requires": "one quilt reference; a closed quilt is not required",
+                "rejected": {
+                    "labels_on_geometry_kinds": (
+                        "{kind:'quilt',label:...} is refused; use "
+                        "{kind:'quilt_feature',label:...} for a feature label"
+                    ),
+                    "body_datum_plane_surface_kinds": (
+                        "{kind:'body'}, {kind:'datum_plane'}, {kind:'plane'} and "
+                        "{kind:'surface'} are not quilts and are refused"
+                    ),
+                    "offset_mm": (
+                        "offset_mm is not a creo_surface_offset parameter; this tool takes "
+                        "distance. surface_trim's offset_mm is a different, gated route: "
+                        + SURFACE_TRIM_OFFSET_LIMIT
+                    ),
+                },
+            },
+            "creo_loft": {
+                "sections": ["section_a", 42],
+                "mode": {"values": ["add"], "meaning": "cut and surface are refused before a job"},
+                "surface_mode": (
+                    "not available: mode='surface' is refused together with 'cut' and "
+                    "new_body=true by capabilities.require_available; there is no "
+                    "creo_surface_loft tool and no surface_loft registered operation, and "
+                    "multi-section/boundary-blend surfaces stay unpublished"
+                ),
+                "requires": (
+                    "sketch labels or integer feature IDs ordered by increasing Z, plus the "
+                    "resolved Blend callback registration"
+                ),
+            },
             "creo_sheetmetal_flange": {
                 "edge": edge,
                 "requires": "Bare edge selection; pass edge={kind:'edge',id:N}, without an extra reference/edge wrapper",

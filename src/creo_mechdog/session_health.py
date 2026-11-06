@@ -28,6 +28,7 @@ JOB_FILE_BYTES = 2 * 1024 * 1024
 JOB_TOTAL_BYTES = 8 * 1024 * 1024
 CACHE_SECONDS = 5.0
 DAMAGE_LIMIT = 5
+HISTORIC_SAVE_LIMIT = 5
 SAVE_CALLS = ("ProMdlnameBackup", "ProMdlSave", "ProMdlfileTypeLoad")
 NON_WRITE_KINDS = {"session_erase", "open_file", "adoption_file"}
 TERMINAL = {"succeeded", "failed", "unknown_outcome", "abandoned"}
@@ -50,6 +51,19 @@ def _moment(value: object) -> datetime | None:
 
 def _age(record: dict, now: datetime) -> float:
     return max(0.0, (now - record["at"]).total_seconds())
+
+
+def _stale(record: dict, now: datetime) -> bool:
+    return _age(record, now) > FRESHNESS_SECONDS
+
+
+def _source(record: dict) -> str:
+    """Name where a fact came from: a recorded job, a persisted probe, or attribution."""
+    if record["detail"].get("source") == "toolkit_probe":
+        return "toolkit_probe"
+    if record.get("session_source") == "attributed":
+        return "attributed"
+    return "recorded_job"
 
 
 def _save_related(result: dict) -> bool:
@@ -135,6 +149,8 @@ def _connection_record(manifest: dict, at: datetime) -> dict | None:
             "connected": connected,
             "connection_state": result.get("connection_state"),
             "disconnect_code": result.get("disconnect_code"),
+            "toolkit_code": result.get("toolkit_code"),
+            "worker_exit_code": result.get("worker_exit_code"),
         },
     }
 
@@ -183,6 +199,8 @@ def _probe_record(root: Path, stats: dict) -> dict | None:
         "detail": {
             "connected": value["connected"],
             "connection_state": value.get("connection_state"),
+            "toolkit_code": value.get("toolkit_code"),
+            "worker_exit_code": value.get("worker_exit_code"),
             "source": "toolkit_probe",
         },
     }
@@ -318,10 +336,14 @@ def _connection_fact(records: list[dict], now: datetime) -> dict | None:
             else ("connected" if connected else "failed"),
             "at": record["at"].isoformat(),
             "age_seconds": int(_age(record, now)),
+            "stale": _stale(record, now),
+            "source": _source(record),
             "job_id": record.get("job_id"),
             "model_id": record.get("model_id"),
             "connection_state": record["detail"].get("connection_state"),
-            "source": record["detail"].get("source", "execution_result"),
+            "toolkit_code": record["detail"].get("toolkit_code"),
+            "worker_exit_code": record["detail"].get("worker_exit_code"),
+            "session_source": record["session_source"],
         }
     return None
 
@@ -332,6 +354,8 @@ def _save_fact(record: dict, now: datetime, current: str | None) -> dict:
         "outcome": record["outcome"],
         "at": record["at"].isoformat(),
         "age_seconds": int(_age(record, now)),
+        "stale": _stale(record, now),
+        "source": _source(record),
         "job_id": record.get("job_id"),
         "model_id": record.get("model_id"),
         "job_status": detail.get("job_status"),
@@ -349,6 +373,8 @@ def _damage_signal(record: dict, now: datetime, current: bool) -> dict:
         "kind": record["damage"],
         "at": record["at"].isoformat(),
         "age_seconds": int(_age(record, now)),
+        "stale": _stale(record, now),
+        "source": _source(record),
         "job_id": record.get("job_id"),
         "model_id": record.get("model_id"),
         "job_status": record["detail"].get("job_status"),
@@ -356,6 +382,31 @@ def _damage_signal(record: dict, now: datetime, current: bool) -> dict:
         "failed_toolkit_call": record["detail"].get("failed_toolkit_call"),
         "session_source": record["session_source"],
         "current_session": current,
+    }
+
+
+def _worker_fact(root: Path, now: datetime) -> dict:
+    """Local worker file time; it is evidence, never proof of a session root cause."""
+    path = root / "build" / "creo_worker.exe"
+    try:
+        updated = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except OSError as exc:
+        return {
+            "available": False,
+            "path": "build/creo_worker.exe",
+            "reason": f"unreadable_{type(exc).__name__}",
+            "causality": "unproven",
+        }
+    return {
+        "available": True,
+        "path": "build/creo_worker.exe",
+        "updated_at": updated.isoformat(),
+        "age_seconds": int(max(0.0, (now - updated).total_seconds())),
+        "causality": "suspected_only",
+        "note": (
+            "A rebuild or worker replacement that coincides with a session failure is "
+            "only suspected; this file time cannot prove the failure cause."
+        ),
     }
 
 
@@ -485,6 +536,8 @@ def _caveats(status: str) -> list[str]:
         "connection and runs no probe.",
         "Absence of a recorded failure is not a health guarantee and never authorizes clearing "
         "an unknown protection.",
+        "A worker rebuild or replacement that coincides with a session failure is only a "
+        "suspected correlation; the worker file time proves neither the cause nor the ordering.",
     ]
     if status == OBSERVED:
         shared.append(
@@ -550,6 +603,8 @@ def snapshot(
     historic = [r for r in records if r["damage"] and r["session"] != current]
     saves = [r for r in scoped if r["kind"] == "save"]
     newest_save = next((r for r in records if r["kind"] == "save"), None)
+    all_saves = [r for r in records if r["kind"] == "save"]
+    historic_saves = [r for r in all_saves if r is not newest_save][:HISTORIC_SAVE_LIMIT]
     sessions = sorted({r["session"] for r in records if r["session"]})
     observed_at = records[0]["at"] if records else None
     return {
@@ -559,10 +614,18 @@ def snapshot(
         "observed_at": observed_at.isoformat() if observed_at else None,
         "evidence_age_seconds": int(_age(records[0], moment)) if records else None,
         "freshness_window_seconds": FRESHNESS_SECONDS,
+        "path": "local_evidence",
+        "path_note": (
+            "This default health path reads persisted job/probe evidence only: no Toolkit "
+            "connection, no channel lock, no process or window probe. A current connection "
+            "requires the separate explicit creo_session_status call."
+        ),
         "session": {
             "identity": current,
             "identity_source": anchor["session_source"] if anchor else None,
             "identity_observed_at": anchor["at"].isoformat() if anchor else None,
+            "identity_age_seconds": int(_age(anchor, moment)) if anchor else None,
+            "identity_stale": _stale(anchor, moment) if anchor else None,
             "changed": len(sessions) > 1,
             "sessions_observed": len(sessions),
         },
@@ -571,12 +634,14 @@ def snapshot(
             "last_save": _save_fact(newest_save, moment, current)
             if newest_save is not None
             else None,
+            "historic_saves": [_save_fact(r, moment, current) for r in historic_saves],
             "recent_saves": {
                 "succeeded": sum(1 for r in saves if r["outcome"] == "succeeded"),
                 "failed": sum(1 for r in saves if r["outcome"] == "failed"),
                 "unknown": sum(1 for r in saves if r["outcome"] == "unknown"),
                 "not_attempted": sum(1 for r in saves if r["outcome"] == "not_attempted"),
             },
+            "worker": _worker_fact(base, moment),
             "channel": channel,
         },
         "damage_signals": [_damage_signal(r, moment, True) for r in damage[:DAMAGE_LIMIT]],
