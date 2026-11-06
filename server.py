@@ -92,7 +92,9 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/adoption.py",
     "src/creo_mechdog/file_adoption.py",
     "src/creo_mechdog/component_changes.py",
+    "src/creo_mechdog/compact_sections.py",
     "src/creo_mechdog/operation_results.py",
+    "src/creo_mechdog/failure_context.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
     "src/creo_mechdog/stdio_lifecycle.py",
@@ -378,9 +380,10 @@ async def creo_get_job(
     section: str | None = None,
     limit: int = Field(default=50, ge=1, le=200),
     cursor: str | None = None,
+    sections: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields."""
-    return await invoke(bridge.get_job, job_id, detail, section, limit, cursor)
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job."""
+    return await invoke(bridge.get_job, job_id, detail, section, limit, cursor, sections)
 
 
 @mcp.tool(annotations=CREATE)
@@ -555,10 +558,12 @@ async def creo_migrate_registry(
 
 @mcp.tool(annotations=READ)
 async def creo_list_jobs(
-    limit: int = 10, detail: Literal["compact", "full"] = "compact"
+    limit: int = 10,
+    detail: Literal["compact", "full"] = "compact",
+    sections: list[str] | None = None,
 ) -> dict[str, Any]:
-    """List recent jobs, including jobs that continue after their MCP client disconnects."""
-    return {"jobs": await invoke(bridge.list_jobs, limit, detail)}
+    """List recent jobs, including jobs that continue after their MCP client disconnects. detail=compact applies the same bounded view as creo_get_job; the optional sections array keeps only the named result blocks for every listed job and adds sections_applied plus omitted_sections. sections require detail=compact; an unknown block name is rejected with isError listing every known name."""
+    return {"jobs": await invoke(bridge.list_jobs, limit, detail, sections)}
 
 
 def _support_status() -> dict[str, Any]:

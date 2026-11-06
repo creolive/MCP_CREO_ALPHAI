@@ -419,3 +419,13 @@ defaulted_fields、source/query_code，实际生效值必须来自特征树实�
 `tests.unit.test_failed_model_cleanup` 通过；预览实机三段（空件跳过 → 有几何生成 → 修改后预览）
 与失败编辑回滚（整批回滚、revision 不变、`failed_model_cleanup.reason="not_new_model_job"`）
 需要经 MCP 的预览入口，当前公开工具里没有预览工具，实机部分保持开放。
+
+## 2026-11-06 failed_operation 结构化上下文（Q02，离线实现，未实机）
+
+- 原生 `native/generic.cpp` 在失败收尾时写出 `failed_operation`；Python `src/creo_mechdog/failure_context.py` 归一化并对旧执行器结果按 `failed_operation_index`/`failed_stage`/`failed_toolkit_call`/请求 ops 回填，不编造错误码。
+- 固定 14 键：`index`、`operation`、`stage`、`feature_label`、`sketch_name`、`toolkit_call`、`pro_error`、`pro_error_source`（`toolkit`/`unsupported`）、`message`（截断 512，附 `message_truncated`）、`input_matrix`、`matrix_source`、`determinant`、`orthogonality_residual`；成功结果不出现该键。
+- 矩阵只回显：按调用方行向量逐值返回，不做正交化、归一化或转置；行列式与正交残差只计算。整批原子回滚语义未改。
+- `pro_error` 仅在实际捕获 `ProError` 时非空；`std::exception` 路径为 null + `unsupported`，不沿用 `toolkit_code` 的通用错误码。
+- 验证：新增 `tests/unit/test_failed_operation_context.py` 24 项；`bridge.py build` 退出 0 并重建执行器；全量 `tools/test_unit.py` 2477 项通过；`dev_check.py --skip-unit` 通过。
+- 未验证：实机 `ProAsmcompAssemble` 返回 -2 的失败场景未复现，真实错误码与真实矩阵/残差只做到编译级与源码级。
+- 更正上文状态：W06 预览三段与失败编辑回滚已于 2026-11-04/05 实机补证并随 0.14.0 交付，上文"实机部分保持开放"为当时记录。

@@ -383,6 +383,11 @@ def annotate_native_result(
     # BUG-097 L2: the error receipt is projected even when no operation list
     # exists (a worker-level failure may still carry the structured block).
     annotate_feature_errors(result)
+    # FEAT-012/FEAT-008: the bounded failure context rides every failed result,
+    # including a failure that never reached an operation (index stays null).
+    from creo_mechdog.failure_context import annotate_failed_operation
+
+    annotate_failed_operation(result, inputs)
     operations = result.get("operations")
     if not isinstance(operations, list):
         # No operation record exists (for example the worker never delivered a

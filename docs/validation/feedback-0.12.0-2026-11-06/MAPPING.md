@@ -16,10 +16,10 @@
 | 原件条目 | 本轮核对 | 归属 | 状态 |
 | --- | --- | --- | --- |
 | P-1 `rotation_matrix` 行/列约定未声明，整机转置不报错 | `capabilities.py` 装配段已写明 "row vectors local to parent"，与实测生效方向一致；`rotation_convention` 开关与读回 4×4 `transform` 回显仍未做 | BUG-045 / FEAT-012（Q02→R05） | 部分：文档已澄清；回显未实现 |
-| P-2 非置换阵 `ProAsmcompAssemble` 返回 −2、`operations[31].error={}`、整批回滚 | `schema.py::_rotation_matrix` 已有正交 1e-6 与 det=+1 校验（报告方残差 3e-8 仍在阈值内，仍会落到内核 −2）；失败项无 `ProError`/矩阵回显 | BUG-045 / FEAT-012（Q02→R05） | 未实现：提交期 1e-6 校验已有，内核 −2 诊断缺失 |
-| P-3 拉伸/切除失败只有 `Regeneration produced a failed...`，`failed_operation=null` | `native/generic.cpp:6651` 与 `bridge.py:1560` 已发布 `failed_operation_index`；`failed_label`/`failed_sketch`/原始 Toolkit 码仍缺 | FEAT-008（Q02→R05） | 部分：仅索引，其余缺 |
+| P-2 非置换阵 `ProAsmcompAssemble` 返回 −2、`operations[31].error={}`、整批回滚 | `schema.py::_rotation_matrix` 已有正交 1e-6 与 det=+1 校验（报告方残差 3e-8 仍在阈值内）；2026-11-06 新增 `failed_operation`：回显 `input_matrix`（4×4 行向量）、`matrix_source`、`determinant`、`orthogonality_residual` 与 `pro_error`/`pro_error_source`，不自动修正，仍整批原子回滚 | BUG-045 / FEAT-012 / [FEAT-008](../../work-items/FEAT-008.md)（Q02→R05） | 已实现（离线单测 24 项）；实机 −2 未复现 |
+| P-3 拉伸/切除失败只有 `Regeneration produced a failed...`，`failed_operation=null` | 2026-11-06 新增 `failed_operation`（14 键：index/operation/stage/feature_label/sketch_name/toolkit_call/pro_error/pro_error_source/message+截断标记/矩阵四键），原生在失败收尾发布、Python 对旧执行器按索引回填；`bridge.py` 与 `native/generic.cpp` 的 `failed_operation_index` 仍保留 | FEAT-008（Q02→R05） | 已实现（离线单测 24 项）；实机失败场景未跑 |
 | P-4 `through_all` 仍要求并回显 `depth=1.0`；方向朝外时只说 Regeneration 失败 | 0.14.0 的 W05 已让 `depth` 可省略：blind 下 `requested_depth_mm=null`、`effective=blind/1.0 mm`、`defaulted_fields=["depth","depth_type"]`；`through_all` 下 `effective_depth_mm=null`（单测覆盖）。`depth_ignored` 显式声明与"方向未命中材料"提示仍未做 | FEAT-008（Q06→R04） | 部分 |
-| P-5 `creo_get_job(detail="compact")` 仍内联完整 `geometry_deviation`；`list_jobs` compact 内联完整 result | `geometry_deviation` 自 0.11.x 起已按 `sample≤20 + total/truncated` 投影（`geometry_deviation.py`），报告里的 40 个 watchpoint 不会再原样内联；`compact_job` 仍无 `sections` 选择器，超限时按 operation 整条裁剪并给 `detail=full sections` 提示（`operation_results.py:271/307`），单条 operation 内非 sample 字段仍全量 | FEAT-023 / FEAT-008（Q06→R04） | 部分：采样已闭环，`sections` 投影未实现 |
+| P-5 `creo_get_job(detail="compact")` 仍内联完整 `geometry_deviation`；`list_jobs` compact 内联完整 result | `geometry_deviation` 自 0.11.x 起已按 `sample≤20 + total/truncated` 投影；2026-11-06 新增 `sections` 选择器（`compact_sections.py`）：只保留点名的结果块/操作块，响应给 `sections_applied` 与 `omitted_sections`，证据字段恒保留，投影先于 32 KiB 预算，未知块在读取 job 前拒绝 | FEAT-023 / FEAT-008（Q06→R04） | 已实现（离线单测 14 项，109 项回归通过）；实机与客户端未验 |
 | P-6 装配检查无 `bbox`（零件有 `bodies[].bbox`） | `model_queries` 装配段无 `bbox`；`assembly_pose.h` 未接 `ProSolidOutlineGet` | FEAT-045（Q06） | 未实现 |
 | P-7 `components[].model_name` 无 `source_model_id`，`model.json` 无组件绑定表 | `appearance` 绑定表已有 `source_model_id`（FEAT-052）；装配组件记录本身未回填 | FEAT-045 / FEAT-052（Q06） | 部分 |
 | P-8 `session_status` 返回 `connected=true` 但 `session_health.status="unknown"`、`reason="session_identity_stale"` | `session_health.py:512` 仍返回该组合 | BUG-091 / FEAT-001（Q06→R06） | 未实现 |
@@ -67,7 +67,7 @@
 | S2 `flip` 无效/折边方向不可控 | 0.8.5 已交付折边方向语义，报告方仍报无效 | FEAT-014（Q05→R09） | 部分（历史项，需定向复测） |
 | S6 `unbend.fixed_surface` 不接受 datum_plane | 未实现 | BUG-060（Q05） | 未实现 |
 | P3 dict plane `offset≠0` 被拒 | 未实现 | BUG-061（Q06） | 未实现 |
-| P5 装配旋转欧拉角反手 | 同 P-1 的行/列约定问题 | BUG-045（Q02→R05） | 部分（文档已澄清，语义未改） |
+| P5 装配旋转欧拉角反手 | 同 P-1 的行/列约定问题；`failed_operation` 的 `input_matrix`/`matrix_source` 现可回显实际送入内核的矩阵，便于判定是调用方写错还是约定不符 | BUG-045（Q02→R05） | 部分（回显已实现，约定未改） |
 | P11 无 `native_bundle` 打包导出 | 0.8.x 起已交付 `creo_export_model(format="native_bundle")`，两段式实机通过 | FEAT-031 | 已闭环（嵌套/外部引用仍开放） |
 
 ## 五、Q00—Q07 去向
@@ -76,11 +76,11 @@
 | --- | --- | --- | --- |
 | Q00 | FEAT-055 | 四件逐字节归档 + 逐条映射 + 台账回填 | 已完成（见本文与 `manifest.json`） |
 | Q01 | FEAT-058 | 板厚几何校验与回执区分 | 未实现（执行入口 DEV-069 R03） |
-| Q02 | FEAT-012/008 | 结构化失败诊断与矩阵精度 | 未实现（R05） |
+| Q02 | FEAT-012/008 | 结构化失败诊断与矩阵精度 | 已实现（离线）；实机失败场景未验（R05） |
 | Q03 | FEAT-039/009/054 | 曲面剩余分支 | 部分（R01/R11） |
 | Q04 | BUG-101 | 端点焊接余项 | 未实现 |
 | Q05 | BUG-103/FEAT-014 | 四壁与多道折边 | 定因，未实现（R09） |
-| Q06 | FEAT-023/008/045 | 回执与补证余项 | 部分（R04/R06/R12） |
+| Q06 | FEAT-023/008/045 | 回执与补证余项 | 部分：`sections` 与失败上下文已实现（离线），装配 bbox/回指/会话健康仍缺（R04/R06/R12） |
 | Q07 | DEV-067 | alphai 分支接续 | 未集成 |
 
 ## 六、对旧建议的纠正（不改原件）

@@ -116,3 +116,10 @@ Release 与附件由控制者执行。
 R1 §5 P1-4（矩阵直入/Euler输出）是0.5.2旧请求；矩阵子项已随0.6.0交付，R3 §1.2/§7显式位姿重建正例不等于新矩阵接口或约束保真验收。T12/T13核对既有矩阵/已知点回归；Euler附加输出建议未承诺新增，显式源件更新与嵌套继续在父卡开放范围。
 
 共享接口遵循 [DEV-047 基线](DEV-047.md#interface-baseline)。本段仅补来源与已确认的本次子项；T00 未实现业务、未新增实机证据，不据此关闭父卡其他范围。
+
+## 2026-11-06 装配/放置失败上下文（Q02/R05，离线实现，未实机）
+
+- `failed_operation` 已覆盖 `assemble_component` / `component_placement` 失败：回显调用方 `input_matrix`（4×4 行向量，16 浮点）、`matrix_source`、`determinant`（3×3）与 `orthogonality_residual`（`max|R·Rᵀ − I|`）。
+- 不自动正交化、不归一化、不转置；`schema.py` 的提交期 1e-6 正交与 det=+1 校验不变，内核返回 -2 时只做诊断、不改写调用方几何；整批原子回滚不变。
+- `pro_error` 只在实际捕获 `ProError` 时给出（例如 -2），否则 null + `pro_error_source="unsupported"`；`feature_label`/`sketch_name` 取不到即 null，不用整数 ID 冒充名称。
+- 验证：`tests/unit/test_failed_operation_context.py` 24 项与相关回归 109 项通过；全量 2477 项通过；`bridge.py build` 退出 0。未验证：实机 -2 未复现，`Euler` 展开路径（`matrix_source="euler"`）只有单测。

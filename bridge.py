@@ -39,6 +39,12 @@ from creo_mechdog.build_support import (
     validate_local_path,
 )
 from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
+from creo_mechdog.compact_sections import (
+    OPERATION_KEYS,
+    RESULT_KEYS,
+    apply_sections,
+    resolve_sections,
+)
 from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.recovery import job_evidence, process_identity
 
@@ -1354,9 +1360,16 @@ def get_job(
     section: str | None = None,
     limit: int = 50,
     cursor: str | None = None,
+    sections: list[str] | None = None,
 ) -> dict:
     if detail not in ("compact", "full"):
         raise ValueError("detail must be compact or full")
+    if sections is not None:
+        if detail != "compact":
+            raise ValueError("sections require detail=compact")
+        # FEAT-023: reject unknown block names before reading the job directory,
+        # so a rejected selection never touches the job (read-only query).
+        sections = resolve_sections(sections)
     if detail == "compact" and (section is not None or cursor is not None):
         raise ValueError("section/cursor require detail=full")
     directory = job_path(job_id)
@@ -1450,7 +1463,7 @@ def get_job(
 
         rollback_status.ensure_rollback_status(manifest)
     if detail == "compact":
-        manifest = compact_job(manifest)
+        manifest = compact_job(manifest, sections)
         return manifest
     # FEAT-008/BUG-088: detail=full keeps the whole manifest view when it fits
     # the response budget and pages the rest through the shared query cursor,
@@ -1460,7 +1473,7 @@ def get_job(
     return job_page(manifest, section=section, limit=limit, cursor=cursor)
 
 
-def compact_job(manifest: dict) -> dict:
+def compact_job(manifest: dict, sections: list[str] | None = None) -> dict:
     """Bound polling payloads without losing the outcome or recovery information.
 
     FEAT-008/BUG-088: every value is projected through the shared bounded
@@ -1468,9 +1481,16 @@ def compact_job(manifest: dict) -> dict:
     is held to the 32 KiB response budget. Failure reasons, revision, rollback
     and save/reload evidence are never cut; truncations carry their
     total/truncated markers.
+
+    FEAT-023: an optional ``sections`` selection keeps only the named result
+    blocks (``compact_sections``) and adds ``sections_applied`` plus
+    ``omitted_sections`` to the response. The projection runs before the
+    budget enforcement, so it never bypasses the shared trimming.
     """
     from creo_mechdog.operation_results import bounded_summary, enforce_compact_budget
 
+    if sections is not None:
+        sections = resolve_sections(sections)
     manifest = dict(manifest)
     apply_terminal_stage(manifest)
     keys = (
@@ -1523,61 +1543,7 @@ def compact_job(manifest: dict) -> dict:
     summary["operation_count"] = len(manifest.get("operations", []))
     result = manifest.get("result")
     if result:
-        result_keys = (
-            "success",
-            "seed_load_evidence",
-            # FEAT-058: the planar wall verdict rides the polling payload; the
-            # tools return a queued job, so compact polling is where the caller
-            # reads feature identity, dimensions and the signed envelope from.
-            "planar_wall",
-            "loft_seed_feature",
-            "creo_release_numeric",
-            "creo_release_query_code",
-            "code",
-            "toolkit_code",
-            "message",
-            "part_file",
-            "sha256",
-            "saved_file_reloaded_and_verified",
-            "rollback_succeeded",
-            "rollback_status",
-            "model_unchanged",
-            "rollback_message",
-            "rollback_code",
-            "failed_model_cleanup",
-            "preview_file",
-            "preview_status",
-            "preview_code",
-            "preview",
-            "connected",
-            "volume_mm3",
-            "expected_volume_mm3",
-            "extrude_count",
-            "round_count",
-            "hole_count",
-            "failed_stage",
-            "failed_toolkit_call",
-            "failed_operation_index",
-            "inspection_source",
-            "adoption",
-            "adopted",
-            "open_file",
-            "session_erase",
-            "loaded",
-            "session_fingerprint",
-            "feature_tombstones",
-            "suppressed_features",
-            "inspection_warnings",
-            # FEAT-008/BUG-088: new operation diagnostics ride the same
-            # bounded summary (Q02 geometry_deviation, Q03 failed_model_cleanup,
-            # Q06 feature_errors; color/surface receipts follow when present).
-            "geometry_deviation",
-            "failed_model_cleanup",
-            "feature_errors",
-            "verify_stages",
-            "failed_transform",
-        )
-        native = {key: result[key] for key in result_keys if key in result}
+        native = {key: result[key] for key in RESULT_KEYS if key in result}
         from creo_mechdog.model_queries import inspection_summary
 
         # Legacy results inline a full inspection; split results carry only a
@@ -1599,73 +1565,7 @@ def compact_job(manifest: dict) -> dict:
                 visible.setdefault("inspection_summary", inspection_summary(inline))
             native["live"] = visible
         native["operations"] = [
-            bounded_summary(
-                {
-                    key: op[key]
-                    for key in (
-                        "op",
-                        "index",
-                        "label",
-                        "succeeded",
-                        "execution_status",
-                        "effect_status",
-                        "unchanged",
-                        "native_geometry_verified",
-                        "size",
-                        "file",
-                        "feature_id",
-                        "preserved_feature_id",
-                        "reordered",
-                        "sheet",
-                        "parameters",
-                        "metadata",
-                        "material_removed_mm3",
-                        "volume_before_mm3",
-                        "volume_after_mm3",
-                        "material_delta_mm3",
-                        "material_measurement",
-                        "draft_geometry",
-                        "extrude_depth",
-                        "reference_application",
-                        "surface_id",
-                        "origin",
-                        "normal",
-                        "u_axis",
-                        "v_axis",
-                        "datum_axes",
-                        "axes_query_code",
-                        "length_unit",
-                        "profile",
-                        "native_section",
-                        "preview_code",
-                        "preview",
-                        "feature_state",
-                        "targets",
-                        "target_count",
-                        "requested_target_count",
-                        "targets_complete",
-                        "elapsed_seconds",
-                        "message",
-                        # FEAT-008/BUG-088: bounded new diagnostics.
-                        "geometry_deviation",
-                        # BUG-108: top-level post-solve shift verdict.
-                        "sketch_shifted",
-                        "feature_errors",
-                        "failed_model_cleanup",
-                        # FEAT-035 increment: which depth basis the created
-                        # hole actually used, and the tree element it came from.
-                        "depth_basis",
-                        "depth_scheme_code",
-                        "depth_scheme_query",
-                        # BUG-102: request vs applied draft flip plus the
-                        # failure classification when the create is rejected.
-                        "requested_flip",
-                        "effective_flip",
-                        "draft_failure",
-                    )
-                    if key in op
-                }
-            )
+            bounded_summary({key: op[key] for key in OPERATION_KEYS if key in op})
             for op in result.get("operations", [])
         ]
         if "operations" in native:
@@ -1689,16 +1589,24 @@ def compact_job(manifest: dict) -> dict:
     for key in list(summary):
         if key != "result":
             summary[key] = bounded_summary(summary[key])
+    if sections is not None:
+        summary = apply_sections(summary, sections)
     return enforce_compact_budget(summary)
 
 
-def list_jobs(limit: int = 10, detail: str = "compact") -> list[dict]:
+def list_jobs(
+    limit: int = 10, detail: str = "compact", sections: list[str] | None = None
+) -> list[dict]:
     if not 1 <= limit <= 50:
         raise ValueError("limit must be 1–50")
     if detail not in ("compact", "full"):
         raise ValueError("detail must be compact or full")
+    if sections is not None:
+        if detail != "compact":
+            raise ValueError("sections require detail=compact")
+        sections = resolve_sections(sections)
     paths = sorted(JOBS.glob("*/job.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return [get_job(p.parent.name, detail=detail) for p in paths[:limit]]
+    return [get_job(p.parent.name, detail=detail, sections=sections) for p in paths[:limit]]
 
 
 if __name__ == "__main__":

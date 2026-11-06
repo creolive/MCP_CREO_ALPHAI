@@ -7,6 +7,7 @@
 #include "axis_geometry.h"
 #include "assembly_units.h"
 #include "assembly_walk.h"
+#include "assembly_pose.h"
 #include "constraint_names.h"
 #include "constraint_compare.h"
 #include "preview.h"
@@ -6269,6 +6270,137 @@ static J transform_failure_report(const J &op) {
     return report;
 }
 
+// FEAT-012/FEAT-008 (0.12.0 P-2/P-3, F04 P5): a failed job publishes one
+// bounded failure context beside failed_operation_index. Only reported facts
+// appear here: an unavailable field stays null instead of being guessed, the
+// raw message is cut at a fixed bound, and a placement failure echoes the
+// caller's own 4x4 row-vector matrix without orthonormalizing, normalizing or
+// transposing it (the batch rollback stays atomic).
+static const int FAILED_OPERATION_MESSAGE_LIMIT = 512;
+
+static std::string bounded_failure_message(const std::string &text) {
+    if ((int)text.size() <= FAILED_OPERATION_MESSAGE_LIMIT)
+        return text;
+    int cut = FAILED_OPERATION_MESSAGE_LIMIT;
+    // Keep the cut on a UTF-8 code point boundary so the receipt stays valid text.
+    while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+        --cut;
+    return text.substr(0, cut);
+}
+
+static void failed_placement_matrix(const J &operation, J &block) {
+    double matrix[4][4];
+    try {
+        assembly_rigid_transform(operation, matrix);
+    } catch (...) {
+        // The admission gate may have rejected this pose before the kernel saw
+        // it; echo the caller's own rotation_matrix anyway (never repaired) so
+        // the residual that caused the failure stays visible.
+        if (!operation.contains("rotation_matrix"))
+            return;
+        const J &input = operation.at("rotation_matrix");
+        if (!input.is_array() || input.size() != 3)
+            return;
+        const J zero = J::array({0, 0, 0});
+        const J &translation =
+            operation.contains("translation") ? operation.at("translation") : zero;
+        if (!translation.is_array() || translation.size() != 3)
+            return;
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                matrix[i][j] = 0;
+        matrix[3][3] = 1;
+        for (int i = 0; i < 3; ++i) {
+            if (!input[i].is_array() || input[i].size() != 3)
+                return;
+            for (int j = 0; j < 3; ++j) {
+                if (!input[i][j].is_number() || !std::isfinite(input[i][j].get<double>()))
+                    return;
+                matrix[i][j] = input[i][j].get<double>();
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            if (!translation[j].is_number() || !std::isfinite(translation[j].get<double>()))
+                return;
+            matrix[3][j] = translation[j].get<double>();
+        }
+    }
+    J echo = J::array();
+    for (int i = 0; i < 4; ++i) {
+        J row = J::array();
+        for (int j = 0; j < 4; ++j) {
+            if (!std::isfinite(matrix[i][j]))
+                return;
+            row.push_back(matrix[i][j]);
+        }
+        echo.push_back(std::move(row));
+    }
+    const double det = matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1]) -
+                       matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0]) +
+                       matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
+    double residual = 0;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+            double dot = 0;
+            for (int k = 0; k < 3; ++k)
+                dot += matrix[i][k] * matrix[j][k];
+            residual = std::max(residual, std::abs(dot - (i == j ? 1.0 : 0.0)));
+        }
+    if (!std::isfinite(det) || !std::isfinite(residual))
+        return;
+    block["input_matrix"] = echo;
+    block["matrix_source"] =
+        operation.contains("rotation_matrix") && !operation.at("rotation_matrix").is_null()
+            ? J("rotation_matrix")
+            : J("euler");
+    block["determinant"] = det;
+    block["orthogonality_residual"] = residual;
+}
+
+static J failed_operation_context(const J &operation, int index, bool executing,
+                                  const std::string &stage, const J &pro_error,
+                                  const std::string &pro_error_source,
+                                  const std::string &toolkit_call, const std::string &message) {
+    const bool in_flight = executing && operation.is_object();
+    const std::string kind = in_flight ? operation.value("op", "") : "";
+    J block = {{"index", in_flight ? J(index) : J(nullptr)},
+               {"operation", kind.empty() ? J(nullptr) : J(kind)},
+               {"stage", stage.empty() ? J(nullptr) : J(stage)},
+               {"feature_label", nullptr},
+               {"sketch_name", nullptr},
+               {"toolkit_call", toolkit_call.empty() ? J(nullptr) : J(toolkit_call)},
+               {"pro_error", pro_error},
+               {"pro_error_source", pro_error_source},
+               {"message", nullptr},
+               {"message_truncated", false},
+               {"input_matrix", nullptr},
+               {"matrix_source", nullptr},
+               {"determinant", nullptr},
+               {"orthogonality_residual", nullptr}};
+    if (in_flight) {
+        // Only a string label/reference is a name; an integer sketch id stays
+        // unnamed rather than being turned into a label.
+        if (operation.contains("label") && operation.at("label").is_string()) {
+            std::string label = operation.at("label").get<std::string>();
+            if (!label.empty())
+                block["feature_label"] = label;
+        }
+        if (operation.contains("sketch") && operation.at("sketch").is_string()) {
+            std::string sketch_name = operation.at("sketch").get<std::string>();
+            if (!sketch_name.empty())
+                block["sketch_name"] = sketch_name;
+        }
+        if (kind == "assemble_component" || kind == "component_placement")
+            failed_placement_matrix(operation, block);
+    }
+    if (!message.empty()) {
+        const std::string bounded = bounded_failure_message(message);
+        block["message"] = bounded;
+        block["message_truncated"] = bounded.size() < message.size();
+    }
+    return block;
+}
+
 static int run_generic(const std::wstring &job) {
     generic_job = job;
     generic_phase = "loading_request";
@@ -6284,6 +6416,11 @@ static int run_generic(const std::wstring &job) {
     int operation_index = -1;
     J operation_in_flight;
     bool executing_operation = false;
+    // FEAT-012/FEAT-008: the raw Toolkit code of the caught failure, with its
+    // provenance. A non-Toolkit failure keeps null/"unsupported" instead of the
+    // general error code assigned to toolkit_code.
+    J failure_pro_error = nullptr;
+    std::string failure_pro_error_source = "unsupported";
     std::wstring checkpoint;
     new_model_evidence = NewModelEvidence();
     board_log = _wfsopen((job + L"\\native.log").c_str(), L"w", _SH_DENYNO);
@@ -6603,6 +6740,9 @@ static int run_generic(const std::wstring &job) {
         }
     } catch (ProError error) {
         report["toolkit_code"] = error;
+        // FEAT-012/FEAT-008: this is the failing call's own return code.
+        failure_pro_error = J(error);
+        failure_pro_error_source = "toolkit";
         report["message"] = "Toolkit call " + last_toolkit_error + " failed with code " +
                             std::to_string(error) + " during " + generic_phase;
         // BUG-097 L2: a failure with a captured ProErrorlist keeps its bounded
@@ -6649,6 +6789,16 @@ static int run_generic(const std::wstring &job) {
         report["failed_toolkit_call"] =
             last_toolkit_error.empty() ? J(nullptr) : J(last_toolkit_error);
         report["failed_operation_index"] = executing_operation ? J(operation_index) : J(nullptr);
+        // FEAT-012/FEAT-008: bounded structured context for the failing input
+        // (index, operation, stage, names, raw code, bounded text, and the
+        // caller's own placement matrix when applicable).
+        const std::string failure_message =
+            report.contains("message") && report["message"].is_string()
+                ? report["message"].get<std::string>()
+                : std::string();
+        report["failed_operation"] = failed_operation_context(
+            operation_in_flight, operation_index, executing_operation, generic_phase,
+            failure_pro_error, failure_pro_error_source, last_toolkit_error, failure_message);
         // BUG-111: a failed transform names its own backend, angles and reference
         // count instead of leaving only a Toolkit code and the phase name.
         if (executing_operation && operation_in_flight.is_object() &&

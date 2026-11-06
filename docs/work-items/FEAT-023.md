@@ -83,3 +83,12 @@ capabilities摘要/分页已随0.4.2交付、0.4.4补验收闭环；0.4.5的READ
 - **`id_renumbering` 半场景限制保持**：本轮 live 矩阵不含独立的 `id_renumbering` 判定行，原生在保存路径上拒绝重编号，**只能观察拒绝、不得整体记为实机通过**的限制不变。
 
 本卡"组件清单内联业务 label 及 source_model_id/source_revision"子项的实机四例本轮全部按预期通过；本卡其余体积议题（jobs compact 日志、翼型/履带请求体量、union 校验错误）仍未做，整卡保持开放。
+
+## 2026-11-06 compact sections 投影（Q06/R04，离线实现，未实机）
+
+- 新增 `src/creo_mechdog/compact_sections.py`：从 `bridge.compact_job` 抽出结果块/操作块名单，提供 `resolve_sections`（非法名报错并列出全部已知块）与 `apply_sections`（只删未点名块、不改数据、不增数据）。
+- `creo_get_job` 与 `creo_list_jobs`（detail=compact）新增可选 `sections: list[str]`；响应顶层新增 `sections_applied` 与 `omitted_sections`；`sections=[]` 只留结果证据；未点名块不出现；`detail=full` 传 `sections` 直接拒绝。
+- 证据字段不可被裁：status/revision/message/code/toolkit_code、回滚与保存重载证据、每条 operation 的身份与失败证据（`feature_errors`/`failed_stage`/`failed_toolkit_call`/`failed_operation`）恒保留；投影先于 32 KiB 预算与 20 条采样上限执行。
+- 未知块名在读取 job 目录前拒绝，`job.json` 字节不变（单测断言）。
+- 验证：新增 `tests/unit/test_compact_sections.py` 14 项；连同既有 compact/budget/分页回归 109 项通过；全量 `tools/test_unit.py` 2477 项通过（0 失败 0 错误）；`dev_check.py --skip-unit` `success=true`。
+- 未验证：实机 Creo、MCP stdio 客户端、WorkBuddy 黑盒均未跑。本卡其余体积议题（jobs compact 日志、翼型/履带请求体量、union 校验错误）仍开放。
