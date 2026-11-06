@@ -812,7 +812,7 @@ def native_source() -> dict:
         # per-end adjacency evidence; the check never fires on a silent query.
         "adjacency_precheck_present": "flange_adjacent_bend_end_evidence" in source,
         "adjacency_precheck_called_before_create": 0
-        <= flange.index("flange_adjacent_bend_end_evidence(op)")
+        <= flange.index("flange_adjacent_bend_end_evidence(op, edge_id)")
         < flange.index("ProSection2DAlloc"),
         "adjacency_rejection_reason": "failure_reason=adjacent_bend_ends" in flange,
         "adjacency_arc_measured": "ProArcdataGet" in source and "ProEdgeDataGet" in source,

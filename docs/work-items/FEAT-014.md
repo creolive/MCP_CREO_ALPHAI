@@ -1,6 +1,24 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
-> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。
+> **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
+
+## 2026-11-06：R10 计划内 `edge_geometry` 选边（实机）
+
+`sheetmetal_flange.edge` 现在有两种形态，二者都不得再包 `edge`/`reference`：
+
+- `{"kind":"edge","id":N}`：当前巡检的边 ID，语义不变；
+- `{"kind":"edge_geometry","endpoints_mm":[[x,y,z],[x,y,z]],"tolerance_mm":1e-6}`：当前模型坐标毫米的两端点点名一条**直线边**。`tolerance_mm` 可省略（默认 `1e-6`，允许 `1e-9..1000`），对象只接受 `endpoints_mm`/`tolerance_mm` 两键，不接受单位字段。坐标必须有限、两端不重合。
+
+原生在**每个 op 执行前**重新遍历当前 body→surface→contour→edge：`ProEdgeIdGet` 去重、`ProEdgeDataGet`+`ProLinedataGet` 取端点，按 `inspect_length_units` 换算到 mm 后做**无向**端点对比较。恰好一条候选才创建；0 条、多条、模型长度单位不可换算都在创建前拒绝，0 条文案给出扫描的直线边数与 tolerance，多条给出候选 id。因此计划不再依赖提交时的 edge id，同一条物理边在重建后改变 id 仍可按几何选中。
+
+实机 Creo 12.4.0.0（`tools/test_flange_edge_geometry.py --live --confirm-session-usable`，17/17）：
+
+- 185×232×1 首壁（模型 `cbbcd27acf374b9c82534c3764b3aa51`）；`+x`、`-x` 两道非干涉折边都用**任何折边创建前**采集的端点提交，两面墙顶面 232 mm、与贴边 `matches`，均 `saved_file_reloaded_and_verified=true`；
+- 两道折边把 `-y` 顶边从 185 缩短到 177.92 mm，id 由 **85 变为 267**，旧 id 已不在当前边表；随后同一物理边用当前几何端点 + 显式 `miter_cuts{width:1,offset:1}` 建成并保存重载 true；
+- 不存在的几何 `[[900,900,900],[900,901,900]]` 被拒，文案报“扫描 86 条直线边、匹配 0 条”，revision 与体积不变、回滚 `succeeded`；
+- 报告 `build/flange_edge_geometry/20261106T235931_f44fd733/report.json`（SHA256 `b84b3e0f5908f6af8932babf70803bbb81982f7ef2bbadf90341db917f13f4ea`）。
+
+**未验证**：Creo 9/10、多候选歧义与未知长度单位的实机拒绝（仅单测）、非轴对齐/斜置边的端点匹配、跨计划重放与真实重启后的 id 重排、WorkBuddy。几何选边只解决“选哪条边”，不改变 `adjacent_bend_ends` 与 miter 的几何门槛。
 
 ## 2026-11-06：R09 归因文案、实机对比与能力口径（离线 + 实机第 3 项）
 
@@ -10,7 +28,7 @@
 - **`adjacent_bend_ends` 是创建前拒绝规则**：它依据邻接边/弯曲后退让判定并拒绝，不是几何证明，也不是斜接（miter）可行性证明；调用方传 `relief` 不会跳过该 guard。
 - **`relief` 是 bend-end relief**：`PRO_E_SMT_BEND_RELIEF` 的弯端释放（`none`/`rectangular`），不是 corner relief，也不是斜接；当前不证明它能解决角部重叠，四壁路线仍需 R09 后续实机取证。
 - **报错来源分派**：`native_planar` 首壁的错误只指向 `creo_sheetmetal_planar_wall` 的 frame/envelope，不再引用 `wall_contract` 或 YZ 旧配方；只有确实由 `sheetmetal_wall` 转换首壁建立的模型才引用 `wall_contract`；来源未知时不提供旧首壁配方。
-- **折边引用文案**：`sheetmetal_flange` 的入参错误给出 `operations[i].edge` 位置与 `{kind:'edge',id:N}` 示例，并要求用当前巡检的 edge id。
+- **折边引用文案**：`sheetmetal_flange` 的入参错误给出 `operations[i].edge` 位置与 `{kind:'edge',id:N}` 示例，并要求用当前巡检的 edge id（2026-11-06 起同时接受 `{kind:'edge_geometry',...}`，见上节）。
 
 离线验证：`tests/unit/test_sheetmetal_flange.py`、`tests/unit/test_flange_direction.py` 的文案断言；未构建执行器、未跑实机，四壁几何与 relief 效果均为未验证。
 

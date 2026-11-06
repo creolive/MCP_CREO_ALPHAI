@@ -4,6 +4,13 @@
 > **版本归属说明（2026-11-05 补记）：** 当时**已发布**版本为 **0.12.1**，本次交付候选为 **0.13.0**（开发分支验收完成，未合并 main、未发布，见[发布记录](validation/RELEASE-0.13.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-04 补记）：** 当时正式版为 **0.12.0**（见下方对应分节）。本文件按版本分节保留各自时点的结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 
+## 折边几何选边（R10，开发分支候选，版本待定，未发布）
+
+- **支持**：`creo_sheetmetal_flange` 的 `edge` 增加 `{"kind":"edge_geometry","endpoints_mm":[[x,y,z],[x,y,z]],"tolerance_mm":1e-6}`，用当前模型坐标毫米的两端点点名一条直线边；`{"kind":"edge","id":N}` 保持不变。`tolerance_mm` 可省略（默认 `1e-6`，范围 `1e-9..1000`），对象只接受这两个键。
+- **判定**：原生在**每个 op 执行前**重查当前几何，遍历 body→surface→contour→edge，按模型长度单位换算后做无向端点对比较；恰好一条候选才创建。0 条时文案给出扫描的直线边数与 tolerance，多条时给出候选 id；两者与单位不可换算、非有限坐标、退化端点一样在创建前拒绝。
+- **本机实机（Creo 12.4.0.0）**：185×232×1 首壁的 `+x`/`-x` 两道非干涉折边使用任何折边创建前采集的端点，两墙保存重载 true；`-y` 顶边被两道折边缩短后 id 由 85 变 267（旧 id 不在边表），几何端点选择仍命中并配合显式 `miter_cuts` 建成；不存在的几何被拒且 revision/体积不变。`tools/test_flange_edge_geometry.py --live --confirm-session-usable` 17/17（`build/flange_edge_geometry/20261106T235931_f44fd733/report.json`）。
+- **边界/未验证**：只有直线边；Creo 9/10、多候选与未知长度单位的实机拒绝、非轴对齐/斜置边的端点匹配、跨计划重放与真实重启后的 id 重排、WorkBuddy 均未验证。几何选边不改变 `adjacent_bend_ends` 与 miter 的几何门槛。
+
 ## 0.13.0 的曲面链能力与边界（FEAT-039，开发分支候选）
 
 本版把曲面链推进到可测量的边界，逐项结论见[发布记录](validation/RELEASE-0.13.0.md)：
@@ -19,11 +26,11 @@
 
 ## 0.12.0 的原生矩形首壁与就地改型（FEAT-058）
 
-- **支持**：空钣金零件上的**矩形**首壁创建（`sheetmetal_planar_wall`：Fill 树 + 钣金分支 `PRO_E_IS_UNATTACHED_WALL`/`PRO_E_BODY_USE=PRO_BODY_USE_NEW`/`PRO_E_SMT_NEW_BODY_LINKED`；`plane` 仅 XY/XZ/YZ；`length/width/thickness>0`；`direction=positive|negative` 决定板厚沿草图法向哪一侧生长）；`resize_sheetmetal_planar_wall` 以驱动草图坐标尺寸的方式就地改长宽，feature id 与板厚不变。
-- **判定**：job 结果发布 `planar_wall` 块——feature id、草图名、四个矩形尺寸（`dimension_count≥4`）、有符号 frame 包络 `u[0,L]`/`v[0,W]`/`n[0,t]`（negative 为 `n[-t,0]`）、体积＝长×宽×厚（容差 max(0.01 mm³, 1e-6×期望)）、从壁体 `ProSmtBodyThicknessValueGet` 读回的板厚；改型额外要求 `thickness_loaded_mm`（改型前从已保存文件读回）。**尺寸缺失或非有限值（NaN/Inf）本身判为问题**，不再让检查整体短路。
-- **准入拒绝**：实体零件；非空钣金零件再建壁；未知标签或非本算子创建的壁改型；壁存在下游子特征时的就地改型。
-- **边界/未验证**：非矩形与多环截面；四壁与第二折边（受 FEAT-014/corner relief 限制）；`plane` 传显式支撑面并覆写 origin；Creo 9/10 实机；WorkBuddy 黑盒。`sheetmetal_wall` 默认路线与 `creo_new_sheetmetal` 默认模板不变。
-- 本版实机：本机 Creo 12.4.0.0，`tools/test_adoption_planar_wall.py --live --confirm-session-usable` 67/67 通过（见 [发布记录](validation/RELEASE-0.12.0.md)）。
+- **支持**：空钣金零件上的**矩形**首壁创建（`sheetmetal_planar_wall`：Fill 树 + 钣金分支 `PRO_E_IS_UNATTACHED_WALL`/`PRO_E_BODY_USE=PRO_BODY_USE_NEW`/`PRO_E_SMT_NEW_BODY_LINKED`；`plane` 仅 XY/XZ/YZ；`length/width/thickness>0`；`origin=[u0,v0]` 为命名平面 frame 内的草图局部 mm 偏移，默认 `[0,0]`；`direction=positive|negative` 决定板厚沿草图法向哪一侧生长）；`resize_sheetmetal_planar_wall` 以驱动草图坐标尺寸的方式就地改长宽，feature id、板厚与 `origin` 不变。
+- **判定**：job 结果发布 `planar_wall` 块——feature id、草图名、四个矩形尺寸（`dimension_count≥4`）、有符号 frame 包络 `u[u0,u0+L]`/`v[v0,v0+W]`/`n[0,t]`（negative 为 `n[-t,0]`）、体积＝长×宽×厚（容差 max(0.01 mm³, 1e-6×期望)）、从壁体 `ProSmtBodyThicknessValueGet` 读回的板厚；改型额外要求 `thickness_loaded_mm`（改型前从已保存文件读回）。**尺寸缺失或非有限值（NaN/Inf）本身判为问题**，不再让检查整体短路。
+- **准入拒绝**：实体零件；非空钣金零件再建壁；未知标签或非本算子创建的壁改型；壁存在下游子特征时的就地改型；`plane` 传字典时再带非零 `origin`（字典自带 origin）。
+- **边界/未验证**：非矩形与多环截面；四壁与第二折边（受 FEAT-014/corner relief 限制）；斜置/非轴对齐 frame 的改型（原生拒绝）；Creo 9/10 实机；WorkBuddy 黑盒。`sheetmetal_wall` 默认路线与 `creo_new_sheetmetal` 默认模板不变。
+- 本版实机：本机 Creo 12.4.0.0，`tools/test_adoption_planar_wall.py --live --confirm-session-usable` 67/67 通过（见 [发布记录](validation/RELEASE-0.12.0.md)）；2026-11-06 增补 `origin` 后 `tools/test_first_wall_origin.py --live --confirm-session-usable` 112/112 通过（`build/first_wall_origin/20261106T152859Z/origin_live.json`）。
 
 ## 0.8.5 的折边方向迁移与边界（历史分节）
 

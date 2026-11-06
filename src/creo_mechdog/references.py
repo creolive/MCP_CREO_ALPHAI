@@ -518,7 +518,12 @@ def reference_capabilities() -> dict[str, Any]:
             },
             "creo_sheetmetal_flange": {
                 "edge": edge,
-                "requires": "Bare edge selection; pass edge={kind:'edge',id:N}, without an extra reference/edge wrapper",
+                "requires": (
+                    "Edge selection: {kind:'edge',id:N} with the current id from "
+                    "creo_inspect_model, or {kind:'edge_geometry',endpoints_mm:"
+                    "[[x,y,z],[x,y,z]],tolerance_mm:1e-6} matching exactly one straight "
+                    "model edge; no extra reference/edge wrapper"
+                ),
             },
             "creo_round": {
                 "references": [{"edge": edge}],

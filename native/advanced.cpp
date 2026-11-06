@@ -1022,9 +1022,12 @@ static ProError smt_surface_type_cb(ProSurface s, ProError status, ProAppData da
         out->push_back({{"id", id}, {"smt_type", (int)type}, {"code", code}});
     return PRO_TK_NO_ERROR;
 }
+// R10: resolves both edge reference shapes; defined with the geometry matcher
+// below, declared here because the flange evidence helpers resolve first.
+static ProSelection resolve_flange_edge(const J &edge_ref);
 static void flange_attachment_evidence(const J &op, J *evidence) {
     try {
-        ProSelection sel = resolve(op["edge"]);
+        ProSelection sel = resolve_flange_edge(op["edge"]);
         ProModelitem item;
         CK(ProSelectionModelitemGet(sel, &item));
         ProSelectionFree(&sel);
@@ -1174,7 +1177,7 @@ static int flange_face_type_id(ProSurface face, int *face_id) {
 
 static J flange_edge_forensics(const J &op) {
     J evidence = J::object();
-    ProSelection sel = resolve(op["edge"]);
+    ProSelection sel = resolve_flange_edge(op["edge"]);
     ProModelitem item;
     CK(ProSelectionModelitemGet(sel, &item));
     ProSelectionFree(&sel);
@@ -1293,7 +1296,7 @@ static void flange_created_feature_evidence(const J &op, const ProFeature &creat
 // failure_reason=adjacent_bend_ends before any feature is created.
 static const double FLANGE_ADJACENT_BEND_TOLERANCE_MM = 1e-3;
 
-static J flange_adjacent_bend_end_evidence(const J &op) {
+static J flange_adjacent_bend_end_evidence(const J &op, int edge_id) {
     J evidence = J::object();
     try {
         double radius = op["radius"].get<double>();
@@ -1304,12 +1307,8 @@ static J flange_adjacent_bend_end_evidence(const J &op) {
             return J::object();
         }
         double bound = 2 * (radius + thickness) + FLANGE_ADJACENT_BEND_TOLERANCE_MM;
-        ProSelection sel = resolve(op["edge"]);
-        ProModelitem item;
-        CK(ProSelectionModelitemGet(sel, &item));
-        ProSelectionFree(&sel);
         ProEdge edge;
-        CK(ProEdgeInit((ProSolid)board, item.id, &edge));
+        CK(ProEdgeInit((ProSolid)board, edge_id, &edge));
         double length = 0;
         ProError length_code = ProEdgeLengthEval(edge, &length);
         ProVector end0, d0a, d0b, d0c, end1, d1a, d1b, d1c;
@@ -1360,7 +1359,7 @@ static J flange_adjacent_bend_end_evidence(const J &op) {
                 ProEdge nb = end_edges[i];
                 int nb_id = -1;
                 ProEdgeIdGet(nb, &nb_id);
-                if (nb_id == item.id)
+                if (nb_id == edge_id)
                     continue; // the attachment edge meets at its own end
                 ProGeomitemdata *data = nullptr;
                 ProError data_code = ProEdgeDataGet(nb, &data);
@@ -1438,13 +1437,13 @@ static J flange_adjacent_bend_end_evidence(const J &op) {
             ProArrayFree((ProArray *)&end_types);
             ProArrayFree((ProArray *)&end_surfs);
         }
-        log("FLANGE_ADJACENT_BEND edge=%d end0=%d end1=%d\n", item.id,
+        log("FLANGE_ADJACENT_BEND edge=%d end0=%d end1=%d\n", edge_id,
             ends[0].value("adjacent_bend_end", false) ? 1 : 0,
             ends[1].value("adjacent_bend_end", false) ? 1 : 0);
         if (!any_hit)
             return J::object();
         evidence["stage"] = "before_create";
-        evidence["edge_id"] = item.id;
+        evidence["edge_id"] = edge_id;
         evidence["edge_length_mm"] = length_code ? J() : J(length);
         evidence["radius_mm"] = radius;
         evidence["part_thickness_mm"] = thickness;
@@ -1531,9 +1530,125 @@ static std::string flange_first_wall_guide() {
 
 static std::string flange_edge_reference_contract() {
     const int index = generated_identity_index();
-    return "operations[i].edge must be a bare edge reference {kind:'edge',id:N} whose id is "
-           "the current edge id read from creo_inspect_model; here i=" +
+    return "operations[i].edge must be {kind:'edge',id:N} whose id is the current edge id read "
+           "from creo_inspect_model, or {kind:'edge_geometry',endpoints_mm:[[x,y,z],[x,y,z]],"
+           "tolerance_mm:1e-6} whose two straight-edge endpoints match exactly one current model "
+           "edge; here i=" +
            std::to_string(index) + " (operations[" + std::to_string(index) + "].edge)";
+}
+
+// R10: edge ids change whenever the model rebuilds, so a plan that must keep
+// targeting one physical edge can name its two straight-edge endpoints in
+// millimetres instead. The match is undirected, must be unique and is re-queried
+// on every operation; non-straight edges and an unknown model length unit are
+// refused rather than guessed. {kind:'edge',id:N} keeps working unchanged.
+struct FlangeEdgeScan {
+    V points[2];
+    double tolerance = 1e-6;
+    double scale = 1;
+    std::set<int> seen;
+    std::set<int> matches;
+    int straight = 0;
+};
+static bool flange_point_within(const V &actual, const V &expected, double tolerance) {
+    return fabs(actual[0] - expected[0]) <= tolerance &&
+           fabs(actual[1] - expected[1]) <= tolerance && fabs(actual[2] - expected[2]) <= tolerance;
+}
+static ProError flange_match_edge(ProEdge edge, ProError status, ProAppData data) {
+    auto *scan = (FlangeEdgeScan *)data;
+    int id = -1;
+    if (status || ProEdgeIdGet(edge, &id))
+        return PRO_TK_NO_ERROR;
+    ProGeomitemdata *geometry = nullptr;
+    if (ProEdgeDataGet(edge, &geometry) || !geometry)
+        return PRO_TK_NO_ERROR;
+    Pro3dPnt start = {}, end = {};
+    auto curve = geometry->data.p_curve_data;
+    bool straight = curve && !ProLinedataGet(curve, start, end);
+    ProGeomitemdataFree(&geometry);
+    if (!straight || !scan->seen.insert(id).second)
+        return PRO_TK_NO_ERROR;
+    scan->straight++;
+    V first = {start[0] * scan->scale, start[1] * scan->scale, start[2] * scan->scale};
+    V second = {end[0] * scan->scale, end[1] * scan->scale, end[2] * scan->scale};
+    if ((flange_point_within(first, scan->points[0], scan->tolerance) &&
+         flange_point_within(second, scan->points[1], scan->tolerance)) ||
+        (flange_point_within(second, scan->points[0], scan->tolerance) &&
+         flange_point_within(first, scan->points[1], scan->tolerance)))
+        scan->matches.insert(id);
+    return PRO_TK_NO_ERROR;
+}
+struct FlangeSurfaceScan {
+    ProSurface surface;
+    FlangeEdgeScan *scan;
+};
+static ProError flange_match_contour(ProContour contour, ProError status, ProAppData data) {
+    if (status)
+        return PRO_TK_NO_ERROR;
+    auto *context = (FlangeSurfaceScan *)data;
+    return ProContourEdgeVisit(context->surface, contour, flange_match_edge, nullptr,
+                               context->scan);
+}
+static ProError flange_match_surface(ProSurface surface, ProError status, ProAppData data) {
+    if (status)
+        return PRO_TK_NO_ERROR;
+    FlangeSurfaceScan context{surface, (FlangeEdgeScan *)data};
+    return ProSurfaceContourVisit(surface, flange_match_contour, nullptr, &context);
+}
+static int flange_geometry_edge_id(const J &edge_ref) {
+    FlangeEdgeScan scan;
+    scan.tolerance = edge_ref.value("tolerance_mm", 1e-6);
+    for (int end = 0; end < 2; end++) {
+        auto point = edge_ref.at("endpoints_mm").at(end);
+        scan.points[end] = {point.at(0).get<double>(), point.at(1).get<double>(),
+                            point.at(2).get<double>()};
+    }
+    InspectionLengthUnits units = inspect_length_units((ProMdl)board);
+    MillimeterScale scale = length_scale_to_mm((ProMdl)board, units);
+    if (!scale.known)
+        throw std::runtime_error(
+            "sheetmetal_flange edge_geometry cannot convert the model length unit to "
+            "millimetres; pass {kind:'edge',id:N} from creo_inspect_model instead");
+    scan.scale = scale.scale;
+    ProSolidBody *bodies = nullptr;
+    int count = 0;
+    CK(ProSolidBodiesCollect((ProSolid)board, &bodies));
+    CK(ProArraySizeGet((ProArray)bodies, &count));
+    for (int index = 0; index < count; index++) {
+        ProSolidBodyState state;
+        CK(ProSolidBodyStateGet(&bodies[index], &state));
+        if (state != PRO_BODY_STATE_ACTIVE)
+            continue;
+        CK(ProSolidBodySurfaceVisit(&bodies[index], flange_match_surface, (ProAppData)&scan));
+    }
+    auto point_text = [&scan](int end) {
+        return "[" + std::to_string(scan.points[end][0]) + ", " +
+               std::to_string(scan.points[end][1]) + ", " + std::to_string(scan.points[end][2]) +
+               "]";
+    };
+    log("FLANGE_EDGE_GEOMETRY straight=%d matches=%d tolerance=%.9f\n", scan.straight,
+        (int)scan.matches.size(), scan.tolerance);
+    if (scan.matches.size() == 1)
+        return *scan.matches.begin();
+    if (scan.matches.empty())
+        throw std::runtime_error(
+            "sheetmetal_flange edge_geometry endpoints " + point_text(0) + " and " + point_text(1) +
+            " matched none of the " + std::to_string(scan.straight) +
+            " straight model edges (tolerance_mm=" + std::to_string(scan.tolerance) +
+            "); edge ids and geometry change when the model rebuilds, so re-read "
+            "creo_inspect_model edges[].start/end and pass current coordinates");
+    std::string ids;
+    for (int id : scan.matches)
+        ids += (ids.empty() ? "" : ", ") + std::to_string(id);
+    throw std::runtime_error(
+        "sheetmetal_flange edge_geometry endpoints " + point_text(0) + " and " + point_text(1) +
+        " matched " + std::to_string(scan.matches.size()) + " edges (ids " + ids +
+        "); use a smaller tolerance_mm or endpoints that belong to exactly one edge");
+}
+static ProSelection resolve_flange_edge(const J &edge_ref) {
+    if (edge_ref.value("kind", "") == "edge")
+        return resolve(edge_ref);
+    return selection(flange_geometry_edge_id(edge_ref), PRO_EDGE);
 }
 
 static void generic_sheetmetal_flange(const J &op) {
@@ -1544,17 +1659,30 @@ static void generic_sheetmetal_flange(const J &op) {
     // adjacent-bend-ends guard below; it is validated here for the same reason.
     FlangeMiterRequest miter_request = flange_miter_request(op);
     J adjacent_allowed;
-    // R09: name the plan position and the required reference shape before the
-    // generic resolver can answer with a bare {kind:...} message.
+    int edge_id = -1;
+    // R09/R10: name the plan position and the accepted reference shapes before
+    // the generic resolver can answer with a bare {kind:...} message.
     {
         J edge_ref = op.value("edge", J());
-        bool valid = edge_ref.is_object() && edge_ref.contains("kind") &&
-                     edge_ref["kind"].is_string() && edge_ref["kind"] == "edge" &&
-                     edge_ref.contains("id") && edge_ref["id"].is_number_integer();
-        if (valid) {
-            const long long id = edge_ref["id"].get<long long>();
-            valid = id >= 0 && id <= 2147483647LL;
-        }
+        bool valid =
+            edge_ref.is_object() && edge_ref.contains("kind") && edge_ref["kind"].is_string();
+        if (valid && edge_ref["kind"] == "edge")
+            valid = edge_ref.contains("id") && edge_ref["id"].is_number_integer() &&
+                    edge_ref["id"].get<long long>() >= 0 &&
+                    edge_ref["id"].get<long long>() <= 2147483647LL;
+        else if (valid && edge_ref["kind"] == "edge_geometry") {
+            J endpoints = edge_ref.contains("endpoints_mm") ? edge_ref["endpoints_mm"] : J::array();
+            valid = endpoints.is_array() && endpoints.size() == 2;
+            for (auto point : endpoints) {
+                valid = valid && point.is_array() && point.size() == 3;
+                for (auto coordinate : point)
+                    valid =
+                        valid && coordinate.is_number() && std::isfinite(coordinate.get<double>());
+            }
+            double tolerance = edge_ref.value("tolerance_mm", 1e-6);
+            valid = valid && std::isfinite(tolerance) && tolerance >= 1e-9 && tolerance <= 1000;
+        } else
+            valid = false;
         if (!valid)
             throw std::runtime_error("sheetmetal_flange " + flange_edge_reference_contract() +
                                      "; got " + edge_ref.dump());
@@ -1565,10 +1693,11 @@ static void generic_sheetmetal_flange(const J &op) {
     // empty element error list. Reject that input here, carrying the raw code, so the
     // caller is not sent back to guessing.
     {
-        ProSelection probe = resolve(op["edge"]);
+        ProSelection probe = resolve_flange_edge(op["edge"]);
         ProModelitem item;
         CK(ProSelectionModelitemGet(probe, &item));
         ProSelectionFree(&probe);
+        edge_id = item.id;
         ProEdge handle;
         CK(ProEdgeInit((ProSolid)board, item.id, &handle));
         ProEdge *contour = nullptr;
@@ -1600,7 +1729,7 @@ static void generic_sheetmetal_flange(const J &op) {
     // the same wall feature so Creo cuts the overlap itself. Without that
     // request the guard behaves exactly as before.
     {
-        J adjacency = flange_adjacent_bend_end_evidence(op);
+        J adjacency = flange_adjacent_bend_end_evidence(op, edge_id);
         if (!adjacency.empty() && !miter_request.requested) {
             adjacency["failure_reason"] = "adjacent_bend_ends";
             std::string summary = flange_adjacent_ends_summary(adjacency);
@@ -1664,7 +1793,7 @@ static void generic_sheetmetal_flange(const J &op) {
     integer(root, PRO_E_SMT_WALL_TYPE, PRO_SMT_WALL_TYPE_FLANGE);
     integer(root, PRO_E_SMT_FLANGE_TYPE, PRO_FLANGE_WALL_TYPE_2D_SWEPT);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
-    ProSelection edge = resolve(op["edge"]);
+    ProSelection edge = resolve_flange_edge(op["edge"]);
     ProReference edge_ref;
     CK(ProSelectionToReference(edge, &edge_ref));
     ProCollection chain;
