@@ -50,6 +50,6 @@
 
 应有四个文件：`MCP_CREO_MechDog-0.16.1-source.zip`、`MCP_CREO_MechDog-0.16.1-source.zip.sha256`、`MCP_CREO_MechDog-0.16.1-seed-library.zip`、`MCP_CREO_MechDog-0.16.1-seed-library.zip.sha256`。逐个列出文件名上传（禁止 `*.zip` 通配），并用 `python tools/check_release_assets.py --tag v0.16.1` 核对四附件齐全、两个 sidecar 与对应 ZIP 摘要一致。
 
-种子包 SHA256：`54ff5dfd58177d58b5748129e562872add6dfa0da25fda85d613e91d274d5a84`。源码包 SHA256：`81745242cc70ecb7e0d7ec561c822be223dbf8f6849f8c50276d83354b372629`。
+种子包 SHA256：`54ff5dfd58177d58b5748129e562872add6dfa0da25fda85d613e91d274d5a84`（24 文件、9 种子）。源码包 SHA256 见同名 `.sha256` sidecar 与 Release body：由本记录所在提交的源码打包生成，打包后不再改动源码，因此不在本文硬编码摘要。
 
 当前状态：**准备发布**（本文随 0.16.1 发布提交进入 `main`）；标签、Release 链接与附件核对结果记录在发布交付说明。
