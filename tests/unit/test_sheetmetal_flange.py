@@ -1361,7 +1361,7 @@ class FlangeWordingTest(unittest.TestCase):
         self.assertNotIn("implements no corner relief", section)
 
     def test_adjacent_guard_is_not_bypassed_by_a_supplied_relief(self) -> None:
-        guard = "\n        J adjacency = flange_adjacent_bend_end_evidence(op);\n"
+        guard = "\n        J adjacency = flange_adjacent_bend_end_evidence(op, edge_id);\n"
         self.assertIn(guard, self.flange)
         section = self.flange[self.flange.index(guard) : self.flange.index("ProSection2DAlloc")]
         self.assertNotIn("relief_request", section)
@@ -1433,6 +1433,144 @@ class MiterCutsSchemaTest(unittest.TestCase):
         validated = validate_operations([operation])[0]
         self.assertEqual(validated["relief"]["width"], 1.0)
         self.assertEqual(validated["miter_cuts"], {"width": 1.0, "offset": 1.0})
+
+
+class EdgeGeometryReferenceTest(unittest.TestCase):
+    """R10: a plan may name an edge by its two straight-edge endpoints.
+
+    Geometry selection exists so a plan survives a rebuild that renumbers edges.
+    The Python side only normalizes and bounds the request; the native resolver
+    re-queries the model per operation and refuses 0 or many matches.
+    """
+
+    ENDPOINTS = [[0.0, 0.0, 1.0], [185.0, 0.0, 1.0]]
+
+    @staticmethod
+    def validated(edge: dict) -> dict:
+        operation = flange_op("-y", "f_ny", {"edge": {"kind": "edge", "id": 1}})
+        operation["edge"] = edge
+        return validate_operations([operation])[0]["edge"]
+
+    def test_endpoints_and_default_tolerance_are_normalized(self) -> None:
+        self.assertEqual(
+            self.validated({"kind": "edge_geometry", "endpoints_mm": self.ENDPOINTS}),
+            {
+                "kind": "edge_geometry",
+                "endpoints_mm": [[0.0, 0.0, 1.0], [185.0, 0.0, 1.0]],
+                "tolerance_mm": 1e-6,
+            },
+        )
+
+    def test_integer_coordinates_and_explicit_tolerance_become_floats(self) -> None:
+        validated = self.validated(
+            {
+                "kind": "edge_geometry",
+                "endpoints_mm": [[0, 0, 1], [185, 0, 1]],
+                "tolerance_mm": 1,
+            }
+        )
+        self.assertEqual(validated["tolerance_mm"], 1.0)
+        self.assertIsInstance(validated["endpoints_mm"][0][0], float)
+
+    def test_current_edge_id_reference_is_unchanged(self) -> None:
+        self.assertEqual(self.validated({"kind": "edge", "id": 104}), {"kind": "edge", "id": 104})
+
+    def test_unknown_keys_including_a_unit_are_rejected(self) -> None:
+        for extra in ({"unit": "inch"}, {"tolerance": 1e-6}, {"kind2": "edge"}):
+            with self.subTest(extra=extra):
+                with self.assertRaisesRegex(ValueError, "length unit"):
+                    self.validated(
+                        {"kind": "edge_geometry", "endpoints_mm": self.ENDPOINTS, **extra}
+                    )
+
+    def test_non_finite_and_boolean_coordinates_are_rejected(self) -> None:
+        for point in (
+            [0.0, 0.0, float("nan")],
+            [0.0, float("inf"), 1.0],
+            [True, 0.0, 1.0],
+            ["0", 0.0, 1.0],
+        ):
+            with self.subTest(point=point):
+                with self.assertRaisesRegex(ValueError, "finite numbers"):
+                    self.validated(
+                        {"kind": "edge_geometry", "endpoints_mm": [point, [185.0, 0.0, 1.0]]}
+                    )
+
+    def test_endpoints_must_be_two_xyz_points(self) -> None:
+        for endpoints in (
+            [[0.0, 0.0, 1.0]],
+            [[0.0, 0.0, 1.0], [185.0, 0.0]],
+            [[0.0, 0.0, 1.0], [185.0, 0.0, 1.0], [1.0, 1.0, 1.0]],
+        ):
+            with self.subTest(endpoints=endpoints):
+                with self.assertRaisesRegex(ValueError, "two \\[x,y,z\\] points"):
+                    self.validated({"kind": "edge_geometry", "endpoints_mm": endpoints})
+
+    def test_coincident_endpoints_describe_no_edge(self) -> None:
+        with self.assertRaisesRegex(ValueError, "non-degenerate"):
+            self.validated(
+                {
+                    "kind": "edge_geometry",
+                    "endpoints_mm": [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]],
+                }
+            )
+
+    def test_tolerance_must_be_a_finite_number_in_range(self) -> None:
+        for tolerance in (0, 1e-10, 1001, float("nan"), True, "1e-6"):
+            with self.subTest(tolerance=tolerance):
+                with self.assertRaisesRegex(ValueError, "between 1e-9 and 1000"):
+                    self.validated(
+                        {
+                            "kind": "edge_geometry",
+                            "endpoints_mm": self.ENDPOINTS,
+                            "tolerance_mm": tolerance,
+                        }
+                    )
+
+
+class EdgeGeometryNativeTest(unittest.TestCase):
+    """The native resolver matches undirected endpoints and refuses 0 or N hits."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = (REPO_ROOT / "native" / "advanced.cpp").read_text(encoding="utf-8")
+        cls.start = cls.source.index("static int flange_geometry_edge_id(")
+        cls.scan = cls.source[
+            cls.source.index("static bool flange_point_within(") : cls.source.index(
+                "static void generic_sheetmetal_flange("
+            )
+        ]
+
+    def test_every_flange_edge_use_goes_through_the_shared_resolver(self) -> None:
+        self.assertIn("static ProSelection resolve_flange_edge(const J &edge_ref)", self.source)
+        self.assertIn(
+            'if (edge_ref.value("kind", "") == "edge")\n        return resolve(edge_ref);',
+            self.source,
+        )
+        self.assertEqual(self.source.count('resolve_flange_edge(op["edge"])'), 4)
+        self.assertNotIn('resolve(op["edge"])', self.source)
+
+    def test_matching_is_undirected_and_unit_scaled(self) -> None:
+        self.assertIn("ProEdgeIdGet(edge, &id)", self.scan)
+        self.assertIn("ProLinedataGet(curve, start, end)", self.scan)
+        self.assertIn("scan->seen.insert(id).second", self.scan)
+        self.assertIn("start[0] * scan->scale", self.scan)
+        self.assertIn(
+            "flange_point_within(second, scan->points[0], scan->tolerance) &&\n"
+            "         flange_point_within(first, scan->points[1], scan->tolerance)",
+            self.scan,
+        )
+
+    def test_unknown_length_unit_is_refused_instead_of_guessed(self) -> None:
+        self.assertIn("if (!scale.known)", self.source)
+        self.assertIn("cannot convert the model length unit to", self.source)
+
+    def test_zero_and_multiple_candidates_report_what_was_scanned(self) -> None:
+        self.assertIn("FLANGE_EDGE_GEOMETRY straight=", self.source)
+        self.assertIn('" matched none of the "', self.source)
+        self.assertIn('" edges (ids "', self.source)
+        self.assertIn('" straight model edges (tolerance_mm="', self.source)
+        self.assertIn("if (scan.matches.size() == 1)", self.source)
 
 
 if __name__ == "__main__":

@@ -1812,7 +1812,14 @@ async def creo_sheetmetal_flange(
     edge: Annotated[
         dict[str, Any],
         Field(
-            description="Bare edge selection {kind:'edge',id:N} from model inspection. Do not add a reference/edge wrapper inside this parameter."
+            description=(
+                "Bare edge selection without a reference/edge wrapper. Use {kind:'edge',id:N} "
+                "with the current id from creo_inspect_model, or {kind:'edge_geometry',"
+                "endpoints_mm:[[x,y,z],[x,y,z]],tolerance_mm:1e-6} naming the two straight-edge "
+                "endpoints in millimetres: the native side re-queries the model on every "
+                "operation and requires exactly one undirected match, so the plan survives a "
+                "rebuild that renumbers edges."
+            )
         ),
     ],
     height: float,

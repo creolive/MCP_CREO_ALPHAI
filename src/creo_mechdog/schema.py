@@ -1111,13 +1111,18 @@ class FlangeMiterCuts(StrictModel):
 class SheetmetalFlangeOp(StrictModel):
     op: Literal["sheetmetal_flange"]
     label: Label
-    # Bare current-geometry edge reference. The plan path is operations[i].edge;
-    # the value is {kind:'edge',id:N} with the edge id read from the current
-    # creo_inspect_model (no edge/reference wrapper, no historical id).
+    # R09/R10: the plan path is operations[i].edge. Two shapes reach the native
+    # resolver: a bare current-geometry edge id {kind:'edge',id:N}, or the two
+    # straight-edge endpoints in millimetres {kind:'edge_geometry',endpoints_mm:
+    # [[x,y,z],[x,y,z]],tolerance_mm:1e-6}. The geometry form is what makes a
+    # plan survive a rebuild that renumbers edges; the native side re-queries the
+    # model for every operation and requires exactly one match.
     edge: dict[str, Any] = Field(
         description=(
-            "Bare edge reference {kind:'edge',id:N}; the plan path is operations[i].edge and "
-            "the id must be the current edge id from creo_inspect_model"
+            "Edge reference for operations[i].edge: {kind:'edge',id:N} with the "
+            "current edge id from creo_inspect_model, or "
+            "{kind:'edge_geometry',endpoints_mm:[[x,y,z],[x,y,z]],"
+            "tolerance_mm:1e-6} matching exactly one straight model edge"
         )
     )
     height: Positive
@@ -1145,6 +1150,65 @@ class SheetmetalFlangeOp(StrictModel):
         if isinstance(value, bool):
             raise ValueError("end_trim_mm is a length in model units, not a boolean")
         return value
+
+    @field_validator("edge", mode="before")
+    @classmethod
+    def edge_is_a_current_reference(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or value.get("kind") not in {"edge", "edge_geometry"}:
+            raise ValueError(
+                "sheetmetal_flange edge must be {kind:'edge',id:N} or "
+                "{kind:'edge_geometry',endpoints_mm:[[x,y,z],[x,y,z]],tolerance_mm:1e-6}"
+            )
+        if value["kind"] == "edge":
+            if set(value) != {"kind", "id"}:
+                raise ValueError("edge {kind:'edge'} accepts exactly kind and id")
+            edge_id = value.get("id")
+            if (
+                isinstance(edge_id, bool)
+                or not isinstance(edge_id, int)
+                or not 0 <= edge_id < 2**31
+            ):
+                raise ValueError(
+                    "edge {kind:'edge'} id must be the nonnegative 32-bit integer from "
+                    "creo_inspect_model"
+                )
+            return value
+        extra = set(value) - {"kind", "endpoints_mm", "tolerance_mm"}
+        if extra:
+            raise ValueError(
+                "edge_geometry accepts endpoints_mm and tolerance_mm only; the length unit "
+                f"comes from the model, not from {sorted(extra)}"
+            )
+        endpoints = value.get("endpoints_mm")
+        if not isinstance(endpoints, list) or len(endpoints) != 2:
+            raise ValueError("edge_geometry endpoints_mm must be two [x,y,z] points")
+        for point in endpoints:
+            if not isinstance(point, list) or len(point) != 3:
+                raise ValueError("edge_geometry endpoints_mm must be two [x,y,z] points")
+            for coordinate in point:
+                if (
+                    isinstance(coordinate, bool)
+                    or not isinstance(coordinate, (int, float))
+                    or not math.isfinite(coordinate)
+                ):
+                    raise ValueError(
+                        "edge_geometry endpoints_mm coordinates must be finite numbers"
+                    )
+        if math.dist(endpoints[0], endpoints[1]) <= 0:
+            raise ValueError("edge_geometry endpoints_mm must describe a non-degenerate edge")
+        tolerance = value.get("tolerance_mm", 1e-6)
+        if (
+            isinstance(tolerance, bool)
+            or not isinstance(tolerance, (int, float))
+            or not math.isfinite(tolerance)
+            or not 1e-9 <= tolerance <= 1000
+        ):
+            raise ValueError("edge_geometry tolerance_mm must be between 1e-9 and 1000")
+        return {
+            "kind": "edge_geometry",
+            "endpoints_mm": [[float(coordinate) for coordinate in point] for point in endpoints],
+            "tolerance_mm": float(tolerance),
+        }
 
 
 class SheetmetalUnbendOp(StrictModel):
@@ -1975,6 +2039,12 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                     # FEAT-053: the three-point datum_plane reference. Its shape
                     # is validated by PlaneOp and its producers by the plan-level
                     # check below; nothing else accepts this kind.
+                    pass
+                elif k == "edge_geometry":
+                    # R10: a flange attachment edge named by its two current
+                    # endpoints. Shape and bounds are enforced by
+                    # SheetmetalFlangeOp.edge_is_a_current_reference; every other
+                    # operation rejects the kind in its own field validator.
                     pass
                 elif k not in ("body", "part", "default_csys"):
                     raise ValueError(f"Unsupported model reference kind: {k}")
