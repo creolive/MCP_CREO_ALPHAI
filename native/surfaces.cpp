@@ -8,6 +8,10 @@
 #include <ProCsys.h>
 #include <ProPoint.h>
 
+#include <cmath>
+
+#include "quilt_gauge_guard.h"
+
 static void generic_csys(const J &op) {
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_CSYS);
@@ -161,18 +165,31 @@ static void generic_surface_offset(const J &op) {
     ProModelitem item;
     CK(ProSelectionModelitemGet(s, &item));
     quilt_id = item.id;
-    double source_area = 0.0;
-    bool area_known = false;
-    {
-        ProQuilt quilt = nullptr;
-        if (!ProQuiltInit((ProSolid)board, quilt_id, &quilt); quilt) {
-            MeasurementOutcome area = quilt_area_native(quilt);
-            if (area.available) {
-                source_area = area.value;
-                area_known = true;
-            }
-        }
+    // BUG-112: ProQuiltInit reports its outcome through a code and a handle, so
+    // both must agree before the quilt may be measured. A leftover handle after
+    // a failed Init would otherwise become a bogus source area and a fabricated
+    // finite offset distance.
+    ProQuilt quilt = nullptr;
+    ProError init_code = ProQuiltInit((ProSolid)board, quilt_id, &quilt);
+    bool gauge_ready = quilt_gauge_ready((int)init_code, quilt);
+    MeasurementOutcome area;
+    if (gauge_ready)
+        area = quilt_area_native(quilt);
+    double source_area = area.available ? area.value : 0.0;
+    bool area_known = area.available;
+    // An unavailable area always names why: a failed Init, a successful Init
+    // that handed back no handle, or the measurement's own reason.
+    const char *area_reason = nullptr;
+    if (!area_known) {
+        if (!gauge_ready)
+            area_reason = init_code ? "quilt_init_failed" : "quilt_handle_missing";
+        else
+            area_reason = area.reason ? area.reason : "source_area_unavailable";
     }
+    J source_area_status = {{"available", area_known},
+                            {"init_code", (int)init_code},
+                            {"query_code", gauge_ready ? J((int)area.query_code) : J(nullptr)},
+                            {"reason", area_reason ? J(area_reason) : J(nullptr)}};
     double volume_before = 0.0;
     bool volume_before_known = true;
     try {
@@ -196,10 +213,14 @@ static void generic_surface_offset(const J &op) {
     ProElementFree(&root);
     double volume_after = volume();
     // The wall is the source area swept by the offset distance, so the
-    // volume over the area measures the distance back from the geometry.
-    const double measured = area_known && source_area > 0.0 ? volume_after / source_area : -1.0;
+    // volume over the area measures the distance back from the geometry. An
+    // unavailable or non-finite area never yields a finite distance.
+    const double measured = area_known && std::isfinite(source_area) && source_area > 0.0
+                                ? volume_after / source_area
+                                : -1.0;
     J extra = {{"target_quilt_id", quilt_id},
                {"source_area_mm2", area_known ? J(source_area) : J(nullptr)},
+               {"source_area_status", source_area_status},
                {"offset_distance_mm", op["distance"]},
                {"measured_offset_distance_mm", measured >= 0.0 ? J(measured) : J(nullptr)},
                {"direction", op["side"]},

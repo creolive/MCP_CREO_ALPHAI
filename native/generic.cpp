@@ -6288,6 +6288,173 @@ static std::string bounded_failure_message(const std::string &text) {
     return text.substr(0, cut);
 }
 
+// BUG-113: a failed save and a failed rollback verification are separate facts
+// and must be readable from the receipt alone. Both blocks below only report
+// what this process observed, stay bounded (20 entries plus total/truncated)
+// and never publish absolute paths or license data.
+static const int RECOVERY_SAMPLE_LIMIT = 20;
+
+static J bounded_directory_names(const std::wstring &directory) {
+    J sample = J::array();
+    int total = 0;
+    bool truncated = false;
+    std::error_code error;
+    std::filesystem::directory_iterator entry(std::filesystem::path(directory), error);
+    const std::filesystem::directory_iterator end;
+    while (!error && entry != end) {
+        std::error_code type_error;
+        if (std::filesystem::is_regular_file(entry->path(), type_error) && !type_error) {
+            ++total;
+            if ((int)sample.size() < RECOVERY_SAMPLE_LIMIT)
+                sample.push_back(utf8(entry->path().filename()));
+            else
+                truncated = true;
+        }
+        entry.increment(error);
+    }
+    if (error)
+        return {{"available", false},
+                {"total", nullptr},
+                {"truncated", nullptr},
+                {"sample", J::array()},
+                {"reason", "the destination directory could not be listed"}};
+    return {{"available", true},
+            {"total", total},
+            {"truncated", truncated},
+            {"sample", sample},
+            {"reason", nullptr}};
+}
+
+// Only a name inside the managed output directory may be published; anything
+// outside it (or any absolute path) stays null instead of leaking a host path.
+static J managed_relative_name(const std::wstring &value, const std::wstring &directory) {
+    if (value.empty())
+        return nullptr;
+    std::error_code error;
+    const std::filesystem::path relative = std::filesystem::relative(
+        std::filesystem::path(value), std::filesystem::path(directory), error);
+    if (error || relative.empty() || relative.is_absolute())
+        return nullptr;
+    if (*relative.begin() == std::filesystem::path(L".."))
+        return nullptr;
+    return J(utf8(relative.generic_wstring()));
+}
+
+static J save_failure_report(ProError code, const char *stage, const std::wstring &checkpoint,
+                             const std::wstring &directory, const std::wstring &model_name,
+                             bool assembly) {
+    const std::wstring extension = assembly ? L".asm" : L".prt";
+    return {{"call", "ProMdlnameBackup"},
+            {"code", code},
+            {"stage", stage},
+            {"destination", utf8(model_name + extension)},
+            {"source_checkpoint", managed_relative_name(checkpoint, directory)},
+            {"candidate_files", bounded_directory_names(directory)}};
+}
+
+static bool collect_ids(const J &state, const char *key, std::set<int> &ids) {
+    if (!state.is_object() || !state.contains(key) || !state[key].is_array())
+        return false;
+    for (const auto &item : state[key]) {
+        if (!item.is_object() || !item.contains("id") || !item["id"].is_number_integer())
+            return false;
+        ids.insert(item["id"].get<int>());
+    }
+    return true;
+}
+
+static J bounded_ids(const std::set<int> &ids) {
+    J sample = J::array();
+    for (auto it = ids.begin(); it != ids.end() && (int)sample.size() < RECOVERY_SAMPLE_LIMIT; ++it)
+        sample.push_back(*it);
+    return {{"total", (int)ids.size()},
+            {"truncated", (int)ids.size() > RECOVERY_SAMPLE_LIMIT},
+            {"sample", sample}};
+}
+
+static J rollback_collection_difference(const J &before, const J &after, const char *key) {
+    std::set<int> before_ids, after_ids;
+    const bool before_ids_ok = collect_ids(before, key, before_ids);
+    const bool after_ids_ok = collect_ids(after, key, after_ids);
+    const bool before_listed = before.is_object() && before.contains(key) && before[key].is_array();
+    const bool after_listed = after.is_object() && after.contains(key) && after[key].is_array();
+    J block = {{"available", false},
+               {"before", before_listed ? J((int)before[key].size()) : J(nullptr)},
+               {"after", after_listed ? J((int)after[key].size()) : J(nullptr)},
+               {"missing_ids", nullptr},
+               {"added_ids", nullptr},
+               {"reason", nullptr}};
+    if (!before_listed || !after_listed) {
+        block["reason"] =
+            std::string(!before_listed ? "baseline" : "restored") + " inspection carries no " + key;
+        return block;
+    }
+    if (!before_ids_ok || !after_ids_ok) {
+        block["reason"] = std::string("one or more ") + key + " records carry no integer id";
+        return block;
+    }
+    std::set<int> missing, added;
+    for (int id : before_ids)
+        if (!after_ids.count(id))
+            missing.insert(id);
+    for (int id : after_ids)
+        if (!before_ids.count(id))
+            added.insert(id);
+    block["available"] = true;
+    block["missing_ids"] = bounded_ids(missing);
+    block["added_ids"] = bounded_ids(added);
+    return block;
+}
+
+static J rollback_volume_difference(const J &before, const J &after) {
+    auto read = [](const J &state) {
+        if (!state.is_object() || !state.contains("volume_mm3") || !state["volume_mm3"].is_number())
+            return J(nullptr);
+        const double value = state["volume_mm3"].get<double>();
+        return std::isfinite(value) ? J(value) : J(nullptr);
+    };
+    const J before_value = read(before), after_value = read(after);
+    J block = {{"available", !before_value.is_null() && !after_value.is_null()},
+               {"before", before_value},
+               {"after", after_value},
+               {"reason", nullptr}};
+    if (!block["available"].get<bool>())
+        block["reason"] = "volume was not measured on both sides, so geometry cannot be compared";
+    return block;
+}
+
+// The difference is diagnostic only: it never changes rollback_succeeded, the
+// operation effect status or the model status. A matched block simply means the
+// bounded evidence found no feature/body/volume difference; the comparison that
+// rejected the rollback stays the authority and its message stays in reason.
+static J rollback_difference_report(const J &baseline, const J &restored,
+                                    const std::string &reason) {
+    J features = rollback_collection_difference(baseline, restored, "features");
+    J bodies = rollback_collection_difference(baseline, restored, "bodies");
+    J volume = rollback_volume_difference(baseline, restored);
+    const bool available = features["available"].get<bool>() && bodies["available"].get<bool>();
+    bool counts_match = true;
+    for (const J *block : {&features, &bodies})
+        if (!((*block)["before"].is_number_integer() && (*block)["after"].is_number_integer() &&
+              (*block)["before"].get<int>() == (*block)["after"].get<int>()))
+            counts_match = false;
+    auto lists_ids = [](const J &block) {
+        return (!block["missing_ids"].is_null() && block["missing_ids"]["total"].get<int>() > 0) ||
+               (!block["added_ids"].is_null() && block["added_ids"]["total"].get<int>() > 0);
+    };
+    const bool volume_changed =
+        volume["available"].get<bool>() &&
+        fabs(volume["before"].get<double>() - volume["after"].get<double>()) > 0.01;
+    const bool mismatch =
+        !counts_match || lists_ids(features) || lists_ids(bodies) || volume_changed;
+    return {{"available", available},
+            {"status", !available ? "unavailable" : (mismatch ? "mismatch" : "matched")},
+            {"reason", reason.empty() ? J(nullptr) : J(bounded_failure_message(reason))},
+            {"features", features},
+            {"bodies", bodies},
+            {"volume_mm3", volume}};
+}
+
 static void failed_placement_matrix(const J &operation, J &block) {
     double matrix[4][4];
     try {
@@ -6668,7 +6835,14 @@ static int run_generic(const std::wstring &job) {
                 ProPath destination;
                 path(destination, folder);
                 generic_substage("verify_model_save");
-                CK(ProMdlnameBackup(board, destination));
+                // BUG-113: record the failed backup as its own fact before the
+                // throw, so a later rollback verification failure cannot hide it.
+                ProError backup = ProMdlnameBackup(board, destination);
+                if (backup != PRO_TK_NO_ERROR)
+                    report["save_failure"] =
+                        save_failure_report(backup, "verify_model_save", checkpoint, folder,
+                                            model_name, assembly_model());
+                check(backup, "ProMdlnameBackup(board, destination)");
                 saved = latest_model_file();
                 J before = state;
                 generic_substage("verify_model_erase");
@@ -6822,6 +6996,11 @@ static int run_generic(const std::wstring &job) {
         ProError loaded =
             erased ? erased : ProMdlFiletypeLoad(file, PRO_MDLFILE_UNUSED, PRO_B_FALSE, &board);
         if (!loaded) {
+            // BUG-113: the baseline and the restored state stay readable in the
+            // catch blocks, so a rejected comparison reports the actual
+            // difference instead of only the comparison's message.
+            J rollback_baseline = nullptr;
+            J rollback_restored = nullptr;
             try {
                 // Restore the model-level feature registries from the request
                 // before verifying the restored state: a partially executed
@@ -6838,12 +7017,13 @@ static int run_generic(const std::wstring &job) {
                 refresh_recorded_suppressed();
                 feature_state_effects = J::object();
                 feature_state_touched = false;
+                rollback_baseline = rollback_model.contains("inspection_ref")
+                                        ? read_inspection_ref(rollback_model.at("inspection_ref"))
+                                        : rollback_model["inspection"];
                 CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
                 J restored = inspection();
-                verify_saved(rollback_model.contains("inspection_ref")
-                                 ? read_inspection_ref(rollback_model.at("inspection_ref"))
-                                 : rollback_model["inspection"],
-                             restored);
+                rollback_restored = restored;
+                verify_saved(rollback_baseline, restored);
                 // FEAT-052: after the checkpoint reload, compare the restored
                 // appearance against the baseline captured before the first
                 // appearance write; an unprovable or mismatching restore keeps
@@ -6862,13 +7042,22 @@ static int run_generic(const std::wstring &job) {
                 report["rollback_succeeded"] = true;
             } catch (const std::exception &e) {
                 report["rollback_message"] = e.what();
+                report["rollback_difference"] =
+                    rollback_difference_report(rollback_baseline, rollback_restored, e.what());
             } catch (ProError e) {
                 report["rollback_code"] = e;
                 report["rollback_message"] = "Restored file could not be regenerated and verified "
                                              "against its saved baseline";
+                report["rollback_difference"] = rollback_difference_report(
+                    rollback_baseline, rollback_restored,
+                    "Restored file could not be regenerated and verified against its saved "
+                    "baseline");
             }
-        } else
+        } else {
             report["rollback_code"] = loaded;
+            report["rollback_difference"] = rollback_difference_report(
+                nullptr, nullptr, "checkpoint reload failed with code " + std::to_string(loaded));
+        }
     }
     // BUG-096: failed new-model orphan cleanup runs in the same Toolkit lock,
     // after the restore-checkpoint block (the two domains are mutually

@@ -134,6 +134,7 @@ _SOURCE_NAMES = (
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/surface_measure.h",
+    "native/quilt_gauge_guard.h",
     "native/quilt_query.h",
     "native/surface_trim.cpp",
     "native/quilt_merge.cpp",

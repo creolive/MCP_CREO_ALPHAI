@@ -10,7 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
-from creo_mechdog.release_integrity import seed_library_files, validate_release_inputs
+from creo_mechdog.release_integrity import (
+    seed_library_files,
+    validate_asset_paths,
+    validate_release_inputs,
+    write_sidecar,
+)
 from version import VERSION
 
 NAME = "MCP_CREO_MechDog"
@@ -124,7 +129,7 @@ def main():
             output.write(source, f"{NAME}/" + source.relative_to(ROOT).as_posix())
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     sidecar = archive.with_suffix(".zip.sha256")
-    sidecar.write_text(f"{checksum}  {archive.name}\n", encoding="ascii")
+    write_sidecar(sidecar, checksum, archive.name)
     seed_archive = Path(summary["seed_archive"])
     seed_sidecar = seed_archive.with_suffix(".zip.sha256")
     print(f"Public source: {archive}; {len(files)} files; SHA256 {checksum}")
@@ -135,11 +140,25 @@ def main():
     print("Release assets (upload all four; never a *.zip glob):")
     for path in (archive, sidecar, seed_archive, seed_sidecar):
         print(f"  {path}")
-    if not seed_sidecar.is_file():
-        print(f"WARNING: missing seed checksum sidecar: {seed_sidecar}", file=sys.stderr)
     if args.stage:
         print(f"GitHub upload directory: {args.stage.resolve()}")
+    if not seed_sidecar.is_file():
+        print(f"ERROR: missing seed checksum sidecar: {seed_sidecar}", file=sys.stderr)
+        print(
+            "Rebuild the seed archive first: python tools/package_seeds.py --output "
+            f'"{seed_archive}"',
+            file=sys.stderr,
+        )
+        return 2
+    problems = validate_asset_paths([archive, sidecar, seed_archive, seed_sidecar], VERSION)
+    if problems:
+        print("Release asset gate rejected this package:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    print("Release asset gate: four assets present; both sidecars match their ZIP digests")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

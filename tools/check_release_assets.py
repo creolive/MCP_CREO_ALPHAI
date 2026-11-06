@@ -3,82 +3,51 @@
 DEV-045/C01: 0.11.7 and 0.12.0 shipped only the two ZIPs, so upgrade users had no
 sidecar to verify. ``tools/package.py`` and ``tools/package_seeds.py`` already write
 ``<zip>.sha256``; this gate checks the remote Release instead of regenerating them.
+
+DEV-070: the validation itself lives in ``creo_mechdog.release_integrity`` so the
+source packager can gate the same four paths even when they live in two directories.
 """
 
 import argparse
-import hashlib
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-NAME = "MCP_CREO_MechDog"
-HEX = set("0123456789abcdefABCDEF")
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
+from creo_mechdog.release_integrity import (
+    expected_assets,
+    read_sidecar,
+    validate_asset_paths,
+    validate_directory,
+)
 
-
-def expected_assets(version: str) -> list[str]:
-    """Return the four asset names a release of ``version`` must publish."""
-    source = f"{NAME}-{version}-source.zip"
-    seed = f"{NAME}-{version}-seed-library.zip"
-    return [source, f"{source}.sha256", seed, f"{seed}.sha256"]
-
-
-def read_sidecar(path: Path) -> tuple[str, str]:
-    """Return ``(digest, zip_name)`` from a one-line ``sha256sum`` style sidecar."""
-    try:
-        text = path.read_text(encoding="ascii")
-    except UnicodeDecodeError as error:
-        raise ValueError(f"{path.name}: sidecar is not ASCII text ({error.reason})") from None
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if len(lines) != 1:
-        raise ValueError(f"{path.name}: sidecar must contain exactly one non-empty line")
-    parts = lines[0].split()
-    if len(parts) != 2:
-        raise ValueError(f"{path.name}: expected '<64-hex SHA256>  <file name>'")
-    digest, target = parts
-    if len(digest) != 64 or not set(digest) <= HEX:
-        raise ValueError(f"{path.name}: sidecar digest is not a 64-character SHA256")
-    return digest.lower(), target
-
-
-def validate_directory(directory: Path, version: str) -> list[str]:
-    """Return every problem that makes ``directory`` unusable as release assets."""
-    expected = expected_assets(version)
-    present = (
-        {path.name for path in directory.iterdir() if path.is_file()}
-        if directory.is_dir()
-        else set()
-    )
-    problems = [f"missing release asset: {name}" for name in expected if name not in present]
-    problems.extend(f"unexpected release asset: {name}" for name in sorted(present - set(expected)))
-    for name in expected:
-        if not name.endswith(".sha256") or name not in present:
-            continue
-        zip_name = name[: -len(".sha256")]
-        if zip_name not in present:
-            continue
-        try:
-            digest, target = read_sidecar(directory / name)
-        except ValueError as error:
-            problems.append(str(error))
-            continue
-        if target != zip_name:
-            problems.append(f"{name}: sidecar names {target}, expected {zip_name}")
-        actual = hashlib.sha256((directory / zip_name).read_bytes()).hexdigest()
-        if actual != digest:
-            problems.append(f"{name}: sidecar {digest} differs from {zip_name} {actual}")
-    return problems
+__all__ = [
+    "download",
+    "expected_assets",
+    "main",
+    "read_sidecar",
+    "validate_asset_paths",
+    "validate_directory",
+]
 
 
 def download(tag: str, directory: Path) -> None:
-    result = subprocess.run(
-        ["gh", "release", "download", tag, "--dir", str(directory), "--clobber"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Download every asset of ``tag`` with the gh CLI, or raise ``RuntimeError``."""
+    try:
+        result = subprocess.run(
+            ["gh", "release", "download", tag, "--dir", str(directory), "--clobber"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise RuntimeError(f"gh CLI is not available ({error.filename or 'gh'})") from None
     if result.returncode != 0:
-        raise SystemExit(f"gh release download failed for {tag}: {result.stderr.strip()}")
+        detail = result.stderr.strip() or result.stdout.strip() or "no output"
+        raise RuntimeError(f"gh release download failed for {tag}: {detail}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -99,14 +68,32 @@ def main(argv: list[str] | None = None) -> int:
         problems = validate_directory(args.dir.resolve(), version)
     else:
         with tempfile.TemporaryDirectory() as temp:
-            download(args.tag, Path(temp))
+            try:
+                download(args.tag, Path(temp))
+            except RuntimeError as error:
+                fallback = ROOT / "build/release-assets" / args.tag
+                print(f"{args.tag}: {error}", file=sys.stderr)
+                print("The remote Release was not checked.", file=sys.stderr)
+                print(
+                    "Download the four assets and both sidecars into one directory, then run:",
+                    file=sys.stderr,
+                )
+                print(
+                    f"  python tools/check_release_assets.py --tag {args.tag} "
+                    f'--version {version} --dir "{fallback}"',
+                    file=sys.stderr,
+                )
+                return 2
             problems = validate_directory(Path(temp), version)
     if problems:
         print(f"{args.tag}: release assets are incomplete or inconsistent", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print(f"{args.tag}: four assets present; both sidecars match their ZIP digests")
+    if args.dir:
+        print(f"local_verified: four assets present; both sidecars match (version {version})")
+    else:
+        print(f"{args.tag}: four assets downloaded and verified; both sidecars match")
     return 0
 
 

@@ -51,6 +51,10 @@ RESULT_KEYS = (
     "model_unchanged",
     "rollback_message",
     "rollback_code",
+    # BUG-113: the failed-save call/code and the bounded restored-vs-baseline
+    # difference. Both are failure evidence, never a selectable detail block.
+    "save_failure",
+    "rollback_difference",
     "preview_file",
     "preview_status",
     "preview_code",
@@ -101,6 +105,10 @@ PROTECTED_RESULT_KEYS = (
     "model_unchanged",
     "rollback_message",
     "rollback_code",
+    # BUG-113: the failed-save call/code and the bounded restored-vs-baseline
+    # difference. Both are failure evidence, never a selectable detail block.
+    "save_failure",
+    "rollback_difference",
     "preview_file",
     "preview_status",
     "preview_code",

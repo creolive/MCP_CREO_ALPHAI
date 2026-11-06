@@ -891,7 +891,7 @@ def build_native() -> Path:
         ""
         if reuse_callback
         else f'''
-cl /nologo /MD /EHsc /std:c++17 /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_sync.cpp"}" /Fo"{build / "blend_sync.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_sync.cpp"}" /Fo"{build / "blend_sync.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /DLL /MACHINE:X64 /OUT:"{blend_dll}" "{build / "blend_sync.obj"}" kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -901,7 +901,7 @@ if errorlevel 1 exit /b 3
         ""
         if reuse_loader
         else f'''
-cl /nologo /MD /EHsc /std:c++17 /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_loader.cpp"}" /Fo"{build / "blend_loader.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /I"{sdk / "includes"}" /c "{ROOT / "native/blend_loader.cpp"}" /Fo"{build / "blend_loader.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /DLL /MACHINE:X64 /OUT:"{loader_dll}" "{build / "blend_loader.obj"}" {dll_libs} kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -914,7 +914,7 @@ setlocal DisableDelayedExpansion
 {compiler_setup_script(c)}
 "{sys.executable}" "{ROOT / "tools/compiler_preflight.py"}"
 if errorlevel 1 exit /b 4
-cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{exe}" "{build / "worker.obj"}" {libs} bcrypt.lib kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3

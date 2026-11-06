@@ -1,0 +1,48 @@
+{
+  "work_item": "DEV-069",
+  "archived_on": "2026-11-06",
+  "source_directory": "C:\\Users\\Administrator\\Downloads\\0.13.0",
+  "reported_server_version": "0.13.0",
+  "review_source_commit": "7002575",
+  "review_source_version": "0.14.0",
+  "evidence_scope": "External reports only; no local Creo or WorkBuddy test performed",
+  "file_count": 4,
+  "files": [
+    {
+      "filename": "2026-11-05+CREO+0.13.0+会话断连阻塞实机验收与execute_plan旋转约定未透出.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.13.0\\2026-11-05+CREO+0.13.0+会话断连阻塞实机验收与execute_plan旋转约定未透出.md",
+      "archived_path": "originals/2026-11-05+CREO+0.13.0+会话断连阻塞实机验收与execute_plan旋转约定未透出.md",
+      "bytes": 18272,
+      "sha256": "b9ae8f48cee28ca3a45eb454255de8d0eb0fa3027667e3423af578bbc5f34989",
+      "source_sha256": "b9ae8f48cee28ca3a45eb454255de8d0eb0fa3027667e3423af578bbc5f34989",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-05CREO10.0.0.0-0.13.0-曲面偏置错误码被丢弃与发布闸门未接入自动化台账未回填.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.13.0\\2026-11-05CREO10.0.0.0-0.13.0-曲面偏置错误码被丢弃与发布闸门未接入自动化台账未回填.md",
+      "archived_path": "originals/2026-11-05CREO10.0.0.0-0.13.0-曲面偏置错误码被丢弃与发布闸门未接入自动化台账未回填.md",
+      "bytes": 20658,
+      "sha256": "0137925bd9608441f5875c675284c86c2ebfb44be451ab00485ff557e49022b7",
+      "source_sha256": "0137925bd9608441f5875c675284c86c2ebfb44be451ab00485ff557e49022b7",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-05CREO10.0.0.0-0.13.0曲面链首次打通但保存间歇失败与新算子判据compact不可见.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.13.0\\2026-11-05CREO10.0.0.0-0.13.0曲面链首次打通但保存间歇失败与新算子判据compact不可见.md",
+      "archived_path": "originals/2026-11-05CREO10.0.0.0-0.13.0曲面链首次打通但保存间歇失败与新算子判据compact不可见.md",
+      "bytes": 25001,
+      "sha256": "493525b352d4dc227f8ce1ebb9bd2bfcbc76ebf46137a09eabf0a18398097e95",
+      "source_sha256": "493525b352d4dc227f8ce1ebb9bd2bfcbc76ebf46137a09eabf0a18398097e95",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-06_CREO_0.13.0_闭合首壁已支持但四壁盒仍被adjacent_bend_ends拒绝_relief无效.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.13.0\\2026-11-06_CREO_0.13.0_闭合首壁已支持但四壁盒仍被adjacent_bend_ends拒绝_relief无效.md",
+      "archived_path": "originals/2026-11-06_CREO_0.13.0_闭合首壁已支持但四壁盒仍被adjacent_bend_ends拒绝_relief无效.md",
+      "bytes": 12912,
+      "sha256": "4396fee5d9be3d001ea5d069dbd39a05101c7ef2df1a15e00d64ffbf37b2882e",
+      "source_sha256": "4396fee5d9be3d001ea5d069dbd39a05101c7ef2df1a15e00d64ffbf37b2882e",
+      "hash_verified": true
+    }
+  ]
+}

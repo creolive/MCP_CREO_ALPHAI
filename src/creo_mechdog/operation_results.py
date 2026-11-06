@@ -146,6 +146,176 @@ def annotate_feature_errors(result: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# BUG-113: save and rollback failure evidence.
+# ---------------------------------------------------------------------------
+
+#: A malformed block degrades to explicit nulls plus a reason; a missing block
+#: stays missing (legacy executors never gain fabricated evidence).
+ROLLBACK_DIFFERENCE_STATUSES = ("mismatch", "unavailable", "matched")
+
+
+def _text_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _bounded_generic_block(value: Any) -> dict[str, Any] | None:
+    """Validate one ``{total, truncated, sample}`` block without inventing facts.
+
+    The producer owns the population and only ever reports entries it observed;
+    this re-applies the shared 20-entry cap defensively (the same contract as
+    ``bounded_entries``) and keeps the producer's totals.
+    """
+    if not isinstance(value, dict):
+        return None
+    sample = value.get("sample")
+    if not isinstance(sample, list):
+        return None
+    total = _bounded_count(value.get("total"))
+    truncated = _bounded_truncated(value.get("truncated"))
+    items = sample[:SAMPLE_LIMIT]
+    if len(sample) > SAMPLE_LIMIT:
+        truncated = True
+    return {"total": total, "truncated": truncated, "sample": items}
+
+
+def normalize_save_failure(block: Any) -> dict[str, Any] | None:
+    """Validate the executor's ``save_failure`` block (BUG-113).
+
+    The raw Toolkit code and the failing call stay exactly as reported, so a
+    failed ``ProMdlnameBackup`` is never confused with a later rollback
+    verification failure. A block that cannot be read degrades to nulls instead
+    of a fabricated code.
+    """
+    if not isinstance(block, dict):
+        return None
+    code = block.get("code")
+    files = block.get("candidate_files")
+    if isinstance(files, list):
+        files = {"total": len(files), "truncated": len(files) > SAMPLE_LIMIT, "sample": files}
+    return {
+        "call": _text_or_none(block.get("call")),
+        "code": code if type(code) is int else None,
+        "stage": _text_or_none(block.get("stage")),
+        "destination": _text_or_none(block.get("destination")),
+        "source_checkpoint": _text_or_none(block.get("source_checkpoint")),
+        "candidate_files": _bounded_generic_block(files),
+    }
+
+
+def _normalize_id_block(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    sample = value.get("sample")
+    if not isinstance(sample, list) or any(type(item) is not int for item in sample):
+        return None
+    total = _bounded_count(value.get("total"))
+    truncated = _bounded_truncated(value.get("truncated"))
+    items = sample[:SAMPLE_LIMIT]
+    if len(sample) > SAMPLE_LIMIT:
+        truncated = True
+    return {"total": total, "truncated": truncated, "sample": items}
+
+
+def _normalize_collection_difference(value: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "available": False,
+        "before": None,
+        "after": None,
+        "missing_ids": None,
+        "added_ids": None,
+        "reason": None,
+    }
+    if not isinstance(value, dict):
+        entry["reason"] = "the executor did not report this collection"
+        return entry
+    before, after = value.get("before"), value.get("after")
+    entry["before"] = before if _bounded_count(before) is not None else None
+    entry["after"] = after if _bounded_count(after) is not None else None
+    entry["reason"] = _text_or_none(value.get("reason"))
+    available = value.get("available") is True
+    malformed = False
+    for key in ("missing_ids", "added_ids"):
+        raw = value.get(key)
+        if raw is None:
+            continue
+        normalized = _normalize_id_block(raw)
+        if normalized is None:
+            malformed = True
+            continue
+        entry[key] = normalized
+    if malformed:
+        # An unreadable id list cannot support a "matched" verdict.
+        entry["missing_ids"] = None
+        entry["added_ids"] = None
+        entry["reason"] = "the executor reported malformed id lists"
+        available = False
+    entry["available"] = available
+    if not available and entry["reason"] is None:
+        entry["reason"] = "the executor did not report a usable difference"
+    return entry
+
+
+def _normalize_volume_difference(value: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {"available": False, "before": None, "after": None, "reason": None}
+    if not isinstance(value, dict):
+        entry["reason"] = "the executor did not report volume evidence"
+        return entry
+    entry["before"] = _finite_number(value.get("before"))
+    entry["after"] = _finite_number(value.get("after"))
+    entry["available"] = (
+        value.get("available") is True
+        and entry["before"] is not None
+        and entry["after"] is not None
+    )
+    entry["reason"] = _text_or_none(value.get("reason"))
+    if not entry["available"] and entry["reason"] is None:
+        entry["reason"] = "volume was not measured on both sides"
+    return entry
+
+
+def normalize_rollback_difference(block: Any) -> dict[str, Any] | None:
+    """Validate the executor's ``rollback_difference`` block (BUG-113).
+
+    ``status`` is only the executor's own verdict. When the reported evidence
+    cannot be read the block degrades to ``unavailable`` with a reason; it never
+    flips a rollback to succeeded and never infers a difference that was not
+    measured.
+    """
+    if not isinstance(block, dict):
+        return None
+    features = _normalize_collection_difference(block.get("features"))
+    bodies = _normalize_collection_difference(block.get("bodies"))
+    volume = _normalize_volume_difference(block.get("volume_mm3"))
+    available = block.get("available") is True and features["available"] and bodies["available"]
+    status = block.get("status")
+    if not available or status not in ROLLBACK_DIFFERENCE_STATUSES:
+        available = False
+        status = "unavailable"
+    reason = _text_or_none(block.get("reason"))
+    if not available and reason is None:
+        reason = "the executor did not report a usable comparison"
+    return {
+        "available": available,
+        "status": status,
+        "reason": reason,
+        "features": features,
+        "bodies": bodies,
+        "volume_mm3": volume,
+    }
+
+
+def annotate_save_recovery(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the save/rollback diagnostics without fabricating missing blocks."""
+    if "save_failure" in result:
+        result["save_failure"] = normalize_save_failure(result.get("save_failure"))
+    if "rollback_difference" in result:
+        result["rollback_difference"] = normalize_rollback_difference(
+            result.get("rollback_difference")
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # FEAT-008 / BUG-088 (Q13): one bounded-summary contract for compact results.
 # ---------------------------------------------------------------------------
 
@@ -383,6 +553,9 @@ def annotate_native_result(
     # BUG-097 L2: the error receipt is projected even when no operation list
     # exists (a worker-level failure may still carry the structured block).
     annotate_feature_errors(result)
+    # BUG-113: the save/rollback diagnostics keep their raw codes and bounded
+    # difference visible on the persisted terminal state.
+    annotate_save_recovery(result)
     # FEAT-012/FEAT-008: the bounded failure context rides every failed result,
     # including a failure that never reached an operation (index stays null).
     from creo_mechdog.failure_context import annotate_failed_operation
@@ -403,6 +576,7 @@ def annotate_native_result(
     )
     annotate_revolve_axis(result)
     annotate_extrude_depth(result)
+    annotate_source_area_status(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -746,6 +920,61 @@ def annotate_extrude_depth(result: dict[str, Any]) -> dict[str, Any]:
         if "extrude_depth" not in operation:
             continue
         operation["extrude_depth"] = normalize_extrude_depth(operation.get("extrude_depth"))
+    return result
+
+
+# BUG-112: surface_offset reports the source quilt area beside this receipt.
+# ``available`` is only ever the executor's own success flag; a failed Init, a
+# successful Init without a handle, or a failed measurement stays unavailable
+# with its code and reason. A record with an unavailable area can never keep a
+# finite measured offset distance: the two measurements are one claim.
+def normalize_source_area_status(block: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "available": False,
+        "init_code": None,
+        "query_code": None,
+        "reason": None,
+    }
+    if not isinstance(block, dict):
+        entry["reason"] = "source_area_status_missing"
+        return entry
+    init_code = block.get("init_code")
+    entry["init_code"] = init_code if type(init_code) is int else None
+    query_code = block.get("query_code")
+    entry["query_code"] = query_code if type(query_code) is int else None
+    reason = block.get("reason")
+    entry["reason"] = reason if isinstance(reason, str) and reason else None
+    entry["available"] = block.get("available") is True
+    if not entry["available"] and entry["reason"] is None:
+        entry["reason"] = "source_area_unavailable"
+    return entry
+
+
+def annotate_source_area_status(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the surface_offset source-area receipt onto its own record.
+
+    A record without the block stays untouched (legacy jobs are never given a
+    synthetic receipt). When the receipt says the area is unavailable, the
+    source area and the derived offset distance are nulls: neither may outlive
+    the evidence that produced them.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "surface_offset":
+            continue
+        if "source_area_status" not in operation:
+            continue
+        status = normalize_source_area_status(operation.get("source_area_status"))
+        operation["source_area_status"] = status
+        if not status["available"]:
+            operation["source_area_mm2"] = None
+            operation["measured_offset_distance_mm"] = None
+        elif "measured_offset_distance_mm" in operation:
+            operation["measured_offset_distance_mm"] = _finite_scalar(
+                operation.get("measured_offset_distance_mm")
+            )
     return result
 
 
