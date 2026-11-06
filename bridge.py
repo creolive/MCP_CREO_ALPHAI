@@ -39,11 +39,13 @@ from creo_mechdog.build_support import (
     validate_local_path,
 )
 from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
-from creo_mechdog.compact_sections import (
-    OPERATION_KEYS,
-    RESULT_KEYS,
-    apply_sections,
-    resolve_sections,
+from creo_mechdog.compact_sections import RESULT_KEYS, apply_sections, resolve_sections
+from creo_mechdog.job_projection import (
+    FULL_DETAIL_HINT,
+    compact_job_list_item,
+    compact_operation,
+    compact_progress,
+    operation_keys,
 )
 from creo_mechdog.lock_files import open_lock_file
 from creo_mechdog.recovery import job_evidence, process_identity
@@ -1486,6 +1488,12 @@ def compact_job(manifest: dict, sections: list[str] | None = None) -> dict:
     blocks (``compact_sections``) and adds ``sections_applied`` plus
     ``omitted_sections`` to the response. The projection runs before the
     budget enforcement, so it never bypasses the shared trimming.
+
+    R04: the operation records are projected onto the shared whitelist
+    (``job_projection.compact_operation``), which keeps the surface-chain
+    criteria the native executor measured. Raw log text (top-level
+    ``native_log_tail`` and any nested ``log_tail``) is not part of compact;
+    ``detail=full`` keeps the original log and pagination path.
     """
     from creo_mechdog.operation_results import bounded_summary, enforce_compact_budget
 
@@ -1564,8 +1572,10 @@ def compact_job(manifest: dict, sections: list[str] | None = None) -> dict:
             if inline is not None:
                 visible.setdefault("inspection_summary", inspection_summary(inline))
             native["live"] = visible
+        # R04: carry every compact key plus the surface-chain criteria so the
+        # optional ``sections`` selection sees the full set before projection.
         native["operations"] = [
-            bounded_summary({key: op[key] for key in OPERATION_KEYS if key in op})
+            {key: op[key] for key in operation_keys(op) if key in op}
             for op in result.get("operations", [])
         ]
         if "operations" in native:
@@ -1583,20 +1593,39 @@ def compact_job(manifest: dict, sections: list[str] | None = None) -> dict:
             if key != "operations":
                 native[key] = bounded_summary(native[key])
         summary["result"] = native
-    if "native_log_tail" in manifest:
-        summary["native_log_tail"] = manifest["native_log_tail"][-2000:]
+    if "native_progress" in summary:
+        summary["native_progress"] = compact_progress(summary["native_progress"])
     summary["full_result_available"] = bool(result)
+    summary["full_detail_hint"] = FULL_DETAIL_HINT
     for key in list(summary):
-        if key != "result":
+        if key not in ("result", "full_detail_hint"):
             summary[key] = bounded_summary(summary[key])
     if sections is not None:
         summary = apply_sections(summary, sections)
+    # R04: sections select blocks first; the operation whitelist and sampling
+    # run afterwards, so a named block is never re-expanded and failure
+    # evidence stays on every record.
+    projected_result = summary.get("result")
+    if isinstance(projected_result, dict) and isinstance(projected_result.get("operations"), list):
+        projected_result["operations"] = [
+            bounded_summary(compact_operation(op)) for op in projected_result["operations"]
+        ]
     return enforce_compact_budget(summary)
 
 
 def list_jobs(
     limit: int = 10, detail: str = "compact", sections: list[str] | None = None
 ) -> list[dict]:
+    """List recent jobs without inlining each job's result.
+
+    R04: ``detail=compact`` returns one bounded item per job
+    (``job_projection.compact_job_list_item``): identity, status, times, stage,
+    outcome classification and a bounded message. The result, revision,
+    rollback and failure context are read with ``creo_get_job(job_id)``, so a
+    list entry never trades detail for the detail entry. ``detail=full`` keeps
+    the previous per-job view. ``sections`` is validated for compatibility but
+    applies to ``creo_get_job`` polls, not to these fixed items.
+    """
     if not 1 <= limit <= 50:
         raise ValueError("limit must be 1–50")
     if detail not in ("compact", "full"):
@@ -1606,7 +1635,11 @@ def list_jobs(
             raise ValueError("sections require detail=compact")
         sections = resolve_sections(sections)
     paths = sorted(JOBS.glob("*/job.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return [get_job(p.parent.name, detail=detail, sections=sections) for p in paths[:limit]]
+    if detail == "compact":
+        return [
+            compact_job_list_item(get_job(p.parent.name, detail="compact")) for p in paths[:limit]
+        ]
+    return [get_job(p.parent.name, detail=detail) for p in paths[:limit]]
 
 
 if __name__ == "__main__":

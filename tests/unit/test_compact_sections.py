@@ -24,7 +24,8 @@ from unittest import mock
 
 import bridge
 from creo_mechdog.compact_sections import known_sections, resolve_sections
-from creo_mechdog.model_queries import RESPONSE_BUDGET
+from creo_mechdog.job_projection import LIST_ITEM_BUDGET
+from creo_mechdog.model_queries import RESPONSE_BUDGET, serialized_size
 
 JOB_ID = "a" * 32
 
@@ -317,18 +318,20 @@ class JobQueryTests(unittest.TestCase):
         self.assertEqual(self.manifest_path.read_bytes(), before)
         self.assertEqual(bridge.get_job(JOB_ID), full)
 
-    def test_list_jobs_compact_accepts_sections(self):
-        jobs = bridge.list_jobs(limit=5, detail="compact", sections=["preview"])
+    def test_list_jobs_compact_returns_bounded_items_referencing_the_job(self):
+        jobs = bridge.list_jobs(limit=5, detail="compact")
         self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0]["sections_applied"], ["preview"])
-        self.assertNotIn("inspection", jobs[0]["result"])
+        self.assertEqual(jobs[0]["job_id"], JOB_ID)
+        self.assertEqual(jobs[0]["outcome"], "success")
+        self.assertNotIn("result", jobs[0])
+        self.assertNotIn("sections_applied", jobs[0])
+        self.assertLessEqual(serialized_size(jobs[0]), LIST_ITEM_BUDGET)
+
+    def test_list_jobs_still_validates_sections_for_compatibility(self):
+        jobs = bridge.list_jobs(limit=5, detail="compact", sections=["preview"])
+        self.assertNotIn("result", jobs[0])
         with self.assertRaises(ValueError):
             bridge.list_jobs(limit=5, detail="full", sections=["preview"])
-
-    def test_list_jobs_without_sections_keeps_the_default_shape(self):
-        jobs = bridge.list_jobs(limit=5, detail="compact")
-        self.assertNotIn("sections_applied", jobs[0])
-        self.assertIn("inspection", jobs[0]["result"])
 
 
 class ToolLayerRejectionTests(unittest.TestCase):

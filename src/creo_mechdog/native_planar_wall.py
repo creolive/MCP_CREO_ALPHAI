@@ -23,7 +23,10 @@ freezes:
   at an offset origin (review, 2026-11-04);
 * the gauge is read back from the wall's own body, and the resize re-reads it
   from the saved file before editing, so neither the request nor a stored record
-  stands in for a measurement.
+  stands in for a measurement;
+* every operation publishes a gauge receipt (status, source, value, reason and
+  context), because one shared null could not tell a missing SDK declaration
+  from a failed measurement (0.13.0 feedback, 2026-11-06).
 
 This module is admission and judgement only: geometry, thickness read-back and
 the envelope come from the native executor, and nothing here re-derives a
@@ -45,6 +48,13 @@ ENVELOPE_TOLERANCE_MM = 1e-6
 VOLUME_TOLERANCE = 1e-6
 ABSOLUTE_VOLUME_TOLERANCE_MM3 = 0.01
 DIRECTIONS = ("positive", "negative")
+#: Gauge receipt vocabulary (FEAT-058/R03). ``status`` says what the evidence
+#: supports, ``source`` says where the number came from and ``context`` ties the
+#: block to this plan or to the file the resize re-read.
+VALIDATION_STATUSES = ("verified", "unverified", "mismatch", "unavailable")
+VALIDATION_SOURCES = ("api", "missing_api", "not_measured")
+PLAN_CONTEXT = "current_plan"
+SAVED_CONTEXT = "saved_loaded"
 
 
 def sketch_label(label: str) -> str:
@@ -308,6 +318,77 @@ def envelope_problem(
     return None
 
 
+def gauge_validation(result: dict[str, Any], key: str, context: str) -> dict[str, Any] | None:
+    """Normalized gauge receipt from a native operation, or None when absent.
+
+    Older executors publish no receipt, so none is generated for them. A receipt
+    that exists but cannot be read is degraded to ``unavailable`` with a reason
+    of its own: it never invents a value, a Toolkit code or a unit, and a
+    malformed receipt must not read as a measurement.
+    """
+    if key not in result:
+        return None
+    raw = result.get(key)
+    if not isinstance(raw, dict):
+        return _degraded_validation(context, "thickness_validation_malformed")
+    status = raw.get("status")
+    if status not in VALIDATION_STATUSES:
+        return _degraded_validation(context, "thickness_validation_unknown_status")
+    source = raw.get("source")
+    if source not in VALIDATION_SOURCES:
+        return _degraded_validation(context, "thickness_validation_unknown_source")
+    if raw.get("context") != context:
+        return _degraded_validation(context, "thickness_validation_context_mismatch")
+    value = raw.get("value_mm")
+    if value is not None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return _degraded_validation(context, "thickness_validation_invalid_value")
+        value = float(value)
+        if not math.isfinite(value):
+            return _degraded_validation(context, "thickness_validation_non_finite_value")
+    reason = raw.get("reason")
+    if reason is not None and not isinstance(reason, str):
+        return _degraded_validation(context, "thickness_validation_invalid_reason")
+    if status in ("verified", "mismatch") and value is None:
+        return _degraded_validation(context, f"thickness_validation_{status}_without_value")
+    if status == "verified" and source != "api":
+        return _degraded_validation(context, "thickness_validation_verified_without_api")
+    if status != "verified" and not reason:
+        return _degraded_validation(context, "thickness_validation_missing_reason")
+    return {
+        "status": status,
+        "source": source,
+        "value_mm": value,
+        "reason": reason,
+        "context": context,
+    }
+
+
+def _degraded_validation(context: str, reason: str) -> dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "source": "not_measured",
+        "value_mm": None,
+        "reason": reason,
+        "context": context,
+    }
+
+
+def _validation_problems(label: str, block: dict[str, Any], thickness: float) -> list[str]:
+    """Why a gauge receipt does not support the requested thickness."""
+    status = block.get("status")
+    if status != "verified":
+        detail = f" ({block['reason']})" if block.get("reason") else ""
+        return [f"the {label} gauge validation is {status!r}{detail}"]
+    value = block.get("value_mm")
+    if isinstance(value, float) and abs(value - thickness) > 1e-6:
+        return [
+            f"the {label} gauge validation reports {value:.9f} mm instead of the "
+            f"requested {thickness:.9f} mm"
+        ]
+    return []
+
+
 def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     """Public view of a native planar wall result, with its own verdict.
 
@@ -316,6 +397,12 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     requested size. A square wall is reported as such instead of being merged
     into one dimension. Missing or non-finite evidence is itself a problem: it
     must never remove a check and leave the wall looking verified.
+
+    The gauge receipt is normalized here so a missing SDK declaration, a failed
+    call, an ambiguous body, a disagreeing reading and a non-finite value stay
+    distinguishable instead of sharing one null. The resize carries both its own
+    receipt and the one read from the loaded file, and neither can stand in for
+    the other.
     """
     length = _number(result, "length")
     width = _number(result, "width")
@@ -343,12 +430,19 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "thickness_body_code": result.get("thickness_body_code"),
         "body_linked": result.get("body_linked"),
     }
+    validation = gauge_validation(result, "thickness_validation", PLAN_CONTEXT)
+    if validation is not None:
+        projection["thickness_validation"] = validation
+    loaded_validation = None
     if resize:
         projection["feature_id_before"] = result.get("feature_id_before")
         projection["feature_id_unchanged"] = result.get("feature_id_before") == result.get(
             "feature_id"
         )
         projection["thickness_loaded_mm"] = _number(result, "thickness_loaded_mm")
+        loaded_validation = gauge_validation(result, "thickness_loaded_validation", SAVED_CONTEXT)
+        if loaded_validation is not None:
+            projection["thickness_loaded_validation"] = loaded_validation
     problems: list[str] = []
     if not isinstance(projection["feature_id"], int):
         problems.append("the native result carries no feature id")
@@ -417,6 +511,13 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                     f"the saved wall carried {float(loaded):.9f} mm instead of the recorded "
                     f"{thickness:.9f} mm"
                 )
+        # FEAT-058/R03: a receipt that is present but does not support the
+        # request is a finding of its own. A receipt that is absent belongs to an
+        # older executor and stays governed by the fields above.
+        if validation is not None:
+            problems.extend(_validation_problems("current plan", validation, thickness))
+        if loaded_validation is not None:
+            problems.extend(_validation_problems("saved wall", loaded_validation, thickness))
         envelope = envelope_problem(
             projection["frame"],
             projection["envelope"],

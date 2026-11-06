@@ -337,8 +337,14 @@ PROTECTED_OPERATION_KEYS = (
     "message",
 )
 
-#: Failure diagnostics kept in full on the failed record itself.
-FAILED_EVIDENCE_KEYS = ("feature_errors", "failed_stage", "failed_toolkit_call")
+#: Failure diagnostics kept in full on the failed record itself. A per-record
+#: ``failed_operation`` block is failure evidence too (FEAT-012/FEAT-008).
+FAILED_EVIDENCE_KEYS = (
+    "feature_errors",
+    "failed_stage",
+    "failed_toolkit_call",
+    "failed_operation",
+)
 
 
 def bounded_entries(items: list, *, limit: int = SAMPLE_LIMIT) -> dict[str, Any]:
@@ -411,9 +417,10 @@ def enforce_compact_budget(summary: dict[str, Any], *, budget: int | None = None
     A summary that already fits is returned untouched. Over budget the
     optional detail is removed in stages and every cut carries its markers:
 
-    1. the operation records are capped at ``SAMPLE_LIMIT`` plus the failed
-       record (``operations_total`` / ``operations_truncated`` /
-       ``operations_status_counts`` record the population);
+    1. the operation records are capped at ``SAMPLE_LIMIT`` plus one failed
+       record outside that window (``operations_total`` /
+       ``operations_truncated`` / ``operations_status_counts`` record the
+       population), so a failure at the end of a long plan keeps its evidence;
     2. optional detail fields are dropped from the kept records, the failed
        record last (``detail_truncated`` marks each stripped record).
 
@@ -446,24 +453,34 @@ def enforce_compact_budget(summary: dict[str, Any], *, budget: int | None = None
     failed_index = failed_index if isinstance(failed_index, int) else None
     if failed_index is not None and not 0 <= failed_index < len(operations):
         failed_index = None
-    # Stage 1: cap the detailed records at SAMPLE_LIMIT plus the failed record.
+    # Stage 1: cap the detailed records at SAMPLE_LIMIT plus one failed record.
     keep = list(operations[:SAMPLE_LIMIT])
+    failed_outside = None
+    for position in range(SAMPLE_LIMIT, len(operations)):
+        record = operations[position]
+        if isinstance(record, dict) and record.get("execution_status") == "failed":
+            failed_outside = position
+            break
     if failed_index is not None and failed_index >= SAMPLE_LIMIT:
-        keep.append(operations[failed_index])
+        failed_outside = failed_index
+    if failed_outside is not None:
+        keep.append(operations[failed_outside])
     result["operations_total"] = len(operations)
     result["operations_truncated"] = len(keep) < len(operations)
     result["operations_status_counts"] = _execution_counts(operations)
     result["operations"] = keep
     if serialized_size(summary) <= limit:
         return summary
-    # Stage 2: drop optional detail from the kept records, failed record last.
+    # Stage 2: drop optional detail from the kept records, failed records last.
     for position in range(len(keep) - 1, -1, -1):
         record = keep[position]
         if not isinstance(record, dict):
             continue
         if all(key in PROTECTED_OPERATION_KEYS for key in record):
             continue
-        is_failed = failed_index is not None and operations[failed_index] is record
+        is_failed = (failed_index is not None and operations[failed_index] is record) or record.get(
+            "execution_status"
+        ) == "failed"
         keep[position] = _status_core(record, failed=is_failed)
         if serialized_size(summary) <= limit:
             return summary
