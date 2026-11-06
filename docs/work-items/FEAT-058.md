@@ -179,3 +179,7 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 验证：`python -m unittest tests.unit.test_native_planar_wall` 34 项 OK；全量 `tools/test_unit.py` 2702 项成功；`python bridge.py build` 退出 0（正常 worker）；`tools/test_adoption_planar_wall.py` 离线 `passed=true`（`build/planar_wall/20261106T111107Z/adoption_offline.json`），受控缺 API 编译 `returncode=0` 且产出 obj；`tools/dev_check.py --skip-unit --work-item FEAT-058` 退出 0。
 
 未验证：受控编译只证明分支可编译，不等于 Creo 9/10 实机结果；12.4 的 live 矩阵（含新增 large/single_plan）未执行；`geometry_normal_span` 的实机读数与存档厚度路径未验收；带孔/下游依赖仅由 `child_count==0` 门控，未做独立孔特征实机样本。
+
+## 2026-11-06 R03 实机验收（Creo 12.4.0.0 / 匹配 SDK）
+
+命令：`.\.venv\Scripts\python.exe tools\test_adoption_planar_wall.py --live --confirm-session-usable`；报告 `build/planar_wall/20261106T115256Z/adoption_live.json`（`passed=true`，sha256 `7a981a00d11e9698f0dde8c70a622f6d44a0bf8eeb13f02d5e6f2675def39838`），77/77 检查通过，含 100×60×1 job `0806159…`（体积 6000、厚度 API 读数 1.0、`wall_created_this_job=true`）、185×232×1 `large`、同计划 create→resize 的 `thickness_loaded_validation.context=current_plan` 与保存重载 true，以及 XY/XZ/YZ、负方向、跨作业存档厚度、拒绝后继续编辑。缺 API 的 `geometry_normal_span` 仍只有受控编译与离线判定，Creo 9/10 实机未验。
