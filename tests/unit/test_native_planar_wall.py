@@ -538,6 +538,118 @@ class CounterexampleTest(unittest.TestCase):
         self.assertIsNone(nan_gauge["thickness_measured_mm"])
 
 
+class OriginTest(unittest.TestCase):
+    """R10: origin=[u0,v0] moves the rectangle and never the plane frame."""
+
+    offset_envelope = {
+        "u": {"min": -92.5, "max": 92.5},
+        "v": {"min": -116.0, "max": 116.0},
+        "n": {"min": 0.0, "max": 1.0},
+    }
+
+    def test_offset_wall_is_verified_on_its_moved_envelope(self):
+        result = create_result(
+            length=185.0,
+            width=232.0,
+            origin=[-92.5, -116.0],
+            volume_mm3=42920.0,
+            envelope=self.offset_envelope,
+        )
+        projection = pwall.result_projection(result)
+        self.assertEqual(projection["origin"], [-92.5, -116.0])
+        self.assertTrue(projection["verified"], projection["problems"])
+
+    def test_the_same_envelope_at_origin_zero_is_refused(self):
+        # An executor that ignores the origin still reports the frame envelope
+        # starting at 0, so the verdict has to fail instead of accepting the
+        # wall at the wrong place (or the request as echoing itself).
+        result = create_result(
+            length=185.0,
+            width=232.0,
+            volume_mm3=42920.0,
+            envelope=self.offset_envelope,
+        )
+        projection = pwall.result_projection(result)
+        self.assertFalse(projection["verified"])
+        self.assertTrue(any("envelope u" in problem for problem in projection["problems"]))
+
+    def test_expected_intervals_move_with_the_origin(self):
+        intervals = pwall.expected_intervals(185.0, 232.0, 1.0, "positive", (-92.5, -116.0))
+        self.assertEqual(intervals["u"], (-92.5, 92.5))
+        self.assertEqual(intervals["v"], (-116.0, 116.0))
+        self.assertEqual(intervals["n"], (0.0, 1.0))
+        self.assertIsNone(
+            pwall.envelope_problem(
+                FRAME_XY,
+                self.offset_envelope,
+                185.0,
+                232.0,
+                1.0,
+                "positive",
+                origin=(-92.5, -116.0),
+            )
+        )
+        self.assertIn(
+            "envelope u",
+            pwall.envelope_problem(FRAME_XY, self.offset_envelope, 185.0, 232.0, 1.0) or "",
+        )
+
+    def test_malformed_origin_is_a_problem(self):
+        for origin in ([1.0, 2.0, 3.0], ["a", 0.0], [float("nan"), 0.0], [True, 0.0]):
+            with self.subTest(origin=origin):
+                projection = pwall.result_projection(create_result(origin=origin))
+                self.assertFalse(projection["verified"])
+                self.assertTrue(any("origin" in item for item in projection["problems"]))
+
+    def test_old_result_without_origin_starts_at_zero(self):
+        projection = pwall.result_projection(create_result())
+        self.assertEqual(projection["origin"], [0.0, 0.0])
+        self.assertTrue(projection["verified"], projection["problems"])
+
+    def test_schema_accepts_and_bounds_the_origin(self):
+        valid = create_op(origin=[-92.5, -116.0])
+        self.assertEqual(validate_operations([valid])[0]["origin"], [-92.5, -116.0])
+        self.assertEqual(validate_operations([create_op()])[0]["origin"], [0.0, 0.0])
+        for origin in (
+            [1.0],
+            [1.0, 2.0, 3.0],
+            ["a", 0.0],
+            [True, 0.0],
+            [float("inf"), 0.0],
+            [1_000_001.0, 0.0],
+        ):
+            with self.subTest(origin=origin):
+                with self.assertRaises(ValueError):
+                    validate_operations([create_op(origin=origin)])
+        # A dictionary plane already carries a world-coordinate origin.
+        plane = {"reference": {"kind": "datum_plane", "axis": "z", "offset": 0}}
+        validate_operations([create_op(plane=plane)])
+        with self.assertRaises(ValueError):
+            validate_operations([create_op(plane=plane, origin=[1.0, 0.0])])
+
+    def test_server_exposes_the_origin(self):
+        source = SERVER.read_text(encoding="utf-8")
+        self.assertIn("origin: list[float] | None = None", source)
+        self.assertIn('"origin": list(origin) if origin is not None else [0.0, 0.0]', source)
+
+    def test_native_records_and_checks_the_origin(self):
+        source = NATIVE_WALL.read_text(encoding="utf-8")
+        self.assertIn('op.value("origin", J::array({0.0, 0.0}))', source)
+        self.assertIn('{"origin", J::array({u0, v0})}', source)
+        self.assertIn('negative, "created", u0, v0)', source)
+        self.assertIn('negative, "resized", u0, v0)', source)
+
+    def test_native_resize_maps_the_recorded_frame(self):
+        # A coordinate dimension is a distance from a section axis, so the resize
+        # must resolve the corner side through the section location matrix
+        # instead of scaling the absolute values.
+        source = NATIVE_WALL.read_text(encoding="utf-8")
+        self.assertIn("ProSectionLocationGet(section, loc)", source)
+        self.assertIn("corner_u[4][2]", source)
+        self.assertIn("fabs(slope * (on_u ? resized_u : resized_v) + offset)", source)
+        self.assertIn("is not part of the recorded rectangle", source)
+
+
 def validation_block(**overrides) -> dict:
     block = {
         "status": "verified",

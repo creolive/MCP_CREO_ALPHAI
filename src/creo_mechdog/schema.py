@@ -971,6 +971,11 @@ class SheetmetalPlanarWallOp(StrictModel):
     sheetmetal part, and the part must still be empty. `length` runs along the
     sketch u axis, `width` along v, and `thickness` is the sheet gauge along the
     signed sketch normal. The internal sketch is named `<label>_sk`.
+
+    R10: `origin=[u0,v0]` moves the rectangle to u0..u0+length / v0..v0+width in
+    the sketch frame (mm) instead of starting at 0,0, so the first wall can be
+    placed around a model origin. The named plane frame, its signed envelope and
+    the growth direction do not change; a resize keeps the recorded origin.
     """
 
     op: Literal["sheetmetal_planar_wall"]
@@ -980,6 +985,27 @@ class SheetmetalPlanarWallOp(StrictModel):
     width: Positive
     thickness: Positive
     direction: Literal["positive", "negative"] = "positive"
+    origin: list[float] = Field(default_factory=lambda: [0.0, 0.0])
+
+    @field_validator("origin", mode="before")
+    @classmethod
+    def origin_is_two_finite_mm(cls, value: Any) -> Any:
+        # The origin is a sketch-local [u, v] pair in mm. A three-element point,
+        # a bool (True is an int) or a NaN would reach the native frame as a
+        # different request than the caller wrote.
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ValueError("sheetmetal_planar_wall origin must be [u0, v0] in mm")
+        components = []
+        for item in value:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ValueError("sheetmetal_planar_wall origin components must be numbers")
+            number = float(item)
+            if not math.isfinite(number):
+                raise ValueError("sheetmetal_planar_wall origin components must be finite")
+            if abs(number) > 1_000_000:
+                raise ValueError("sheetmetal_planar_wall origin is limited to +/-1000000 mm")
+            components.append(number)
+        return components
 
     @model_validator(mode="after")
     def label_leaves_room_for_sketch(self):
@@ -988,6 +1014,13 @@ class SheetmetalPlanarWallOp(StrictModel):
         # 28-character feature-name limit.
         if len(self.label) > 25:
             raise ValueError("sheetmetal_planar_wall label must be at most 25 characters")
+        if not isinstance(self.plane, str) and any(abs(value) > 0 for value in self.origin):
+            # A dictionary plane already carries its own world-coordinate origin;
+            # combining it with a sketch-local [u0, v0] would be ambiguous.
+            raise ValueError(
+                "sheetmetal_planar_wall origin is a sketch-local offset on XY/XZ/YZ; "
+                "a dictionary plane carries its own origin"
+            )
         return self
 
 

@@ -20,7 +20,10 @@ freezes:
 * the rectangle starts at the sketch origin and the gauge grows one side of the
   plane, so the accepted interval is signed - u[0,L], v[0,W] and n[0,t] or
   n[-t,0]. A span-only comparison accepted a wall that grew on the opposite side
-  at an offset origin (review, 2026-11-04);
+  at an offset origin (review, 2026-11-04). R10 adds a sketch-local
+  ``origin=[u0,v0]`` so the first wall can start at u0,v0: the named-plane frame
+  and the growth direction are unchanged and the interval moves with the
+  rectangle (u[u0,u0+L], v[v0,v0+W]); a resize keeps the recorded origin;
 * the gauge is read back from the wall's own body, and the resize re-reads it
   before editing, so neither the request nor a stored record stands in for a
   measurement. When the SDK declares no body gauge API, the wall's own measured
@@ -262,18 +265,23 @@ def _vector(frame: dict[str, Any], key: str) -> list[float]:
 
 
 def expected_intervals(
-    length: float, width: float, thickness: float, direction: str
+    length: float,
+    width: float,
+    thickness: float,
+    direction: str,
+    origin: tuple[float, float] = (0.0, 0.0),
 ) -> dict[str, tuple[float, float]]:
     """Signed envelope the wall must occupy, measured along the sketch frame.
 
-    The rectangle starts at the sketch origin and the gauge grows one side of the
-    sketch plane, so the accepted interval keeps its sign: comparing spans alone
-    accepted a wall that grew on the opposite side.
+    The rectangle starts at the sketch-local ``origin`` and the gauge grows one
+    side of the sketch plane, so the accepted interval keeps its sign: comparing
+    spans alone accepted a wall that grew on the opposite side.
     """
     if direction not in DIRECTIONS:
         raise ValueError(f"unknown planar wall direction: {direction!r}")
+    u0, v0 = float(origin[0]), float(origin[1])
     n_low, n_high = (-thickness, 0.0) if direction == "negative" else (0.0, thickness)
-    return {"u": (0.0, length), "v": (0.0, width), "n": (n_low, n_high)}
+    return {"u": (u0, u0 + length), "v": (v0, v0 + width), "n": (n_low, n_high)}
 
 
 def envelope_problem(
@@ -284,6 +292,7 @@ def envelope_problem(
     thickness: float,
     direction: str = "positive",
     tolerance: float = ENVELOPE_TOLERANCE_MM,
+    origin: tuple[float, float] = (0.0, 0.0),
 ) -> str | None:
     """Why the reported frame envelope does not prove the requested rectangle."""
     if not isinstance(frame, dict):
@@ -293,7 +302,7 @@ def envelope_problem(
     if direction not in DIRECTIONS:
         return f"the planar wall result carries no usable direction ({direction!r})"
     for axis, (want_low, want_high) in expected_intervals(
-        length, width, thickness, direction
+        length, width, thickness, direction, origin
     ).items():
         entry = envelope.get(axis)
         if not isinstance(entry, dict) or "min" not in entry or "max" not in entry:
@@ -427,6 +436,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     thickness = _number(result, "thickness")
     resize = result.get("op") == PLANAR_WALL_RESIZE_OP
     direction = result.get("direction")
+    origin, origin_problem = _origin(result)
     projection: dict[str, Any] = {
         "op": result.get("op"),
         "feature": result.get("feature"),
@@ -436,6 +446,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "width": width,
         "thickness": thickness,
         "direction": direction,
+        "origin": origin,
         "square": bool(length is not None and width is not None and abs(length - width) <= 1e-9),
         "dimension_count": result.get("dimension_count"),
         "volume_mm3": _number(result, "volume_mm3"),
@@ -474,6 +485,8 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                 )
             projection["thickness_loaded_validation"] = loaded_validation
     problems: list[str] = []
+    if origin_problem:
+        problems.append(origin_problem)
     if not isinstance(projection["feature_id"], int):
         problems.append("the native result carries no feature id")
     dimensions = projection["dimension_count"]
@@ -573,6 +586,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
             width,
             thickness,
             direction if isinstance(direction, str) else "positive",
+            origin=tuple(origin) if origin else (0.0, 0.0),
         )
         if envelope:
             problems.append(envelope)
@@ -597,6 +611,29 @@ def annotate_result(result: dict[str, Any]) -> None:
         if isinstance(item, dict) and item.get("op") in (PLANAR_WALL_OP, PLANAR_WALL_RESIZE_OP):
             result["planar_wall"] = result_projection(item)
             return
+
+
+def _origin(result: dict[str, Any]) -> tuple[list[float] | None, str | None]:
+    """Sketch-local [u0, v0] the wall was created at, or a problem.
+
+    A result without the field comes from an executor older than R10 and starts
+    at 0,0; anything else that is not a finite pair is reported instead of being
+    silently read as 0,0, which would accept a wall placed somewhere else.
+    """
+    raw = result.get("origin")
+    if raw is None:
+        return [0.0, 0.0], None
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None, "the native result carries no usable [u0, v0] origin"
+    values = []
+    for item in raw:
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            return None, "the native result origin is not numeric"
+        number = float(item)
+        if not math.isfinite(number):
+            return None, "the native result origin is not finite"
+        values.append(number)
+    return values, None
 
 
 def _number(result: dict[str, Any], key: str) -> float | None:

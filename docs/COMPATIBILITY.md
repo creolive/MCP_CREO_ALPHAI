@@ -19,11 +19,11 @@
 
 ## 0.12.0 的原生矩形首壁与就地改型（FEAT-058）
 
-- **支持**：空钣金零件上的**矩形**首壁创建（`sheetmetal_planar_wall`：Fill 树 + 钣金分支 `PRO_E_IS_UNATTACHED_WALL`/`PRO_E_BODY_USE=PRO_BODY_USE_NEW`/`PRO_E_SMT_NEW_BODY_LINKED`；`plane` 仅 XY/XZ/YZ；`length/width/thickness>0`；`direction=positive|negative` 决定板厚沿草图法向哪一侧生长）；`resize_sheetmetal_planar_wall` 以驱动草图坐标尺寸的方式就地改长宽，feature id 与板厚不变。
-- **判定**：job 结果发布 `planar_wall` 块——feature id、草图名、四个矩形尺寸（`dimension_count≥4`）、有符号 frame 包络 `u[0,L]`/`v[0,W]`/`n[0,t]`（negative 为 `n[-t,0]`）、体积＝长×宽×厚（容差 max(0.01 mm³, 1e-6×期望)）、从壁体 `ProSmtBodyThicknessValueGet` 读回的板厚；改型额外要求 `thickness_loaded_mm`（改型前从已保存文件读回）。**尺寸缺失或非有限值（NaN/Inf）本身判为问题**，不再让检查整体短路。
-- **准入拒绝**：实体零件；非空钣金零件再建壁；未知标签或非本算子创建的壁改型；壁存在下游子特征时的就地改型。
-- **边界/未验证**：非矩形与多环截面；四壁与第二折边（受 FEAT-014/corner relief 限制）；`plane` 传显式支撑面并覆写 origin；Creo 9/10 实机；WorkBuddy 黑盒。`sheetmetal_wall` 默认路线与 `creo_new_sheetmetal` 默认模板不变。
-- 本版实机：本机 Creo 12.4.0.0，`tools/test_adoption_planar_wall.py --live --confirm-session-usable` 67/67 通过（见 [发布记录](validation/RELEASE-0.12.0.md)）。
+- **支持**：空钣金零件上的**矩形**首壁创建（`sheetmetal_planar_wall`：Fill 树 + 钣金分支 `PRO_E_IS_UNATTACHED_WALL`/`PRO_E_BODY_USE=PRO_BODY_USE_NEW`/`PRO_E_SMT_NEW_BODY_LINKED`；`plane` 仅 XY/XZ/YZ；`length/width/thickness>0`；`origin=[u0,v0]` 为命名平面 frame 内的草图局部 mm 偏移，默认 `[0,0]`；`direction=positive|negative` 决定板厚沿草图法向哪一侧生长）；`resize_sheetmetal_planar_wall` 以驱动草图坐标尺寸的方式就地改长宽，feature id、板厚与 `origin` 不变。
+- **判定**：job 结果发布 `planar_wall` 块——feature id、草图名、四个矩形尺寸（`dimension_count≥4`）、有符号 frame 包络 `u[u0,u0+L]`/`v[v0,v0+W]`/`n[0,t]`（negative 为 `n[-t,0]`）、体积＝长×宽×厚（容差 max(0.01 mm³, 1e-6×期望)）、从壁体 `ProSmtBodyThicknessValueGet` 读回的板厚；改型额外要求 `thickness_loaded_mm`（改型前从已保存文件读回）。**尺寸缺失或非有限值（NaN/Inf）本身判为问题**，不再让检查整体短路。
+- **准入拒绝**：实体零件；非空钣金零件再建壁；未知标签或非本算子创建的壁改型；壁存在下游子特征时的就地改型；`plane` 传字典时再带非零 `origin`（字典自带 origin）。
+- **边界/未验证**：非矩形与多环截面；四壁与第二折边（受 FEAT-014/corner relief 限制）；斜置/非轴对齐 frame 的改型（原生拒绝）；Creo 9/10 实机；WorkBuddy 黑盒。`sheetmetal_wall` 默认路线与 `creo_new_sheetmetal` 默认模板不变。
+- 本版实机：本机 Creo 12.4.0.0，`tools/test_adoption_planar_wall.py --live --confirm-session-usable` 67/67 通过（见 [发布记录](validation/RELEASE-0.12.0.md)）；2026-11-06 增补 `origin` 后 `tools/test_first_wall_origin.py --live --confirm-session-usable` 112/112 通过（`build/first_wall_origin/20261106T152859Z/origin_live.json`）。
 
 ## 0.8.5 的折边方向迁移与边界（历史分节）
 

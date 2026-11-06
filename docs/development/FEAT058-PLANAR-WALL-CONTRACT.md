@@ -1,6 +1,6 @@
 # FEAT-058 原生矩形平面壁契约（sheetmetal_planar_wall / resize_sheetmetal_planar_wall）
 
-状态：**冻结（实机已验收，2026-11-04）**。关联条目：[FEAT-058](../work-items/FEAT-058.md)、BUG-032、FEAT-014。实现：`native/planar_wall.{h,cpp}`、`src/creo_mechdog/native_planar_wall.py`、`server.py`。
+状态：**冻结（实机已验收，2026-11-04；2026-11-06 增补 `origin`，实机 112/112）**。关联条目：[FEAT-058](../work-items/FEAT-058.md)、BUG-032、FEAT-014。实现：`native/planar_wall.{h,cpp}`、`src/creo_mechdog/native_planar_wall.py`、`server.py`。
 
 本文件是这两个算子的唯一接口依据：元素树、方向语义、测量字段、拒绝条件和"已验证 / 未验证"边界都以本文件为准，需要改动时先改本文件、再改代码。
 
@@ -10,9 +10,9 @@
 | --- | --- |
 | 本机 SDK | `C:\Program Files\PTC\Creo 12.4.0.0\Common Files\protoolkit\includes` |
 | 实机环境 | Windows x64 / Creo 12.4.0.0 / 匹配 Toolkit 与许可（2026-11-04） |
-| 实机证据 | `build/planar_wall/20261104T032633Z/adoption_live.json`（67 项全通过，含 8 个实机场景） |
-| 离线证据 | `tests/unit/test_native_planar_wall.py`、`tools/test_adoption_planar_wall.py` 默认离线部分 |
-| 未实测 | Creo 9 / 10 实机；非矩形截面；显式支撑面上 `plane` 的 origin 覆写；翻转支撑面以外的自定义方向 |
+| 实机证据 | `build/planar_wall/20261104T032633Z/adoption_live.json`（67 项全通过，含 8 个实机场景）；`build/first_wall_origin/20261106T152859Z/origin_live.json`（112/112，`origin` 创建/改型矩阵） |
+| 离线证据 | `tests/unit/test_native_planar_wall.py`、`tools/test_adoption_planar_wall.py`、`tools/test_first_wall_origin.py` 的默认离线部分 |
+| 未实测 | Creo 9 / 10 实机；非矩形截面；显式支撑面字典与 `origin` 组合（schema 拒绝）；斜置/非轴对齐 frame 的改型；翻转支撑面以外的自定义方向 |
 
 ## 1. SDK 依据（已核实）
 
@@ -45,7 +45,7 @@ PRO_E_FEATURE_TREE
 └ PRO_E_SMT_NEW_BODY_LINKED       = PRO_B_TRUE
 ```
 
-驱动草图：`<label>_sk`，平面由 `plane`（`XY`/`XZ`/`YZ`）决定，实体为一个 `rectangle`，范围 `0..length` × `0..width`，`dimensioning=coordinates`。草图是真实特征名，因此**同时参与重名、计划内冲突与墓碑保护**：`<label>` 或 `<label>_sk` 已被占用时，准入与原生两侧都会拒绝，绝不覆盖受管别名。
+驱动草图：`<label>_sk`，平面由 `plane`（`XY`/`XZ`/`YZ`）决定，实体为一个 `rectangle`，范围 `u0..u0+length` × `v0..v0+width`（`origin=[u0,v0]` 默认 `[0,0]`，草图局部 mm），`dimensioning=coordinates`。`origin` 只改变矩形在命名平面 frame 内的位置，命名平面的 u/v/n 与正负生长方向不变；`plane` 传字典时字典自带 origin，非零 `origin` 与字典平面互斥（schema 拒绝）。草图是真实特征名，因此**同时参与重名、计划内冲突与墓碑保护**：`<label>` 或 `<label>_sk` 已被占用时，准入与原生两侧都会拒绝，绝不覆盖受管别名。
 
 创建后必须全部成立，否则该 op 失败并回滚：
 
@@ -62,8 +62,8 @@ PRO_E_FEATURE_TREE
 
 | 轴 | direction=positive | direction=negative |
 | --- | --- | --- |
-| u | `[0, length]` | `[0, length]` |
-| v | `[0, width]` | `[0, width]` |
+| u | `[u0, u0+length]` | `[u0, u0+length]` |
+| v | `[v0, v0+width]` | `[v0, v0+width]` |
 | n | `[0, thickness]` | `[-thickness, 0]` |
 
 只比跨度会放过"长在平面另一侧且整体偏移"的壁（2026-11-04 复核复现），因此原生 `planar_wall_require_envelope` 与 Python `envelope_problem` 都按上表逐轴比对上下界（容差 1e-6 相对、1e-6 绝对下限）。
@@ -78,13 +78,14 @@ PRO_E_FEATURE_TREE
 ## 5. 改型（`resize_sheetmetal_planar_wall`）
 
 * 只接受由 `sheetmetal_planar_wall` 创建的壁；标签未知、由其他算子创建、或存在下游子特征时**在建模前**拒绝（准入读保存的 inspection 找子特征，原生再以 `ProFeatureChildrenGet` 复核）。
-* 实现方式：按当前尺寸比例驱动该草图已有的点坐标尺寸，再重定义草图；不改壁特征、不重建、不动其它约束。
-* 完成后必须成立：壁 `feature_id` 不变；点尺寸仍 ≥ 4；体积 = 新 `length × width × thickness`；有符号包络按 §3（沿用记录的 direction）；壁体厚度与记录一致。
+* 实现方式：驱动该草图已有的点坐标尺寸，再重定义草图；不改壁特征、不重建、不动其它约束。
+* 尺寸解释：坐标尺寸是“到截面轴的距离”，值本身不带侧符号（矩形跨过截面原点时两侧同值）。因此改型读取草图截面定位矩阵，把记录的 frame 轴映射到截面轴，再按 `wall_0..wall_3` 角点表把每个尺寸名还原到 frame 角点，逐一核对旧值后写入新值，原点保持不动；排列/符号无法由矩阵解释时拒绝改型，不猜测。
+* 完成后必须成立：壁 `feature_id` 不变；点尺寸仍 ≥ 4；体积 = 新 `length × width × thickness`；有符号包络按 §3（沿用记录的 direction 与 origin）；壁体厚度与记录一致。
 * 改型开始前会从**已保存的文件**读出壁体厚度并与记录比对（`PLANAR_WALL_BODIES phase=loaded`），因此"保存重载后厚度保持"由改型作业自身证明。
 
 ## 6. 公开结果（`planar_wall`）
 
-`creo_get_job` 的 `detail=compact` 与 `detail=full` 都会带 `planar_wall`（compact 白名单在 `bridge.compact_job`）。字段：`op`、`feature`、`feature_id`、`feature_id_before`（改型）、`feature_id_unchanged`、`sketch`、`length`、`width`、`thickness`、`direction`、`square`、`dimension_count`、`volume_mm3`、`frame`、`envelope`、`sheetmetal_body`、`sheetmetal_bodies`、`material_bodies`、`thickness_source`、`thickness_measured_mm`、`thickness_verified`、`thickness_body_code`、`thickness_loaded_mm`（改型）、`body_linked`、`problems`、`verified`。
+`creo_get_job` 的 `detail=compact` 与 `detail=full` 都会带 `planar_wall`（compact 白名单在 `bridge.compact_job`）。字段：`op`、`feature`、`feature_id`、`feature_id_before`（改型）、`feature_id_unchanged`、`sketch`、`length`、`width`、`thickness`、`origin`、`direction`、`square`、`dimension_count`、`volume_mm3`、`frame`、`envelope`、`sheetmetal_body`、`sheetmetal_bodies`、`material_bodies`、`thickness_source`、`thickness_measured_mm`、`thickness_verified`、`thickness_body_code`、`thickness_loaded_mm`（改型）、`body_linked`、`problems`、`verified`。
 
 `verified=true` 仅当 §2/§5 的证据项全部具备且一致；缺体积、缺方向、缺厚度读回都会变成 `problems` 而不是默认通过。
 
@@ -100,4 +101,12 @@ PRO_E_FEATURE_TREE
 * 默认（转换）模板模型上原生首壁被原生拒绝、revision 不变，随后旧 `sheetmetal_wall` 仍成功（42920 mm³）；
 * 旧首壁 + 折边链路：42920 mm³ → 加折边 47178.64 mm³，保存重载通过。
 
-未验证：Creo 9/10 实机；非矩形/多环截面；`plane` 传显式支撑面并覆写 origin；原生壁上第二个折边与四壁（受 FEAT-014/corner relief 限制）；WorkBuddy 黑盒。
+2026-11-06 增补（`build/first_wall_origin/20261106T152859Z`，112/112）：
+
+* 185×232×1、`origin=[-92.5,-116]` → bbox `[-92.5,-116,0]..[92.5,116,1]`、质心 `[0,0,0.5]`、42920 mm³；
+* 省略 `origin` → `[0,0,0]..[185,232,1]`，与 0.16.0 几何一致；
+* XZ/YZ + `origin`、`direction=negative` 全部通过；
+* 同计划与跨计划 resize 到 200×250 → bbox `[-92.5,-116,0]..[107.5,134,1]`，原点保持、`saved_file_reloaded_and_verified=true`；
+* 第二面墙在派发前被拒、revision 不变，随后 resize 成功。
+
+未验证：Creo 9/10 实机；非矩形/多环截面；`plane` 传显式支撑面字典并带非零 `origin`（schema 拒绝）；斜置/非轴对齐 frame 的改型；原生壁上第二个折边与四壁（受 FEAT-014/corner relief 限制）；WorkBuddy 黑盒。

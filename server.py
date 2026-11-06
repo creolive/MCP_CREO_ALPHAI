@@ -1722,6 +1722,7 @@ async def creo_sheetmetal_planar_wall(
     thickness: float,
     plane: Literal["XY", "XZ", "YZ"] = "XY",
     direction: Literal["positive", "negative"] = "positive",
+    origin: list[float] | None = None,
 ) -> dict[str, Any]:
     """Create the first sheetmetal wall as a native unattached planar wall.
 
@@ -1730,11 +1731,14 @@ async def creo_sheetmetal_planar_wall(
     needs the sheetmetal subtype, so a solid-template sheetmetal model is refused natively (it
     keeps its revision and stays editable). The rectangle runs 0..length along the sketch u axis
     and 0..width along v on `plane`; direction=positive grows toward the reported sketch normal,
-    direction=negative toward the opposite side, verified on XY, XZ and YZ. The op also creates
+    direction=negative toward the opposite side, verified on XY, XZ and YZ. `origin=[u0,v0]` (mm,
+    optional) starts the rectangle at u0,v0 instead, e.g. origin=[-92.5,-116] with
+    185x232x1 spans [-92.5,-116]..[92.5,116] around the model origin; the plane frame and the
+    growth direction are unchanged and a resize keeps the recorded origin. The op also creates
     the feature <label>_sk, so both names must be free (the plan is refused when either name
     exists, was deleted, or repeats inside the same plan). Verification is measured, not echoed:
     read the planar_wall block on the job result (creo_get_job detail=compact keeps it) with
-    feature_id, dimension_count (4+ point dimensions, so a square is not silently
+    feature_id, origin, dimension_count (4+ point dimensions, so a square is not silently
     under-constrained), volume_mm3, thickness_measured_mm/thickness_verified (read back from the
     wall body), and the signed envelope (envelope.u/v/n min/max). Use
     creo_resize_sheetmetal_planar_wall to change the rectangle; do not rebuild the wall. A flange
@@ -1751,6 +1755,7 @@ async def creo_sheetmetal_planar_wall(
                 "width": width,
                 "thickness": thickness,
                 "direction": direction,
+                "origin": list(origin) if origin is not None else [0.0, 0.0],
             }
         ],
         model_id,

@@ -304,17 +304,20 @@ static void planar_wall_geometry_gauge(PlanarWallBodies &bodies, const V &normal
 }
 
 // A span-only envelope accepted a wall that grew on the opposite side of the
-// sketch plane at the wrong origin offset. The rectangle starts at the sketch
-// origin, so the accepted interval is signed: u[0,L], v[0,W] and either
-// n[0,t] or n[-t,0].
+// sketch plane at the wrong origin offset. The rectangle starts at ``origin``
+// (sketch-local [u0, v0] in mm) so the accepted interval is signed:
+// u[u0,u0+L], v[v0,v0+W] and either n[0,t] or n[-t,0]. R10: a non-zero origin
+// keeps the named-plane frame and only moves the rectangle, so the interval
+// moves with it instead of being compared against 0..L.
 static void planar_wall_require_envelope(const J &envelope, double length, double width,
-                                         double thickness, bool negative, const char *phase) {
+                                         double thickness, bool negative, const char *phase,
+                                         double u0, double v0) {
     struct Expected {
         const char *axis;
         double low;
         double high;
-    } expected[3] = {{"u", 0.0, length},
-                     {"v", 0.0, width},
+    } expected[3] = {{"u", u0, u0 + length},
+                     {"v", v0, v0 + width},
                      {"n", negative ? -thickness : 0.0, negative ? 0.0 : thickness}};
     for (const auto &axis : expected) {
         const J &entry = envelope[axis.axis];
@@ -420,9 +423,21 @@ static void generic_sheetmetal_planar_wall(const J &op) {
     double width = op["width"].get<double>();
     double thickness = op["thickness"].get<double>();
     bool negative = op.value("direction", "positive") == "negative";
+    // R10: the origin is a sketch-local [u0, v0] offset in mm. The named-plane
+    // frame (and therefore u/v/n and the growth direction) is left untouched;
+    // only the rectangle coordinates move, so the recorded frame stays the one
+    // Creo reported and a resize keeps the same placement.
+    J origin_pair = op.value("origin", J::array({0.0, 0.0}));
+    if (!origin_pair.is_array() || origin_pair.size() != 2 || !origin_pair[0].is_number() ||
+        !origin_pair[1].is_number() || !std::isfinite(origin_pair[0].get<double>()) ||
+        !std::isfinite(origin_pair[1].get<double>()))
+        throw std::runtime_error(
+            "sheetmetal_planar_wall origin must be a finite [u0, v0] pair in mm");
+    double u0 = origin_pair[0].get<double>(), v0 = origin_pair[1].get<double>();
 
-    // 1) The driving sketch: one rectangle covering 0..length by 0..width, fully
-    //    dimensioned by coordinates so a later resize can drive its dimensions.
+    // 1) The driving sketch: one rectangle covering u0..u0+length by v0..v0+width,
+    //    fully dimensioned by coordinates so a later resize can drive its
+    //    dimensions.
     std::string sketch_name = label + "_sk";
     // The internal sketch is a real feature name: creating it while the name is
     // already taken would overwrite a managed alias behind the caller's back.
@@ -435,8 +450,8 @@ static void generic_sheetmetal_planar_wall(const J &op) {
                    {"plane", op["plane"]},
                    {"entities", J::array({J{{"type", "rectangle"},
                                             {"name", "wall"},
-                                            {"min", J::array({0.0, 0.0})},
-                                            {"max", J::array({length, width})}}})},
+                                            {"min", J::array({u0, v0})},
+                                            {"max", J::array({u0 + length, v0 + width})}}})},
                    {"dimensioning", "coordinates"}};
     J sketch_details = sketch(sketch_op);
     ProFeature sketch_feature = feature(sketch_name);
@@ -498,7 +513,8 @@ static void generic_sheetmetal_planar_wall(const J &op) {
         throw std::runtime_error(
             "The wall regenerated but no sheetmetal body carries geometry; the feature did not "
             "build a wall body");
-    planar_wall_require_envelope(envelope, length, width, thickness, negative, "created");
+    planar_wall_require_envelope(envelope, length, width, thickness, negative, "created", u0, v0);
+    log("PLANAR_WALL_ORIGIN u0=%.9f v0=%.9f\n", u0, v0);
     // R03: a wall just created by this job has no downstream feature, so the
     // geometry fallback can measure its own material extent.
     planar_wall_geometry_gauge(bodies, n, thickness, u, v, 0);
@@ -534,6 +550,7 @@ static void generic_sheetmetal_planar_wall(const J &op) {
                 {"width", width},
                 {"thickness", thickness},
                 {"direction", direction},
+                {"origin", J::array({u0, v0})},
                 {"frame", frame}}}});
     planar_walls_created_this_job.insert(label);
     stage_operation_result(
@@ -545,6 +562,7 @@ static void generic_sheetmetal_planar_wall(const J &op) {
          {"width", width},
          {"thickness", thickness},
          {"direction", direction},
+         {"origin", J::array({u0, v0})},
          {"square", fabs(length - width) <= 1e-9},
          {"dimension_count", dimensions},
          {"volume_mm3", measured},
@@ -580,6 +598,13 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     double thickness = record["thickness"].get<double>();
     bool negative = record.value("direction", "positive") == "negative";
     J frame = record.value("frame", J::object());
+    // Older records have no origin: the rectangle started at the sketch origin.
+    J recorded_origin = record.value("origin", J::array({0.0, 0.0}));
+    if (!recorded_origin.is_array() || recorded_origin.size() != 2 ||
+        !recorded_origin[0].is_number() || !recorded_origin[1].is_number())
+        throw std::runtime_error("The recorded planar wall " + label +
+                                 " carries no usable [u0, v0] origin; the resize is refused");
+    double u0 = recorded_origin[0].get<double>(), v0 = recorded_origin[1].get<double>();
     double length = op["length"].get<double>();
     double width = op["width"].get<double>();
     ProFeature wall = feature(label);
@@ -642,44 +667,122 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     CK(ProElementSpecialvalueGet(section_element, nullptr, (ProAppData *)&section));
 
     // Read every dimension before writing any, so a partially readable section
-    // leaves the model untouched.
+    // leaves the model untouched. R10: a coordinate dimension is a distance from
+    // a section axis, so its value alone cannot say which side of the section
+    // origin a corner sits on (a wall centred on the frame reports the same
+    // magnitude on both sides). The section location matrix maps the recorded
+    // frame to section coordinates and the rectangle table maps each dimension
+    // name back to its frame corner, so the resize keeps the recorded origin.
+    const double recorded_length = record["length"].get<double>();
+    const double recorded_width = record["width"].get<double>();
+    V frame_origin = vec(frame["origin"]), frame_u = vec(frame["u_axis"]),
+      frame_v = vec(frame["v_axis"]);
+    ProMatrix loc;
+    CK(ProSectionLocationGet(section, loc));
+    bool loc_is_identity = true;
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            if (fabs(loc[row][col] - (row == col ? 1.0 : 0.0)) > 1e-12)
+                loc_is_identity = false;
+    // The identity is a real placement only for world XY through the origin.
+    const bool frame_is_world_xy = fabs(frame_origin[0]) < 1e-9 && fabs(frame_origin[1]) < 1e-9 &&
+                                   fabs(frame_origin[2]) < 1e-9 && fabs(frame_u[0] - 1) < 1e-9 &&
+                                   fabs(frame_u[1]) < 1e-9 && fabs(frame_u[2]) < 1e-9 &&
+                                   fabs(frame_v[0]) < 1e-9 && fabs(frame_v[1] - 1) < 1e-9 &&
+                                   fabs(frame_v[2]) < 1e-9;
+    struct AxisMap {
+        int axis = -1;
+        double slope = 1;
+        double offset = 0;
+    } map_u, map_v;
+    if (loc_is_identity && !frame_is_world_xy) {
+        // The location matrix is the BUG-097 placeholder, so the section really
+        // is placed with the recorded frame: section x/y are frame u/v.
+        map_u = {0, 1, 0};
+        map_v = {1, 1, 0};
+    } else {
+        for (int axis = 0; axis < 2; axis++) {
+            V row = {loc[axis][0], loc[axis][1], loc[axis][2]};
+            double du = dot(row, frame_u), dv = dot(row, frame_v);
+            double offset = dot(V{frame_origin[0] - loc[3][0], frame_origin[1] - loc[3][1],
+                                  frame_origin[2] - loc[3][2]},
+                                row);
+            if (fabs(fabs(du) - 1) <= 1e-6 && fabs(dv) <= 1e-6) {
+                if (map_u.axis >= 0)
+                    throw std::runtime_error("The driving sketch section repeats the recorded "
+                                             "frame u axis; the resize is refused");
+                map_u = {axis, du > 0 ? 1.0 : -1.0, offset};
+            } else if (fabs(fabs(dv) - 1) <= 1e-6 && fabs(du) <= 1e-6) {
+                if (map_v.axis >= 0)
+                    throw std::runtime_error("The driving sketch section repeats the recorded "
+                                             "frame v axis; the resize is refused");
+                map_v = {axis, dv > 0 ? 1.0 : -1.0, offset};
+            }
+        }
+    }
+    if (map_u.axis < 0 || map_v.axis < 0 || map_u.axis == map_v.axis)
+        throw std::runtime_error("The driving sketch section axes do not align with the recorded "
+                                 "wall frame; the resize is refused");
+    log("PLANAR_WALL_RESIZE axes u=%d,v=%d slope=%d,%d offset=%.9f,%.9f origin=%.9f,%.9f\n",
+        map_u.axis, map_v.axis, (int)map_u.slope, (int)map_v.slope, map_u.offset, map_v.offset, u0,
+        v0);
+
+    // Rectangle traversal: min -> (max.x,min.y) -> max -> (min.x,max.y).
+    static const double corner_u[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+    static const double corner_v[4][2] = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
     struct Target {
         int id;
         double value;
-        char axis;
     };
-    std::vector<Target> reads;
-    double observed_length = 0, observed_width = 0;
+    std::vector<Target> writes;
     for (auto it = ids.begin(); it != ids.end(); ++it) {
         const std::string &name = it.key();
-        if (name.rfind("coord_origin_", 0) == 0)
+        if (name.rfind("coord_", 0) != 0 || name.size() <= 8)
             continue;
-        char axis = 0;
+        int axis = -1;
         if (name.size() > 2 && name.compare(name.size() - 2, 2, "_x") == 0)
-            axis = 'x';
+            axis = 0;
         else if (name.size() > 2 && name.compare(name.size() - 2, 2, "_y") == 0)
-            axis = 'y';
+            axis = 1;
         else
             continue;
-        double value = 0;
-        CK(ProSecdimValueGet(section, it.value().get<int>(), &value));
-        reads.push_back({it.value().get<int>(), fabs(value), axis});
-        if (axis == 'x')
-            observed_length = std::max(observed_length, fabs(value));
-        else
-            observed_width = std::max(observed_width, fabs(value));
+        std::string body = name.substr(6, name.size() - 8);
+        bool end = body.size() > 4 && body.compare(body.size() - 4, 4, "_end") == 0;
+        bool start = body.size() > 6 && body.compare(body.size() - 6, 6, "_start") == 0;
+        std::string entity = body.substr(0, body.size() - (end ? 4 : 6));
+        if ((!end && !start) || entity.rfind("wall_", 0) != 0 || entity.size() != 6 ||
+            entity[5] < '0' || entity[5] > '3')
+            throw std::runtime_error("The driving sketch dimension " + name +
+                                     " is not part of the recorded rectangle; the wall stayed "
+                                     "untouched");
+        int corner = entity[5] - '0';
+        bool at_end = end;
+        double recorded_u = u0 + corner_u[corner][at_end ? 1 : 0] * recorded_length;
+        double recorded_v = v0 + corner_v[corner][at_end ? 1 : 0] * recorded_width;
+        double resized_u = u0 + corner_u[corner][at_end ? 1 : 0] * length;
+        double resized_v = v0 + corner_v[corner][at_end ? 1 : 0] * width;
+        // The dimension suffix names the frame axis, not the section axis: the
+        // coordinate dimensioning names u as _x and v as _y after the section
+        // axis that carries them (COORDINATE_AXES).
+        bool on_u = axis == 0;
+        double slope = on_u ? map_u.slope : map_v.slope;
+        double offset = on_u ? map_u.offset : map_v.offset;
+        double current = 0;
+        CK(ProSecdimValueGet(section, it.value().get<int>(), &current));
+        double expected = fabs(slope * (on_u ? recorded_u : recorded_v) + offset);
+        double tolerance = std::max(1e-6, fabs(expected) * 1e-6);
+        if (fabs(current - expected) > tolerance)
+            throw std::runtime_error("The driving sketch dimension " + name + " is " +
+                                     std::to_string(current) + " mm instead of the recorded " +
+                                     std::to_string(expected) + " mm; the wall stayed untouched");
+        writes.push_back(
+            {it.value().get<int>(), fabs(slope * (on_u ? resized_u : resized_v) + offset)});
     }
-    if (observed_length <= 0 || observed_width <= 0)
-        throw std::runtime_error("The driving sketch dimensions cannot be read (" +
-                                 std::to_string(reads.size()) +
-                                 " point dimensions); the wall was left unchanged");
-    double factor_u = length / observed_length, factor_v = width / observed_width;
-    log("PLANAR_WALL_RESIZE observed_u=%.9f observed_v=%.9f factor_u=%.9f factor_v=%.9f\n",
-        observed_length, observed_width, factor_u, factor_v);
-
-    for (const auto &target : reads)
-        CK(ProSecdimValueSet(section, target.id,
-                             target.value * (target.axis == 'x' ? factor_u : factor_v)));
+    if (writes.empty())
+        throw std::runtime_error("The driving sketch carries no readable coordinate dimensions; "
+                                 "the wall stayed untouched");
+    for (const auto &target : writes)
+        CK(ProSecdimValueSet(section, target.id, target.value));
     ProWSecerror error = nullptr;
     CK(ProSecerrorAlloc(&error));
     CK(ProSectionRegenerate(section, &error));
@@ -713,7 +816,7 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
                                  std::to_string(dimensions) + " point dimensions");
     if (!bodies.material)
         throw std::runtime_error("The resize left no sheetmetal body carrying geometry");
-    planar_wall_require_envelope(envelope, length, width, thickness, negative, "resized");
+    planar_wall_require_envelope(envelope, length, width, thickness, negative, "resized", u0, v0);
     if (bodies.thickness_known && fabs(bodies.thickness - thickness) > 1e-6)
         throw std::runtime_error("The resized wall carries " + std::to_string(bodies.thickness) +
                                  " mm instead of the recorded " + std::to_string(thickness) +
@@ -739,6 +842,7 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
          {"width", width},
          {"thickness", thickness},
          {"direction", negative ? "negative" : "positive"},
+         {"origin", J::array({u0, v0})},
          {"square", fabs(length - width) <= 1e-9},
          {"dimension_count", dimensions},
          {"volume_mm3", measured},

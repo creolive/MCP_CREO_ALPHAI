@@ -183,3 +183,29 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 ## 2026-11-06 R03 实机验收（Creo 12.4.0.0 / 匹配 SDK）
 
 命令：`.\.venv\Scripts\python.exe tools\test_adoption_planar_wall.py --live --confirm-session-usable`；报告 `build/planar_wall/20261106T115256Z/adoption_live.json`（`passed=true`，sha256 `7a981a00d11e9698f0dde8c70a622f6d44a0bf8eeb13f02d5e6f2675def39838`），77/77 检查通过，含 100×60×1 job `0806159…`（体积 6000、厚度 API 读数 1.0、`wall_created_this_job=true`）、185×232×1 `large`、同计划 create→resize 的 `thickness_loaded_validation.context=current_plan` 与保存重载 true，以及 XY/XZ/YZ、负方向、跨作业存档厚度、拒绝后继续编辑。缺 API 的 `geometry_normal_span` 仍只有受控编译与离线判定，Creo 9/10 实机未验。
+
+## 2026-11-06 R10 首壁 origin（代码已实现并实机验收，未提交/未发布）
+
+分支 `codex/R10-first-wall-origin`（基线 `34dbcb1`，`version.py=0.16.1` 已发布）。本轮只改首壁定位与 resize，不改全局坐标求解器。
+
+实现：
+
+- `schema.SheetmetalPlanarWallOp` 新增 `origin: [u0, v0]`（草图局部 mm，默认 `[0,0]`，有限且 |值|≤1e6；显式平面字典自带 origin，故与非零 origin 互斥）；`server.creo_sheetmetal_planar_wall` 透传并写入 docstring。
+- 创建：驱动草图矩形由 `0..L/0..W` 改为 `u0..u0+L / v0..v0+W`，仍按命名平面原有 u/v/n 建帧，板厚生长侧不变；记录与结果都带 `origin`，包络按移动后的矩形校验。
+- 改型：坐标尺寸是“到截面轴的距离”，`fabs` 值在矩形跨过截面原点时两侧同值（实测 92.5/92.5、116/116），不能靠 min/max 猜区间。现在读取草图截面定位矩阵，把记录的 frame 映射到截面轴，再按 `wall_0..wall_3` 角点表把每个尺寸名还原到 frame 角点，逐项核对旧值后写入新值；原点保持不动。旧记录缺 `origin` 按 `[0,0]`。
+- 未采用“平移 sketch frame”路线：原生探针（`tools/test_first_wall_origin.py`，9 个 sketch+extrude 用例）显示 XY/YZ 可以复现 offset 几何，但 XZ 的显式平面取支撑法向 +Y（命名约定为 −Y），`v=cross(n,u)` 翻到 −Z，几何落到 `z[-348,-116]`。因此保留命名帧、移动矩形，与 `sketch_frame` 现有约定不冲突。
+
+实机（本机 Creo 12.4.0.0 / 匹配 SDK / Windows x64；命令 `.\.venv\Scripts\python.exe tools\test_first_wall_origin.py --live --confirm-session-usable`；报告 `build/first_wall_origin/20261106T152859Z/origin_live.json`，**112/112**）：
+
+| 场景 | 结果 |
+| --- | --- |
+| 185×232×1，`origin=[-92.5,-116]`，XY | bbox `[-92.5,-116,0]..[92.5,116,1]`，质心 `[0,0,0.5]`，体积 42920 mm³ |
+| 默认 `origin` 省略 | bbox `[0,0,0]..[185,232,1]`，几何与 0.16.0 一致 |
+| XZ / YZ + origin / negative | 创建、包络、体积、保存重载全部通过，命名帧不变 |
+| 同计划 create→resize 200×250 | bbox `[-92.5,-116,0]..[107.5,134,1]`，原点保持，`saved_file_reloaded_and_verified=true` |
+| 跨计划 resize | 同上；旧记录 `origin` 从别名读取 |
+| 第二面墙 | 派发前被拒（`creates the first wall; this model already has geometry`），revision 不变，随后 resize 成功 |
+
+测试：`tests/unit/test_native_planar_wall.py` 44 项（新增 origin/envelope/投影/server/native 断言 8 项 + resize 映射 1 项）、`test_t02_operation_results` 18 项；`bridge.py build` 退出 0。离线探针 10/10。
+
+未验证：Creo 9/10 实机；显式平面字典与非零 `origin` 组合（schema 明确拒绝）；WorkBuddy 黑盒；斜置/非轴对齐 frame 的 resize（原生会以“截面轴与记录 frame 不对齐”拒绝，未取实机证据）。本轮未合入 `main`、未发布。
