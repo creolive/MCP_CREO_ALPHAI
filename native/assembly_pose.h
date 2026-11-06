@@ -5,6 +5,12 @@
 
 // Shared by the production assembly entries and the offline harness. Row-vector
 // local-to-parent mapping; translation is the last row. Never repair input poses.
+// BUG-045/FEAT-012: receipts publish this exact name beside the transform they
+// read back from the kernel; it is the same mapping the input schema states.
+inline const char *assembly_rotation_convention() {
+    return "row_vectors_local_to_parent";
+}
+
 template <typename Json> inline void assembly_rigid_transform(const Json &op, double matrix[4][4]) {
     auto vector3 = [](const Json &value) {
         if (!value.is_array() || value.size() != 3)

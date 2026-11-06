@@ -3406,6 +3406,9 @@ static J populate_profile(ProSection section, const J &op) {
     return {{"entity_ids", ids}, {"dimension_ids", dims}, {"solver", solver_info}};
 }
 #include "component_transform.h"
+// R05 (BUG-045/FEAT-012): the assembly receipt serializes the transform it just
+// read back, so the row-major matrix helper is forward declared for advanced.cpp.
+static J matrix_json(const ProMatrix matrix);
 // Result split helpers are defined after the feature modules; forward declared
 // here so component sources can resolve controlled detail references (BUG-077).
 static J read_inspection_ref(const J &ref);

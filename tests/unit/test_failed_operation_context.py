@@ -62,6 +62,18 @@ def placement_operation(**overrides):
     return operation
 
 
+def cut_miss_result():
+    """R05: a cut whose intersection with the solid is empty removes no material."""
+    return {
+        "success": False,
+        "toolkit_code": -1,
+        "message": "Extrude cut removed no material",
+        "failed_stage": "execute_extrude",
+        "failed_toolkit_call": None,
+        "failed_operation_index": 1,
+    }
+
+
 class SuccessPathTest(unittest.TestCase):
     def test_a_succeeded_result_never_carries_the_block(self):
         result = {"success": True, "toolkit_code": 0}
@@ -341,6 +353,138 @@ class CompactVisibilityTest(unittest.TestCase):
         self.assertEqual(block["stage"], "execute_extrude")
         self.assertEqual(block["pro_error"], -1)
         self.assertEqual(block["pro_error_source"], "toolkit")
+
+
+class NonToolkitFailureContextTest(unittest.TestCase):
+    """R05: extrude-shape and cut-miss failures use the same bounded block."""
+
+    def test_a_coplanar_tangent_extrude_keeps_its_real_failing_call(self):
+        result = failed_extrude_result(
+            message="Extrude produced a zero-volume (coplanar/tangent) feature",
+            failed_toolkit_call="ProFeatureWithoptionsCreate",
+        )
+        annotate_failed_operation(result, extrude_inputs())
+        block = result["failed_operation"]
+        self.assertEqual(block["operation"], "extrude")
+        self.assertEqual(block["stage"], "execute_extrude")
+        self.assertEqual(block["feature_label"], "p10_ex2")
+        self.assertEqual(block["toolkit_call"], "ProFeatureWithoptionsCreate")
+        self.assertEqual(block["pro_error"], -1)
+        self.assertEqual(block["pro_error_source"], "toolkit")
+
+    def test_a_cut_that_misses_material_reports_an_unknown_cause_as_null(self):
+        result = cut_miss_result()
+        annotate_failed_operation(result, extrude_inputs())
+        block = result["failed_operation"]
+        self.assertEqual(block["index"], 1)
+        self.assertEqual(block["operation"], "extrude")
+        self.assertEqual(block["feature_label"], "p10_ex2")
+        self.assertEqual(block["sketch_name"], "p10_sk1")
+        # No Toolkit call failed, so the -1 general error is not published as a
+        # Toolkit sub-code and no matrix is invented.
+        self.assertIsNone(block["toolkit_call"])
+        self.assertIsNone(block["pro_error"])
+        self.assertEqual(block["pro_error_source"], "unsupported")
+        for field in ("input_matrix", "matrix_source", "determinant", "orthogonality_residual"):
+            self.assertIsNone(block[field])
+
+    def test_both_failures_publish_the_same_key_set(self):
+        shapes = []
+        for result in (
+            failed_extrude_result(failed_toolkit_call="ProFeatureWithoptionsCreate"),
+            cut_miss_result(),
+        ):
+            annotate_failed_operation(result, extrude_inputs())
+            shapes.append(set(result["failed_operation"]))
+        self.assertEqual(shapes[0], shapes[1])
+        self.assertIn("pro_error", shapes[0])
+        self.assertIn("toolkit_call", shapes[0])
+
+    def test_the_annotated_result_keeps_the_same_shape(self):
+        result = cut_miss_result()
+        annotate_native_result(result, readonly=False, inputs=extrude_inputs())
+        self.assertIn("failed_operation", result)
+        self.assertIsNone(result["failed_operation"]["pro_error"])
+
+
+class AssemblyPoseReceiptVisibilityTest(unittest.TestCase):
+    """R05: compact keeps the convention and the transform read back from Creo."""
+
+    READBACK = [
+        [0.951594, 0.307357, 0.0, 0.0],
+        [-0.307357, 0.951594, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [12.5, -4.25, 30.0, 1.0],
+    ]
+
+    def _operation(self, **overrides):
+        operation = {
+            "index": 0,
+            "op": "assemble_component",
+            "succeeded": True,
+            "source_model_id": "a" * 32,
+            "rotation_convention": "row_vectors_local_to_parent",
+            "transform": self.READBACK,
+            "transform_source": "component_to_assembly",
+            "transform_code": 0,
+            "length_unit": {
+                "name": "millimeter",
+                "query_code": 0,
+                "scale_to_mm": 1.0,
+                "scale_to_mm_known": True,
+            },
+        }
+        operation.update(overrides)
+        return operation
+
+    def test_compact_keeps_the_convention_and_the_readback(self):
+        from bridge import compact_job
+
+        result = {"success": True, "toolkit_code": 0, "operations": [self._operation()]}
+        annotate_native_result(result, readonly=False, inputs=None)
+        compact = compact_job({"job_id": "j", "status": "succeeded", "result": result})
+        operation = compact["result"]["operations"][0]
+        self.assertEqual(operation["rotation_convention"], "row_vectors_local_to_parent")
+        self.assertEqual(operation["transform"], self.READBACK)
+        self.assertEqual(operation["transform_source"], "component_to_assembly")
+        self.assertEqual(operation["transform_code"], 0)
+        self.assertEqual(operation["length_unit"]["scale_to_mm"], 1.0)
+        # Existing identity/status fields are not lost by the added whitelist.
+        self.assertEqual(operation["op"], "assemble_component")
+        self.assertEqual(operation["index"], 0)
+        self.assertEqual(operation["effect_status"], "committed")
+
+    def test_an_unreadable_transform_stays_null_in_compact(self):
+        from bridge import compact_job
+
+        operation = self._operation(transform=None, transform_code=-4)
+        result = {"success": False, "toolkit_code": -4, "operations": [operation]}
+        annotate_native_result(result, readonly=False, inputs=None)
+        compact = compact_job({"job_id": "j", "status": "failed", "result": result})
+        projected = compact["result"]["operations"][0]
+        self.assertIsNone(projected["transform"])
+        self.assertEqual(projected["transform_code"], -4)
+        self.assertEqual(projected["rotation_convention"], "row_vectors_local_to_parent")
+        self.assertIn("failed_operation", compact["result"])
+
+    def test_component_placement_receipt_is_projected_too(self):
+        from bridge import compact_job
+
+        operation = self._operation(op="component_placement", component="i032")
+        operation.pop("source_model_id")
+        operation.pop("succeeded")
+        operation["execution_status"] = "succeeded"
+        result = {
+            "success": True,
+            "toolkit_code": 0,
+            "operations": [operation],
+            "rollback_succeeded": None,
+        }
+        annotate_native_result(result, readonly=False, inputs=None)
+        compact = compact_job({"job_id": "j", "status": "succeeded", "result": result})
+        projected = compact["result"]["operations"][0]
+        self.assertEqual(projected["rotation_convention"], "row_vectors_local_to_parent")
+        self.assertEqual(projected["transform"], self.READBACK)
 
 
 if __name__ == "__main__":

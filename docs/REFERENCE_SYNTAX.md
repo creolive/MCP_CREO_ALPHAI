@@ -161,9 +161,9 @@
 | surface_trim.target/tool | target 一个 quilt；tool 一个 quilt、基准面标签或曲线几何 ID；`keep_side` 只用 `one`/`two`，实际依据见 `kept_side_basis`；`offset_mm` 仍拒绝 |
 | project_curve.target/source/direction_ref | target 一个 quilt；source 只接受 `{"kind":"curve","id":N}`（不接受 edge/axis 或曲线标签）；direction_ref 接受 `datum_feature`/`datum_axis_feature` 标签或曲线 ID，不接受 `datum_plane` 标签或裸向量 |
 | surface_offset.reference | 裸 quilt 或 quilt_feature 引用；距离字段是 `distance`，结果按面积×距离计量的偏置壁，不是独立 quilt 或实体厚度壁 |
-| sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`；参数内部不再加 edge/reference 包装 |
+| sheetmetal_flange.edge | 裸 `{"kind":"edge","id":N}`（计划路径 `operations[i].edge`），`id` 取当前 `creo_inspect_model` 的边 ID；参数内部不再加 edge/reference 包装。缺 `kind` 或写成 `{"id":N}` 时错误会给出该位置与 `{kind:'edge',id:N}` 示例。首壁来源为 `native_planar` 时，报错只指向 `creo_sheetmetal_planar_wall` 的 frame/envelope；只有 `sheetmetal_wall` 转换首壁才引用 `wall_contract`；来源未知不给旧首壁配方 |
 | sheetmetal_unbend/flat_pattern/bend_back.fixed_surface | 裸面引用，如 `{"kind":"surface","id":N}`，取自当前巡检；`references` 省略时作用全部折弯，能否固定由原生执行判定 |
-| sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放、斜接与边撕裂不支持。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |
+| sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放、斜接与边撕裂不支持。这是 **bend-end relief**，不是 corner relief 或斜接，当前未证明能解决角部重叠；传入它也不会跳过 `adjacent_bend_ends` 创建前拒绝，四壁仍未交付。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |
 | sheetmetal_flange.end_trim_mm | 可选正数（`>0`，上限 100000，布尔拒绝），模型单位；省略时元素树与旧行为逐字一致。**Creo 把它读作「距链端各内缩 setback」还是「自截面起算的壁长」尚未实机确认**，属诊断参数：先在自由壁上用实测体积分类再依赖修剪几何（开发分支未发布） |
 | feature_state.action / targets | `action` ∈ `delete`/`suppress`/`resume`；`targets` 是特征标签或非负特征 ID 的数组，同一批目标必须互不相同。仅用于零件/钣金模型；装配组件走 `creo_remove_component` |
 | component_placement.component / component_constraints 引用 | 组件**业务标签**（如 `part_alpha`）；标签是业务名不是身份，身份是模型身份 + feature_id，删除重插后旧标签不误指新组件 |

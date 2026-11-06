@@ -123,3 +123,11 @@ R1 §5 P1-4（矩阵直入/Euler输出）是0.5.2旧请求；矩阵子项已随0
 - 不自动正交化、不归一化、不转置；`schema.py` 的提交期 1e-6 正交与 det=+1 校验不变，内核返回 -2 时只做诊断、不改写调用方几何；整批原子回滚不变。
 - `pro_error` 只在实际捕获 `ProError` 时给出（例如 -2），否则 null + `pro_error_source="unsupported"`；`feature_label`/`sketch_name` 取不到即 null，不用整数 ID 冒充名称。
 - 验证：`tests/unit/test_failed_operation_context.py` 24 项与相关回归 109 项通过；全量 2477 项通过；`bridge.py build` 退出 0。未验证：实机 -2 未复现，`Euler` 展开路径（`matrix_source="euler"`）只有单测。
+
+## 2026-11-06 R05 离线实现（旋转约定、放置回执与投影，未构建、未实机）
+
+- 契约：`AssemblyPose.rotation`/`rotation_matrix`/`translation` 的 Field description 统一透出 `p_parent = p_local * rotation_matrix + translation`；`assemble_component` 与 `component_placement` 两支 description 逐字一致，并写明 3×3、正交与 det=+1（1e-6）、与 Euler 互斥、不转置/不自动修复。
+- 回执：创建与更新成功后新增 `rotation_convention="row_vectors_local_to_parent"`，并回显实读 `transform`（`component_to_assembly` 4×4）、`transform_source`、`transform_code`、`length_unit`；读取失败只留 null + 查询码。
+- 投影：`job_projection.ASSEMBLY_POSE_KEYS` 并入 compact 白名单（两个 op 分支），`compact_operation`/`compact_job` 不丢既有 op/index/effect_status 与 `failed_operation`。
+- 验证（离线）：`tests/unit/test_assembly_matrix_poses.py` 12 项（含 17.9° 完整精度与六位舍入、非对称点与基向量、创建/更新、非法矩阵受理期拒绝）、`tests/unit/test_assembly_matrix_rollback.py` 11 项（整批回滚、后续合法编辑同一 revision）、`tests/unit/test_failed_operation_context.py` 31 项通过。
+- 未验证：原生编译（`bridge.py build` 由编排方统一执行）、实机放置/更新回读与 revision、Creo 10、WorkBuddy。

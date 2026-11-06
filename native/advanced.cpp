@@ -1411,10 +1411,69 @@ static std::string flange_adjacent_ends_summary(const J &evidence) {
     return summary;
 }
 
+// R09 (FEAT-014, 0.13.0 feedback §3.3): the pre-create error must not hand a
+// native_planar model the conversion-only wall_contract recipe. The first-wall
+// source is recorded in the model's aliases: wall_contract only for the
+// thin-extrusion conversion (creo_sheetmetal_wall), planar_wall only for
+// creo_sheetmetal_planar_wall. When neither is present the source is unknown,
+// so no first-wall recipe is offered instead of defaulting to the old one.
+static std::string flange_first_wall_guide() {
+    bool planar = false, conversion = false;
+    for (auto item = aliases.begin(); item != aliases.end(); ++item) {
+        const J &record = item.value();
+        if (!record.is_object())
+            continue;
+        if (record.contains("planar_wall") && record["planar_wall"].is_object())
+            planar = true;
+        if (record.contains("wall_contract") && record["wall_contract"].is_object())
+            conversion = true;
+    }
+    if (planar && !conversion)
+        return "This model's first wall was created by creo_sheetmetal_planar_wall "
+               "(template='native_planar'); that wall's result carries the measured frame "
+               "(origin/u_axis/v_axis/normal) and envelope. Pick an edge on a green/white wall "
+               "face boundary of that wall; this model has no wall_contract.";
+    if (conversion && !planar)
+        return "Frame contract: depth grows one-sided along the signed sketch normal and "
+               "thickness is the sheet gauge spread centered on the sketch line, so the "
+               "green/white wall faces are the gauge faces (see wall_contract.wall_face_ids). "
+               "To build a horizontal base plate whose large faces are the wall faces, sketch "
+               "on the YZ plane (or a YZ plane with offset) one line along +Y and call "
+               "sheetmetal_wall with depth=plate size along the normal and thickness=sheet "
+               "thickness; the frozen recipe with coordinates is "
+               "examples/sheetmetal_base_yz.json. Confirm the result via wall_contract.frame "
+               "and wall_face_ids before attaching flanges.";
+    return "This model does not report which first wall created it, so no first-wall recipe is "
+           "given here. Re-read the wall faces with creo_inspect_model and pick an edge on a "
+           "green/white wall face boundary.";
+}
+
+static std::string flange_edge_reference_contract() {
+    const int index = generated_identity_index();
+    return "operations[i].edge must be a bare edge reference {kind:'edge',id:N} whose id is "
+           "the current edge id read from creo_inspect_model; here i=" +
+           std::to_string(index) + " (operations[" + std::to_string(index) + "].edge)";
+}
+
 static void generic_sheetmetal_flange(const J &op) {
     // Validate the relief request before any feature exists so an unsupported
     // combination cannot leave a created-but-wrong wall behind.
     FlangeReliefRequest relief_request = flange_relief_request(op);
+    // R09: name the plan position and the required reference shape before the
+    // generic resolver can answer with a bare {kind:...} message.
+    {
+        J edge_ref = op.value("edge", J());
+        bool valid = edge_ref.is_object() && edge_ref.contains("kind") &&
+                     edge_ref["kind"].is_string() && edge_ref["kind"] == "edge" &&
+                     edge_ref.contains("id") && edge_ref["id"].is_number_integer();
+        if (valid) {
+            const long long id = edge_ref["id"].get<long long>();
+            valid = id >= 0 && id <= 2147483647LL;
+        }
+        if (!valid)
+            throw std::runtime_error("sheetmetal_flange " + flange_edge_reference_contract() +
+                                     "; got " + edge_ref.dump());
+    }
     // DEV-051 T05/T11: a flange can only attach to an edge that borders a sheetmetal
     // wall face. Creo's own query answers PRO_TK_BAD_CONTEXT (-8) for an edge of a side
     // (rim) surface, and ProFeatureWithoptionsCreate then fails with a bare -1 and an
@@ -1437,25 +1496,22 @@ static void generic_sheetmetal_flange(const J &op) {
         log("FLANGE_ATTACH_EDGE id=%d smt_contour_code=%d smt_contour=%d\n", item.id, code, count);
         if (code == PRO_TK_BAD_CONTEXT)
             throw std::runtime_error(
-                "sheetmetal_flange cannot attach to edge " + std::to_string(item.id) +
-                ": ProSmtedgeContourGet returned PRO_TK_BAD_CONTEXT (-8), so this edge is not "
+                "sheetmetal_flange cannot attach to edge " + std::to_string(item.id) + " (" +
+                flange_edge_reference_contract() +
+                "): ProSmtedgeContourGet returned PRO_TK_BAD_CONTEXT (-8), so this edge is not "
                 "on a sheetmetal wall face (green/white contour). Pick an edge on a wall face "
-                "boundary: an edge shared by two side/rim surfaces cannot carry a flange. "
-                "Frame contract: depth grows one-sided along the signed sketch normal and "
-                "thickness is the sheet gauge spread centered on the sketch line, so the "
-                "green/white wall faces are the gauge faces (see wall_contract.wall_face_ids). "
-                "To build a horizontal base plate whose large faces are the wall faces, sketch "
-                "on the YZ plane (or a YZ plane with offset) one line along +Y and call "
-                "sheetmetal_wall with depth=plate size along the normal and thickness=sheet "
-                "thickness; the frozen recipe with coordinates is examples/sheetmetal_base_yz"
-                ".json. Confirm the result via wall_contract.frame and wall_face_ids before "
-                "attaching flanges.");
+                "boundary: an edge shared by two side/rim surfaces cannot carry a flange. " +
+                flange_first_wall_guide());
     }
     // DEV-052 N06 (FEAT-014): the confirmed trigger shape - an attachment-edge
     // end adjacent to an existing bend - is refused here, before any feature
     // exists, instead of failing inside regeneration and rolling back. See
     // flange_adjacent_bend_end_evidence for the dual-evidence criterion and its
     // default compatibility: a silent check never blocks the stock path.
+    // R09 (0.13.0 feedback §3.1): the guard is unconditional. A supplied
+    // bend-end relief parameter (relief_request) never bypasses it, because that
+    // relief is not proven to remove corner overlap; relaxing the refusal is a
+    // separate capability decision (FEAT-014), not a caller option.
     {
         J adjacency = flange_adjacent_bend_end_evidence(op);
         if (!adjacency.empty()) {
@@ -1471,10 +1527,13 @@ static void generic_sheetmetal_flange(const J &op) {
                 " has end(s) adjacent to existing bends: " + summary +
                 ". The 2026-10-31 live probes proved this shape fails inside regeneration "
                 "(feature_status=6, no geometry) and the failure evidence cannot separate "
-                "section overrun from neighbouring-material overlap; this build implements "
-                "no corner relief or miter, so the wall is refused before submission. Attach "
-                "the flange to an edge whose ends are clear of existing bends; four-wall "
-                "boxes are not supported yet (FEAT-014 stays open).");
+                "section overrun from neighbouring-material overlap. The current bend-end relief "
+                "is not proven to resolve this corner "
+                "overlap: it trims a bend end, not "
+                "a corner run or miter, and no corner relief or miter route is implemented, so "
+                "the adjacent guard refuses the wall before submission whatever relief the "
+                "caller passes. Attach the flange to an edge whose ends are clear of existing "
+                "bends; four-wall boxes are not supported yet (FEAT-014 stays open).");
         }
     }
     ProSection section;
@@ -1805,6 +1864,21 @@ static void verify_rebuild_binding(const J &op, const J &source) {
                                  "); collect a new snapshot and plan again instead of rebuilding "
                                  "from a different revision");
 }
+// R05 (BUG-045/FEAT-012): the placement receipt names the row-vector convention
+// and reports the transform the kernel actually stored — a fresh query, never a
+// copy of the requested pose. An unreadable transform stays null with its raw
+// query code instead of echoing the request as if it had been measured.
+static J assembly_pose_receipt(ProAsmcomp *component) {
+    ProMatrix position = {};
+    const ProError code = component_to_assembly_transform(component, position);
+    auto units = inspect_length_units((ProMdl)board);
+    MillimeterScale scale = length_scale_to_mm((ProMdl)board, units);
+    return {{"rotation_convention", assembly_rotation_convention()},
+            {"transform", code ? J(nullptr) : matrix_json(position)},
+            {"transform_source", "component_to_assembly"},
+            {"transform_code", (int)code},
+            {"length_unit", length_unit_json(units, scale)}};
+}
 static void assemble_component(const J &op) {
     ProMatrix position;
     assembly_rigid_transform(op, position);
@@ -1865,6 +1939,7 @@ static void assemble_component(const J &op) {
     ProName name;
     wcscpy_s(name, wide(op["label"]).c_str());
     CK(ProModelitemNameSet(&comp, name));
+    stage_operation_result(assembly_pose_receipt(&comp));
     remember(op, comp,
              {{"source_model_id", op["source_model_id"]},
               {"source_revision", source["revision"]},
@@ -2024,6 +2099,7 @@ static void modify_component(const J &op) {
         CK(ProAsmcompAllConstrRemove(&comp));
         CK(ProAsmcompPositionSet(nullptr, &comp, position));
         fix_component(&comp);
+        stage_operation_result(assembly_pose_receipt(&comp));
     } else {
         int *ids = nullptr;
         ProFeatureDeleteOptions *options = nullptr;

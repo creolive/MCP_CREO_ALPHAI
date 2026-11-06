@@ -383,9 +383,25 @@ async def creo_get_job(
     limit: int = Field(default=50, ge=1, le=200),
     cursor: str | None = None,
     sections: list[str] | None = None,
+    wait_seconds: Annotated[
+        int,
+        Field(
+            ge=0,
+            le=30,
+            strict=True,
+            description=(
+                "FEAT-007 long poll: 0 returns immediately; 1-30 waits at most that many seconds "
+                "for a terminal status. The wait reads only the job record, holds no Toolkit channel "
+                "lock, creates no job, changes no timeout and resubmits nothing. On expiry the current "
+                "status returns with wait_expired=true; an interruption ends only the wait."
+            ),
+        ),
+    ] = 0,
 ) -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Compact keeps the measured surface-chain criteria (surface_trim area_before/area_after with their status and kept_side_basis, surface_offset source_area/measured_offset_distance/direction/offset_method, project_curve length/endpoints/curve/helper/route and the solidify closure) but omits raw log text; full_detail_hint names the paginated full read (detail="full", section="operations_result", limit, cursor). Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job."""
-    return await invoke(bridge.get_job, job_id, detail, section, limit, cursor, sections)
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Compact keeps the measured surface-chain criteria (surface_trim area_before/area_after with their status and kept_side_basis, surface_offset source_area/measured_offset_distance/direction/offset_method, project_curve length/endpoints/curve/helper/route and the solidify closure) but omits raw log text; full_detail_hint names the paginated full read (detail="full", section="operations_result", limit, cursor). Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job. wait_seconds (0-30, default 0) long-polls the persisted job record only: terminal statuses return immediately, expiry returns the current status with wait_seconds/waited_seconds/wait_expired, and the wait never creates a job, holds the Toolkit channel lock, changes a timeout, resubmits or cancels the job when interrupted."""
+    return await invoke(
+        bridge.get_job, job_id, detail, section, limit, cursor, sections, wait_seconds
+    )
 
 
 @mcp.tool(annotations=CREATE)

@@ -1,5 +1,17 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
+## 2026-11-06：R09 归因文案与能力口径（离线，未实机）
+
+本条只改诊断文案与说明，不改几何、不放宽拒绝条件，未连接 Creo。状态口径固定如下：
+
+- **四壁未交付**：0.13.0 没有新增四壁能力，四壁盒仍不可建，FEAT-014 保持开放。
+- **`adjacent_bend_ends` 是创建前拒绝规则**：它依据邻接边/弯曲后退让判定并拒绝，不是几何证明，也不是斜接（miter）可行性证明；调用方传 `relief` 不会跳过该 guard。
+- **`relief` 是 bend-end relief**：`PRO_E_SMT_BEND_RELIEF` 的弯端释放（`none`/`rectangular`），不是 corner relief，也不是斜接；当前不证明它能解决角部重叠，四壁路线仍需 R09 后续实机取证。
+- **报错来源分派**：`native_planar` 首壁的错误只指向 `creo_sheetmetal_planar_wall` 的 frame/envelope，不再引用 `wall_contract` 或 YZ 旧配方；只有确实由 `sheetmetal_wall` 转换首壁建立的模型才引用 `wall_contract`；来源未知时不提供旧首壁配方。
+- **折边引用文案**：`sheetmetal_flange` 的入参错误给出 `operations[i].edge` 位置与 `{kind:'edge',id:N}` 示例，并要求用当前巡检的 edge id。
+
+离线验证：`tests/unit/test_sheetmetal_flange.py`、`tests/unit/test_flange_direction.py` 的文案断言；未构建执行器、未跑实机，四壁几何与 relief 效果均为未验证。
+
 ## 2026-10-31：DEV-053 P08 候选边发现接口冻结（离线）
 
 本轮新增钣金件巡检中的有界 `wall_contour_check`：原生每边最多一次 `ProSmtedgeContourGet`，单次巡检最多 256 边，保留真实 `wall_contour_query_code`；公开巡检按当前 model revision 将每条已查询边投影为 `wall_contour_status=eligible|ineligible|unknown`。`0` 为壁面轮廓候选，`-8` 为不在绿/白壁面轮廓，其余/异常查询码为 unknown；未查询边不伪造状态。以当前巡检几何、壁面/端点选择边，不复用历史 edge id，也不提供无条件 `flange_available`。`eligible` 不表示最终可创建，邻接端仍由 `failure_reason=adjacent_bend_ends` 与 `flange_failure_evidence` 独立解释，并在创建前拒绝。

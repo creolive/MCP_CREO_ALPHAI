@@ -55,6 +55,10 @@ JOBS = ROOT / "jobs"
 HIDDEN = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 JOB_ID = re.compile(r"[a-f0-9]{32}\Z")
 MODEL_NAME = re.compile(r"[a-z0-9][a-z0-9_]{0,30}\Z")
+#: FEAT-007: a job is final in these states; a long poll returns immediately.
+TERMINAL_JOB_STATUSES = ("succeeded", "failed", "cancelled", "aborted", "unknown_outcome")
+MAX_JOB_WAIT_SECONDS = 30
+JOB_WAIT_POLL_SECONDS = 0.25
 MODEL_NAME_RULE = (
     "model_name must be 1-31 characters of lowercase letters, digits and "
     "underscores, starting with a letter or digit; uppercase input is normalized "
@@ -1356,7 +1360,71 @@ def _run_job_dispatch(job_id: str) -> None:
     write_json(directory / "job.json", manifest)
 
 
+def _validate_wait_seconds(value: object) -> int:
+    """FEAT-007: wait_seconds is an explicit integer in 0..30 (no floats/bools)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"wait_seconds must be an integer between 0 and {MAX_JOB_WAIT_SECONDS}")
+    if not 0 <= value <= MAX_JOB_WAIT_SECONDS:
+        raise ValueError(f"wait_seconds must be an integer between 0 and {MAX_JOB_WAIT_SECONDS}")
+    return value
+
+
+def _manifest_status(job_id: str) -> str | None:
+    """Read only the persisted job status for the long-poll loop (FEAT-007)."""
+    path = job_path(job_id) / "job.json"
+    if not path.exists():
+        return None
+    return read_json(path).get("status")
+
+
 def get_job(
+    job_id: str,
+    detail: str = "full",
+    section: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+    sections: list[str] | None = None,
+    wait_seconds: int = 0,
+    *,
+    clock=time.monotonic,
+    sleep=time.sleep,
+) -> dict:
+    """Read one job, optionally waiting for a terminal state (FEAT-007).
+
+    ``wait_seconds`` long-polls only the persisted job record: it never creates
+    a job, holds the Toolkit channel lock, changes a timeout or resubmits.
+    Terminal statuses return immediately; expiry returns the current status
+    with ``wait_expired=true``, never a completion claim. An interruption only
+    ends the wait and cannot cancel the job.
+    """
+    wait_seconds = _validate_wait_seconds(wait_seconds)
+    started = clock()
+    view = _read_job(job_id, detail, section, limit, cursor, sections)
+    waited = 0.0
+    expired = False
+    if wait_seconds and view.get("status") not in TERMINAL_JOB_STATUSES:
+        deadline = started + wait_seconds
+        while True:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                expired = True
+                break
+            sleep(min(JOB_WAIT_POLL_SECONDS, remaining))
+            status = _manifest_status(job_id)
+            if status is None or status in TERMINAL_JOB_STATUSES:
+                break
+        waited = max(waited, clock() - started)
+        view = _read_job(job_id, detail, section, limit, cursor, sections)
+    terminal = view.get("status") in TERMINAL_JOB_STATUSES
+    view["wait_seconds"] = wait_seconds
+    view["waited_seconds"] = round(waited, 3)
+    view["wait_expired"] = bool(
+        wait_seconds and not terminal and (expired or waited >= wait_seconds)
+    )
+    return view
+
+
+def _read_job(
     job_id: str,
     detail: str = "full",
     section: str | None = None,

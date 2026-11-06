@@ -429,3 +429,12 @@ defaulted_fields、source/query_code，实际生效值必须来自特征树实�
 - 验证：新增 `tests/unit/test_failed_operation_context.py` 24 项；`bridge.py build` 退出 0 并重建执行器；全量 `tools/test_unit.py` 2477 项通过；`dev_check.py --skip-unit` 通过。
 - 未验证：实机 `ProAsmcompAssemble` 返回 -2 的失败场景未复现，真实错误码与真实矩阵/残差只做到编译级与源码级。
 - 更正上文状态：W06 预览三段与失败编辑回滚已于 2026-11-04/05 实机补证并随 0.14.0 交付，上文"实机部分保持开放"为当时记录。
+
+## 2026-11-06 R05 离线实现（失败上下文与 compact 投影，未构建、未实机）
+
+- 共面相切（零体积）extrude 与实际失败调用：仍按同一 14 键 `failed_operation` 发布，`toolkit_call`/`pro_error` 取真实失败调用与其返回码。
+- cut 未命中材料：`std::runtime_error` 路径无失败 Toolkit 调用，`toolkit_call`/`pro_error` 均为 null 且 `pro_error_source="unsupported"`，不把通用 -1 冒充 Toolkit 子码；两种失败的键集合由单测断言完全一致。
+- 成功路径不变：`success=true` 仍移除该键；`annotate_native_result` 对所有失败结果（含未产生操作记录）统一投影。
+- compact：`job_projection.ASSEMBLY_POSE_KEYS` 保留放置回执（`rotation_convention`/`transform`/`transform_source`/`transform_code`/`length_unit`），`failed_operation` 仍整块保留，既有字段不丢。
+- 验证（离线）：`tests/unit/test_failed_operation_context.py` 31 项通过（新增两项失败结构、键集合一致与 compact 回执可见性）。
+- 未验证：原生编译与实机共面 extrude/cut-miss 复现、Creo 10；本次未启动 Creo 或新建 Toolkit 连接。

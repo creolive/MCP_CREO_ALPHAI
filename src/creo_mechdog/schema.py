@@ -67,10 +67,40 @@ RotationMatrix = Annotated[
 ]
 
 
+#: BUG-045/FEAT-012: the one published mapping. Every pose field below states
+#: it verbatim so the execute_plan schema (both assembly branches) cannot drift
+#: from the native row-vector implementation.
+ROTATION_CONVENTION = "row_vectors_local_to_parent"
+ROTATION_FORMULA = "p_parent = p_local * rotation_matrix + translation"
+
+
 class AssemblyPose(StrictModel):
-    translation: Point3 = [0, 0, 0]
-    rotation: Point3 | None = None
-    rotation_matrix: RotationMatrix | None = None
+    translation: Point3 = Field(
+        default=[0, 0, 0],
+        description=(
+            "Translation in the parent frame's units (mm), added after the rotation: "
+            f"{ROTATION_FORMULA}."
+        ),
+    )
+    rotation: Point3 | None = Field(
+        default=None,
+        description=(
+            "Euler angles in degrees, applied X then Y then Z and expanded to the same "
+            "row-vector matrix; mutually exclusive with rotation_matrix. "
+            f"Mapping: {ROTATION_FORMULA}."
+        ),
+    )
+    rotation_matrix: RotationMatrix | None = Field(
+        default=None,
+        description=(
+            f"Row-vector local-to-parent rotation: {ROTATION_FORMULA} "
+            "(p_local is a row vector; the matrix is not a column-vector transpose). "
+            "It is a 3x3 matrix whose rows are the local X/Y/Z axes in the parent frame, "
+            "must be orthogonal (R*R^T = I) with determinant +1 within 1e-6, and is "
+            "mutually exclusive with rotation (Euler). The values are applied exactly as "
+            "given: never transposed, orthonormalized or repaired."
+        ),
+    )
 
     @model_validator(mode="after")
     def orientation_valid(self):
@@ -956,6 +986,9 @@ class FlangeRelief(StrictModel):
     # pre-T11 tree) and "rectangular" with an explicit blind width and depth are
     # admitted: width and depth stay absolute model units, are never derived from
     # the sheet thickness, and no corner rule is guessed from the edge geometry.
+    # This is bend-end relief, not corner relief or a miter: it is not proven to
+    # resolve corner overlap, and the adjacent_bend_ends guard still refuses such
+    # a flange when this relief is supplied.
     # Rip/stretch/obround/param, corner relief, miter cuts and edge rips remain
     # unsupported and are rejected instead of being silently replaced by "none".
     type: Literal["none", "rectangular"] = "none"
@@ -993,7 +1026,15 @@ class FlangeRelief(StrictModel):
 class SheetmetalFlangeOp(StrictModel):
     op: Literal["sheetmetal_flange"]
     label: Label
-    edge: dict[str, Any]
+    # Bare current-geometry edge reference. The plan path is operations[i].edge;
+    # the value is {kind:'edge',id:N} with the edge id read from the current
+    # creo_inspect_model (no edge/reference wrapper, no historical id).
+    edge: dict[str, Any] = Field(
+        description=(
+            "Bare edge reference {kind:'edge',id:N}; the plan path is operations[i].edge and "
+            "the id must be the current edge id from creo_inspect_model"
+        )
+    )
     height: Positive
     angle: Annotated[float, Field(gt=0, lt=180)] = 90
     radius: Positive = 1

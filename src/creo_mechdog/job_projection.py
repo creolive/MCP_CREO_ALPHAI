@@ -124,7 +124,23 @@ SOLIDIFY_KEYS = (
     "volume_after_mm3",
 )
 
+#: R05 (BUG-045/FEAT-012): the placement receipt from
+#: ``native/advanced.cpp::assembly_pose_receipt``. ``rotation_convention`` names
+#: the published row-vector mapping; ``transform``, ``transform_source``,
+#: ``transform_code`` and ``length_unit`` are the pose read back from the
+#: kernel. A failed readback keeps ``transform=null`` with its raw query code,
+#: so compact never turns "unread" into a copied request pose.
+ASSEMBLY_POSE_KEYS = (
+    "rotation_convention",
+    "transform",
+    "transform_source",
+    "transform_code",
+    "length_unit",
+)
+
 _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
+    "assemble_component": ASSEMBLY_POSE_KEYS,
+    "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
