@@ -1,0 +1,30 @@
+{
+  "work_item": "DEV-069",
+  "archived_on": "2026-11-06",
+  "source_directory": "C:\\Users\\Administrator\\Downloads\\0.14.0",
+  "reported_server_version": "0.14.0",
+  "review_source_commit": "4517e3650fdfbe89a97f4d8d5b905c5da248ac05",
+  "review_source_version": "0.16.0",
+  "evidence_scope": "Report A runtime evidence and report B offline evidence remain separate; no local product or Creo test performed",
+  "file_count": 2,
+  "files": [
+    {
+      "filename": "2026-11-06+CREO+0.14.0+旋转阵缺陷跨版未修与失败事务标注自相矛盾.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.14.0\\2026-11-06+CREO+0.14.0+旋转阵缺陷跨版未修与失败事务标注自相矛盾.md",
+      "archived_path": "originals/2026-11-06+CREO+0.14.0+旋转阵缺陷跨版未修与失败事务标注自相矛盾.md",
+      "bytes": 18068,
+      "sha256": "1a3f9acea007823c21465e03945a02662dd1e6069f2835f686c0bc5b134f23e3",
+      "source_sha256": "1a3f9acea007823c21465e03945a02662dd1e6069f2835f686c0bc5b134f23e3",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-06CREO10.0.0.0-0.14.0-上版反馈四项跨版未修与C4552二次重现.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.14.0\\2026-11-06CREO10.0.0.0-0.14.0-上版反馈四项跨版未修与C4552二次重现.md",
+      "archived_path": "originals/2026-11-06CREO10.0.0.0-0.14.0-上版反馈四项跨版未修与C4552二次重现.md",
+      "bytes": 16491,
+      "sha256": "8ee30a1b2547c4ac7612c278cb7844e194e1d6bacbea362f55dc5a04e4211bdf",
+      "source_sha256": "8ee30a1b2547c4ac7612c278cb7844e194e1d6bacbea362f55dc5a04e4211bdf",
+      "hash_verified": true
+    }
+  ]
+}

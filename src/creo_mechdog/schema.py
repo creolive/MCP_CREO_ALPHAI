@@ -25,6 +25,7 @@ from creo_mechdog.references import (
     validate_planar_reference,
     validate_sketch_plane_frame,
 )
+from creo_mechdog.rotation_admission import ADMISSION_TOLERANCE, admission_status
 from creo_mechdog.schema_base import Label, Point2, Point3, Positive, StrictModel
 from creo_mechdog.sheetmetal import first_wall_section_problem
 from creo_mechdog.surface_ops import (
@@ -46,19 +47,21 @@ def _rotation_matrix(value: Any) -> Any:
             raise ValueError("rotation_matrix must be a nested 3x3 array")
         if any(type(v) not in (int, float) or not -math.inf < v < math.inf for v in row):
             raise ValueError("rotation_matrix requires finite real numbers")
-    for i in range(3):
-        for j in range(3):
-            dot = sum(value[i][k] * value[j][k] for k in range(3))
-            if abs(dot - (i == j)) > 1e-6 or not math.isfinite(dot):
-                raise ValueError("rotation_matrix must be orthogonal within 1e-6")
-    a, b, c = value
-    determinant = (
-        a[0] * (b[1] * c[2] - b[2] * c[1])
-        - a[1] * (b[0] * c[2] - b[2] * c[0])
-        + a[2] * (b[0] * c[1] - b[1] * c[0])
-    )
-    if abs(determinant - 1) > 1e-6:
-        raise ValueError("rotation_matrix determinant must be +1 within 1e-6")
+    status = admission_status(value)
+    residual = status["orthogonality_residual"]
+    if not math.isfinite(residual) or residual > ADMISSION_TOLERANCE:
+        raise ValueError(
+            "rotation_matrix must be orthogonal within 1e-6 "
+            f"(max |R*R^T-I| = {residual:.9g}); the input is echoed and never repaired, "
+            "so supply exact orthonormal values"
+        )
+    determinant = status["determinant"]
+    if abs(determinant - 1) > ADMISSION_TOLERANCE:
+        raise ValueError(
+            "rotation_matrix determinant must be +1 within 1e-6 "
+            f"(det = {determinant:.9g}); the input is echoed and never repaired, "
+            "so supply a right-handed orthonormal basis"
+        )
     return value
 
 

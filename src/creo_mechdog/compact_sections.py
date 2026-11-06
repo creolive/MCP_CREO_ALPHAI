@@ -83,6 +83,9 @@ RESULT_KEYS = (
     "inspection_warnings",
     "geometry_deviation",
     "failed_model_cleanup",
+    # BUG-114: the scoped terminal-effect verdicts (managed model / component
+    # bindings / external outputs) ride every failed terminal result.
+    "terminal_effect",
     "feature_errors",
     "verify_stages",
     "failed_transform",
@@ -126,6 +129,9 @@ PROTECTED_RESULT_KEYS = (
     "failed_operation",
     "inspection_source",
     "adopted",
+    # BUG-114: the scoped terminal-effect verdicts are outcome evidence and are
+    # never removed by a ``sections`` selection.
+    "terminal_effect",
     # Population markers the compact projection already publishes for the
     # operations list; they stay even when the records themselves are filtered.
     "operations_total",

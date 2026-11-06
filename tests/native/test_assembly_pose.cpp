@@ -109,6 +109,26 @@ int main() {
     rejected({{"rotation_matrix", identity}, {"translation", {0, true, 0}}});
     rejected({{"rotation", {0, 0}}});
     rejected({{"rotation", {0, std::numeric_limits<double>::infinity(), 0}}});
+
+    // BUG-045/FEAT-012: the reported I032 pose and the exact 30-degree pose.
+    const double i032[3][3] = {{0, 0.307383, -0.951586}, {0, 0.951586, 0.307383}, {1, 0, 0}};
+    const AssemblyRotationAdmission i032_status = assembly_rotation_admission(i032);
+    assert(i032_status.accepted); // the published 1e-6 admission still admits it
+    assert(i032_status.near_orthonormal);
+    close(i032_status.orthogonality_residual, 2.2408500011117383e-7);
+    close(i032_status.determinant - 1, 2.2408500011117383e-7);
+    const double thirty[3][3] = {
+        {0.8660254037844387, 0.5, 0}, {-0.5, 0.8660254037844387, 0}, {0, 0, 1}};
+    const AssemblyRotationAdmission thirty_status = assembly_rotation_admission(thirty);
+    assert(thirty_status.accepted && !thirty_status.near_orthonormal);
+    assert(thirty_status.orthogonality_residual == 0);
+    assert(thirty_status.determinant == 1);
+    // Near-orthonormal input is admitted verbatim, never reorthogonalized.
+    J near_i032 =
+        J::array({{0.0, 0.307383, -0.951586}, {0.0, 0.951586, 0.307383}, {1.0, 0.0, 0.0}});
+    assembly_rigid_transform(J{{"rotation_matrix", near_i032}}, matrix);
+    assert(matrix[0][1] == 0.307383 && matrix[1][1] == 0.951586);
     std::puts("assembly_pose: 11 Euler/matrix poses, basis/known-point/inverse maps, defaults, "
-              "tolerance preservation and invalid-input checks passed; no Toolkit connection");
+              "tolerance preservation, I032/30-degree admission and invalid-input checks passed; "
+              "no Toolkit connection");
 }

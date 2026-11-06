@@ -13,7 +13,9 @@ from pathlib import Path
 
 from creo_mechdog.operation_results import (
     annotate_native_result,
+    annotate_offset_distance_status,
     annotate_source_area_status,
+    normalize_offset_distance_status,
     normalize_source_area_status,
 )
 
@@ -160,6 +162,162 @@ class SourceAreaStatusShapeTests(unittest.TestCase):
         # rewritten into the surface_offset shape.
         self.assertEqual(record["source_area_status"], {"available": False})
         self.assertEqual(record["area_after_mm2"], 700.0)
+
+
+class OffsetDistanceStatusTests(unittest.TestCase):
+    """FEAT-039/R01: the distance is a scoped measurement, not a ratio."""
+
+    def receipt(self, status, *, area=800.0, measured=None, area_available=True):
+        record = {
+            "op": "surface_offset",
+            "succeeded": True,
+            "feature_id": 12,
+            "source_area_mm2": area,
+            "measured_offset_distance_mm": measured,
+            "offset_distance_mm": 5.0,
+            "direction": "positive",
+            "offset_method": "normal_to_surface",
+            "source_area_status": {
+                "available": area_available,
+                "init_code": 0,
+                "query_code": 0 if area_available else None,
+                "reason": None if area_available else "quilt_surface_visit_failed",
+            },
+        }
+        if status is not None:
+            record["offset_distance_status"] = status
+        return {"success": True, "operations": [record]}
+
+    def test_existing_solid_does_not_become_offset_distance(self):
+        # 800 mm2 source, 5 mm offset, 1000 mm3 already in the part: the total
+        # 5000/800 = 6.25 is not the offset. The native receipt refuses it and
+        # the projection must not resurrect a number from the volumes.
+        result = annotate_offset_distance_status(
+            self.receipt(
+                {
+                    "available": False,
+                    "source": None,
+                    "query_code": None,
+                    "reason": "pre_existing_volume",
+                },
+                measured=None,
+            )
+        )
+        record = annotate_source_area_status(result)["operations"][0]
+        self.assertIsNone(record["measured_offset_distance_mm"])
+        self.assertEqual(record["offset_distance_status"]["reason"], "pre_existing_volume")
+        self.assertTrue(record["source_area_status"]["available"])
+        self.assertEqual(record["source_area_mm2"], 800.0)
+
+    def test_curved_source_has_unverified_distance(self):
+        result = annotate_offset_distance_status(
+            self.receipt(
+                {
+                    "available": False,
+                    "source": None,
+                    "query_code": None,
+                    "reason": "source_quilt_not_a_single_plane",
+                }
+            )
+        )
+        record = result["operations"][0]
+        self.assertIsNone(record["measured_offset_distance_mm"])
+        self.assertEqual(
+            record["offset_distance_status"]["reason"], "source_quilt_not_a_single_plane"
+        )
+        self.assertEqual(record["source_area_mm2"], 800.0)
+
+    def test_verified_single_plane_keeps_its_source(self):
+        result = annotate_offset_distance_status(
+            self.receipt(
+                {
+                    "available": True,
+                    "source": "volume_over_source_area",
+                    "query_code": None,
+                    "reason": None,
+                },
+                measured=5.0,
+            )
+        )
+        record = result["operations"][0]
+        self.assertEqual(record["measured_offset_distance_mm"], 5.0)
+        self.assertEqual(
+            record["offset_distance_status"],
+            {
+                "available": True,
+                "source": "volume_over_source_area",
+                "query_code": None,
+                "reason": None,
+            },
+        )
+
+    def test_available_receipt_without_a_known_source_is_downgraded(self):
+        result = annotate_offset_distance_status(
+            self.receipt(
+                {"available": True, "source": "bounding_box_ratio", "query_code": 0},
+                measured=5.0,
+            )
+        )
+        record = result["operations"][0]
+        self.assertIsNone(record["measured_offset_distance_mm"])
+        self.assertFalse(record["offset_distance_status"]["available"])
+        self.assertEqual(
+            record["offset_distance_status"]["reason"], "offset_distance_source_unknown"
+        )
+
+    def test_a_non_finite_measured_value_is_downgraded(self):
+        result = annotate_offset_distance_status(
+            self.receipt(
+                {
+                    "available": True,
+                    "source": "volume_over_source_area",
+                    "query_code": None,
+                    "reason": None,
+                },
+                measured=float("inf"),
+            )
+        )
+        record = result["operations"][0]
+        self.assertIsNone(record["measured_offset_distance_mm"])
+        self.assertEqual(record["offset_distance_status"]["reason"], "offset_distance_not_finite")
+
+    def test_a_malformed_receipt_degrades_to_unavailable(self):
+        result = annotate_offset_distance_status(self.receipt(["unexpected"]))
+        record = result["operations"][0]
+        self.assertEqual(
+            record["offset_distance_status"]["reason"], "offset_distance_status_missing"
+        )
+        self.assertIsNone(record["measured_offset_distance_mm"])
+
+    def test_a_legacy_record_without_the_receipt_is_untouched(self):
+        result = self.receipt(None)
+        annotate_offset_distance_status(result)
+        record = result["operations"][0]
+        self.assertNotIn("offset_distance_status", record)
+        self.assertIsNone(record["measured_offset_distance_mm"])
+
+    def test_normalizer_defaults_to_unavailable(self):
+        status = normalize_offset_distance_status({"available": False})
+        self.assertEqual(
+            status,
+            {
+                "available": False,
+                "source": None,
+                "query_code": None,
+                "reason": "offset_distance_unavailable",
+            },
+        )
+
+    def test_the_native_offset_gates_the_ratio(self):
+        native = (ROOT / "native" / "surfaces.cpp").read_text(encoding="utf-8")
+        self.assertIn('"offset_distance_status"', native)
+        self.assertIn('"pre_existing_volume"', native)
+        self.assertIn('"source_quilt_not_a_single_plane"', native)
+        self.assertIn("quilt_planarity_native(quilt)", native)
+        self.assertNotIn("volume_after / source_area", native)
+        header = (ROOT / "native" / "quilt_query.h").read_text(encoding="utf-8")
+        self.assertIn("struct QuiltPlanarity", header)
+        self.assertIn("PRO_SRF_PLANE", header)
 
 
 class NativeWiringTests(unittest.TestCase):

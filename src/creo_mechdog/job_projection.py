@@ -70,6 +70,7 @@ SURFACE_OFFSET_KEYS = (
     "source_area_status",
     "offset_distance_mm",
     "measured_offset_distance_mm",
+    "offset_distance_status",
     "direction",
     "offset_method",
     "volume_before_mm3",

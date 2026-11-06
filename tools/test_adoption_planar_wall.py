@@ -9,8 +9,10 @@ The offline half runs by default and decides everything that does not need Creo:
 schema admission, the empty-sheetmetal rule, internal-name collisions, the
 feature-identity and downstream-dependency rules, the square case, the signed
 frame envelope (including the sorted-world-bbox and offset-origin fixtures that
-must be rejected) and the evidence requirements (volume, gauge read-back,
-direction).
+must be rejected), the R03 geometry gauge (no-API verification, conflict refusal
+and the current_plan context), and a controlled compile with the body-API
+declaration forced off. The compile proves the branch is buildable only; it is
+not a Creo 10 runtime result.
 
 The live half (``--live --confirm-session-usable``) covers the review matrix:
 
@@ -20,6 +22,9 @@ The live half (``--live --confirm-session-usable``) covers the review matrix:
   negative  the same wall with direction=negative: envelope n[-1,0];
   planes    XZ and YZ supports;
   square    a 60x60 square resized to 90x60 (a square is not a resize proof);
+  large     185x232x1 (42920 mm3) build;
+  single_plan create then resize in one plan: the loaded receipt must say
+            current_plan because the wall was never saved and reloaded;
   downstream a flange attached to the wall turns it into a parent; the in-place
             resize is then refused before a job exists;
   rollback  the default conversion-template model refuses the native wall
@@ -57,8 +62,21 @@ RESIZED_WIDTH = 80.0
 SQUARE_SIDE = 60.0
 SQUARE_RESIZE = (90.0, 60.0)
 BASE_PLATE_VOLUME_MM3 = 42920.0
+LARGE_LENGTH = 185.0
+LARGE_WIDTH = 232.0
 SHEETMETAL_TEMPLATE = "mmns_part_sheetmetal_abs.prt"
 SOLID_TEMPLATE = "mmns_part_solid_abs.prt"
+# R03: every required combination, frozen as data. The controlled compile
+# forces the no-API branch; the live half is the only runtime evidence.
+R03_MATRIX = (
+    ("primary_100x60_to_120x80", "100x60x1 -> 120x80x1, XY, positive, cross-job"),
+    ("large_185x232", "185x232x1, XY, positive"),
+    ("planes", "XY / XZ / YZ"),
+    ("negative", "negative direction, envelope n[-1,0]"),
+    ("single_plan", "create + resize in one plan, current_plan context"),
+    ("saved_thickness", "cross-job resize reads the saved gauge"),
+    ("continue_after_reject", "a refused edit leaves the model editable"),
+)
 STAMP = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 # Creo model names are lowercase, at most 31 characters (BUG-069), so the run
 # tag is a short lowercase hex stamp instead of the report timestamp.
@@ -190,11 +208,83 @@ def model_record(model_type: str, has_solid: bool) -> dict:
     }
 
 
-def offline_checks() -> Checks:
+def controlled_no_api_compile(directory: Path) -> dict:
+    """Compile the worker with the body-API declaration forced off.
+
+    R03's controlled compile proves the no-API branch is buildable. It does not
+    link, start Creo or exercise runtime behaviour, so it is not evidence that a
+    Creo 10 session behaves like this machine. The reviewed worker is untouched:
+    the object and log stay in this run's directory.
+    """
+    import bridge
+    from creo_mechdog.build_support import compiler_setup_script
+
+    try:
+        settings = bridge.config()
+        sdk = Path(settings["creo_root"]) / "Common Files/protoolkit/includes"
+    except Exception as error:  # noqa: BLE001 - the missing toolchain is the finding
+        return {"compiled": False, "reason": f"compiler configuration unavailable: {error}"}
+    obj = directory / "worker_no_thickness_api.obj"
+    script = directory / "no_thickness_api_build.cmd"
+    log = directory / "no_thickness_api_build.log"
+    script.write_text(
+        "@echo off\n"
+        "setlocal DisableDelayedExpansion\n"
+        f"{compiler_setup_script(settings)}\n"
+        f"cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /we4552 /DPRO_MACHINE=36 "
+        f"/DPRO_OS=4 /DPRO_USE_VAR_ARGS /DMECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API "
+        f'/I"{sdk}" /c "{ROOT / "native/worker.cpp"}" /Fo"{obj}"\n'
+        "exit /b %errorlevel%\n",
+        encoding="utf-8",
+    )
+    try:
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", str(script)],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired as error:
+        log.write_text(f"timeout: {error}", encoding="utf-8")
+        return {"compiled": False, "reason": "controlled compile timed out"}
+    output = (result.stdout or "") + (result.stderr or "")
+    log.write_text(output, encoding="utf-8")
+    return {
+        "compiled": result.returncode == 0 and obj.is_file(),
+        "returncode": result.returncode,
+        "define": "MECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API",
+        "object": str(obj),
+        "log": str(log),
+        "log_tail": output[-1200:],
+    }
+
+
+def offline_checks(directory: Path) -> Checks:
     from creo_mechdog import native_planar_wall as pwall
     from creo_mechdog.schema import validate_operations
 
     checks = Checks()
+    checks.add(
+        "R03 no-API matrix frozen",
+        tuple(name for name, _ in R03_MATRIX)
+        == (
+            "primary_100x60_to_120x80",
+            "large_185x232",
+            "planes",
+            "negative",
+            "single_plan",
+            "saved_thickness",
+            "continue_after_reject",
+        ),
+        [name for name, _ in R03_MATRIX],
+    )
+    compiled = controlled_no_api_compile(directory)
+    checks.add(
+        "controlled no-API worker compiles",
+        compiled["compiled"],
+        dict(compiled, note="compile-only; not a Creo 10 runtime result"),
+    )
     create = {
         "op": "sheetmetal_planar_wall",
         "label": "wall",
@@ -422,6 +512,87 @@ def offline_checks() -> Checks:
         )
     )
     checks.add("rebuilt wall detected", not rebuilt["verified"], rebuilt["problems"])
+
+    # --- R03: the no-body-API geometry gauge --------------------------------
+    geometry_receipt = {
+        "status": "verified",
+        "source": "geometry_normal_span",
+        "value_mm": THICKNESS,
+        "reason": None,
+        "context": "current_plan",
+    }
+    geometry = pwall.result_projection(
+        dict(
+            created,
+            thickness_verified=False,
+            thickness_measured_mm=None,
+            thickness_geometry_span_mm=THICKNESS,
+            thickness_validation=geometry_receipt,
+        )
+    )
+    checks.add(
+        "missing-API geometry gauge verifies without the API boolean",
+        geometry["verified"]
+        and geometry["thickness_verified"] is False
+        and geometry["thickness_measured_mm"] is None
+        and geometry["thickness_validation"]["source"] == "geometry_normal_span",
+        geometry["problems"],
+    )
+    geometry_mismatch = pwall.result_projection(
+        dict(
+            created,
+            thickness_verified=False,
+            thickness_measured_mm=None,
+            thickness_geometry_span_mm=2.0,
+            thickness_validation=dict(
+                geometry_receipt,
+                status="mismatch",
+                value_mm=2.0,
+                reason="thickness_measured_mismatch",
+            ),
+        )
+    )
+    checks.add(
+        "missing-API geometry conflict refused",
+        not geometry_mismatch["verified"]
+        and geometry_mismatch["thickness_validation"]["status"] == "mismatch",
+        geometry_mismatch["problems"],
+    )
+    same_plan = dict(
+        created,
+        op="resize_sheetmetal_planar_wall",
+        feature_id_before=49,
+        length=RESIZED_LENGTH,
+        width=RESIZED_WIDTH,
+        volume_mm3=RESIZED_LENGTH * RESIZED_WIDTH * THICKNESS,
+        envelope={
+            "u": {"min": 0.0, "max": RESIZED_LENGTH},
+            "v": {"min": 0.0, "max": RESIZED_WIDTH},
+            "n": {"min": 0.0, "max": THICKNESS},
+        },
+        thickness_verified=False,
+        thickness_measured_mm=None,
+        thickness_loaded_mm=None,
+        thickness_geometry_span_mm=THICKNESS,
+        thickness_validation=geometry_receipt,
+        thickness_loaded_validation=geometry_receipt,
+        wall_created_this_job=True,
+    )
+    same_plan_projection = pwall.result_projection(same_plan)
+    checks.add(
+        "same-plan create then resize reports current_plan",
+        same_plan_projection["verified"]
+        and same_plan_projection["thickness_loaded_validation"]["context"] == "current_plan",
+        same_plan_projection["problems"],
+    )
+    borrowed = pwall.result_projection(dict(same_plan, wall_created_this_job=False))
+    checks.add(
+        "current_plan receipt without the create fact refused",
+        not borrowed["verified"]
+        and borrowed["thickness_loaded_validation"]["reason"]
+        == "thickness_validation_current_plan_without_create",
+        borrowed["problems"],
+    )
     return checks
 
 
@@ -465,13 +636,19 @@ def _created_result() -> dict:
     }
 
 
-def _create_op(label: str = "wall", plane: str = "XY", direction: str = "positive") -> dict:
+def _create_op(
+    label: str = "wall",
+    plane: str = "XY",
+    direction: str = "positive",
+    length: float = LENGTH,
+    width: float = WIDTH,
+) -> dict:
     return {
         "op": "sheetmetal_planar_wall",
         "label": label,
         "plane": plane,
-        "length": LENGTH,
-        "width": WIDTH,
+        "length": length,
+        "width": width,
         "thickness": THICKNESS,
         "direction": direction,
     }
@@ -643,18 +820,75 @@ def live_checks(report: dict) -> Checks:
             projection["feature_id"] == wall_feature and projection["feature_id_unchanged"],
             {"before": wall_feature, "after": projection["feature_id"]},
         )
+        loaded_validation = projection["thickness_loaded_validation"] or {}
+        gauge_ok = (
+            projection["thickness_measured_mm"] is not None
+            and abs((projection["thickness_measured_mm"] or 0) - THICKNESS) < 1e-9
+            and projection["thickness_loaded_mm"] is not None
+            and abs((projection["thickness_loaded_mm"] or 0) - THICKNESS) < 1e-9
+        ) or (
+            loaded_validation.get("status") == "verified"
+            and loaded_validation.get("source") == "geometry_normal_span"
+            and abs((loaded_validation.get("value_mm") or 0) - THICKNESS) < 1e-9
+        )
         checks.add(
             "resize kept the 1 mm gauge",
-            abs((projection["thickness_measured_mm"] or 0) - THICKNESS) < 1e-9
-            and abs((projection["thickness_loaded_mm"] or 0) - THICKNESS) < 1e-9,
+            gauge_ok,
             {
                 "measured": projection["thickness_measured_mm"],
                 "loaded": projection["thickness_loaded_mm"],
+                "loaded_validation": loaded_validation,
             },
         )
         checks.add(
             "resized wall saved, reloaded and verified",
             scenarios["resize"]["saved_file_reloaded_and_verified"] is True,
+        )
+
+    # --- R03: 185 x 232 -----------------------------------------------------
+    tag, setup_job, _ = live.model("large")
+    if checks.add("large model created", setup_job.get("status") == "succeeded"):
+        job_id, job = live.plan(
+            setup_job["model_id"],
+            [_create_op(label="wall_large", length=LARGE_LENGTH, width=LARGE_WIDTH)],
+        )
+        projection = live.projection(job, "sheetmetal_planar_wall")
+        scenarios["large"] = {
+            "job_id": job_id,
+            "status": job.get("status"),
+            "message": job.get("message"),
+            "planar_wall": projection,
+        }
+        checks.add(
+            "185x232x1 wall verified",
+            job.get("status") == "succeeded"
+            and projection["verified"]
+            and abs((projection["volume_mm3"] or 0) - LARGE_LENGTH * LARGE_WIDTH * THICKNESS)
+            < 0.01,
+            projection["problems"],
+        )
+
+    # --- R03: create then resize in one plan --------------------------------
+    tag, setup_job, _ = live.model("singleplan")
+    if checks.add("single-plan model created", setup_job.get("status") == "succeeded"):
+        job_id, job = live.plan(
+            setup_job["model_id"],
+            [_create_op(label="wall_sp"), _resize_op("wall_sp", RESIZED_LENGTH, RESIZED_WIDTH)],
+        )
+        projection = live.projection(job, "resize_sheetmetal_planar_wall")
+        loaded = projection["thickness_loaded_validation"] or {}
+        scenarios["single_plan"] = {
+            "job_id": job_id,
+            "status": job.get("status"),
+            "message": job.get("message"),
+            "planar_wall": projection,
+        }
+        checks.add(
+            "single-plan create then resize reports current_plan",
+            job.get("status") == "succeeded"
+            and projection["verified"]
+            and loaded.get("context") == "current_plan",
+            {"problems": projection["problems"], "loaded": loaded},
         )
 
     # --- negative direction -------------------------------------------------
@@ -947,7 +1181,7 @@ def main() -> int:
             "legacy_volume_mm3": BASE_PLATE_VOLUME_MM3,
         },
     }
-    checks = offline_checks()
+    checks = offline_checks(directory)
     if args.live:
         try:
             live = live_checks(report)

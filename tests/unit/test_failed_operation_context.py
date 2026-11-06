@@ -212,6 +212,20 @@ class PlacementMatrixTest(unittest.TestCase):
         self.assertEqual(echoed[1][:3], F01_ROTATION[1])
         self.assertEqual(echoed[2][:3], F01_ROTATION[2])
 
+    def test_a_near_orthonormal_pose_gets_a_precision_note_in_the_failure_context(self):
+        i032 = [[0, 0.307383, -0.951586], [0, 0.951586, 0.307383], [1, 0, 0]]
+        matrix = placement_matrix({"op": "assemble_component", "rotation_matrix": i032})
+        self.assertEqual(matrix["precision_class"], "near_orthonormal")
+        self.assertIn("2.24e-07", matrix["precision_advice"])
+        self.assertIn("not a confirmed cause", matrix["precision_advice"])
+
+    def test_a_strict_pose_has_no_precision_advice(self):
+        matrix = placement_matrix(
+            {"op": "assemble_component", "rotation": [0, 0, 90], "translation": [1, 2, 3]}
+        )
+        self.assertEqual(matrix["precision_class"], "strict")
+        self.assertIsNone(matrix["precision_advice"])
+
     def test_euler_input_expands_with_the_row_vector_convention(self):
         matrix = placement_matrix(
             {"op": "assemble_component", "rotation": [0, 0, 90], "translation": [1, 2, 3]}
@@ -290,6 +304,8 @@ class PlacementMatrixTest(unittest.TestCase):
             "matrix_source",
             "determinant",
             "orthogonality_residual",
+            "precision_class",
+            "precision_advice",
         ):
             self.assertIsNone(block[field])
 
@@ -385,7 +401,14 @@ class NonToolkitFailureContextTest(unittest.TestCase):
         self.assertIsNone(block["toolkit_call"])
         self.assertIsNone(block["pro_error"])
         self.assertEqual(block["pro_error_source"], "unsupported")
-        for field in ("input_matrix", "matrix_source", "determinant", "orthogonality_residual"):
+        for field in (
+            "input_matrix",
+            "matrix_source",
+            "determinant",
+            "orthogonality_residual",
+            "precision_class",
+            "precision_advice",
+        ):
             self.assertIsNone(block[field])
 
     def test_both_failures_publish_the_same_key_set(self):

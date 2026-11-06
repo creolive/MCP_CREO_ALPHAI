@@ -806,7 +806,7 @@ static int run_drawing(const std::wstring &job) {
             verify_drawing(before, state);
             report["saved_file_reloaded_and_verified"] = true;
         }
-        finalize_operation_results(request, true, false, request.value("readonly", false));
+        finalize_operation_results(request, true, false, request.value("readonly", false), false);
         report.update({{"success", true},
                        {"toolkit_code", 0},
                        {"inspection", state},
@@ -845,7 +845,7 @@ static int run_drawing(const std::wstring &job) {
     }
     if (!report["success"].get<bool>()) {
         finalize_operation_results(request, false, report.value("rollback_succeeded", false),
-                                   request.is_object() && request.value("readonly", false));
+                                   request.is_object() && request.value("readonly", false), false);
         report["operations"] = operation_results;
     }
     log("PHASE=disconnect\n");

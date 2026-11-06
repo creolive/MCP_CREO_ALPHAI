@@ -122,6 +122,47 @@ static J quilt_record(ProSolid solid, int quilt_id, const J &feature_ids,
     return record;
 }
 
+// FEAT-039/R01: the swept-volume measurement is a distance only for a single
+// planar source face. A curved or multi-face quilt still reports its measured
+// area, but its volume over area is not a constant normal sweep, so the offset
+// distance stays unverified instead of becoming a plausible number.
+struct QuiltPlanarity {
+    bool visit_ok = true;
+    int face_count = 0;
+    int planar_count = 0;
+    ProError query_code = PRO_TK_NO_ERROR;
+};
+static ProError quilt_planarity_cb(ProSurface surface, ProError status, ProAppData data) {
+    auto *acc = (QuiltPlanarity *)data;
+    if (status) {
+        acc->visit_ok = false;
+        acc->query_code = status;
+        return PRO_TK_NO_ERROR;
+    }
+    ProGeomitemdata *surface_data = nullptr;
+    if (ProSurfaceDataGet(surface, &surface_data) || !surface_data ||
+        !surface_data->data.p_surface_data) {
+        acc->visit_ok = false;
+        if (!acc->query_code)
+            acc->query_code = PRO_TK_GENERAL_ERROR;
+        return PRO_TK_NO_ERROR;
+    }
+    acc->face_count++;
+    if (surface_data->data.p_surface_data->type == PRO_SRF_PLANE)
+        acc->planar_count++;
+    ProGeomitemdataFree(&surface_data);
+    return PRO_TK_NO_ERROR;
+}
+static QuiltPlanarity quilt_planarity_native(ProQuilt quilt) {
+    QuiltPlanarity acc;
+    ProError code = ProQuiltSurfaceVisit(quilt, quilt_planarity_cb, nullptr, &acc);
+    if (code) {
+        acc.visit_ok = false;
+        acc.query_code = code;
+    }
+    return acc;
+}
+
 struct QuiltMembership {
     std::map<int, J> features_of; // quilt id -> owning feature ids (ordered)
     bool visit_failed = false;

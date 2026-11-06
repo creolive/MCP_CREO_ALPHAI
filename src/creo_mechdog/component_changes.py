@@ -32,13 +32,15 @@ what the native side actually confirmed:
   (the saved checkpoint was restored and verified). Entries list the requested
   component operations only, and nothing is reported as effective.
 * ``no_effect`` — the job never mutated the model: rejected before execution
-  (channel busy, worker not started) or the native preflight refused before
-  any mutation (``model_unchanged``). Nothing took effect and no rollback was
-  needed or claimed.
+  (channel busy, worker not started), the native preflight refused before any
+  mutation (``model_unchanged``), or this job's own never-saved new model was
+  erased and proven absent (``failed_model_cleanup``). Nothing took effect and
+  no rollback was needed or claimed; per-operation execution facts and the
+  legacy rollback fields are untouched.
 * ``unknown_outcome`` — the effect is unconfirmed: either the job outcome
   itself is unconfirmed, or the job failed after native execution without a
-  confirmed rollback. No change is reported and the note points at the
-  retained protection.
+  confirmed rollback or trusted cleanup. No change is reported and the note
+  points at the retained protection.
 
 The output rides on the existing job result next to ``preview_file``; no new
 batch-assembly tool is introduced. The summary is auxiliary: a summary
@@ -68,36 +70,75 @@ def _label_of(component: Any, prior_aliases: dict) -> Any:
     return None
 
 
-def _status_for(job_status: str, rollback: dict | None, executed: bool) -> tuple[str, str]:
+def _status_for(
+    job_status: str,
+    rollback: dict | None,
+    executed: bool,
+    *,
+    is_new_model: bool = False,
+    checkpoint_present: bool | None = None,
+    operations: list[dict] | None = None,
+) -> tuple[str, str]:
     """Map the terminal state plus native evidence to an honest summary status."""
     if job_status == "succeeded":
         return "committed", "Changes below were committed by the job."
     evidence = rollback if isinstance(rollback, dict) else {}
-    if evidence.get("rollback_succeeded") is True:
+    if not executed:
+        return (
+            "no_effect",
+            "The job never executed natively (rejected or worker not started); no "
+            "changes were attempted and none took effect.",
+        )
+    # BUG-114: the model/component effect is the same scoped decision the
+    # native finalizer and the compact/full projection use. A confirmed
+    # cleanup of this job's own never-saved new model is no_effect without
+    # rewriting any per-operation execution status.
+    from creo_mechdog import terminal_effect
+
+    verdict = terminal_effect.classify_terminal_effect(
+        evidence,
+        job_status=job_status,
+        is_new_model=is_new_model,
+        checkpoint_present=checkpoint_present,
+        operations=operations,
+        effect_scope="component_bindings",
+    )
+    if verdict["effect"] == "rolled_back":
         return (
             "rolled_back",
             "The job failed after native execution; the saved checkpoint was "
             "restored and verified (rollback_succeeded). None of the requested "
             "changes took effect.",
         )
-    if evidence.get("model_unchanged") is True:
+    if verdict["effect"] == "no_effect":
+        if verdict["reason"] == terminal_effect.REASON_CLEANUP_CONFIRMED:
+            return (
+                "no_effect",
+                "The job failed after native execution; its own never-saved new "
+                "model was erased and its absence verified (failed_model_cleanup). "
+                "The managed model and component bindings have no net effect; "
+                "per-operation execution statuses are preserved, the job stays "
+                "failed, and the previous registration/revision history remains.",
+            )
         return (
             "no_effect",
             "The job failed before any mutation (model_unchanged); the model is "
             "unchanged and no rollback was needed.",
         )
-    if executed:
-        return (
-            "unknown_outcome",
+    if verdict["reason"] == terminal_effect.REASON_ROLLBACK_UNCONFIRMED:
+        note = (
             "The job failed after native execution but rollback is unconfirmed; "
             "do not treat any requested change as effective. Protection is "
-            "retained; inspect before any recovery decision.",
+            "retained; inspect before any recovery decision."
         )
-    return (
-        "no_effect",
-        "The job never executed natively (rejected or worker not started); no "
-        "changes were attempted and none took effect.",
-    )
+    else:
+        note = (
+            "The job failed after native execution and the cleanup is "
+            f"unconfirmed ({verdict['reason']}); do not treat any requested "
+            "change as effective. Protection is retained; inspect before any "
+            "recovery decision."
+        )
+    return "unknown_outcome", note
 
 
 def _added_entry(label: Any, result_entry: dict, added_sources: dict) -> dict:
@@ -234,6 +275,8 @@ def summarize(
     job_status: str,
     rollback: dict | None = None,
     executed: bool | None = None,
+    is_new_model: bool = False,
+    checkpoint_present: bool | None = None,
     prior_aliases: dict | None = None,
     prior_inspection: dict | None = None,
     result_aliases: dict | None = None,
@@ -257,7 +300,14 @@ def summarize(
                 "inspect before any recovery decision."
             ),
         }
-    status, note = _status_for(job_status, rollback, executed)
+    status, note = _status_for(
+        job_status,
+        rollback,
+        executed,
+        is_new_model=is_new_model,
+        checkpoint_present=checkpoint_present,
+        operations=operations,
+    )
     if status in ("rolled_back",):
         return {
             "status": status,

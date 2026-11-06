@@ -131,3 +131,18 @@ R1 §5 P1-4（矩阵直入/Euler输出）是0.5.2旧请求；矩阵子项已随0
 - 投影：`job_projection.ASSEMBLY_POSE_KEYS` 并入 compact 白名单（两个 op 分支），`compact_operation`/`compact_job` 不丢既有 op/index/effect_status 与 `failed_operation`。
 - 验证（离线）：`tests/unit/test_assembly_matrix_poses.py` 12 项（含 17.9° 完整精度与六位舍入、非对称点与基向量、创建/更新、非法矩阵受理期拒绝）、`tests/unit/test_assembly_matrix_rollback.py` 11 项（整批回滚、后续合法编辑同一 revision）、`tests/unit/test_failed_operation_context.py` 31 项通过。
 - 未验证：原生编译（`bridge.py build` 由编排方统一执行）、实机放置/更新回读与 revision、Creo 10、WorkBuddy。
+
+## 2026-11-06：0.14.0外部截断矩阵A/B增量（DEV-069/R05）
+
+[两件反馈A §4.1/§4.3](../validation/feedback-0.14.0-2026-11-06/MAPPING.md)给出精确输入I032：`[[0,0.307383,-0.951586],[0,0.951586,0.307383],[1,0,0]]`，最大正交残差/det误差均约2.2408500011117383e-7；外部Creo10/0.14.0的017c62e4前缀作业报ProAsmcompAssemble=-2。严格正交30°矩阵`[[0.8660254037844387,0.5,0],[-0.5,0.8660254037844387,0],[0,0,1]]`的bfc3551e前缀作业成功。
+
+当前main/0.16.0的schema与native/assembly_pose.h两层仍是1e-6，均接受I032。已有schema公式、位姿/失败诊断不能替代准入缺口处理；[统一计划R05](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md)升P1并补两层精确回归、兼容设计、扰动边界与真实保存重载。1e-9只是候选，不是已证Creo阈值；-2唯一根因未定，不自动修复/转置输入，不增加部分提交。
+
+本轮仅数学复算与静态审阅，未执行产品单元、native构建或Creo实机；外部载荷只有job前缀，不能补造完整UUID。当前公开1e-6契约在执行修复前仍保持，若收紧需先同步设计/版本/错误指引。
+
+## 2026-11-06 R05 增量（离线）
+
+- 准入判据集中到 `src/creo_mechdog/rotation_admission.py`，与 `native/assembly_pose.h` 共享 1e-6 准入与 1e-9 分类；I032（残差/det 误差 2.2408500011117383e-07）与 30° 精确正例在两层固定。
+- 拒绝文案带原矩阵残差/det 与“不修复”指引；已准入的近正交矩阵在 `failed_operation` 带 `precision_class`/`precision_advice`，明确不把内核 -2 归因近正交。
+- `bridge.py build` 与离线 `tools/test_assembly_pose.py` 通过；**阈值未改**，实机扰动扫描、真实保存重载与内核拒绝分列仍未验证。详见 [BUG-045](BUG-045.md) 同日段。
+

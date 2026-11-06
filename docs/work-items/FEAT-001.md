@@ -39,3 +39,7 @@
 离线验证：`tests/test_creo_startup.py` 41 项、`tests.unit.test_startup_retry` 9 项、`tests.unit.test_t10_session_health` 26 项全部通过，覆盖正在探测、通道忙、进程存在但 IPC 不可读、无进程、预算到期、`retry_id` 稳定、轮询不新建 retry、无启动不增 `launch_attempt`、默认路径零 Toolkit 调用且不启动进程。本次未连接 Creo、未新建 Toolkit 通道、未启动或结束进程、未做故障注入。
 
 仍未验证：真实断连后的重试行为、WorkBuddy 公开 MCP 黑盒、实机启动/窗口状态与 `-4/exit 20` 现场，均需在 BUG-001 准入条件下另行串行执行；按任务约束未改 `capabilities.py` 工具描述。
+
+## 2026-11-06 R06 当前树复核（离线，未连接）
+
+按 0.13.0 修复计划 R06 对既有离线覆盖复核一次：`tests/test_creo_startup.py` 41 项、`tests.unit.test_startup_retry` 11 项、`tests.unit.test_t10_session_health` 24 项共 **76 项通过**（上面 R06 节记录的 9/26 项是 0.15.0 时点数，测试已增长）。覆盖 `retry_id` 轮询稳定、通道忙不排队/不开第二通道、事实来源与时间/stale、`session_status` 的 `mode="explicit_live"`/`live_probe`/`channel_policy`。`creo_session_status` 默认仍建立 live 探测，未改默认行为；“默认本地缓存+显式 live”仍属 D01 后续，需独立兼容设计。本轮未连接 Creo、未新建 Toolkit 通道、未启动或结束进程。计划 R06 三项保持未勾：正常部署/真实现场同一 retry 稳定、`-4/exit 20`/hung 现场均无本轮证据。

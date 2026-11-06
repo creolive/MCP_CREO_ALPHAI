@@ -173,8 +173,11 @@ static void generic_surface_offset(const J &op) {
     ProError init_code = ProQuiltInit((ProSolid)board, quilt_id, &quilt);
     bool gauge_ready = quilt_gauge_ready((int)init_code, quilt);
     MeasurementOutcome area;
-    if (gauge_ready)
+    QuiltPlanarity planarity;
+    if (gauge_ready) {
         area = quilt_area_native(quilt);
+        planarity = quilt_planarity_native(quilt);
+    }
     double source_area = area.available ? area.value : 0.0;
     bool area_known = area.available;
     // An unavailable area always names why: a failed Init, a successful Init
@@ -212,17 +215,44 @@ static void generic_surface_offset(const J &op) {
     ProFeature f = create(root);
     ProElementFree(&root);
     double volume_after = volume();
-    // The wall is the source area swept by the offset distance, so the
-    // volume over the area measures the distance back from the geometry. An
-    // unavailable or non-finite area never yields a finite distance.
-    const double measured = area_known && std::isfinite(source_area) && source_area > 0.0
-                                ? volume_after / source_area
-                                : -1.0;
+    // FEAT-039/R01: the volume over area ratio is the offset distance only when
+    // the part had no solid before the offset and the source is exactly one
+    // planar face. An existing solid folds its old volume into the numerator;
+    // a curved or multi-face source is not a constant-normal sweep. Both keep
+    // the distance null with a named reason instead of publishing a plausible
+    // but ungrounded number.
+    const bool single_planar_source =
+        planarity.visit_ok && planarity.face_count == 1 && planarity.planar_count == 1;
+    const bool empty_before = volume_before_known && std::fabs(volume_before) <= 1e-9;
+    const bool result_volume_known = std::isfinite(volume_after) && volume_after > 0.0;
+    const bool distance_available =
+        area_known && single_planar_source && empty_before && result_volume_known;
+    const char *distance_reason = nullptr;
+    if (!area_known)
+        distance_reason = "source_area_unavailable";
+    else if (!planarity.visit_ok)
+        distance_reason = "source_surface_visit_failed";
+    else if (!single_planar_source)
+        distance_reason = "source_quilt_not_a_single_plane";
+    else if (!volume_before_known)
+        distance_reason = "pre_offset_volume_unavailable";
+    else if (!empty_before)
+        distance_reason = "pre_existing_volume";
+    else if (!result_volume_known)
+        distance_reason = "result_volume_unavailable";
+    const double measured =
+        distance_available ? (volume_after - volume_before) / source_area : -1.0;
+    J offset_distance_status = {
+        {"available", distance_available},
+        {"source", distance_available ? J("volume_over_source_area") : J(nullptr)},
+        {"query_code", planarity.visit_ok ? J(nullptr) : J((int)planarity.query_code)},
+        {"reason", distance_reason ? J(distance_reason) : J(nullptr)}};
     J extra = {{"target_quilt_id", quilt_id},
                {"source_area_mm2", area_known ? J(source_area) : J(nullptr)},
                {"source_area_status", source_area_status},
                {"offset_distance_mm", op["distance"]},
                {"measured_offset_distance_mm", measured >= 0.0 ? J(measured) : J(nullptr)},
+               {"offset_distance_status", offset_distance_status},
                {"direction", op["side"]},
                {"offset_method", "normal_to_surface"},
                {"volume_before_mm3", volume_before_known ? J(volume_before) : J(nullptr)},

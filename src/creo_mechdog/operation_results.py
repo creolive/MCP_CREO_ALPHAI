@@ -18,6 +18,11 @@ from typing import Any
 EXECUTION_STATUSES = ("succeeded", "failed", "not_executed", "unknown")
 EFFECT_STATUSES = ("committed", "rolled_back", "no_effect", "unknown")
 
+#: BUG-114: operations that write files outside the managed model. Erasing the
+#: session model (or restoring a checkpoint) never withdraws this effect, so a
+#: cleanup-proven new-model erasure leaves these records ``unknown``.
+EXTERNAL_OUTPUT_OPS = ("export", "dump_tree")
+
 #: BUG-097 L2: the native executor caps the element/section error samples; the
 #: projection re-applies the same bound defensively and keeps totals visible.
 FEATURE_ERROR_SAMPLE_LIMIT = 20
@@ -519,6 +524,7 @@ def _effect_status(
     job_status: str,
     rollback_confirmed: bool,
     readonly: bool,
+    cleanup_confirmed: bool = False,
 ) -> str:
     if op.get("effect_status") in EFFECT_STATUSES:
         return str(op["effect_status"])
@@ -530,6 +536,14 @@ def _effect_status(
         return "no_effect" if readonly else "committed"
     if rollback_confirmed and execution in ("succeeded", "failed"):
         return "rolled_back"
+    # BUG-114: only the managed-model scope is released by a trusted cleanup;
+    # external outputs already written are not deleted with the model.
+    if (
+        cleanup_confirmed
+        and execution in ("succeeded", "failed")
+        and op.get("op") not in EXTERNAL_OUTPUT_OPS
+    ):
+        return "no_effect"
     return "unknown"
 
 
@@ -540,6 +554,7 @@ def normalize_operations(
     rollback_confirmed: bool = False,
     readonly: bool = False,
     failed_index: int | None = None,
+    cleanup_confirmed: bool = False,
 ) -> list[dict[str, Any]]:
     """Fill index and the two status fields without fabricating outcomes.
 
@@ -557,14 +572,18 @@ def normalize_operations(
         execution = _execution_status(op, job_status, failed_index)
         op["execution_status"] = execution
         op["effect_status"] = _effect_status(
-            op, execution, job_status, rollback_confirmed, readonly
+            op, execution, job_status, rollback_confirmed, readonly, cleanup_confirmed
         )
         normalized.append(op)
     return normalized
 
 
 def annotate_native_result(
-    result: dict[str, Any], *, readonly: bool, inputs: list[dict[str, Any]] | None = None
+    result: dict[str, Any],
+    *,
+    readonly: bool,
+    inputs: list[dict[str, Any]] | None = None,
+    is_new_model: bool = False,
 ) -> dict[str, Any]:
     """Normalize an accepted native result before it is persisted on the job."""
     # BUG-097 L2: the error receipt is projected even when no operation list
@@ -584,16 +603,20 @@ def annotate_native_result(
         # result). Do not synthesize executed outcomes; leave the field absent.
         return result
     failed_index = result.get("failed_operation_index")
+    from creo_mechdog.terminal_effect import cleanup_is_trusted
+
     result["operations"] = normalize_operations(
         operations,
         job_status="succeeded" if result.get("success") else "failed",
         rollback_confirmed=result.get("rollback_succeeded") is True,
         readonly=readonly,
         failed_index=failed_index if isinstance(failed_index, int) else None,
+        cleanup_confirmed=cleanup_is_trusted(result, is_new_model=is_new_model),
     )
     annotate_revolve_axis(result)
     annotate_extrude_depth(result)
     annotate_source_area_status(result)
+    annotate_offset_distance_status(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -992,6 +1015,64 @@ def annotate_source_area_status(result: dict[str, Any]) -> dict[str, Any]:
             operation["measured_offset_distance_mm"] = _finite_scalar(
                 operation.get("measured_offset_distance_mm")
             )
+    return result
+
+
+# FEAT-039/R01: the offset distance is a derived measurement, not the request
+# echo. The executor only publishes it when the source is a single planar face
+# and the part had no solid before the offset; every other shape keeps the value
+# null with a reason. The receipt below says which basis produced it.
+OFFSET_DISTANCE_SOURCES = ("volume_over_source_area",)
+
+
+def normalize_offset_distance_status(block: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "available": False,
+        "source": None,
+        "query_code": None,
+        "reason": None,
+    }
+    if not isinstance(block, dict):
+        entry["reason"] = "offset_distance_status_missing"
+        return entry
+    code = block.get("query_code")
+    entry["query_code"] = code if type(code) is int else None
+    reason = block.get("reason")
+    entry["reason"] = reason if isinstance(reason, str) and reason else None
+    entry["available"] = block.get("available") is True
+    source = block.get("source")
+    entry["source"] = source if source in OFFSET_DISTANCE_SOURCES else None
+    if entry["available"] and entry["source"] is None:
+        entry["available"] = False
+        entry["reason"] = entry["reason"] or "offset_distance_source_unknown"
+    if not entry["available"] and entry["reason"] is None:
+        entry["reason"] = "offset_distance_unavailable"
+    return entry
+
+
+def annotate_offset_distance_status(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the surface_offset distance receipt onto its own record.
+
+    A record without the block stays untouched (legacy jobs are never given a
+    synthetic receipt). An unavailable or malformed receipt nulls the measured
+    distance and a non-finite "available" measurement is downgraded: the number
+    may never outlive the basis that produced it.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "surface_offset":
+            continue
+        if "offset_distance_status" not in operation:
+            continue
+        status = normalize_offset_distance_status(operation.get("offset_distance_status"))
+        measured = _finite_scalar(operation.get("measured_offset_distance_mm"))
+        if status["available"] and (measured is None or measured < 0):
+            status["available"] = False
+            status["reason"] = status["reason"] or "offset_distance_not_finite"
+        operation["offset_distance_status"] = status
+        operation["measured_offset_distance_mm"] = measured if status["available"] else None
     return result
 
 

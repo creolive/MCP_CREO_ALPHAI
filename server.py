@@ -95,6 +95,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/compact_sections.py",
     "src/creo_mechdog/job_projection.py",
     "src/creo_mechdog/operation_results.py",
+    "src/creo_mechdog/terminal_effect.py",
     "src/creo_mechdog/failure_context.py",
     "src/creo_mechdog/inspection_refs.py",
     "src/creo_mechdog/lock_files.py",
