@@ -236,3 +236,18 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 - **口径矛盾（新增待核对项）**：`advanced.cpp:1396-1412` 的折边失败文案推荐“YZ 平面单线 + depth=板长 + thickness=板厚”，而该反馈正是用此配方失败。文案与 `examples/sheetmetal_base_yz.json` 的指引必须与本卡实测一致，否则会继续误导。
 - **分工**：**“为何只有 X=±92.5 短边进入壁面轮廓”的归属定因、人工 UI 对照与配方/准入口径归 [BUG-103](BUG-103.md)**；本卡继续负责四壁/corner relief/材料端释放几何能力，`four_walls_complete` 在第三、四壁真实建成并全链路通过前保持 false。
 - A 层矩阵（A1 `ny_first`、A2 `order_ny_second`、A3 trim 读数组、A4 自由端 relief 扩展）与 B 层受限诊断门槛沿用 [交接记录](../development/FEAT014-CORNER-INVESTIGATION-2026-10-31.md)，本轮未执行、未连接 Creo。
+
+## 2026-11-06 四壁/角部对比实机重跑——邻接拒绝仍按设计生效，四壁保持不支持
+
+源码提交 `4201f84`（分支 `codex/FEAT-039-w02-w06-live`；工作树另有其他会话文件，本报告未记录源码指纹），环境 Windows x64 / Creo 12.4.0.0 / 匹配 SDK；原始报告 `build/post090_n05_live_20261106T1505/report.json`（SHA256 `046702f2d2642697ec82e2d674de293821c02700b07a87e63e808072f18e1cf7`，`run_id=20261106T145942_62f3136c`，`mode=live`，`passed=true`，`stopped=null`）。单服务 `MCP_CREO_MechDog_dev`，每道墙一个 job、失败不重交；提交前已确认会话可操作（CREO 启动与挂接阻塞已解除）。
+
+| 组 | 底板 model / base job | 墙作业与 rev | 结果 |
+| --- | --- | --- | --- |
+| `ny_first` | `689fa772dbc14c46acff50ec92815c86` / `820e4992e78c42648a55af8ad4842ca5` | `f_ny` `2887bd458c63471dab17c71a506bf3d1`，1→2 | **自由首壁建成**，42920.0→57293.61585482106 mm³，`saved_file_reloaded_and_verified=true`，`outcome=free_wall_built` |
+| `px_then_ny` | `a240f7c6baa94fe4a470186e9f95592a` / `1e69a18b1c4b4f95baf23cd929b3f682` | `f_px` `50b7a3b906994c228d2e4399f3034aec` 1→2；`f_ny` `1f9b7f51e07342e8a9ac178032744faa` 2→2 | `f_ny` 创建前拒绝 `adjacent_bend_ends`，附着边 span 181.46 / 期望 185（单端邻接弧） |
+| `px_nx_then_ny` | `16f525357629443ca5263798a4f9bf7f` / `01e9b839d57a476088b94afa289aaec7` | `f_px` `ed9a7546a01c4dbb813782d56e89a78c` 1→2；`f_nx` `36c0875c24d942f8a1931711723cb54c` 2→3；`f_ny` `1899bde72e67478daa589b297f6de98b` 3→3 | `f_ny` 创建前拒绝 `adjacent_bend_ends`，附着边 id 296、span 177.92 / 期望 185，两端均命中邻接弧（298/201，R2.54，折弯界限 7.081） |
+
+- 两次第三壁拒绝均为 `terminal_status=failed`、`toolkit_code=-1`、`failed_stage=execute_sheetmetal_flange`、`rollback_succeeded=true`，revision 与体积不变（`revision_restored=true`、`volume_restored=true`），失败原文带 "no corner relief or miter route is implemented … four-wall boxes are not supported yet"。
+- `trim_probe` 仍为 `trim_ignored`：完整墙与 `end_trim_mm=20` 修剪墙体积同为 60945.29123405193（job `c0f6c4ffa4f64db2a4ac9e016d594200` / `044db8125d0a49b190739c13fefb1d7d`），`setback_confirmed=false`；trim 不能用于角部让位。
+- **判定**：本轮只执行了 R09 第 3 项（分离资格/邻接/材料干涉）。结论是第三壁在 1 角与 2 角上下文都被既有的创建前邻接保护拒绝，失败发生在 `before_create`，**不构成 corner relief/miter 的几何证据，也不解除任何四壁门禁**。第 4—6 项（真实角部去料/缺口几何、逐 op 重解析、实机四壁保存重载）仍 blocked：没有已实现的 corner relief/miter 路线，且 `end_trim_mm` 实测被忽略。FEAT-014 保持开放，`four_walls_complete=false`。
+- **未验证**：第三壁若绕过保护进入再生的内部机理（截面越界 vs 相邻料重叠）、真实角部缺口几何、材料端释放几何、四壁保存重载。
