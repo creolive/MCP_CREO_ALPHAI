@@ -131,16 +131,18 @@ def require_available(operations: list[dict]) -> None:
                     "keeps the move controlled"
                 )
         if op["op"] == "surface_trim" and op.get("offset_mm") is not None:
-            # FEAT-039/S07: the documented thin-trim elements are accepted by the
-            # kernel but they do not move the cut on this machine, so a
-            # published distance would be a silent lie.
+            # FEAT-039/S07: a distance here is not the published "keep one side"
+            # semantics. The documented Thin tree does honour PRO_E_THICKNESS on a
+            # quilt tool (2026-11-06: 40x20 target -> 700 mm2 at 5 mm), but it
+            # removes a band instead of moving the cut, the direction elements are
+            # inert, and a datum-plane tool ignores the thickness.
             raise ValueError(
-                "surface_trim offset_mm is not published: the documented thin-trim "
-                "elements (PRO_E_THICKNESS with PRO_E_STD_USEQLT_SIDE and "
-                "PRO_E_SRF_OFFS_METHOD) are accepted by the kernel, but the cut does "
-                "not move (2026-11-04: a 5 mm offset on a 40x20 fill still leaves "
-                "400/400 mm2, and a 50 mm offset that cannot intersect the target is "
-                "not refused either), so the requested distance cannot be honoured"
+                "surface_trim offset_mm is not published: the documented Thin tree "
+                "(PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only "
+                "removes a band of that thickness when the tool is a quilt, keeps both "
+                "sides instead of the requested keep_side, and offset_side has no "
+                "observable effect (2026-11-06 six direction variants all produced the "
+                "same band; negative thickness fails regeneration)"
             )
 
 

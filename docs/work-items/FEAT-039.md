@@ -214,6 +214,34 @@
 在排队前拒绝，消息带实测依据。偏置能力维持门禁，等能真正移动切口的路线（真实偏置曲面树，
 或按法向扫掠构造等距面——与 S04 的扫掠思路同源）。
 
+## 2026-11-06 偏置新规格复测：Thin 树生效，但语义是带移除且方向不可控（仍门禁）
+
+S07 的失败原因是偏置元素挂在了 Use Quilt 树（两个 type 元素仍是 `PRO_SURF_TRIM_USE_QLT`）。
+`ProTrim.h` §(4.1)/(4.2) 规定 `PRO_E_THICKNESS`/`PRO_E_STD_USEQLT_SIDE`/`PRO_E_SRF_OFFS_METHOD`
+属于 **Thin** 变体，两个 type 元素必须是 `PRO_SURF_TRIM_THIN`。本轮用低层
+`creo_create_feature_tree` 直接构 Thin 树复测（不改公开入口），40×20 填充 + x=`tool_x` 的竖直
+YZ quilt/基准面，按 quilt 面积判读（驱动 `build/_live_thin_trim_probe2.py`，证据
+`build/live_thin_trim_probe2.json`）：
+
+| 工具 | 厚度 | side | 目标面积 | 工具 quilt 盒 |
+| --- | --- | --- | --- | --- |
+| use-quilt 对照（x=20） | — | one | 400/400 | — |
+| 基准面 | 5 | one | 400/400（厚度被忽略） | — |
+| quilt x=2 | 5 | one/two/both | **760** | x∈[-3, 2] |
+| quilt x=20 | 5 | one/two/both | **700** | x∈[15, 20] |
+| quilt x=20 | 10 | one | **600** | x∈[10, 20] |
+| quilt x=20 | -5 | one | 再生成失败 | — |
+
+结论：`offset_mm` 只对 **quilt 工具**生效，几何是**移除一条厚度带、带两侧都保留**，不是"切口整体
+移动"，也与公开契约的 `keep_side`（保留 one/two 一侧）冲突；`offset_side` 无法兑现
+（`PRO_E_STD_USEQLT_SIDE` one/two/both、附加 material/primary side、`PRO_E_SRF_OFFS_DIRECTION`
+六种写法结果完全相同，方向由工具 quilt 自身朝向决定；负厚度再生成失败）。因此两字段继续保持
+`capabilities.require_available` 门禁，schema 不变。
+
+原生树已按文档修正：`native/surface_trim.cpp` 在 `offset_mm` 存在时把两个 type 元素切换为
+`PRO_SURF_TRIM_THIN`，并不写 Thin 树不存在的 `PRO_E_MATERIAL_SIDE`/`PRO_E_PRIMARY_QLTSIDE`。
+该分支目前不可达（Python 门禁先拒绝），只为后续开放时不误用旧树。
+
 ## 2026-11-05 S08 交付：两条完整曲面链用例（实机）
 
 驱动新增 `--case chain_open` 与 `--case chain_closed`（`tools/surface_chain_chains.py`、

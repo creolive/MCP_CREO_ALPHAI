@@ -124,10 +124,17 @@ static void generic_surface_trim(const J &op) {
     if (!curve_tool)
         integer(root, PRO_E_FEATURE_FORM, PRO_USE_SURFS);
     // PRO_E_SRF_TRIM_TYPE is non-redefinable mandatory; both type elements must
-    // agree (ProTrim.h §2.1/§3.1). The use-curve tree has no FEATURE_FORM and
-    // takes its trimming geometry from PRO_E_STD_CURVE_COLLECTION_APPL.
-    integer(root, PRO_E_SRF_TRIM_TYPE, curve_tool ? PRO_SURF_TRIM_USE_CRV : PRO_SURF_TRIM_USE_QLT);
-    integer(root, PRO_E_SURF_TRIM_TYPE, curve_tool ? PRO_SURF_TRIM_USE_CRV : PRO_SURF_TRIM_USE_QLT);
+    // agree (ProTrim.h §2.1/§3.1/§4.2). The use-curve tree has no FEATURE_FORM
+    // and takes its trimming geometry from PRO_E_STD_CURVE_COLLECTION_APPL.
+    // PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD only belong to the Thin variant
+    // (ProTrim.h §4.1), so an offset request must switch the trim type to
+    // PRO_SURF_TRIM_THIN; attaching those elements to the use-quilt tree is
+    // accepted by the kernel but ignored (2026-11-04 probe, contract §2.7).
+    bool offset_tool = !curve_tool && op.contains("offset_mm");
+    int trim_type = curve_tool ? PRO_SURF_TRIM_USE_CRV
+                               : (offset_tool ? PRO_SURF_TRIM_THIN : PRO_SURF_TRIM_USE_QLT);
+    integer(root, PRO_E_SRF_TRIM_TYPE, trim_type);
+    integer(root, PRO_E_SURF_TRIM_TYPE, trim_type);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
     ref(root, PRO_E_TRIM_QUILT, target_selection);
     if (curve_tool)
@@ -135,16 +142,20 @@ static void generic_surface_trim(const J &op) {
     else
         ref(root, PRO_E_STD_USEQLT_QLT, tool.selection);
     // "Keep trim surface" stays off in this release; only the two side
-    // elements follow keep_side.
-    integer(root, PRO_E_MATERIAL_SIDE, material_side);
-    integer(root, PRO_E_PRIMARY_QLTSIDE, primary_side);
+    // elements follow keep_side. The Thin tree documents neither side element,
+    // so an offset request writes no keep_side at all (contract §2.7b).
+    if (!offset_tool) {
+        integer(root, PRO_E_MATERIAL_SIDE, material_side);
+        integer(root, PRO_E_PRIMARY_QLTSIDE, primary_side);
+    }
     if (!curve_tool)
         integer(root, PRO_E_KEEP_TRIM_SURF_OPT, PRO_KEEP_TRIM_SURF_OPT_NO);
     // FEAT-039/S07: the documented thin-trim route (ProTrim.h §4.1) offsets the
     // trimming surface by PRO_E_THICKNESS along PRO_E_STD_USEQLT_SIDE before it
     // cuts, so the distance and its direction are explicit instead of inherited
-    // from a GUI view.
-    bool offset_tool = !curve_tool && op.contains("offset_mm");
+    // from a GUI view. Live 2026-11-06: this removes a band of offset_mm on a
+    // quilt tool; the direction elements were inert and offset_side is still
+    // gated by capabilities.require_available.
     if (offset_tool) {
         real(root, PRO_E_THICKNESS, op["offset_mm"]);
         integer(root, PRO_E_STD_USEQLT_SIDE,
