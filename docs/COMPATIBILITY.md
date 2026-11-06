@@ -61,9 +61,26 @@
 - **`verify_model` 阶段可观测（BUG-109）**：原生把 `verify_model` 拆成 `verify_model_start/regenerate/inspect/assertions/before_save/save/erase/reload/reload_regenerate/reload_inspect/compare/after_reload/preview` 子阶段，每段写 `STAGE name= elapsed_ms= since_start_ms= ts=`（epoch ms）；成功与失败回执都带 `verify_stages`（≤32 条）。`creo_get_job` 在 `queued/running/failed/unknown_outcome` 时追加只读 `native_progress{readable,log_bytes,tail_bytes,truncated,stage,sub_stage,elapsed_ms,since_start_ms,idle_seconds,stages_seen,reason}`（只 seek 日志末尾 8 KiB）；超时文案点名最后子阶段与停滞秒数。**总预算 600 s、`unknown_outcome` 语义、无自动重试均未改变**；未做进程内子阶段强杀。卡死根因仍未定，未并入 BUG-088（预览文件缺失）/BUG-085（断连）。
 - **刚性平移判据（BUG-108）**：`verify_coordinate_plan` 与 `enforce_geometry_deviation` 改为区分"整体平移"与"形状变形"——可证刚体平移（逐点同一向量、去平移后残差 ≤1e-9 mm）且平移 ≤**1e-2 mm** 时放行并标 `accepted_rigid=true`（日志 `GEOMETRY_DEVIATION_RIGID_ACCEPTED`）；超限拒绝并写明平移量与上限。**形状闸门仍是 1e-5 mm、默认阈值未放宽**，真实变形仍拒绝。`geometry_deviation` 与 `sketch_shifted` 增 `shape_deviation_mm`/`residual_mm`/`rigid`/`translation_mm`/`translation_magnitude_mm`/`accepted_rigid`（成功与失败都填，旧字段语义不动）。
 - **装配失败恢复（BUG-110）**：`creo_reconcile_model` 新增 `action="ack_failure"`（需 `confirm_failure_ack=true`），把终态失败/`unknown_outcome` 的模型以**元数据事务**退回 `ready`：不启 worker、不连 Toolkit、不改 revision、不改模型文件、不改组件绑定；审计块记 `action/prior_status/prior_job_status/outcome_uncertain/disk_state_verified=false/component_ownership_preserved=true`。四个触碰组件所有权的动作仍只对零件/钣金可用且理由不变。
-- **旋转范围（BUG-111，行为收紧）**：`geometry_transform`/`set_geometry_transform` 的 `rotation` 分量前置限制在 **-180..180 度**，超范围在提交前拒绝并给出等价值（如 225 → -135）；两种原生后端统一归一为 `(-180, 180]`（旧实现把负角 `+360`，使 -135 与 225 走不同路径）。transform 失败回执新增 `failed_transform`（backend、请求与归一角度、平移、`keep_original`、引用数与类型），并保留 `failed_operation_index`。**第 5 个 `keep_original` 副本在 Creo 12.4 复现**（5 op 与 7 op 批次都在 `operation_index=4` 失败、与角度无关），根因未定，能力文案按"单批 ≤4 个副本并重新引用当前 body"提示，未新增 `body_pattern` 工具。
+- **旋转范围（BUG-111，行为收紧）**：`geometry_transform`/`set_geometry_transform` 的 `rotation` 分量前置限制在 **-180..180 度**，超范围在提交前拒绝并给出等价值（如 225 → -135）；两种原生后端统一归一为 `(-180, 180]`（旧实现把负角 `+360`，使 -135 与 225 走不同路径）。transform 失败回执新增 `failed_transform`（backend、请求与归一角度、平移、`keep_original`、引用数与类型），并保留 `failed_operation_index`。**第 5 个 `keep_original` 副本在 Creo 12.4 复现**（5 op 与 7 op 批次都在 `operation_index=4` 失败、与角度无关），根因未定，能力文案按"单批 ≤4 个副本并重新引用当前 body"提示，未新增 `body_pattern` 工具。**本段为 0.11.6 的历史结论：其中的"单批 ≤4 个副本并重新引用当前 body"提示与"根因未定"已被 0.11.7 的实机定因取代（失败不跟随副本数量或位置，拆批无效），以本文件下方 0.11.7 段为准。**
 - **本机 Creo 12.4.0.0 实机（2026-11-03，用户授权启动会话）**：四项夹具串行通过——阶段归因（3 个作业各 13 个 `verify_stages`，`jobs/<id>/native.log` 对应 13 行 `STAGE`，终态不带 `native_progress`）；坐标草图 4 例 + 挤出全部成功且新字段齐备（4 例 `rigid=false`，平移未复现，`accepted_rigid=true` 仅单测覆盖）；装配失败作业 `failed` 后模型仍 `ready`（无死路），`ack_failure` 对 `ready` 被正确拒绝（成功路径未实机发生）；225° 提交前拒绝并给 `-135`、单个 −135° 副本成功、**5 op 与 7 op 批次均在 index 4 失败**（第 5 副本现象在 12.4 复现两轮，根因未定）。
 - **未验证范围**：Creo 9/10 构建与建模；WorkBuddy 黑盒；`ack_failure` 成功路径与真实 10 分钟停滞场景；报告方 `native.log`/`request.json`/P12 计划原件（未随包）。
+
+## 0.11.7（2026-11-03 已发布）：`keep_original` 副本定因与能力边界
+
+分支 `codex/BUG-111-r13-followup`，PATCH 交付；公开工具仍 95（未新增工具）。离线全量 2268 项单测 0 失败/0 错误、`dev_check` `success=true`，本机 Creo 12.4.0.0 实机 C0—C6 对照。版本说明见 [RELEASE_NOTES_0.11.7](RELEASE_NOTES_0.11.7.md)，发布记录见 [RELEASE-0.11.7](validation/RELEASE-0.11.7.md)，验收摘要见 [R13-FOLLOWUP-ACCEPTANCE-2026-11-03](development/R13-FOLLOWUP-ACCEPTANCE-2026-11-03.md)。
+
+- **`keep_original` 副本失败已定因（BUG-111）**：本机 Creo 12.4.0.0 实机七个独立底板（C0—C6）显示，4 个独立模型（C2/C3/C5 与 C6 批 B）在"体已含 45/90/135/180 副本后追加 −135"这一步同型失败于 `operation_index=4`，整批干净回滚（after==before、revision 不变）、后续合法编辑正常；把 −135 放在首位的 C4 五个副本**全部成功**；拆成 4+3 两批的 C6 仍在批 B 首个 op 失败。结论：**失败不跟随副本数量或位置，而跟随"既有副本集合 × 该角度"**——`keep_original` 复制的是**整个当前体**（副本累积在同一 body 内，特征数 +1/副本），追加副本与既有凸块重合／交叠时触发再生失败；全程单 body 反证引用解析问题。**本版不做行为修复**，只交付诊断与能力边界。
+- **"单批 ≤4 个副本、下一批重新引用当前 body"变通建议作废**（C6 证明拆批无效）：对外口径改为"副本集放在同一计划里提交；需要固定原件的副本时另建模型"。0.11.6 段的历史提示已标注被本段取代。
+- **失败回执带有界选集诊断**：`failed_transform.selection`（`requested_body_ids`、`selected_surface_count`、`model_counts_at_start`），只读诊断、几何与再生时机零改动。
+- **未验证范围**：Creo 9/10 构建与建模（本机无 Creo 9 SDK，Creo 10 不要求独立复测）；WorkBuddy 黑盒；`accepted_rigid=true` 实机分支（BUG-108，9/9 候选未触发，保持开放）；`ack_failure` 成功路径与幂等实机证据（BUG-110，实机只覆盖零变更守卫，保持开放）；"恰好重合 vs 部分交叠"的内核判据；`body_pattern` 未实现。
+
+## 0.11.7 发布后修正（2026-11-03，当前开发分支，尚未发布）
+
+0.11.7 的对外文案与选集诊断计数仍有两处与上述定因结论不符，本轮修正后随下一版本发布；已发布标签与附件不覆盖。
+
+- **对外文案撤销**：工具描述（`server.py`）、能力边界（`src/creo_mechdog/capabilities.py` 的 placement 段）与 [语法参考](REFERENCE_SYNTAX.md) 已删除"每批 ≤4 个副本并重新引用当前 body"的建议，改写为当前结论；兼容矩阵 0.11.6 段的历史提示已标注被 0.11.7 段取代。回归由 `tests/unit/test_transform_selection_diagnostics.py` 护栏（8 项断言：4 项原生取数源码护栏 + 4 项对外文案护栏）。
+- **选集诊断计数取数修正（原生改动，需重编执行器）**：`native/placement.cpp` 原从 `state["counts"]` 取模型计数，而巡检从不发布该对象，计数一律退化为 -1（把已有数据写成未知）；现改为从巡检实际字段取数（`features`/`surfaces`/`bodies` 数组长度 + `body_counts.active`），巡检确实没有的字段在回执里记 `null`（明确未知）。
+- **本机复核实机证据**：本机 Windows x64 / Creo 12.4.0.0（`release_numeric=44`）/ 匹配 SDK，执行器 `cb6f3345…`（13 329 920 B，源码指纹 `7d0bc254…`，分支 `codex/BUG-111-doc-and-counts-fix`，基线 `main@8ab0641`）；`tools/test_geometry_transform_copies.py --confirmed-session-usable --phase reproduce --cases C2,C4 --model-suffix t7` → C2 仍失败于 index 4 且整批干净回滚、后续合法编辑成功，C4 五副本全部成功（features 8→13、保存重载 true）。失败回执 `failed_transform.selection.model_counts_at_start` = `{features:12, surfaces:26, bodies:1, active_bodies:1}`、`selected_surface_count=26`；原生日志逐 op 记录被选面数 6→9→15→23→26、features 8→9→10→11→12，"选集随体增长"由此在失败回执里直接可见。离线全量 2276 项单测 0 失败/0 错误、`tools/dev_check.py` `success=true`（无新增风格问题，基线未改）。
 
 ## 0.11.0（2026-11-01 发布）：装配按零件族上色（FEAT-052）
 
