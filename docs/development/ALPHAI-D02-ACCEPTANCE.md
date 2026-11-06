@@ -182,3 +182,24 @@ checked_source_sha256=c03195646a8c2cee001bcf3d960b884d428bbf39093976b9bae5220c7a
 源码包加原有受控测试依赖，不声称发布包已包含全部旧测试依赖。
 完整 T05 模块 16/16 通过；副本本地验证身份更新为
 e0a13e051a58bc92eeb53c177c177021d025838d，最终完整 dev_check 仍在运行，尚不能宣称门禁通过。
+
+
+### 最终完整环境门禁（2026-11-06）
+
+短路径源码加受控测试依赖副本执行同一命令
+`python tools/dev_check.py --work-item FEAT-063-completion`：exit 0，success=true，
+unit_tests=passed，2664 tests / 0 failures / 0 errors / 2 skipped，耗时 385.563 秒。
+证据 short_dev_check_complete.log、short_development_check_complete.json、
+short_unit_test_report_complete.json 均已复制回本树证据目录。
+受测验证身份 e0a13e051a58bc92eeb53c177c177021d025838d，dirty=true（验证日志）；
+checked_source_sha256=c03195646a8c2cee001bcf3d960b884d428bbf39093976b9bae5220c7a5f3927。
+Ruff 0.17.0 / clang-format 23.1.3；372 Python、43 C++ 检查，24 lint/12 未格式化存量，
+语言回归闸门通过，未修改基线。
+
+原任务实现提交 448297a75a466c88adefe35cd0582b92a9a42654；提交后 driver_committed 通过，
+Git dirty=false。committed_python_template_equivalence.json 确认副本受测 Python 与固定模板
+和该实现提交原始字节相同；副本 Git 身份不是原源码提交。
+长工作树全量的路径错误与首轮不完备副本缺件均保留，不宣称这些旧轮通过。
+验证副本仍保留 E:/f63-89873d66；无需修改系统长路径设置、生产路径或 DEV-040 夹具。
+软件范围完成；未发布、未连接 Creo，原生模板、保存重载、WorkBuddy 与全新机器安装未验。
+本任务未对 DEV-069 工作树写入、提交或切换；其自身并行推进不属于本次改动。
