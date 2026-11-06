@@ -4,9 +4,9 @@
 
 优先级：P2
 
-状态：验收中（离线实现完成；实机、MCP stdio 客户端与真实取消未验证）
+状态：已交付 **0.15.0**（只读 job 记录长轮询；实机、MCP stdio 客户端与真实取消未验证）
 
-目标版本：未排期（按 0.13.0 反馈修复计划 R12 实施）
+目标版本：0.15.0（已发布）
 
 来源与关联：[台账](../BACKLOG.md) FEAT-007 行；[履带反馈](../validation/TRACK-FEEDBACK-2026-10-16.md)；[0.13.0 反馈修复计划](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md) R12。关联 FEAT-006、FEAT-023、FEAT-033、BUG-053、BUG-109。
 
