@@ -1,6 +1,6 @@
 # FEAT-004：尺寸归属、可编辑性与修改旧值保护
 
-类型：功能。优先级：P2。状态：验收中（A02分支离线实现2804d5a；实机与0.12.0基线集成待验）。目标版本：未排期。
+类型：功能。优先级：P2。状态：验收中（2026-11-03 本机 Creo 12.4 实机 19 例已通过；2026-11-06 已 rebase 到 0.15.1 且离线门禁通过；rebase 后实机回归与合入待排）。目标版本：未排期。
 
 来源：原主台账既有同ID条目；2026-11-03补建缺失工作卡，不新增台账身份，不改历史结论。
 
@@ -36,3 +36,19 @@
 2804d5a/7b3d90e已有守卫代码、17项专项与构建/dev_check记录；本次未重跑或连接Creo。接续R01，先基于0.12.0整合再取当前几何/revision/回滚/保存重载证据，原尺寸分类余项不一并关闭。
 
 详见[核验记录](../development/DEV067-POST0120-AUDIT-2026-11-04.md)和[后续计划](../superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)。本次只改记录/计划，未修改该任务产品代码或进行新实机。
+
+## 2026-11-06 rebase 到 0.15.1 与离线门禁
+
+分支 `codex/FEAT-004-dimension-guards` 已 rebase 到已发布标签 `v0.15.1`（`2b57dd5`），两个提交按新基线重放：`2c1276b`（守卫实现）、`3d0c31c`（live driver 与验收记录）。冲突只有 `docs/BACKLOG.md` 与本节卡首页的状态行，按"保留主干最新口径 + 并入 A02 实现说明"合并；`native/generic.cpp`、`server.py`、`src/creo_mechdog/schema.py` 与 0.13.0—0.15.1 的改动自动合并，未做语义改写。
+
+离线门禁（A02 工作树独立环境，未连接 Creo）：
+
+| 项目 | 结果 |
+| --- | --- |
+| `bridge.py build` | 退出 0，`build/creo_worker.exe` 重建 |
+| `tools/test_unit.py` | **2641 项通过**，0 失败 0 错误（0.15.1 主干 2624 + 本卡 17 项） |
+| `tools/dev_check.py --skip-unit` | `success=true`；24 条 lint、12 个未格式化文件，与 `style-baseline.json` 存量相同，未新增 |
+
+受测源码身份：提交 `3d0c31c`、`dirty=false`、`checked_source_sha256=dbca883f…b908`。
+
+**未重跑实机**：2026-11-03 的 19 例实机记录（[A02 验收摘要](../development/ALPHAI-A02-ACCEPTANCE.md)，基线 `7b3d90e`）保留为历史证据，不当作 rebase 后源码的实机结论；rebase 只做了离线重建与回归。Creo 9/10、装配/骨架/族表驱动尺寸、同一计划内 `set_parameters` 与 pin 的先后语义、WorkBuddy 黑盒仍未验证。合并与发版另行排期，不随本轮进行。
