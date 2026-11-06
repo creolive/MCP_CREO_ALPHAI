@@ -985,6 +985,7 @@ async def live_box(output: Path, run_id: str) -> int:
             run_id,
         )
         runner.report["hang_budget_seconds"] = box.HANG_BUDGET_SECONDS
+        runner.report["source"] = local_provenance()
         runner.report["capability_claim"] = {
             "four_walls_complete": False,
             "statement": (
@@ -1101,6 +1102,11 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
     return path
 
 
+def _worker_sha256() -> str | None:
+    worker = ROOT / "build" / "creo_worker.exe"
+    return hashlib.sha256(worker.read_bytes()).hexdigest() if worker.is_file() else None
+
+
 def local_provenance() -> dict:
     from version import VERSION
 
@@ -1141,6 +1147,7 @@ def local_provenance() -> dict:
         "source_fingerprint": hashlib.sha256(
             json.dumps(hashes, sort_keys=True).encode()
         ).hexdigest(),
+        "worker_sha256": _worker_sha256(),
         "environment": {
             "system": platform.system(),
             "machine": platform.machine(),

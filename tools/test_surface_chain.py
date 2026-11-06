@@ -42,12 +42,14 @@ try:  # the driver runs as a script and as a package module
     from surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
     from surface_chain_example import case_example_live, case_example_offline
     from surface_chain_join import case_join_live, case_join_offline
+    from surface_chain_offset import case_offset_live, case_offset_offline
     from surface_chain_sweep import case_sweep_live, case_sweep_offline
 except ImportError:  # pragma: no cover - the package import path
     from tools.surface_chain_chains import case_chain_open_live, case_chain_open_offline
     from tools.surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
     from tools.surface_chain_example import case_example_live, case_example_offline
     from tools.surface_chain_join import case_join_live, case_join_offline
+    from tools.surface_chain_offset import case_offset_live, case_offset_offline
     from tools.surface_chain_sweep import case_sweep_live, case_sweep_offline
 sys.path.insert(0, str(ROOT))
 
@@ -63,6 +65,7 @@ CASES = (
     "chain_closed",
     "join",
     "sweep_surface",
+    "offset",
 )
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
@@ -1537,6 +1540,8 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_sweep_live(wait_ready)) if live else case_sweep_offline()
     if case == "join":
         return asyncio.run(case_join_live(wait_ready)) if live else case_join_offline()
+    if case == "offset":
+        return asyncio.run(case_offset_live(wait_ready)) if live else case_offset_offline()
     if case == "chain_open":
         return asyncio.run(case_chain_open_live(wait_ready)) if live else case_chain_open_offline()
     if case == "chain_closed":

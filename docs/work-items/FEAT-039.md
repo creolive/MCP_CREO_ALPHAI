@@ -502,3 +502,18 @@ run `20261106T004748_84fc913a`，报告
 - 验证：`tests/unit/test_surface_measure_guard` + `test_surface_offset_contract` 28 项 OK；`bridge.py build` 退出 0（SDK 头实际编译新代码）；全量单测与 dev_check 见本轮汇总。
 - 未验证：Creo 实机 40×20/±5 mm 空件、已有实体、曲面源的实际几何/来源/保存重载/失败回滚；Creo 10 无新证据。空件若 `volume()` 在无实体时抛错，会保守落入 `pre_offset_volume_unavailable` 而非误报。
 
+## 2026-11-06 R01 实机验收（Creo 12.4.0.0 / 匹配 SDK）
+
+命令：`.\.venv\Scripts\python.exe tools\test_surface_chain.py --case offset --live --confirm-session-usable`
+（新增驱动 `tools/surface_chain_offset.py`，注册为 `--case offset`；默认离线）。
+报告：`build/surface_chain/20261106-121417-172300/report.json`，`passed=true`、`native_offset_distance=verified`，27 项检查全通过，8 个 job。
+
+| 场景 | 结果 |
+| --- | --- |
+| 空件 40×20 fill，偏置 +5 | `measured_offset_distance_mm≈5`、`source=volume_over_source_area`、`direction=positive`、壁体积≈4000 mm³、保存重载 true（job `9cc254dc…`） |
+| 空件 40×20 fill，偏置 -5（另一新件） | 同上，`direction=negative`（job `fccba0e7…`） |
+| 已有实体 8000 mm³ + fill | `available=false`、`reason=pre_existing_volume`、`measured_offset_distance_mm=null`，`volume_before_mm3≈8000` 实报 |
+| 圆柱面 quilt（surface extrude R20/H12） | `available=false`、`reason=source_quilt_not_a_single_plane`、距离 null，源面积≈1507.96 mm² 照常发布 |
+
+结论：偏置距离只在“单一平面源 + 前置体积≈0”时发布，已有实体和曲面源改为 null 加原因，与离线闸门一致；未验证 Creo 10、offset 失败回滚与 `offset_mm` 变体。
+
