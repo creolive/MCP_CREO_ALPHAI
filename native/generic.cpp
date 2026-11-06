@@ -6642,7 +6642,13 @@ static int run_generic(const std::wstring &job) {
         char empty[] = "";
         ProBoolean random = PRO_B_FALSE;
         generic_stage("connect");
+        // BUG-109/R12: a stage on each side of the Toolkit connect lets the
+        // bounded stall report attribute a slow session attach instead of folding
+        // it into the first operation stage. "connected" carries the elapsed
+        // milliseconds the attach itself took.
+        generic_substage("connect");
         CK(connect_creo(&process));
+        generic_substage("connected");
         connected = true;
         report["connected"] = true;
         int release_numeric = 0;
