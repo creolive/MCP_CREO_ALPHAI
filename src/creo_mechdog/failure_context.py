@@ -19,6 +19,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from creo_mechdog.rotation_admission import PRECISION_ADVICE
+
 #: The raw message is cut to this many characters (the native producer cuts at
 #: the same byte budget). ``message_truncated`` records that a cut happened.
 FAILED_OPERATION_MESSAGE_LIMIT = 512
@@ -29,7 +31,16 @@ PLACEMENT_OPERATIONS = ("assemble_component", "component_placement")
 
 PRO_ERROR_SOURCES = ("toolkit", "unsupported")
 
-_MATRIX_FIELDS = ("input_matrix", "matrix_source", "determinant", "orthogonality_residual")
+_MATRIX_FIELDS = (
+    "input_matrix",
+    "matrix_source",
+    "determinant",
+    "orthogonality_residual",
+    # BUG-045/FEAT-012: the numerical class of the admitted pose plus an
+    # actionable note. Advice never claims a cause for a kernel rejection.
+    "precision_class",
+    "precision_advice",
+)
 
 
 def _text(value: Any) -> str | None:
@@ -101,6 +112,18 @@ def _euler_rows(euler: list[float]) -> list[list[float]]:
     return [[columns[column][row] for column in range(3)] for row in range(3)]
 
 
+def _precision(residual: float) -> dict[str, Any]:
+    """Classify the admitted rotation; advice is a numerical fact, not a cause."""
+    if residual <= 1e-9:
+        return {"precision_class": "strict", "precision_advice": None}
+    if residual <= 1e-6:
+        return {
+            "precision_class": "near_orthonormal",
+            "precision_advice": PRECISION_ADVICE.format(residual=residual),
+        }
+    return {"precision_class": "invalid", "precision_advice": None}
+
+
 def _matrix_block(
     rotation: list[list[float]], translation: list[float], source: str
 ) -> dict[str, Any]:
@@ -115,6 +138,7 @@ def _matrix_block(
         "matrix_source": source,
         "determinant": determinant,
         "orthogonality_residual": residual,
+        **_precision(residual),
     }
 
 
@@ -176,13 +200,13 @@ def _native_matrix(block: dict[str, Any]) -> dict[str, Any]:
     rotation = rows[:3]
     determinant = _number(block.get("determinant"))
     residual = _number(block.get("orthogonality_residual"))
+    residual = residual if residual is not None else _orthogonality_residual(rotation)
     return {
         "input_matrix": rows,
         "matrix_source": _text(block.get("matrix_source")),
         "determinant": determinant if determinant is not None else _determinant(rotation),
-        "orthogonality_residual": (
-            residual if residual is not None else _orthogonality_residual(rotation)
-        ),
+        "orthogonality_residual": residual,
+        **_precision(residual),
     }
 
 

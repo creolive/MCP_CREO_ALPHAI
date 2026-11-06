@@ -10,8 +10,10 @@ valid while a running job's manifest change correctly invalidates them.
 
 Sections in stream order:
 
-- ``operations_input``: the requested input operations (the plan echo), one
-  raw record per input.
+- ``operations_input``: the accepted plan echo, one record per input. It is the
+  normalized view written by ``generic_bridge.submit`` (defaults applied, extrude
+  omissions marked in ``defaulted_fields``); ``operations_view="normalized"``
+  labels it, it is never the caller's raw request.
 - ``operations_result``: the terminal operation result records.
 - ``result_entries``: every remaining manifest/result value as
   ``{"path", "value"}`` leaf records (lists indexed), so oversized receipts
@@ -60,6 +62,10 @@ _SUMMARY_KEYS = (
     "reason_details",
     "failure_phase",
     "recovery_required",
+    # R04/0.14.0: ``operations_input`` pages read the persisted manifest plan,
+    # which is the normalized view. Carry the marker so a page cannot pass it
+    # off as the caller's raw request (legacy jobs simply omit it).
+    "operations_view",
 )
 
 

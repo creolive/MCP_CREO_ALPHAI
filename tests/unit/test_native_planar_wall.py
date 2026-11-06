@@ -787,7 +787,7 @@ class GaugeReceiptTest(unittest.TestCase):
         self.assertFalse(projection["verified"])
         self.assertEqual(
             projection["thickness_loaded_validation"]["reason"],
-            "thickness_validation_context_mismatch",
+            "thickness_validation_current_plan_without_create",
         )
 
     def test_old_executor_without_receipts_is_unchanged(self):
@@ -816,10 +816,77 @@ class GaugeReceiptTest(unittest.TestCase):
         self.assertEqual(planar["thickness_validation"]["status"], "verified")
         self.assertEqual(planar["thickness_loaded_validation"]["context"], "saved_loaded")
 
+    def test_geometry_span_verifies_without_the_api_boolean(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_body_code=-1,
+                thickness_geometry_span_mm=1.0,
+                thickness_validation=validation_block(source="geometry_normal_span"),
+            )
+        )
+        self.assertTrue(projection["verified"], projection["problems"])
+        self.assertEqual(projection["thickness_validation"]["source"], "geometry_normal_span")
+        # The API-specific fields stay absent instead of being rewritten as if
+        # the body API had answered.
+        self.assertIsNone(projection["thickness_measured_mm"])
+        self.assertFalse(projection["thickness_verified"])
+
+    def test_geometry_span_mismatch_is_not_verified(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_geometry_span_mm=2.0,
+                thickness_validation=validation_block(
+                    status="mismatch",
+                    source="geometry_normal_span",
+                    value_mm=2.0,
+                    reason="thickness_measured_mismatch",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_validation"]["status"], "mismatch")
+        self.assertEqual(projection["thickness_validation"]["value_mm"], 2.0)
+
+    def test_same_plan_resize_accepts_the_current_plan_context(self):
+        projection = pwall.result_projection(
+            resized_result(
+                wall_created_this_job=True,
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_loaded_mm=None,
+                thickness_geometry_span_mm=1.0,
+                thickness_validation=validation_block(source="geometry_normal_span"),
+                thickness_loaded_validation=validation_block(
+                    source="geometry_normal_span", context="current_plan"
+                ),
+            )
+        )
+        self.assertTrue(projection["verified"], projection["problems"])
+        self.assertEqual(projection["thickness_loaded_validation"]["context"], "current_plan")
+        self.assertIsNone(projection["thickness_loaded_mm"])
+
+    def test_native_geometry_fallback_is_gated(self):
+        wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
+        self.assertIn('bodies.gauge_source != "missing_api"', wall)
+        self.assertIn("planar_walls_created_this_job", wall)
+        self.assertIn('const char *loaded_context = created_this_job ? "current_plan"', wall)
+        for gate in (
+            "thickness_geometry_has_downstream_features",
+            "thickness_geometry_frame_not_axis_aligned",
+            "thickness_geometry_span_unavailable",
+            "thickness_material_body_not_unique",
+        ):
+            with self.subTest(gate=gate):
+                self.assertIn(gate, wall)
+
     def test_native_publishes_one_receipt_per_operation(self):
         wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
         create_call = 'planar_wall_thickness_validation(bodies, thickness, "current_plan")'
-        loaded_call = 'planar_wall_thickness_validation(loaded, thickness, "saved_loaded")'
+        loaded_call = "planar_wall_thickness_validation(loaded, thickness, loaded_context)"
         self.assertEqual(wall.count(create_call), 2, "create and resize each publish a receipt")
         self.assertEqual(wall.count(loaded_call), 1)
         self.assertIn('"thickness_loaded_validation"', wall)

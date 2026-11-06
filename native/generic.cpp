@@ -4109,10 +4109,31 @@ static void execute_operation(const J &op) {
 // the revision; read-only jobs confirm no model write instead). Failure keeps
 // the executed/failed records and appends the operations that were never
 // started as not_executed/no_effect. rolled_back is only used when the native
-// rollback restored and verified the saved baseline; without that evidence the
-// effect stays unknown and is never inferred from the job status alone.
+// rollback restored and verified the saved baseline. BUG-114: a cleanup-proven
+// new-model erasure releases only the managed-model effect of operations that
+// do not write external files; external outputs (export/dump_tree) keep
+// unknown, because erasing the session model never deletes them. Without
+// either proof the effect stays unknown and is never inferred from the job
+// status alone.
+static bool operation_writes_external_outputs(const std::string &kind) {
+    return kind == "export" || kind == "dump_tree";
+}
+
+static bool cleanup_clears_managed_effect(const J &report) {
+    if (!report.contains("failed_model_cleanup") || !report["failed_model_cleanup"].is_object())
+        return false;
+    const J &receipt = report["failed_model_cleanup"];
+    if (!receipt.value("attempted", false) || receipt.value("status", std::string()) != "erased" ||
+        receipt.value("reason", std::string()) != "cleaned" ||
+        !receipt.value("absence_verified", false))
+        return false;
+    // A bare erase code is not enough: only the full cleaned shape qualifies.
+    return receipt.contains("erase_code") && receipt["erase_code"].is_number_integer() &&
+           receipt["erase_code"].get<int>() == 0;
+}
+
 static void finalize_operation_results(const J &request, bool succeeded, bool rolled_back,
-                                       bool readonly) {
+                                       bool readonly, bool cleanup_confirmed) {
     if (succeeded) {
         for (auto &item : operation_results)
             if (item.value("execution_status", "unknown") == "succeeded")
@@ -4123,8 +4144,15 @@ static void finalize_operation_results(const J &request, bool succeeded, bool ro
         std::string execution = item.value("execution_status", "unknown");
         if (execution == "not_executed")
             item["effect_status"] = "no_effect";
-        else if (execution == "succeeded" || execution == "failed")
-            item["effect_status"] = rolled_back ? "rolled_back" : "unknown";
+        else if (execution == "succeeded" || execution == "failed") {
+            if (rolled_back)
+                item["effect_status"] = "rolled_back";
+            else if (cleanup_confirmed &&
+                     !operation_writes_external_outputs(item.value("op", std::string())))
+                item["effect_status"] = "no_effect";
+            else
+                item["effect_status"] = "unknown";
+        }
     }
     int count = request.contains("operations") && request["operations"].is_array()
                     ? (int)request["operations"].size()
@@ -7043,7 +7071,8 @@ static int run_generic(const std::wstring &job) {
                                                          true, 8, 6, PRORASTERTYPE_JPEG);
             J preview_json = preview_outcome_json(preview);
             log("PREVIEW=%s\n", preview_json.dump().c_str());
-            finalize_operation_results(request, true, false, request.value("readonly", false));
+            finalize_operation_results(request, true, false, request.value("readonly", false),
+                                       false);
             report.update(
                 {{"success", true},
                  {"toolkit_code", 0},
@@ -7223,7 +7252,8 @@ static int run_generic(const std::wstring &job) {
     }
     if (!report["success"].get<bool>()) {
         finalize_operation_results(request, false, report.value("rollback_succeeded", false),
-                                   request.is_object() && request.value("readonly", false));
+                                   request.is_object() && request.value("readonly", false),
+                                   cleanup_clears_managed_effect(report));
         // Accepted plans always report their per-operation outcome, including
         // the operations that were never started.
         report["operations"] = operation_results;

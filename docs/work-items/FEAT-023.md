@@ -101,3 +101,15 @@ capabilities摘要/分页已随0.4.2交付、0.4.4补验收闭环；0.4.5的READ
 - `creo_list_jobs` 的 compact 改为固定有界条目（job/model id、status、stage、时间、outcome、≤200 字 message；`job_id` 即详情入口）。`sections` 仅为兼容校验，对固定条目不再生效，需用 `creo_get_job` 取块。实测 50 条最大单条 618 B、整列表 32102 B；1000 op 的 compact 为 5828 B（保留 20 条 + 总体标记）。这一变化取代本节 2026-11-06 sections 段中“list_jobs compact 应用 sections”的描述。
 - 验证：新增 `tests/unit/test_job_projection.py` 18 项，更新 `test_compact_sections.py`/`test_job_query.py` 的列表与日志断言；连同既有 compact/budget/分页/operation 回归 91 项通过。
 - 未验证：实机 Creo、MCP stdio、WorkBuddy、native 实测判据值均未跑；本卡其余体积议题仍开放。
+
+## 2026-11-06 R04：协议验收与请求/执行视图分离（离线 stdio，未实机）
+
+- 新增 `tests/unit/test_job_query_protocol.py`（8 项）：子进程 `python -m ... --serve` 启动真实 `server.py`，数据根隔离、预置 52 个 job 目录，全部断言经真实 MCP stdio 客户端读取结果；未提交作业、未占 Toolkit 通道、未启动 Creo。
+- 字节：compact 35 op 与 1000 op 均 ≤ 32 KiB（千 op 报 `operations_total=1000`/`operations_truncated=true`/样本 ≤20/状态计数合计 1000）；`creo_list_jobs` 50 条逐项 ≤620 B 且不含 `result`/`sections_applied`。
+- 保护：失败位于样本窗外（index 34）仍保留该记录及 `failed_stage`/`failed_toolkit_call`；约 3 KB 中文长错误在 `message` 与 `result.message` 原文保留且仍是合法 UTF-8。
+- sections：省略无 `sections_applied`；`[]` 只留结果证据；`["preview"]` 保留 preview 与精简 operations；`["operations"]` 反之；非法名 `isError` 并列出已知块名；保护字段与 full 一致。
+- full 分页：`section="operations_input", limit=5` 逐 cursor 取回 35 条无遗漏，最终 `next_cursor=null`；surface_trim/surface_offset/solidify/flange miter/assembly pose 与 `planar_wall.thickness_validation` 的 null、状态码与 reason 与 full 逐键一致。
+- **请求/执行视图分离（0.14.0）**：`generic_bridge.submit` 写 manifest 时新增 `operations_view="normalized"`；`job_pages` 的 full 分页摘要同步携带（历史作业无此键则不补造）。省略 depth 的归一化执行值仍为 1，但 `defaulted_fields` 标出省略来源，`extrude_depth.requested_depth_mm=null` 的既有语义不变；未新增 `depth_ignored` 同义块。
+- 新测试 `test_submission_distinguishes_omitted_and_explicit_depth`：省略 depth、显式 depth=1、through_all 省略 depth、through_all 显式 depth=10 四例 × `creo_extrude`/`creo_execute_plan` 两入口；入口层省略字段保持缺失，提交回执、提交后 full 与 full 分页读到同一 normalized 视图。35 op 提交回执序列化仍 < 32 KiB，故未改提交投影。
+- 验证：两模块定向 23 项 OK；全量 `tools/test_unit.py` 2672 项 OK；`dev_check.py --skip-unit --work-item FEAT-023` `success=true`。
+- 未验证：实机 Creo、WorkBuddy 黑盒、真实客户端取消/断流；本卡其余体积议题仍开放。

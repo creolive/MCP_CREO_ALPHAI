@@ -316,6 +316,155 @@ class SuccessfulRollbackTests(unittest.TestCase):
         self.assertNotIn('verified"', body)
 
 
+class DirectedReproVerdictTests(unittest.TestCase):
+    """R02/BUG-113: the frozen matrix and the saved-identity gate.
+
+    The driver's offline mode replays the four classes above and applies this
+    decision table. A failed job may be ready only when the existing native
+    rule allows it and every saved identity field is unchanged; equal counts
+    or equal volume are diagnostics and never clear the protection.
+    """
+
+    def baseline(self, **overrides) -> dict:
+        model = {
+            "model_id": "m" * 32,
+            "status": "ready",
+            "part_file": r"E:\models\recovery\output\wb.prt.4",
+            "part_sha256": "a" * 64,
+            "revision": 7,
+        }
+        model.update(overrides)
+        return model
+
+    def matched(self) -> dict:
+        return difference_block(
+            status="matched",
+            reason=None,
+            features=collection([1, 2, 3], [1, 2, 3]),
+            bodies=collection([10], [10]),
+            volume_mm3={"available": True, "before": 1000.0, "after": 1000.0, "reason": None},
+        )
+
+    def test_the_directed_matrix_is_frozen_and_never_resubmits(self):
+        from tools.test_surface_save_recovery import frozen_cases
+
+        cases = frozen_cases()
+        self.assertEqual(len(cases), 12)
+        self.assertFalse(any(case["resubmit_on_failure"] for case in cases))
+        self.assertTrue(all(case["max_attempts_per_submission"] == 1 for case in cases))
+        for route in ("single_plan", "incremental"):
+            for tool in ("independent_plane", "projected_dependency"):
+                selected = [
+                    case for case in cases if case["route"] == route and case["tool"] == tool
+                ]
+                self.assertEqual(len(selected), 3)
+                self.assertEqual(len({case["model_index"] for case in selected}), 3)
+
+    def test_unknown_outcome_keeps_the_protection_even_with_matched_counts(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        baseline = baseline_snapshot(self.baseline())
+        verdict = failure_verdict(
+            {},
+            {"status": "unknown_outcome"},
+            failed_result(rollback_difference=self.matched()),
+            baseline,
+            baseline,
+        )
+        self.assertEqual(verdict["model_status"], "unknown_outcome")
+        self.assertEqual(verdict["protection"], "unknown_outcome")
+        self.assertIn("do not resubmit", " ".join(verdict["reasons"]))
+
+    def test_matched_counts_without_a_verified_restore_stay_failed(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        annotated = operation_results.annotate_native_result(
+            failed_result(rollback_succeeded=False, rollback_difference=self.matched()),
+            readonly=False,
+        )
+        baseline = baseline_snapshot(self.baseline())
+        verdict = failure_verdict({}, {"status": "failed"}, annotated, baseline, baseline)
+        self.assertEqual(verdict["model_status"], "failed")
+        self.assertEqual(verdict["difference_status"], "matched")
+        self.assertIn("diagnostic only", " ".join(verdict["reasons"]))
+        self.assertNotEqual(verdict["rule_status"], "ready")
+
+    def test_equal_volume_alone_does_not_clear_the_protection(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        equal_volume = difference_block(
+            features=collection([1, 2, 3], [1, 2, 3, 4]),
+            volume_mm3={"available": True, "before": 1000.0, "after": 1000.0, "reason": None},
+        )
+        annotated = operation_results.annotate_native_result(
+            failed_result(rollback_difference=equal_volume), readonly=False
+        )
+        baseline = baseline_snapshot(self.baseline())
+        verdict = failure_verdict({}, {"status": "failed"}, annotated, baseline, baseline)
+        self.assertEqual(verdict["model_status"], "failed")
+        self.assertEqual(verdict["difference_status"], "mismatch")
+
+    def test_a_changed_baseline_hash_blocks_ready(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        annotated = operation_results.annotate_native_result(
+            failed_result(rollback_succeeded=True, rollback_difference=self.matched()),
+            readonly=False,
+        )
+        verdict = failure_verdict(
+            {},
+            {"status": "failed"},
+            annotated,
+            baseline_snapshot(self.baseline()),
+            baseline_snapshot(self.baseline(part_sha256="b" * 64)),
+        )
+        self.assertEqual(verdict["model_status"], "failed")
+        self.assertFalse(verdict["baseline"]["checks"]["part_sha256"])
+        self.assertIn("part_sha256", " ".join(verdict["reasons"]))
+
+    def test_a_changed_baseline_revision_blocks_ready(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        annotated = operation_results.annotate_native_result(
+            failed_result(rollback_succeeded=True, rollback_difference=self.matched()),
+            readonly=False,
+        )
+        verdict = failure_verdict(
+            {},
+            {"status": "failed"},
+            annotated,
+            baseline_snapshot(self.baseline()),
+            baseline_snapshot(self.baseline(revision=8)),
+        )
+        self.assertEqual(verdict["model_status"], "failed")
+        self.assertFalse(verdict["baseline"]["checks"]["revision"])
+
+    def test_all_invariants_with_a_verified_restore_allow_ready(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        annotated = operation_results.annotate_native_result(
+            failed_result(rollback_succeeded=True, rollback_difference=self.matched()),
+            readonly=False,
+        )
+        baseline = baseline_snapshot(self.baseline())
+        verdict = failure_verdict({}, {"status": "failed"}, annotated, baseline, baseline)
+        self.assertEqual(verdict["model_status"], "ready")
+        self.assertTrue(verdict["baseline"]["unchanged"])
+
+    def test_a_new_model_failure_keeps_the_failed_verdict(self):
+        from tools.test_surface_save_recovery import baseline_snapshot, failure_verdict
+
+        verdict = failure_verdict(
+            {},
+            {"status": "failed"},
+            failed_result(save_failure=save_failure_block()),
+            baseline_snapshot(None),
+            baseline_snapshot({"part_file": None, "part_sha256": None, "revision": 0}),
+        )
+        self.assertEqual(verdict["model_status"], "failed")
+        self.assertIsNone(verdict["baseline"]["after"]["part_sha256"])
+
+
 class CompactVisibilityTests(unittest.TestCase):
     def manifest(self) -> dict:
         return {

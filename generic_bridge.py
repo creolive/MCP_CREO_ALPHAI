@@ -480,7 +480,11 @@ def submit(
             "status": "queued",
             "readonly": readonly,
             "created_at": bridge.now(),
+            # R04/0.14.0: the accepted plan is echoed after validate_operations
+            # (defaults applied, extrude omissions marked in defaulted_fields).
+            # Label it so a receipt reader never mistakes it for the raw request.
             "operations": operations,
+            "operations_view": "normalized",
             "job_directory": str(directory),
             "output_directory": str(directory / "output"),
             "message": "Poll creo_get_job with this job_id; do not resubmit the operation",
@@ -535,6 +539,22 @@ def failed_model_status(request: dict, result: dict, model: dict) -> str:
     ):
         return "ready"
     return "failed"
+
+
+def _checkpoint_present(request: dict) -> bool | None:
+    """Whether the request's target already had a saved checkpoint.
+
+    ``None`` means the request view did not carry ``part_file`` (legacy job):
+    the caller must not read that absence as "no checkpoint".
+    """
+    model = request.get("model")
+    if not isinstance(model, dict):
+        return None
+    if request.get("new"):
+        return False
+    if "part_file" in model:
+        return bool(model.get("part_file"))
+    return None
 
 
 def run_generic_job(job_id: str, manifest: dict):
@@ -606,6 +626,7 @@ def run_generic_job(job_id: str, manifest: dict):
                         bridge.read_json(result_file),
                         readonly=request["readonly"],
                         inputs=request["operations"],
+                        is_new_model=bool(request.get("new")),
                     )
                     # FEAT-052: project the native recolor block into the
                     # stable result shape (missing fields stay unknown and are
@@ -792,6 +813,21 @@ def run_generic_job(job_id: str, manifest: dict):
         summary = component_changes.unavailable(exc)
     if summary is not None:
         manifest["component_changes"] = summary
+    # BUG-114: publish the scoped terminal effect (managed model, component
+    # bindings, external outputs) on the same result the client polls. The
+    # three verdicts come from the shared decision table; the job terminal
+    # status, per-operation execution statuses and the legacy rollback fields
+    # are never rewritten.
+    if isinstance(result, dict) and manifest["status"] in ("failed", "unknown_outcome"):
+        from creo_mechdog import terminal_effect
+
+        terminal_effect.apply_to_result(
+            result,
+            job_status=manifest["status"],
+            is_new_model=bool(request.get("new")),
+            checkpoint_present=_checkpoint_present(request),
+            operations=request["operations"],
+        )
     manifest["finished_at"] = bridge.now()
     bridge.write_json(directory / "job.json", manifest)
 
@@ -828,6 +864,8 @@ def _component_summary(
         job_status=manifest["status"],
         rollback=result,
         executed=worker_started,
+        is_new_model=bool(request.get("new")),
+        checkpoint_present=_checkpoint_present(request),
         prior_aliases=prior_state.get("aliases"),
         prior_inspection=prior_state.get("inspection"),
         result_aliases=result_aliases,

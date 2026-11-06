@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -196,6 +197,17 @@ def offline(output: Path, run_id: str) -> dict:
         "claims_absence": unknown["absence_verified"],
         "note": "unknown_outcome jobs never claim a cleanup they did not prove",
     }
+    from creo_mechdog.schema import validate_operations
+
+    assembly_plan = validate_operations(assembly_failing_plan("offline"))
+    report["assembly_plan"] = {
+        "operations": [operation["op"] for operation in assembly_plan],
+        "note": (
+            "schema-valid, so the live step submits a job and the native failure happens "
+            "after the assembly model exists; the cleanup decision itself is model-type "
+            "agnostic"
+        ),
+    }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report
@@ -227,6 +239,17 @@ def failing_plan(tag: str) -> list[dict]:
             "references": [{"edge": {"kind": "edge", "id": 999999}}],
         }
     ]
+
+
+def assembly_failing_plan(tag: str) -> list[dict]:
+    """Schema-valid operation that fails natively on an empty new assembly.
+
+    Solid operations are refused for assemblies before a job exists, so the
+    failure has to be an assembly-legal op: a dimension id the executor cannot
+    resolve fails after the assembly model already exists - the assembly
+    counterpart of the E orphan shape.
+    """
+    return [{"op": "set_dimensions", "values": [{"id": 999999, "value": 1.0}]}]
 
 
 class LiveRun:
@@ -283,15 +306,30 @@ class LiveRun:
         model_id: str | None = None,
         revision: int | None = None,
         model_name: str | None = None,
+        model_type: str | None = None,
     ) -> dict:
         args: dict = {"operations": operations}
         if model_id is not None:
             args.update(model_id=model_id, expected_revision=revision)
         if model_name is not None:
             args["model_name"] = model_name
+        if model_type is not None:
+            args["model_type"] = model_type
         accepted = await self.call("creo_execute_plan", args)
         job = await self.terminal(accepted["job_id"])
         return {"accepted": accepted, "job": job}
+
+    def disk_inventory(self) -> dict:
+        """SHA256 of every model file this repo keeps, keyed by relative path."""
+        inventory = {}
+        models = ROOT / "models"
+        if not models.is_dir():
+            return inventory
+        for path in sorted(models.rglob("*")):
+            if path.suffix.lower() not in (".prt", ".asm"):
+                continue
+            inventory[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return inventory
 
     async def session_names(self) -> list:
         listing = await self.call("creo_list_session_models", {"limit": 50})
@@ -322,6 +360,7 @@ class LiveRun:
         await self.scenario_main_path()
         await self.scenario_preexisting_same_name()
         await self.scenario_saved_model_rollback()
+        await self.scenario_assembly_failure()
         self.report["live_acceptance"] = "completed"
         self.save()
 
@@ -439,6 +478,51 @@ class LiveRun:
             == "succeeded",
             "revision_unchanged": after.get("revision") == before.get("revision"),
             "cleanup_reports_not_applicable": receipt.get("reason") == "not_new_model_job",
+        }
+        scenario["passed"] = all(scenario["assertions"].values())
+        self.save()
+
+    async def scenario_assembly_failure(self) -> None:
+        """A new assembly that fails natively is erased, like a failing new part.
+
+        The four earlier scenarios only cover parts. The assembly cleanup path
+        is asserted separately: the assembly name must vanish from the session,
+        no managed model may appear under that name, and every model file on
+        disk keeps the same SHA256.
+        """
+        tag = self.tag("q03s4asm")
+        scenario: dict = {"id": "S4_assembly_failure", "model_name": tag}
+        self.report["scenarios"].append(scenario)
+        self.save()
+        disk_before = self.disk_inventory()
+        failed = await self.plan(assembly_failing_plan(tag), model_name=tag, model_type="assembly")
+        receipt = failed["job"].get("result", {}).get("failed_model_cleanup") or {}
+        names = await self.session_names()
+        managed = await self.call("creo_list_models", {})
+        disk_after = self.disk_inventory()
+        scenario.update(
+            failing_job={
+                "job_id": failed["accepted"]["job_id"],
+                "model_id": failed["accepted"].get("model_id"),
+                "model_type": failed["accepted"].get("model_type"),
+                "status": failed["job"].get("status"),
+                "message": failed["job"].get("message"),
+                "failed_model_cleanup": receipt,
+            },
+            session_has_name=tag in names,
+            managed_names=[entry.get("name") for entry in managed.get("models", [])][:20],
+            disk_before=disk_before,
+            disk_after=disk_after,
+        )
+        scenario["assertions"] = {
+            "job_failed": failed["job"].get("status") == "failed",
+            "orphan_erased": receipt.get("status") == "erased",
+            "absence_verified": receipt.get("absence_verified") is True,
+            "reason_cleaned": receipt.get("reason") == "cleaned",
+            "name_absent_from_session": tag not in names,
+            "not_registered_as_managed": tag
+            not in [entry.get("name") for entry in managed.get("models", [])],
+            "disk_unchanged": disk_before == disk_after,
         }
         scenario["passed"] = all(scenario["assertions"].values())
         self.save()

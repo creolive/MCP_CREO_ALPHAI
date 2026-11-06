@@ -1,6 +1,13 @@
 // FEAT-058: native rectangular unattached planar wall and its in-place resize.
 // See native/planar_wall.h for the measured basis and the tree rationale.
 
+#include <set>
+
+// R03: the walls this job created. The resize context is decided by execution
+// order, not by a label: a wall created earlier in the same plan was never
+// saved and reloaded, so its gauge belongs to ``current_plan``.
+static std::set<std::string> planar_walls_created_this_job;
+
 // The primary wall is a sheetmetal feature: CREO refuses it (or creates a
 // feature that cannot regenerate) outside a sheetmetal part, so the subtype is
 // checked before anything is written to the model.
@@ -112,6 +119,12 @@ struct PlanarWallBodies {
     // receipt could not say which had happened.
     std::string gauge_source = "not_measured";
     std::string gauge_reason;
+    // R03: the material body's measured outline. It is the only independent
+    // gauge when this SDK generation declares no body thickness API.
+    ProOutline outline = {};
+    bool outline_known = false;
+    double geometry_span = 0;
+    bool geometry_known = false;
     bool linked = false;
     bool linked_known = false;
 };
@@ -142,6 +155,10 @@ static PlanarWallBodies planar_wall_bodies() {
         if (size > material_size) {
             material_size = size;
             material_index = i;
+            for (int row = 0; row < 2; row++)
+                for (int axis = 0; axis < 3; axis++)
+                    evidence.outline[row][axis] = outline[row][axis];
+            evidence.outline_known = true;
         }
     }
     if (evidence.material != 1) {
@@ -150,7 +167,8 @@ static PlanarWallBodies planar_wall_bodies() {
         // cannot be attributed to this wall.
         evidence.gauge_reason = "thickness_material_body_not_unique";
     } else {
-#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+#if defined(MECHDOG_HAS_ProSmtBodyThicknessValueGet) &&                                            \
+    !defined(MECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API)
         evidence.gauge_source = "api";
         double value = 0;
         evidence.thickness_code = ProSmtBodyThicknessValueGet(&bodies[material_index], &value);
@@ -212,9 +230,15 @@ static J planar_wall_thickness_validation(const PlanarWallBodies &bodies, double
                {"value_mm", nullptr},
                {"reason", bodies.gauge_reason.empty() ? J(nullptr) : J(bodies.gauge_reason)},
                {"context", context}};
-    if (bodies.thickness_known) {
-        block["value_mm"] = bodies.thickness;
-        if (fabs(bodies.thickness - thickness) <= 1e-6) {
+    double measured = bodies.thickness;
+    bool known = bodies.thickness_known;
+    if (!known && bodies.geometry_known) {
+        measured = bodies.geometry_span;
+        known = true;
+    }
+    if (known) {
+        block["value_mm"] = measured;
+        if (fabs(measured - thickness) <= 1e-6) {
             block["status"] = "verified";
             block["reason"] = nullptr;
         } else {
@@ -225,6 +249,58 @@ static J planar_wall_thickness_validation(const PlanarWallBodies &bodies, double
         block["status"] = "unverified";
     }
     return block;
+}
+
+// R03: a frame axis is axis-aligned only when exactly one component is a unit
+// value. A rotated frame cannot use the box extent as a normal span.
+static bool planar_wall_axis_aligned(const V &axis) {
+    int unit = 0;
+    for (double component : axis) {
+        if (!std::isfinite(component))
+            return false;
+        if (fabs(fabs(component) - 1) <= 1e-6)
+            unit++;
+        else if (fabs(component) > 1e-6)
+            return false;
+    }
+    return unit == 1;
+}
+
+// FEAT-058/R03: when this SDK generation declares no body gauge API, the wall's
+// own material extent along the frame normal is the only independent gauge. It
+// is accepted only for one material body, a pure rectangle (no downstream
+// feature) and an axis-aligned frame; the driving size, signed envelope and
+// volume stay cross-checks and never become the source. An API that exists but
+// fails never reaches this fallback.
+static void planar_wall_geometry_gauge(PlanarWallBodies &bodies, const V &normal, double thickness,
+                                       const V &u, const V &v, int child_count) {
+    if (bodies.thickness_known || bodies.gauge_source != "missing_api")
+        return;
+    if (bodies.material != 1 || !bodies.outline_known) {
+        bodies.gauge_reason = "thickness_material_body_not_unique";
+        return;
+    }
+    if (child_count != 0) {
+        bodies.gauge_reason = "thickness_geometry_has_downstream_features";
+        return;
+    }
+    if (!planar_wall_axis_aligned(u) || !planar_wall_axis_aligned(v) ||
+        !planar_wall_axis_aligned(normal)) {
+        bodies.gauge_reason = "thickness_geometry_frame_not_axis_aligned";
+        return;
+    }
+    double span = 0;
+    for (int axis = 0; axis < 3; axis++)
+        span += fabs(normal[axis]) * fabs(bodies.outline[1][axis] - bodies.outline[0][axis]);
+    if (!std::isfinite(span) || span <= PLANAR_WALL_ENVELOPE_TOLERANCE) {
+        bodies.gauge_reason = "thickness_geometry_span_unavailable";
+        return;
+    }
+    bodies.geometry_span = span;
+    bodies.geometry_known = true;
+    bodies.gauge_source = "geometry_normal_span";
+    bodies.gauge_reason.clear();
+    log("PLANAR_WALL_GEOMETRY_GAUGE span_mm=%.9f requested_mm=%.9f\n", span, thickness);
 }
 
 // A span-only envelope accepted a wall that grew on the opposite side of the
@@ -423,6 +499,9 @@ static void generic_sheetmetal_planar_wall(const J &op) {
             "The wall regenerated but no sheetmetal body carries geometry; the feature did not "
             "build a wall body");
     planar_wall_require_envelope(envelope, length, width, thickness, negative, "created");
+    // R03: a wall just created by this job has no downstream feature, so the
+    // geometry fallback can measure its own material extent.
+    planar_wall_geometry_gauge(bodies, n, thickness, u, v, 0);
     // The gauge is read back from the wall's own body. A measured value that
     // disagrees fails the operation; an unreadable one is published as
     // unverified (older SDKs) instead of being replaced by the request.
@@ -430,7 +509,13 @@ static void generic_sheetmetal_planar_wall(const J &op) {
         throw std::runtime_error("The wall body carries " + std::to_string(bodies.thickness) +
                                  " mm instead of the requested " + std::to_string(thickness) +
                                  " mm; the sheetmetal gauge was not applied");
-#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+    if (bodies.geometry_known && fabs(bodies.geometry_span - thickness) > 1e-6)
+        throw std::runtime_error("The wall body spans " + std::to_string(bodies.geometry_span) +
+                                 " mm along the normal instead of the requested " +
+                                 std::to_string(thickness) +
+                                 " mm; the measured geometry does not carry the gauge");
+#if defined(MECHDOG_HAS_ProSmtBodyThicknessValueGet) &&                                            \
+    !defined(MECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API)
     if (!bodies.thickness_known)
         throw std::runtime_error("The wall body thickness could not be read (" +
                                  planar_wall_gauge_failure(bodies) +
@@ -450,6 +535,7 @@ static void generic_sheetmetal_planar_wall(const J &op) {
                 {"thickness", thickness},
                 {"direction", direction},
                 {"frame", frame}}}});
+    planar_walls_created_this_job.insert(label);
     stage_operation_result(
         {{"op", "sheetmetal_planar_wall"},
          {"feature", label},
@@ -472,6 +558,9 @@ static void generic_sheetmetal_planar_wall(const J &op) {
          {"thickness_measured_mm", bodies.thickness_known ? J(bodies.thickness) : J(nullptr)},
          {"thickness_verified", bodies.thickness_known},
          {"thickness_body_code", bodies.thickness_code},
+         {"thickness_geometry_span_mm",
+          bodies.geometry_known ? J(bodies.geometry_span) : J(nullptr)},
+         {"wall_created_this_job", true},
          {"thickness_validation",
           planar_wall_thickness_validation(bodies, thickness, "current_plan")},
          {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
@@ -494,17 +583,22 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     double length = op["length"].get<double>();
     double width = op["width"].get<double>();
     ProFeature wall = feature(label);
+    // R03: only a wall loaded from the saved file is a saved read. A wall this
+    // job created earlier in the same plan was never saved, so its gauge is the
+    // current plan's, even though this resize re-measures it.
+    const bool created_this_job = planar_walls_created_this_job.count(label) > 0;
+    const char *loaded_context = created_this_job ? "current_plan" : "saved_loaded";
 
-    // The part was loaded from the saved file at the start of this job, so the
-    // gauge measured here is the saved-and-reloaded thickness of the previous
-    // operation. A saved wall that lost its gauge must not be resized further.
+    // The part was loaded from the saved file at the start of this job, so a
+    // wall created by an earlier job was read back from disk here.
     PlanarWallBodies loaded = planar_wall_bodies();
     planar_wall_log_bodies(loaded, "loaded");
     if (loaded.thickness_known && fabs(loaded.thickness - thickness) > 1e-6)
         throw std::runtime_error("The saved wall carries " + std::to_string(loaded.thickness) +
                                  " mm instead of the recorded " + std::to_string(thickness) +
                                  " mm; the sheetmetal gauge did not survive save/reload");
-#ifdef MECHDOG_HAS_ProSmtBodyThicknessValueGet
+#if defined(MECHDOG_HAS_ProSmtBodyThicknessValueGet) &&                                            \
+    !defined(MECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API)
     if (!loaded.thickness_known)
         throw std::runtime_error("The saved wall body thickness could not be read (" +
                                  planar_wall_gauge_failure(loaded) +
@@ -524,6 +618,15 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
         throw std::runtime_error("Feature " + label + " has downstream dependencies " +
                                  child_ids.dump() +
                                  "; the in-place resize is refused so they are not rebuilt");
+    // R03: with no body API, the loaded wall is measured from its own material
+    // extent. The child count is zero here, so the rectangle has no hole or
+    // downstream dependency.
+    planar_wall_geometry_gauge(loaded, vec(frame["normal"]), thickness, vec(frame["u_axis"]),
+                               vec(frame["v_axis"]), child_count);
+    if (loaded.geometry_known && fabs(loaded.geometry_span - thickness) > 1e-6)
+        throw std::runtime_error("The saved wall spans " + std::to_string(loaded.geometry_span) +
+                                 " mm along the normal instead of the recorded " +
+                                 std::to_string(thickness) + " mm");
 
     const J *sketch_meta = alias_entry(sketch_name);
     if (!sketch_meta || !sketch_meta->contains("dimension_ids"))
@@ -615,6 +718,14 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
         throw std::runtime_error("The resized wall carries " + std::to_string(bodies.thickness) +
                                  " mm instead of the recorded " + std::to_string(thickness) +
                                  " mm; the in-place resize changed the gauge");
+    // R03: the resized wall is a pure rectangle with no downstream feature, so
+    // its own material extent can stand in for the missing body API.
+    planar_wall_geometry_gauge(bodies, vec(frame["normal"]), thickness, vec(frame["u_axis"]),
+                               vec(frame["v_axis"]), 0);
+    if (bodies.geometry_known && fabs(bodies.geometry_span - thickness) > 1e-6)
+        throw std::runtime_error("The resized wall spans " + std::to_string(bodies.geometry_span) +
+                                 " mm along the normal instead of the recorded " +
+                                 std::to_string(thickness) + " mm");
 
     aliases[label]["planar_wall"]["length"] = length;
     aliases[label]["planar_wall"]["width"] = width;
@@ -641,10 +752,15 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
          {"thickness_measured_mm", bodies.thickness_known ? J(bodies.thickness) : J(nullptr)},
          {"thickness_verified", bodies.thickness_known},
          {"thickness_body_code", bodies.thickness_code},
+         {"thickness_geometry_span_mm",
+          bodies.geometry_known ? J(bodies.geometry_span) : J(nullptr)},
          {"thickness_loaded_mm", loaded.thickness_known ? J(loaded.thickness) : J(nullptr)},
+         {"thickness_loaded_geometry_span_mm",
+          loaded.geometry_known ? J(loaded.geometry_span) : J(nullptr)},
+         {"wall_created_this_job", created_this_job},
          {"thickness_validation",
           planar_wall_thickness_validation(bodies, thickness, "current_plan")},
          {"thickness_loaded_validation",
-          planar_wall_thickness_validation(loaded, thickness, "saved_loaded")},
+          planar_wall_thickness_validation(loaded, thickness, loaded_context)},
          {"body_linked", bodies.linked_known ? J(bodies.linked) : J(nullptr)}});
 }

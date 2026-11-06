@@ -165,3 +165,17 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 验证：`.\.venv\Scripts\python.exe -m unittest tests.unit.test_native_planar_wall -v` 30 项 OK；`tools\test_adoption_planar_wall.py` 默认离线通过（`build/planar_wall/20261106T044614Z/adoption_offline.json`，`passed=true`、`failed=[]`）；两个 Python 文件 `ruff check`/`ruff format` 通过，`native/planar_wall.cpp` 已按 `.clang-format` 格式化。
 
 未验证：本轮按编排要求未运行 `bridge.py build`，原生 C++ 未经编译验证；未连 Creo、未做任何实机建模或保存重载，`thickness_validation` 的实机读数、缺 API 模式（Creo 9/10）与 `saved_loaded` 路径均未验收；未运行 `tools/dev_check.py`、全量 `tools/test_unit.py` 或 WorkBuddy。后续实机需在会话可用且获授权时执行原驱动正例（100×60×1→120×80×1、185×232×1、XY/XZ/YZ/负方向、保存后改型及失败后继续编辑）并记录直接 API/缺 API 模式；缺 API 兜底（纯矩形唯一材料 body 的独立法向几何读取）仍未实现，不属本轮范围。
+
+## 2026-11-06 R03 几何兜底与 saved_loaded 上下文（离线 + 受控编译）
+
+本节完成上一节留下的“缺 API 兜底”，并修正同计划 create→resize 的上下文。未连接 Creo；运行时证据仍待健康会话。
+
+- `native/planar_wall.cpp`：`PlanarWallBodies` 保存唯一材料 body 的实测 outline；`planar_wall_geometry_gauge()` 仅在编译期缺 `ProSmtBodyThicknessValueGet`、`material==1`、`child_count==0`、u/v/n 均轴对齐且 span 有限正值时，把法向跨度发布为 `source="geometry_normal_span"`。API 存在但调用失败不会进入兜底。几何值与请求不符时与 API 路径一样抛错。
+- 新增 `MECHDOG_FORCE_NO_SHEETMETAL_THICKNESS_API` 受控编译开关：三个 `MECHDOG_HAS_*` 门都额外要求该宏未定义，正常构建不受影响。
+- 上下文：`planar_walls_created_this_job` 按作业执行顺序记录创建；同计划 create→resize 的 `thickness_loaded_validation.context` 为 `current_plan`，跨作业为 `saved_loaded`。结果新增 `wall_created_this_job`，Python 对 `current_plan` 回执要求该事实，否则降级为 `thickness_validation_current_plan_without_create`。
+- `src/creo_mechdog/native_planar_wall.py`：source 扩展 `geometry_normal_span`；`TRUSTED_SOURCES=("api","geometry_normal_span")` 决定整体 verified；`thickness_measured_mm`/`thickness_verified` 在缺 API 时保持 null/false，不伪装成 api；`gauge_validation` 支持回执自述 context。
+- 驱动 `tools/test_adoption_planar_wall.py`：新增 `R03_MATRIX`（7 组覆盖）、`controlled_no_api_compile`（仅编译，产出在本次 run 目录）、离线几何判定（无 API 可验证、冲突拒绝、同计划 current_plan、伪造 create 回执拒绝）与 live `large`（185×232×1）、`single_plan`。原驱动已含 XY/XZ/YZ、负方向、跨作业存档厚度与拒绝后继续编辑。
+
+验证：`python -m unittest tests.unit.test_native_planar_wall` 34 项 OK；全量 `tools/test_unit.py` 2702 项成功；`python bridge.py build` 退出 0（正常 worker）；`tools/test_adoption_planar_wall.py` 离线 `passed=true`（`build/planar_wall/20261106T111107Z/adoption_offline.json`），受控缺 API 编译 `returncode=0` 且产出 obj；`tools/dev_check.py --skip-unit --work-item FEAT-058` 退出 0。
+
+未验证：受控编译只证明分支可编译，不等于 Creo 9/10 实机结果；12.4 的 live 矩阵（含新增 large/single_plan）未执行；`geometry_normal_span` 的实机读数与存档厚度路径未验收；带孔/下游依赖仅由 `child_count==0` 门控，未做独立孔特征实机样本。

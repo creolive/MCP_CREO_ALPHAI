@@ -276,3 +276,24 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
   - `miter_box`：`four_walls_complete=true`。`f_px`、`f_nx` 自由壁成功；`f_ny`（附着边 span 177.92，两端邻接折弯）带 `miter_cuts` 成功，回显 `allowed_by_miter_cut=true` 与两端邻接证据；`f_py` 同样成功。四墙均 `saved_file_reloaded_and_verified=true`，revision 1→5，体积 42920 → 106499.16 mm³。模型树为 `F_PX`/`F_NX`/`F_NY`/`F_PY`，Creo 中可见四壁闭合盒子与角部斜切线。
 - **仍未量化**：`miter_cuts` 的 width/offset 与实际切除量之间的关系（自由壁探针为空操作对照；角部无法做「不传 miter」的反例，因为保护会拒绝）；角部间隙的尺寸、不同板厚/半径下的行为，以及删除/修改后的回滚，均未验证。结论只到「四壁经 miter_cuts 路线建成并保存重载」，不外推切角尺寸。
 
+### 2026-11-06 R09 复跑与报告身份（Creo 12.4.0.0）
+
+命令：`.\.venv\Scripts\python.exe tools\test_sheetmetal_box_live.py --live --confirm-session-usable`；
+报告 `build/post090_n05/20261106T203424_b183d2c8/report.json`（`passed=true`，六组全过）：
+
+- `trim_probe`、`ny_first`、`px_then_ny`、`px_nx_then_ny`、`miter_probe`、`miter_box` 全部 `passed=true`；`miter_box` 的 `f_px`/`f_nx`/`f_ny`/`f_py` 四墙均 `saved_file_reloaded_and_verified=true`，`four_walls_complete=true`，`miter_cuts{width=1,offset=1}`。
+- 报告新增 `source` 身份块：`commit=a88900cf…`（分支 `codex/DEV-069-feedback-repair`）、`dirty=true`、`source_sha256`/`source_fingerprint`、`worker_sha256=e76a831a…`；顶层 `capability_claim.four_walls_complete` 与 `miter_box` 判定一致，不再出现 161949 那种顶层 false/组 true 的错位。
+- **仍未验证**：native_planar+resize 路径、角部切除量与缺口 bbox 定标、板厚/半径独立矩阵、删除/失败修改回滚；本项只关闭“基础路线复跑与报告身份”，不关闭上述子项。
+
+## 2026-11-06 R09 剩余三项：native_planar 路径、切角定标与后续行为（Creo 12.4.0.0）
+
+驱动 `tools/test_sheetmetal_planar_box.py`（默认离线；`--live --confirm-session-usable` 才连接），报告 `build/sheetmetal_planar_box/20261106T212525_1018e92f/report.json`（`passed=true`、`stopped=null`，sha256 `3fffaf07b9686227cee4e6ef8cd8a1567c084ee57d1f856aed634073a043e607`）；源码 `commit=95b9114`（分支 `codex/DEV-069-feedback-repair`）、`dirty=true`、`source_fingerprint=47739186…`、`worker_sha256=e76a831a…`。全部串行单通道，一次运行内不并发其他 MCP 调用。
+
+**native_planar + resize**：`creo_new_sheetmetal(template=native_planar)` 建 180×230×1（41400 mm³，rev 2）；单独作业 resize 到 185×232×1 得 42920 mm³、`thickness_measured_mm=1.0`、`thickness_loaded_mm=1.0`、`feature_id_unchanged=true`、保存重载 true、revision 3。随后四道折边逐 job 从当前顶边选边，`f_px`/`f_nx`（自由）与 `f_ny`/`f_py`（`miter_cuts{width=1,offset=1}`）全部成功、每墙保存重载 true，终 bbox `185×232.1×80`、体积 `106499.15656`，与 `sheetmetal_wall` 转换首壁路线一致。
+
+**切角定标（按面 bbox 实测，不用元素回显）**：水平顶面 run 与真实附着边长比较——`f_px`/`f_nx` 顶面 `run=232.0` = 附着边 `232.0`（`matches`）；`f_ny`/`f_py` 顶面 `run=185.0` 超过已被折弯缩短的附着边 `177.92`（`exceeds`，+7.08 = 2×3.54 退让，各含 5 个顶面片）。四角缺口面按面 bbox 记为 `corner_square_mm=[6,6]`（如 `+x+y` 3 个面）。同几何换参矩阵：gap 2.0@R2.54 → 106074.619423（Δ−424.537137，÷4=−106.134284/角）；gap 1.0@R1.5 → 107041.242367（Δ+542.085806）。体积差分只作 cross-check（独立墙体增量会双计角部材料），不当作“未切角体积”或切角量真值。
+
+**后续行为（同一模型 followup）**：`creo_sheetmetal_unbend` 全展开 rev 7→8、体积 106499.15656→106181.93079、保存重载 true；`creo_sheetmetal_bend_back` rev 8→9、体积回到 106499.15656；带子特征的父壁 resize 在被提交前拒绝、rev 9→9；无效边（id 999999）折边 `status=failed`、`rollback_status=succeeded`、rev 9→9、体积不变。产品没有“折边高度编辑/删除折边”操作，两项按无该能力记录，不模拟。
+
+**边界**：本轮验证的是 miter_cuts 固定 1/1 基线、两组换参、native_planar 路线与展开/折回/失败回滚；relief 材料几何、更大厚度/半径范围、跨计划多级改型仍未覆盖，FEAT-014 的 relief 子项保持开放。
+

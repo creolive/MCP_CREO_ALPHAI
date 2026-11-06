@@ -22,11 +22,16 @@ freezes:
   n[-t,0]. A span-only comparison accepted a wall that grew on the opposite side
   at an offset origin (review, 2026-11-04);
 * the gauge is read back from the wall's own body, and the resize re-reads it
-  from the saved file before editing, so neither the request nor a stored record
-  stands in for a measurement;
+  before editing, so neither the request nor a stored record stands in for a
+  measurement. When the SDK declares no body gauge API, the wall's own measured
+  material extent along the frame normal is the independent source
+  (``geometry_normal_span``) for a unique material body, a pure rectangle and an
+  axis-aligned frame; the driving size, signed envelope and volume stay
+  cross-checks. A missing API boolean is therefore not required for verification,
+  and an API that exists but fails never falls back;
 * every operation publishes a gauge receipt (status, source, value, reason and
-  context), because one shared null could not tell a missing SDK declaration
-  from a failed measurement (0.13.0 feedback, 2026-11-06).
+  context). The resize context follows execution order: a wall created earlier
+  in the same plan is ``current_plan``, not ``saved_loaded`` (R03, 2026-11-06).
 
 This module is admission and judgement only: geometry, thickness read-back and
 the envelope come from the native executor, and nothing here re-derives a
@@ -52,7 +57,11 @@ DIRECTIONS = ("positive", "negative")
 #: supports, ``source`` says where the number came from and ``context`` ties the
 #: block to this plan or to the file the resize re-read.
 VALIDATION_STATUSES = ("verified", "unverified", "mismatch", "unavailable")
-VALIDATION_SOURCES = ("api", "missing_api", "not_measured")
+VALIDATION_SOURCES = ("api", "geometry_normal_span", "missing_api", "not_measured")
+#: A verified receipt may only come from a source that measured the wall: the
+#: body API or, when the SDK declares none, the wall's own measured geometry.
+TRUSTED_SOURCES = ("api", "geometry_normal_span")
+CONTEXTS = ("current_plan", "saved_loaded")
 PLAN_CONTEXT = "current_plan"
 SAVED_CONTEXT = "saved_loaded"
 
@@ -318,26 +327,35 @@ def envelope_problem(
     return None
 
 
-def gauge_validation(result: dict[str, Any], key: str, context: str) -> dict[str, Any] | None:
+def gauge_validation(
+    result: dict[str, Any], key: str, context: str | None = None
+) -> dict[str, Any] | None:
     """Normalized gauge receipt from a native operation, or None when absent.
 
     Older executors publish no receipt, so none is generated for them. A receipt
     that exists but cannot be read is degraded to ``unavailable`` with a reason
     of its own: it never invents a value, a Toolkit code or a unit, and a
     malformed receipt must not read as a measurement.
+
+    ``context=None`` means the receipt states its own context (R03: a resize of
+    a wall created in the same plan is ``current_plan``, not ``saved_loaded``).
     """
     if key not in result:
         return None
     raw = result.get(key)
     if not isinstance(raw, dict):
-        return _degraded_validation(context, "thickness_validation_malformed")
+        return _degraded_validation(context or PLAN_CONTEXT, "thickness_validation_malformed")
     status = raw.get("status")
     if status not in VALIDATION_STATUSES:
-        return _degraded_validation(context, "thickness_validation_unknown_status")
+        return _degraded_validation(context or PLAN_CONTEXT, "thickness_validation_unknown_status")
     source = raw.get("source")
     if source not in VALIDATION_SOURCES:
-        return _degraded_validation(context, "thickness_validation_unknown_source")
-    if raw.get("context") != context:
+        return _degraded_validation(context or PLAN_CONTEXT, "thickness_validation_unknown_source")
+    if context is None:
+        if raw.get("context") not in CONTEXTS:
+            return _degraded_validation(PLAN_CONTEXT, "thickness_validation_context_mismatch")
+        context = raw["context"]
+    elif raw.get("context") != context:
         return _degraded_validation(context, "thickness_validation_context_mismatch")
     value = raw.get("value_mm")
     if value is not None:
@@ -351,8 +369,8 @@ def gauge_validation(result: dict[str, Any], key: str, context: str) -> dict[str
         return _degraded_validation(context, "thickness_validation_invalid_reason")
     if status in ("verified", "mismatch") and value is None:
         return _degraded_validation(context, f"thickness_validation_{status}_without_value")
-    if status == "verified" and source != "api":
-        return _degraded_validation(context, "thickness_validation_verified_without_api")
+    if status == "verified" and source not in TRUSTED_SOURCES:
+        return _degraded_validation(context, "thickness_validation_verified_without_trusted_source")
     if status != "verified" and not reason:
         return _degraded_validation(context, "thickness_validation_missing_reason")
     return {
@@ -428,6 +446,8 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         "thickness_measured_mm": _number(result, "thickness_measured_mm"),
         "thickness_verified": result.get("thickness_verified"),
         "thickness_body_code": result.get("thickness_body_code"),
+        "thickness_geometry_span_mm": _number(result, "thickness_geometry_span_mm"),
+        "wall_created_this_job": result.get("wall_created_this_job"),
         "body_linked": result.get("body_linked"),
     }
     validation = gauge_validation(result, "thickness_validation", PLAN_CONTEXT)
@@ -440,8 +460,18 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
             "feature_id"
         )
         projection["thickness_loaded_mm"] = _number(result, "thickness_loaded_mm")
-        loaded_validation = gauge_validation(result, "thickness_loaded_validation", SAVED_CONTEXT)
+        loaded_validation = gauge_validation(result, "thickness_loaded_validation")
         if loaded_validation is not None:
+            # R03: a current-plan receipt is only valid when this job created
+            # the wall. Without that execution-order fact, a copied create
+            # receipt must not stand in for the loaded read.
+            if (
+                loaded_validation["context"] == PLAN_CONTEXT
+                and result.get("wall_created_this_job") is not True
+            ):
+                loaded_validation = _degraded_validation(
+                    SAVED_CONTEXT, "thickness_validation_current_plan_without_create"
+                )
             projection["thickness_loaded_validation"] = loaded_validation
     problems: list[str] = []
     if not isinstance(projection["feature_id"], int):
@@ -485,7 +515,16 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                 f"length*width*thickness = {expected:.9f} mm3"
             )
         measured_thickness = projection["thickness_measured_mm"]
-        if projection["thickness_verified"] is not True:
+        if validation is not None:
+            # R03: the receipt's trusted source decides the gauge verdict. The
+            # legacy API boolean is deliberately not required: an SDK without
+            # the body API can still verify from the wall's measured geometry.
+            if measured_thickness is not None and abs(float(measured_thickness) - thickness) > 1e-6:
+                problems.append(
+                    f"the wall body carries {float(measured_thickness):.9f} mm instead of the "
+                    f"requested {thickness:.9f} mm"
+                )
+        elif projection["thickness_verified"] is not True:
             problems.append(
                 "the sheetmetal gauge was not read back from the wall body "
                 f"(thickness_body_code={projection['thickness_body_code']!r})"
@@ -498,10 +537,18 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                 f"requested {thickness:.9f} mm"
             )
         if resize:
-            # The resize reads the gauge from the loaded file before editing, so
-            # an unreadable saved gauge must not fall through as a pass.
+            # The resize re-reads the gauge before editing, so an unreadable
+            # gauge must not fall through as a pass. With a receipt the label
+            # follows its actual context: a wall created in this plan was never
+            # saved and reloaded.
             loaded = projection["thickness_loaded_mm"]
-            if loaded is None:
+            if loaded_validation is not None:
+                if loaded is not None and abs(float(loaded) - thickness) > 1e-6:
+                    problems.append(
+                        f"the wall carried {float(loaded):.9f} mm before the resize instead of "
+                        f"the recorded {thickness:.9f} mm"
+                    )
+            elif loaded is None:
                 problems.append(
                     "the resize result reports no gauge read back from the saved wall "
                     "(thickness_loaded_mm is missing or not finite)"
@@ -517,7 +564,8 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         if validation is not None:
             problems.extend(_validation_problems("current plan", validation, thickness))
         if loaded_validation is not None:
-            problems.extend(_validation_problems("saved wall", loaded_validation, thickness))
+            label = "current plan" if loaded_validation["context"] == PLAN_CONTEXT else "saved wall"
+            problems.extend(_validation_problems(label, loaded_validation, thickness))
         envelope = envelope_problem(
             projection["frame"],
             projection["envelope"],
