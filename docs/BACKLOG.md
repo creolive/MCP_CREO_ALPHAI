@@ -7,8 +7,12 @@
 本页只安排未完成工作和单列的历史观察；完成结论见[完成档案](BACKLOG_COMPLETED.md)。各固定 ID 只出现一条任务记录，工作卡和原始证据保存详细输入、历史过程与已测范围。
 
 ## 当前安排
+- **2026-11-06 Q00 / 0.12.0 四件反馈归档与逐条映射（FEAT-055，仅归档与文档）：** `C:\Users\Administrator\Downloads\0.12.0` 四件原件**逐字节归档 4/4**（F01 16 653 B / F02 6 131 B / F03 9 943 B / F04 6 674 B，长度、SHA256 与整文件字节序列比对均一致，[manifest](validation/feedback-0.12.0-2026-11-06/manifest.json)、[逐条映射](validation/feedback-0.12.0-2026-11-06/MAPPING.md)）。源目录混装两个报告版本：F01 标题写 0.11.7 但内容与 `feedback-0.11.7-2026-11-04` 四件均不同，故归入本批而不追加旧批；本批与既有七个反馈目录并存不合并。按计划 Q00 逐条核对源码：sidecar 缺失已由 0.13.0/0.14.0 四附件 + `check_release_assets.py` 闭环；`creo_export_model(format="native_bundle")` 两段式实机已闭环；G5 三 op 中 `surface_trim`/`project_curve`/`surface_offset` 已随 0.13.0 公开、`surface_loft` 仍缺；板厚回读、结构化失败诊断、`through_all` 深度语义、compact、装配 bbox/回指、`session_unknown`、四壁与折边余项仍按 Q01—Q06/DEV-069 Rxx 未实现。台账仍 182 行、无新增 ID（Qxx 为派工编号）；本批不修改原件、不改产品代码、未运行测试、未连 Creo、未提交/合入/发布，原有 dirty 文档与 `.trae/` 保留。三项收尾同日完成：FEAT-039/055/009 与 BUG-101 首页改写为带日期的交付口径、0.12.0 发布记录补注 sidecar 已补传（远端 `v0.12.0` 现四附件且 `check_release_assets.py` 摘要一致）、旧 S/W 编号映射表写入 MAPPING §七；Q00 已无剩余子项。
 
-- **2026-11-06 FEAT-039 偏置新规格复测（门禁保持）：** 用低层 `creo_create_feature_tree` 按 `ProTrim.h` §(4.1) 的 **Thin** 树复测（两个 type 元素 = `PRO_SURF_TRIM_THIN`），旧写法把偏置元素挂在 Use Quilt 树上才被内核忽略。实测 40×20 填充 + x=20 竖直 quilt 工具：厚度 5 → 目标面积 **700**、厚度 10 → **600**、x=2 → **760**，工具 quilt 盒按厚度单向移动，即 `offset_mm` 只对 **quilt 工具**生效且语义是**移除厚度带、两侧保留**，与公开契约"保留 one/two 一侧"冲突；`offset_side` 六种写法（`PRO_E_STD_USEQLT_SIDE` one/two/both、附加 material/primary side、`PRO_E_SRF_OFFS_DIRECTION`）结果完全相同，方向由工具 quilt 朝向决定，负厚度再生成失败，基准面工具忽略厚度。原生偏置分支已改为文档 Thin 树，但 `capabilities.require_available` **继续拒绝** `offset_mm`，schema 不变；是否按带移除语义开放需单独决策。证据 `build/live_thin_trim_probe.json`/`live_thin_trim_probe2.json`，契约 [G5 §2.7b](development/G5-NATIVE-CONTRACT.md)，工作卡 [FEAT-039](work-items/FEAT-039.md)。本轮不改公开能力、不合 main、不发布 0.14.0。
+- **2026-11-06 DEV-069 / 0.13.0 四件反馈核对与规划：** Downloads/0.13.0 原件逐字节归档 4/4（[manifest](validation/feedback-0.13.0-2026-11-06/manifest.json)、[逐项映射](validation/feedback-0.13.0-2026-11-06/MAPPING.md)）；以本地 `7002575` / 0.14.0 去重，建立[设计](superpowers/specs/2026-11-06-0.13.0-feedback-repair-design.md)与[分批修复计划](superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md)。新增 BUG-112（偏置源面积 Init 返回码丢弃）、BUG-113（Creo 10 追加曲面 Backup 与回滚失败）、DEV-070（四附件自动闸门/LF）；板厚、矩阵、compact、会话与四壁接续既有 ID/Q01—Q06。README 旧链接和 W01 文案冲突当前已修，不重复派工。本轮只分析/文档，未运行产品测试、连接 Creo、提交/合入/发布；原有 dirty 文档与 `.trae/` 保留。台账唯一任务行 178→182，待开发 0→1、待复现 24→25、待规划 47→49，其余分类保持。
+
+
+- **2026-11-06 FEAT-039 偏置新规格复测（门禁保持）：** 用低层 `creo_create_feature_tree` 按 `ProTrim.h` §(4.1) 的 **Thin** 树复测（两个 type 元素 = `PRO_SURF_TRIM_THIN`），旧写法把偏置元素挂在 Use Quilt 树上才被内核忽略。实测 40×20 填充 + x=20 竖直 quilt 工具：厚度 5 → 目标面积 **700**、厚度 10 → **600**、x=2 → **760**，工具 quilt 盒按厚度单向移动，即 `offset_mm` 只对 **quilt 工具**生效且语义是**移除厚度带、两侧保留**，与公开契约"保留 one/two 一侧"冲突；`offset_side` 六种写法（`PRO_E_STD_USEQLT_SIDE` one/two/both、附加 material/primary side、`PRO_E_SRF_OFFS_DIRECTION`）结果完全相同，方向由工具 quilt 朝向决定，负厚度再生成失败，基准面工具忽略厚度。原生偏置分支已改为文档 Thin 树，但 `capabilities.require_available` **继续拒绝** `offset_mm`，schema 不变；是否按带移除语义开放需单独决策。证据 `build/live_thin_trim_probe.json`/`live_thin_trim_probe2.json`，契约 [G5 §2.7b](development/G5-NATIVE-CONTRACT.md)，工作卡 [FEAT-039](work-items/FEAT-039.md)。本轮不改公开能力；该复测随后于 `04dcbd5` 提交，并随 0.14.0 发布（`main@c774fa2`、标签 `v0.14.0`）。
 
 - **2026-11-05 0.13.0 发布执行 + W02—W06 补证（分支 `codex/FEAT-039-w02-w06-live`）：** PR #13 合入 `main`（合并提交 `d90d28e163f096f602ca06f60ccd11a91274172a`），标签 `v0.13.0`（附注标签对象 `1ae20806…`），Release 与四附件上传并远端核对通过（见[发布记录](validation/RELEASE-0.13.0.md)）。发布后按 1→5 顺序补证：W02 拔模双向（[BUG-102](work-items/BUG-102.md)，+352.044362 / −353.263560 mm³，`effective_flip` 两次均 true，原始 Creo 10 `-1` 未复现）、W03 基准面方向矩阵与两入口拒绝（[BUG-094](work-items/BUG-094.md)，六例法向/原点解算 + 三拒绝无 job/无特征/revision 不变）、W04 草图 origin 矩阵（[BUG-095](work-items/BUG-095.md)，省略/精确/0.5e-6 通过、2e-6 与 ±1.07e-4 拒绝带 signed/distance 诊断）、W05 `extrude_depth` 回执（[FEAT-039](work-items/FEAT-039.md)，省略→100 mm³、`depth=10` 省略 type→1000 mm³，effective 从特征树实读）、W06 只读预览三段 + 失败编辑回滚（[FEAT-039](work-items/FEAT-039.md)，`preview_acceptance="passed"`、`not_new_model_job` 回滚 revision 不变）。**本轮不合 main、不发布 0.14.0**；W05/W06 归 0.14.0。门禁：`tools/test_unit.py` 全量 **2439 项通过**（`build/unit_test_report.json`，0 失败 0 错误）、`tools/dev_check.py` 通过（24 条 lint 均为基线存量、13 个未格式化文件均在 `style-baseline.json`）、`bridge.py build` 已重建执行器。未测保持：S03 合并算子（4 个 `PRO_SURFACE`、0 quilt）、S05 多截面放样（Direct Blend 树抽取 -18）、原始拔模 -1 未复现、Creo 9 无本机 SDK、Creo 10 独立复测按 2026-10-15 决定取消、WorkBuddy 未执行、预览图片内容待人工复核。
 
@@ -71,11 +75,11 @@
 | 状态 | 数量 | 下一步 |
 | --- | --- | --- |
 | 开发中 | 6 | DEV-002、DEV-030继续按卡推进；FEAT-010 为“进行中”，同归本类；DEV-051 离线交付已移至未收口交付态；**R13 的 DEV-065、BUG-109、BUG-110、BUG-111 与 BUG-108 已随 0.11.6 交付，转未收口交付态（历史9→4；本次按BUG-101现状态纠偏为3）** |
-| 待复现 | 24 | 补齐输入与环境，复现并定位（含BUG-101现有“实机不复现”状态，统计从开发中归回本类；含 BUG-085 根因未定、BUG-084 静态引用缺口、BUG-066 缺原件、BUG-091 调查交付但根因未定；BUG-049/BUG-088/BUG-090 转下行；**R10 新登记 BUG-102 拔模倒角圆角面回归、BUG-103 水平底板壁面归属**；**R12：BUG-108 坐标求解整截面平移，R13 迁入开发中，0.11.6 已交付转未收口；BUG-106 转已修复下行**） |
+| 待复现 | 25 | 补齐输入与环境，复现并定位（含BUG-101现有“实机不复现”状态，统计从开发中归回本类；含 BUG-085 根因未定、BUG-084 静态引用缺口、BUG-066 缺原件、BUG-091 调查交付但根因未定；BUG-049/BUG-088/BUG-090 转下行；**R10 新登记 BUG-102 拔模倒角圆角面回归、BUG-103 水平底板壁面归属**；**R12：BUG-108 坐标求解整截面平移，R13 迁入开发中，0.11.6 已交付转未收口；BUG-106 转已修复下行**） |
 | 待核实 | 10 | 明确输入、规则或预期后再定性（含 BUG-045 已测范围待外部环境、BUG-060 `unbend` 引用类型、BUG-061 字典平面非零 offset） |
-| 待开发 | 0 | 本批无；**DEV-061 已随 0.11.2 发布转未收口交付，BUG-104/BUG-105/FEAT-056 同批离线实现并转未收口** |
+| 待开发 | 1 | BUG-112：偏置源面积初始化丢弃返回码已由静态核对确认，修复未实施；其他已交付子项保持原分类。 |
 | 验收中 | 31 | 按卡补齐剩余验证，不重复计入旧成功（含 DEV-051 “验收中；指定子项已验”；FEAT-034/FEAT-035/FEAT-023/FEAT-014 转 0.10.0 未收口交付态） |
-| 待规划 | 47 | 确定范围、兼容规则与验收方法（含 FEAT-010、FEAT-012 等未覆盖子项；FEAT-051/FEAT-008 转 0.10.0 未收口交付态，FEAT-027/036 已转下行；FEAT-053 三点定面；2026-11-02 发布后缺口 FEAT-054/055、[DEV-056](work-items/DEV-056.md)/[DEV-057](work-items/DEV-057.md)/[DEV-058](work-items/DEV-058.md)/[DEV-059](work-items/DEV-059.md)（四卡已于 2026-11-03 补建，不再是"无卡行"）；R11 新登记 DEV-063 擦除回执体量与预览视角说明；**R13 新登记 DEV-066 tools/ git 硬依赖，仅登记未实现**） |
+| 待规划 | 49 | 确定范围、兼容规则与验收方法（含 FEAT-010、FEAT-012 等未覆盖子项；FEAT-051/FEAT-008 转 0.10.0 未收口交付态，FEAT-027/036 已转下行；FEAT-053 三点定面；2026-11-02 发布后缺口 FEAT-054/055、[DEV-056](work-items/DEV-056.md)/[DEV-057](work-items/DEV-057.md)/[DEV-058](work-items/DEV-058.md)/[DEV-059](work-items/DEV-059.md)（四卡已于 2026-11-03 补建，不再是"无卡行"）；R11 新登记 DEV-063 擦除回执体量与预览视角说明；**R13 新登记 DEV-066 tools/ git 硬依赖，仅登记未实现**） |
 | 观察中 | 3 | 出现新证据后再转回调查（BUG-021、BUG-005、**BUG-088 文件级定因与图像复核已过，I/O 根因未定保持观察**） |
 | 已交付/已修复/已完成/已验收/已定因（未收口，状态保留） | 57 | 归类口径：按行状态字面归类（已交付/已修复/已完成/已验收/已定因/验收完成/候选交付/实机已过但 WorkBuddy 未执行），不再沿用旧版本发布时点数字。含 0.10.0 交付 9（DEV-052、FEAT-051、FEAT-035、FEAT-034、FEAT-008、FEAT-023、FEAT-014、BUG-049、BUG-090）、0.10.1 修复收口 2（BUG-092、BUG-093）、0.11.0 交付 1（FEAT-052 实机 28/28）、0.11.1 交付 5（BUG-096/097/098/100、FEAT-053）、DEV-054 与 DEV-060 本地整理 2、DEV-061（0.11.2 发布）、R11 本地整理与离线交付 4（DEV-062、BUG-104、BUG-105、FEAT-056）、R12 交付 3（DEV-064、BUG-106、BUG-107）、R13 交付 5（DEV-065、BUG-108、BUG-109、BUG-110、BUG-111，**已随 0.11.6 发布**）；均有另期保留范围，按各卡待收口下一步收口后再移档，不改原状态凑数 |
 | 待处理 | 0 | 本批无；**BUG-092 已随 0.10.1 修复并实机收口（2026-11-01 退出零残留）转下行** |
@@ -130,10 +134,18 @@
 
 <a id="待核实缺陷"></a>
 
+### 已确认，待开发
+
+| ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
+| --- | --- | --- | --- | --- |
+| [BUG-112](work-items/BUG-112.md) | P1 | 待开发（编译告警与当前源码确认；运行时影响未复现） | 下一修复批 | `native/surfaces.cpp` 的 if-init 丢弃 `ProQuiltInit` 返回码，只按非空指针测量。显式检查成功码与 handle、保留 source_area_status，并针对 C4552 加编译闸门；已有实体/曲面距离计量风险沿 FEAT-039/Q03。见 DEV-069/R01。 |
+
+
 ### 有失败报告，待当前环境复现
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
+| [BUG-113](work-items/BUG-113.md) | P1 | 待复现（外部 Creo 10 普通追加 trim/thicken 两例；根因未定） | 下一稳定性批诊断先交付 | Backup=-1 且 rollback 比较报 Saved feature/body count changed；先分别记录 save_failure/rollback_difference 与恢复可用动作，保持基线、revision 与失败保护。不先套 BUG-078/099 或投影自依赖根因，不取消严格比对、不默认重试。见 DEV-069/R02。 |
 | [BUG-102](work-items/BUG-102.md) | P1 | 部分复现（flip 歧义已复现并解释；-1 未复现） | 0.11.2（诊断已交付，定因未做） | 倒角+圆角边界面 10° 拔模由 0.9.0 成功变为 0.10.0 `ProFeatureWithoptionsCreate=-1`（外部 Creo 10，本机未复现）；同例 `flip=false` 回显 `draft_geometry.flip=true`。**离线交付**：`requested_flip`/`effective_flip` 分字段（既有 `flip` 不动）、失败 stage `draft_failure{classification, element_errors≤20, note}` 取代裸 `-1`；`tools/test_draft_regression.py` 冻结四变体 A/B 与实机步骤。**未做**：本机 A/B 单变量定因与实机，故不记已修复。关联 FEAT-051。**2026-11-03 R13**：Creo 10 复测 `draft_failure` 块字段与文案符合交付口径（`classification=no_element_evidence`、`requested_flip`、修复建议、`volume_before_mm3`、回滚干净）；成功路径 `flip=false → draft_geometry.flip=true` 仍未修（N2），成功路径 `requested_flip` 属 D 组，本轮不实现。 |
 | [BUG-103](work-items/BUG-103.md) | P1 | 实机不复现（12.4 四边 eligible、106 折边成功；跨版本未定因） | 未排期 | 水平底板（YZ offset 92.5、depth=185 沿 −X、thickness=1）四条下边均 Z=0，但只有 X=±92.5 短边进入壁面轮廓；`f_ny` 报 `ProSmtedgeContourGet=-8`，四壁第 3 道受阻。0.11.x 已交付 `wall_contour_status` 三态可事前查询。**离线交付**：[对照清单与收口口径](development/BUG103-WALL-ATTRIBUTION-CHECKLIST-2026-11-02.md)、示例/README 不再暗示四边可挂。**未做**：本机只读巡检与 UI 对照，故“为何只有短边合格”仍未定因，`four_walls_complete` 保持 false。关联 FEAT-014/BUG-032/BUG-047。 |
 | [BUG-106](work-items/BUG-106.md) | P2 | 已修复（0.11.4，文案；实机链路未复测） | 0.11.4（已发布） | 同名会话副本（外部 origin）阻塞 save/erase：`Loaded model origin does not match...` 与 `The model has unsaved changes...` 均无解锁引导。**R12 交付**：`save` 拒绝附 `creo_erase_session_models(targets=[{name, model_type}])` 调用形态与重试步骤，`erase` 的 `modified` 拒绝附"GUI 保存 → 重新 inspect → apply"链路；`adopt_session_copy` 仍不实现，拒绝条件与回执结构未改。`tests/unit/test_session_origin_guidance.py` 3 项过。未做：真实同名外部模型两步链路复测。关联 DEV-064。 |
@@ -189,6 +201,8 @@
 
 | ID | 优先级 | 状态 | 目标版本 | 问题与下一步 |
 | --- | --- | --- | --- | --- |
+| [DEV-069](work-items/DEV-069.md) | P1 | 待规划（四件归档、核对与修复计划已建立；产品未实施） | 分批核定未发布版本 | 0.13.0 反馈以当前 0.14.0 去重，按稳定性→回执/契约→原生余项独立收口；原件/映射/设计/实施计划已建。复用板厚 Q01、矩阵 Q02、曲面 Q03、四壁 Q05 与既有固定 ID。无新 Toolkit 连接或产品测试；不增加双版本全量门槛。 |
+| [DEV-070](work-items/DEV-070.md) | P2 | 待规划（未实现） | 下一工程修复批 | 四附件校验接入打包，缺 seed sidecar 从 warning 改失败；sidecar 输出 ASCII/LF、读取兼容 CRLF；无 gh 时给 --dir 降级。CI 验证离线夹具，发布后另核真实远端附件，不能互相代替。DEV-045 已完成的手动闸门不重开。见 DEV-069/R08。 |
 | BUG-012 | P1 | 待核实 | 未排期 | transform 失败后，几何和 revision 没变，模型却被标为 failed；0.3.1 还有成功作业返回 rollback_succeeded=false，履带报告也出现同样误读。0.3.5/Creo 10 实机再现：新建零件失败（自交轮廓）时 inspection=null、rollback_succeeded=false 并残留 failed/revision 0 的登记与 .prt.1——新件无检查点可回滚是事实，但 false 易被误读为"回滚失败"，反馈建议改 null/not_applicable；另守卫触发时作业级 toolkit_code=-1 属异常路径汇总码（disconnect_code=0、通道健康），建议与真实 Toolkit 故障区分。需要分别说明回滚未尝试、成功、失败和无法确认时的含义，以及模型还能否使用，并检查保存点和旧字段兼容性。false 本身不能证明模型损坏，unknown_outcome 保护也不能直接清除。关联 FEAT-018。 |
 | BUG-016 | P2 | 待核实 | 未排期 | solidify(cut) 用 z=30、positive 侧的基准面裁剪 z=20..40 的实体后，体积和 bbox 未变，却显示特征成功。先查清 side、pull_direction 和引用是否适用，再对比两侧裁剪并检查重载。应区分允许不改材料的操作、无效输入和真正切除，不能把所有零变化都判失败。 |
 | BUG-018 | P2 | 待核实 | 未排期 | 旧报告中 export/dump_tree/update_sketch_geometry 的结果重复；0.3.1 和 0.3.2 的失败计划又只返回 null 或空 operations。每个请求应对应一条带序号的结果，说明已执行、已回滚、失败、未执行或结果未知，并带上文件、特征和参数。0.3.5 钣金回归中 5 次失败计划仍均返回空 operations 数组，调用方无法知道哪些已成功、只能整批重发。核对成功及失败时的数量、顺序和失败位置；operation_outcomes 的接口建议仍待评估，不能据此自动重跑后半段。关联 FEAT-006。 [0.5.2反馈R1 §4.4](validation/feedback-0.5.2-2026-10-26/MAPPING.md#r1-12)续报重复；T02按[DEV-047接口基线](work-items/DEV-047.md#interface-baseline)固定零基index、execution_status/effect_status及每输入一结果，离线实现完成（[T02记录](development/DEV047-T02-ACCEPTANCE-2026-10-26.md)），实机与集成由T13收口。 |

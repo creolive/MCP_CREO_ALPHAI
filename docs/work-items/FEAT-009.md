@@ -1,6 +1,6 @@
 # FEAT-009：放样曲面模式与多截面能力
 
-日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：待规划。目标版本：未排期。
+日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：待规划（2026-11-06 复核：`surface_loft` 仍未公开，`capabilities` 继续拒绝 `loft` 曲面模式；0.13.0 只公开了 `creo_surface_trim`/`creo_project_curve`/`creo_surface_offset`，不属本卡范围；Direct Blend 元素树抽取返回 -18，树路线仍关闭）。目标版本：未排期。
 
 来源：[0.3.5 曲面反馈](../validation/feedback-0.3.5-surface-2026-10-18/report.md) 与[能力边界反馈](../validation/FEEDBACK-0.3.5-CAPABILITY-2026-10-18.md)；[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §2（`surface_loft` 元素树路线）；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-039](FEAT-039.md)（纯曲面链路算子）、[FEAT-053](FEAT-053.md)（三点定面）、[BUG-052](BUG-052.md)（曲面类型查询）。
 
