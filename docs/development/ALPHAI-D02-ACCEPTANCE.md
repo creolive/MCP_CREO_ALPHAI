@@ -89,3 +89,96 @@ unit_test_report.json 和 development_check.json 原件均已复制到上述持�
 fixture/test/reconciliation/bridge/generic_bridge/server 均无 product_rules 引用，D02 未注册且无调用关系。
 未重跑单例：原始异常及只读调用链已足够区分确定事实和未定原因。
 证据 dev040_diagnosis.json、dev040_call_relation.txt 保留在同目录。
+
+
+## 2026-11-06 公共接入增量
+
+当前状态：只读规划器软件已完成，开发分支未发布，原生模板未验。
+新增 READ 工具 creo_plan_product_variant；工具总数 100→101，原生操作数量不变。
+能力只取当前服务 REGISTERED_OPERATIONS 减 UNAVAILABLE_OPERATIONS；不查询运行时。
+接口参数保留 dict[str, Any]，避免在内核之前把 bool/字符串尺寸转成合法数字。
+实现与固定 JSON 纳入 server 的源码身份；现有源码递归分发白名单无需修改。
+回归复制 source_files 中源码到独立短临时目录，在子进程中从副本导入并运行默认规划，
+resource_root 确认指向副本；这证明源码资源可独立定位，不等同全新机器安装或 native 验收。
+
+tests.unit.test_product_rules_mcp 经 MCPServer.call_tool 验成功与拒绝。
+本机 MCP SDK 的直接 call_tool 遇非法输入抛 ToolError；真实 wire handler 才返回 isError，
+回归分别验证二者，沿用已有服务错误契约。SDK 忽略额外顶层参数，缺 extrude 时即使
+客户端额外自报完整能力仍 blocked，不会被客户端声明解除。
+
+本次仅在 FEAT-063 工作树与其 .venv 运行；独立分发测试使用系统临时夹具并清理。
+未修改 DEV-069 工作树/服务/配置，没有启动真实服务生命周期、连接 Creo/Toolkit、
+编译 native、复制 SDK/config/constants、推送、合入 main 或发布。版本保持 0.16.0。
+测试时 HEAD=64db947fa738cdac73082860ea8545a1223b1113，dirty=true（本次待提交实现）。
+环境 Python 3.12.14 / Windows-11-10.0.26100-SP0；Ruff 0.17.0 / clang-format 23.1.3。
+证据目录 build/feat063_completion_20261106，以下 python 均为本工作树 .venv 解释器。
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| 新增 MCP/分发/driver 回归（实现前） | RED，8 tests；3 failures、12 errors，未注册/身份遗漏与报告覆盖风险 | red.log |
+| planner/MCP/driver/能力/身份/数量回归（最终） | GREEN，71 tests，0 failures/errors | green_final.log |
+| Ruff check/format 改动 Python | 通过；最终冻结源码由 dev_check 再验证 | ruff_check_final.log、ruff_format_final.log |
+| driver --output build/feat063_completion_20261106/driver_final | exit 0，四场景通过；含版本/时间/平台/Git/11文件指纹 | driver_final.log、driver_final/report.json |
+| driver --live | exit 2，拒绝未知参数；未创建 should_not_exist 目录 | live_rejected.log、live_rejected_exit.txt |
+
+报告使用 x 模式独占创建；回归验证已有 report.json 原字节保留，run_checks 禁止外部进程。
+首轮 dev_check 因改动 PRODUCT_RULES.md 的旧 Python 围栏需格式化而在单元前失败；
+格式化后第二轮发现第四处旧 100 工具断言（test_callback_admission），并因需要冻结最终
+描述/副本测试调整而终止本树单测子进程。dev_check.log、dev_check_retry.log 和相应 JSON
+保留原件；它们不作为通过证据。最终轮在冻结 Python/JSON 上独立运行。
+
+### 本次受测原始字节指纹
+
+- server.py: `1f3e38d3a03d71621f000f1378e8a8cc176fcd5f5a87321c300c10daf7ab0195`
+- src/creo_mechdog/capabilities.py: `76069017a83948b001b5126b590f4d58c5dc2901763b5e296e2d7b777b1607ec`
+- version.py: `448adffc4b06ec09e4c4ad839483d47bff4481d0122ddf749cd21fed69d7ade2`
+- tests/unit/test_product_rules_mcp.py: `515a20091604995dd468920dc32a30fee53521c7ee4620c7da540bd83f6f7e8f`
+- tests/unit/test_product_rules_driver.py: `dfa7fe8496facb70f25099f53ebef8afa0f155bc08d874b0af91be717c56443a`
+- src/creo_mechdog/product_rules.py: `2f119705bc67d143671aa448ecf570ddcaacf18919c1ef6b09fa3c195765343a`
+- src/creo_mechdog/schema.py: `eacf1b90a639c504e01a6b36ccf9200b08f967cfdfce2bb246bc3a4cf97f7fa2`
+- src/creo_mechdog/paths.py: `389dca158e3a7d02337ca3a099a1872bf858e38cc8108d78172cff235256dff5`
+- examples/product_rules/box_frame.json: `cbc3f10e13aef0d33b92a3e3aa2e400a0b654f6da60dec52a7d8f53a63549c5d`
+- tools/test_adoption_product_rules.py: `c8dc5c33e369ad53d8eedac508d5d93948e4b66f02c7f7bf1c79bba42bbb933d`
+- tests/unit/test_product_rules.py: `967947b3c5a07276a9687bbe8d8ab4715a9dd7db5246c8f7e5b12112472adaa6`
+
+
+### 完整检查实际结果与环境限制
+
+冻结规划器源码的完整轮 dev_check_final.log：2663 tests / 0 failures / 1 error / 2 skipped，
+耗时 310.835 秒；unit_tests=failed、success=false，不能用专项绿色替代全量结论。
+语言回归闸门通过（24 lint 存量、12 未格式化存量，无新增回归）。
+checked_source_sha256=89dd3fd39f3eca7230a4e58886d2e483a1ca854520a4f4614ee41b7e4e8fb386。
+唯一错误是既有 DEV-040 stdio 黑盒夹具写 reconciliation 临时证据文件 Errno 2：
+原失败路径 264 字符；缩短测试前缀后 evidence 路径 255 字符可通过，但后续 intent
+临时路径仍 285 字符并失败。测量见 fixture_path_lengths.json、fixture_short_prefix.log。
+本树 build 下的纯路径探针确认父目录存在且组件长度合法时，255 字符写入成功，
+264/285 字符均 FileNotFoundError(2)；详见 path_probe.json。
+没有为此改变生产路径、注册表或系统长路径设置，也没有 skip 夹具测试。
+
+
+### 最终测试契约补充
+
+报告 CLI 的 Git 身份允许未知，新增回归不再要求宿主必须是 Git checkout。
+旧测试在定向 mock 未知身份时 RED（len(None)）；改后成功/不可用身份两条契约通过，
+driver_git_unknown_red.log / driver_git_unknown_green.log 为证据。
+最终本树专项 green_verified.log 为 72/72，Ruff check/format *_verified.log 通过。
+最终 driver_verified/report.json 补充本次最新原始字节指纹；测试文件新增一例后，
+此前 71 项记录和 driver_final 的旧指纹保持其阶段含义。
+DEV-040 前缀尝试已完全撤回，没有夹具或生产路径变更进入交付。
+经控制者授权，建立 E:/f63-89873d66 一次性短路径源码验证副本，复制白名单源码及本任务
+自有 .venv；逐文件原始字节一致证据 short_copy_identity_final.json。副本没有复制本机
+config/constants/SDK/jobs/models。仅在副本补 setuptools==80.9.0 并重装 editable，已核对
+sys.executable/sys.prefix/package/resource_root 全为副本。副本本地 Git 快照
+b87be074338aa975a7b38d37fc23f16f1a0a6e07 仅为验证身份，不能冒充原树提交。
+副本保留供控制者核对；没有修改原树环境或 DEV-069。
+
+
+短副本首轮 2664 tests / 0 failures / 1 error / 2 skipped，DEV-040 长路径场景通过；
+唯一错误是 source_files 白名单未包含 tests/native/test_axis_geometry.cpp，导致既有
+T05 来源指纹测试无法读取其依赖。证据 short_dev_check.log / short_development_check.json，
+checked_source_sha256=c03195646a8c2cee001bcf3d960b884d428bbf39093976b9bae5220c7a5f3927。
+经授权仅向验证副本补入 git ls-files tests/native 中缺失的 7 个 .cpp，逐项双哈希相同，
+证据 short_copy_added_test_dependencies.json。没有修改发布白名单或原树；验证副本此后定义为
+源码包加原有受控测试依赖，不声称发布包已包含全部旧测试依赖。
+完整 T05 模块 16/16 通过；副本本地验证身份更新为
+e0a13e051a58bc92eeb53c177c177021d025838d，最终完整 dev_check 仍在运行，尚不能宣称门禁通过。

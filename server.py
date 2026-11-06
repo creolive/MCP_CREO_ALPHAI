@@ -31,6 +31,7 @@ from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.generation_reclaim import reclaim_generations
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
+from creo_mechdog.product_rules import build_product_plan
 from creo_mechdog.reconciliation import reconcile
 from creo_mechdog.references import (
     PLANE_REFERENCE_DESCRIPTION,
@@ -76,6 +77,8 @@ _SOURCE_NAMES = (
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
     "src/creo_mechdog/paths.py",
+    "src/creo_mechdog/product_rules.py",
+    "examples/product_rules/box_frame.json",
     "src/creo_mechdog/references.py",
     "src/creo_mechdog/update_check.py",
     "src/creo_mechdog/blend_callback.py",
@@ -257,6 +260,17 @@ async def invoke(fn, *args, **kwargs):
                 structured_content=payload,
             )
         raise ToolError(str(exc)) from None
+
+
+@mcp.tool(annotations=READ)
+async def creo_plan_product_variant(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    """Plan the sole template box_frame offline in mm. parameters accepts length_mm/width_mm/height_mm/wall_mm; {} defaults to 100/60/40/2. First three range 10..1000, wall 0.5..20; L-2t, W-2t and H-t must be at least 1 mm. Returns four operations for explicit creo_execute_plan use, without connecting or submitting work. executable means static capability/schema admission only; native and saved reload remain not_run."""
+    return await invoke(
+        build_product_plan,
+        template_id,
+        parameters,
+        {"operations": [op for op in REGISTERED_OPERATIONS if op not in UNAVAILABLE_OPERATIONS]},
+    )
 
 
 @mcp.tool(annotations=READ)

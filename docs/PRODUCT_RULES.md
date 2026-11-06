@@ -1,4 +1,11 @@
-# 产品规则（FEAT-063，离线阶段）
+# 产品规则（FEAT-063，只读规划器）
+
+2026-11-06：只读规划器软件已完成，开发分支未发布，原生模板未验。
+
+MCP 调用：`creo_plan_product_variant(template_id="box_frame", parameters={})`。
+接口只有 template_id 和 parameters；能力快照由服务的 REGISTERED_OPERATIONS 扣除
+UNAVAILABLE_OPERATIONS 构造，客户端不能自报启用能力。工具使用 READ 注解。
+以下 Python 内核接口用于离线嵌入，能力快照责任仅适用于直接调用内核。
 
 ```python
 from creo_mechdog.product_rules import build_product_plan
@@ -44,7 +51,11 @@ expected_geometry 是预期解析值：体积 LWH-(L-2t)(W-2t)(H-t)，包络 [0,
 
 运行 `python tools/test_adoption_product_rules.py` 默认在本工作树 build 下创建唯一目录并写 report.json。
 可用 `--output <directory>` 指定报告目录；没有 --live，未知参数在执行前拒绝。
-报告包含两组尺寸、缺 extrude 阻断、bool 拒绝及相关源码原始字节 SHA256，不调用 git/SDK/外部程序。
+报告包含两组尺寸、缺 extrude 阻断、bool 拒绝、UTC 时间、版本、平台及相关源码原始字节 SHA256。
+run_checks 不调用外部程序；CLI 只读 Git 记录 commit/dirty，无法读取时显式记录未知。
+report.json 使用独占创建；已有同名报告时拒绝，保留原证据。
 
-MCP 工具注册、server 源码身份、部署/资源分发白名单、打包资源与实机验收仍待集成人完成。
-当前不声称新增公开工具或原生 supported 能力。见 [验收记录](development/ALPHAI-D02-ACCEPTANCE.md)。
+MCP 工具已注册；开发分支工具总数 101，原生操作数量不变。实现和固定 JSON 已纳入 server
+源码身份；递归源码分发白名单已包含二者。回归从独立源码副本导入并运行默认规划，
+证明资源定位独立于原工作树；尚未进行全新环境安装或原生模板验收。
+见 [验收记录](development/ALPHAI-D02-ACCEPTANCE.md)。

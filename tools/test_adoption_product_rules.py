@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import platform
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +14,7 @@ from uuid import uuid4
 
 from creo_mechdog.paths import SOURCE_PATHS
 from creo_mechdog.product_rules import build_product_plan
+from version import VERSION
 
 
 def run_checks() -> dict:
@@ -50,6 +53,11 @@ def run_checks() -> dict:
     else:
         cases.append({"name": "reject_bool", "passed": False})
     sources = (
+        "server.py",
+        "src/creo_mechdog/capabilities.py",
+        "version.py",
+        "tests/unit/test_product_rules_mcp.py",
+        "tests/unit/test_product_rules_driver.py",
         "src/creo_mechdog/product_rules.py",
         "src/creo_mechdog/schema.py",
         "src/creo_mechdog/paths.py",
@@ -59,6 +67,9 @@ def run_checks() -> dict:
     )
     return {
         "work_item": "FEAT-063",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "version": VERSION,
+        "platform": platform.platform(),
         "mode": "offline",
         "passed": all(c["passed"] for c in cases),
         "cases": cases,
@@ -73,6 +84,25 @@ def run_checks() -> dict:
     }
 
 
+def git_identity() -> dict:
+    """Record read-only CLI provenance; an unavailable Git identity stays explicit."""
+    try:
+
+        def read(*args: str) -> str:
+            return subprocess.run(
+                ["git", *args],
+                cwd=SOURCE_PATHS.resource_root,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            ).stdout.strip()
+
+        return {"commit": read("rev-parse", "HEAD"), "dirty": bool(read("status", "--porcelain"))}
+    except (OSError, subprocess.SubprocessError) as error:
+        return {"commit": None, "dirty": None, "error": str(error)}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="Directory for report.json")
@@ -84,9 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         + "_"
         + uuid4().hex[:8]
     )
+    report["git"] = git_identity()
     output.mkdir(parents=True, exist_ok=True)
     path = output / "report.json"
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({"passed": report["passed"], "report": str(path.resolve())}))
     return 0 if report["passed"] else 1
 

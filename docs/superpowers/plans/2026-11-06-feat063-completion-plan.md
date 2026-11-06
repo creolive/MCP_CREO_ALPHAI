@@ -34,12 +34,12 @@
 
 **Interfaces:** 新增 creo_plan_product_variant(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]，READ annotations，经 invoke(build_product_plan, template_id, parameters, 静态启用操作快照)。保持 build_product_plan 的既有接口与结果；操作数不变，工具总数由 100→101。families 增加 product_rules 只读能力，说明模板、单位、参数、无连接/提交、解析预期、原生未验。_SOURCE_NAMES 加实现与固定 JSON 资源。
 
-- [ ] Step 1: 新增并运行回归取得 RED：通过 MCPServer.call_tool 验证工具枚举/READ、默认与第二尺寸体积 35712/83508、缺 extrude 时阻断、非法 bool/字符串/模板路径返回 isError、无写盘/锁/作业/连接、完整响应预算、实现/资源指纹与分发可用。通过已有离线测试模式，不启动服务生命周期。
-- [ ] Step 2: 最小实现注册/能力/身份；保持业务在包内。不添加通用表达式解释器、自动执行、额外模板、实机开关或参数猜测。
-- [ ] Step 3: driver 添加拒绝已有 report.json 的回归，使用独占创建以免覆盖；报告补充本次时间、版本、平台、提交/dirty 与受测源码指纹（纯 run_checks 不调用外部进程，CLI 可只读 git 记录身份）。保持默认离线、无 --live。
+- [x] Step 1: 新增并运行回归取得 RED：通过 MCPServer.call_tool 验证工具枚举/READ、默认与第二尺寸体积 35712/83508、缺 extrude 时阻断、非法 bool/字符串/模板路径返回 isError、无写盘/锁/作业/连接、完整响应预算、实现/资源指纹与分发可用。通过已有离线测试模式，不启动服务生命周期。
+- [x] Step 2: 最小实现注册/能力/身份；保持业务在包内。不添加通用表达式解释器、自动执行、额外模板、实机开关或参数猜测。
+- [x] Step 3: driver 添加拒绝已有 report.json 的回归，使用独占创建以免覆盖；报告补充本次时间、版本、平台、提交/dirty 与受测源码指纹（纯 run_checks 不调用外部进程，CLI 可只读 git 记录身份）。保持默认离线、无 --live。
 - [ ] Step 4: 运行本树 .venv 的专项 tests.unit.test_product_rules/tests.unit.test_product_rules_mcp 和 driver 测试、能力/身份/打包相关回归；Ruff check/format check 改动 Python。运行 driver 与拒绝 --live；执行一次 tools/dev_check.py --work-item FEAT-063-completion，长输出留本树 build/feat063_completion_20261106。不得用 SDK 或其他工作树配置补全离线测试。
-- [ ] Step 5: 更新文档/工作卡/台账为“只读规划器软件已完成，开发分支未发布，原生模板未验”，保留原日期证据；记录 HEAD/dirty、源码指纹、环境、命令和结果。用户明确要求不影响 DEV-069，不能为实机验收替换它的服务。
-- [ ] Step 6: 自查范围后提交 FEAT-063 开发分支，写实现报告到控制者指定的独立 scratch 路径；控制者随后做任务审查和全分支审查。不得自行派生 agent。
+- [x] Step 5: 更新文档/工作卡/台账为“只读规划器软件已完成，开发分支未发布，原生模板未验”，保留原日期证据；记录 HEAD/dirty、源码指纹、环境、命令和结果。用户明确要求不影响 DEV-069，不能为实机验收替换它的服务。
+- [x] Step 6: 自查范围后提交 FEAT-063 开发分支，写实现报告到控制者指定的独立 scratch 路径；控制者随后做任务审查和全分支审查。不得自行派生 agent。
 
 ## 预检与决定
 

@@ -1,5 +1,7 @@
 # MCP_CREO_MechDog 0.16.0
 
+本开发分支新增只读工具 `creo_plan_product_variant`（工具总数 101，原生操作数不变）：使用仓库 box_frame 固定模板生成毫米参数计划、解析预期和阻断项，不连接 Creo 或提交作业。只读规划器软件已完成，开发分支未发布，原生模板未验；`executable` 仅表示静态能力/schema 准入。见 [产品规则](docs/PRODUCT_RULES.md)。
+
 ![version](https://img.shields.io/badge/version-0.16.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
 
 当前正式版 **0.16.0**（FEAT-014 四壁经 `miter_cuts` 实机建成；FEAT-004 尺寸归属与旧值守卫） · [版本说明](docs/RELEASE_NOTES_0.16.0.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)

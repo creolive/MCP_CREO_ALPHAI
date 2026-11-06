@@ -303,9 +303,10 @@ class ReferenceContractTests(unittest.TestCase):
 
     def test_schema_examples_list_all_three_axis_forms(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
+        # 101 adds the offline creo_plan_product_variant to the 100 tools.
         # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
         # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-        self.assertEqual(len(tools), 100)
+        self.assertEqual(len(tools), 101)
         axis = tools["creo_axis_pattern"].input_schema["properties"]["axis"]
         self.assertEqual(
             {form["properties"]["kind"]["const"] for form in axis["oneOf"]},
