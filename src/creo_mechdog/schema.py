@@ -1691,14 +1691,48 @@ Operation = Annotated[
 OPERATIONS = TypeAdapter(list[Operation])
 
 
+def dump_plan_operations(operations) -> list[dict]:
+    """Dump validated plan models so extrude omissions stay visible (W05).
+
+    ExtrudeOp applies the 1 mm / blind defaults for execution, but the receipt
+    must distinguish an omitted field from an explicit one, so a depth or
+    depth_type the caller never set is dropped here. validate_operations
+    re-applies the defaults and marks them in defaulted_fields.
+    """
+    dumped = []
+    for op in operations:
+        data = op.model_dump(exclude_none=True)
+        provided = getattr(op, "model_fields_set", ())
+        if data.get("op") == "extrude":
+            for field in ("depth", "depth_type"):
+                if field not in provided:
+                    data.pop(field, None)
+        dumped.append(data)
+    return dumped
+
+
 def validate_operations(operations: list[dict]) -> list[dict]:
     if not 0 <= len(operations) <= 200:
         raise ValueError("A plan supports at most 200 operations")
+    # W05: the model below applies the depth/depth_type defaults, which would
+    # erase the difference between "omitted" and "explicitly 1 / blind". The
+    # omission is therefore captured from the caller's dicts (dump_plan_operations
+    # already removed the keys the plan entry never set) and marked on the
+    # normalized operation for the native receipt.
+    defaulted_extrude_fields: dict[int, list[str]] = {}
+    for index, raw in enumerate(operations):
+        if not isinstance(raw, dict) or raw.get("op") != "extrude":
+            continue
+        missing = [field for field in ("depth", "depth_type") if field not in raw]
+        if missing:
+            defaulted_extrude_fields[index] = missing
     result = OPERATIONS.validate_python(operations)
     labels = [x.label for x in result if hasattr(x, "label")]
     if len(labels) != len(set(labels)):
         raise ValueError("Feature labels must be unique within a plan")
     dumped = [x.model_dump(exclude_none=True) for x in result]
+    for index, missing in defaulted_extrude_fields.items():
+        dumped[index]["defaulted_fields"] = missing
 
     def finite(x):
         if isinstance(x, float) and not math.isfinite(x):

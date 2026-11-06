@@ -307,6 +307,113 @@ class Acceptance:
             "unknown_units_and_query_failures",
         ]
 
+    async def wait_job(self, accepted: dict, success: bool = True) -> dict:
+        deadline = time.monotonic() + 360
+        while time.monotonic() < deadline:
+            terminal = await self.call(
+                "creo_get_job", {"job_id": accepted["job_id"], "detail": "full"}
+            )
+            if terminal["status"] not in ("queued", "running"):
+                break
+            await asyncio.sleep(1)
+        else:
+            raise TimeoutError(accepted["job_id"])
+        assert terminal["status"] == ("succeeded" if success else "failed"), terminal
+        if success:
+            assert terminal["result"]["saved_file_reloaded_and_verified"] is True, terminal
+        else:
+            assert terminal["result"]["rollback_succeeded"] is True, terminal
+        return terminal
+
+    async def depth_case(
+        self,
+        name: str,
+        terminal: dict,
+        *,
+        expected_volume: float,
+        expected_depth: float,
+        expected_requested_type: str | None,
+        expected_requested_depth: float | None,
+        expected_defaulted: list[str],
+    ) -> dict:
+        operation = next(
+            (item for item in terminal["result"]["operations"] if item.get("label") == "solid"),
+            {},
+        )
+        block = operation.get("extrude_depth") or {}
+        snapshot = await self.snapshot(terminal["model_id"])
+        volume = snapshot["inspection"]["volume_mm3"]
+        checks = {
+            "source_feature_tree": block.get("source") == "feature_tree",
+            "query_code_ok": block.get("query_code") == 0,
+            "requested_type": block.get("requested_depth_type") == expected_requested_type,
+            "requested_depth": block.get("requested_depth_mm") == expected_requested_depth,
+            "effective_type_blind": block.get("effective_depth_type") == "blind",
+            "effective_depth": block.get("effective_depth_mm") == expected_depth,
+            "defaulted_fields": block.get("defaulted_fields") == expected_defaulted,
+            "volume_mm3": abs(volume - expected_volume) <= max(0.05, 1e-4 * expected_volume),
+            "saved_file_reloaded_and_verified": terminal["result"][
+                "saved_file_reloaded_and_verified"
+            ]
+            is True,
+        }
+        case = {
+            "case": name,
+            "model_id": terminal["model_id"],
+            "job_id": terminal.get("job_id"),
+            "volume_mm3": volume,
+            "extrude_depth": block,
+            "checks": checks,
+            "passed": all(checks.values()),
+        }
+        self.report.setdefault("extrude_depth_cases", []).append(case)
+        return case
+
+    async def extrude_depth_receipt(self) -> None:
+        """W05: omission vs tree readback on 10x10 extrusions (100 / 1000 mm3)."""
+        self.report["extrude_depth_receipt"] = "running"
+        base = await self.plan([sketch("box_profile", "XY", rectangle(10, 10))])
+        revision = (await self.snapshot(base["model_id"]))["revision"]
+        accepted = await self.call(
+            "creo_extrude",
+            {
+                "model_id": base["model_id"],
+                "expected_revision": revision,
+                "label": "solid",
+                "sketch": "box_profile",
+            },
+        )
+        await self.depth_case(
+            "standalone_omitted_both",
+            await self.wait_job(accepted),
+            expected_volume=100.0,
+            expected_depth=1.0,
+            expected_requested_type=None,
+            expected_requested_depth=None,
+            expected_defaulted=["depth", "depth_type"],
+        )
+        extracted = await self.plan(
+            [
+                sketch("box_profile", "XY", rectangle(10, 10)),
+                {"op": "extrude", "label": "solid", "sketch": "box_profile", "depth": 10},
+            ]
+        )
+        await self.depth_case(
+            "plan_depth_only",
+            extracted,
+            expected_volume=1000.0,
+            expected_depth=10.0,
+            expected_requested_type=None,
+            expected_requested_depth=10.0,
+            expected_defaulted=["depth_type"],
+        )
+        passed = all(case["passed"] for case in self.report["extrude_depth_cases"])
+        self.report["extrude_depth_receipt"] = "passed" if passed else "failed"
+        if not passed:
+            raise RuntimeError(
+                f"extrude_depth receipt failed: {self.report['extrude_depth_cases']}"
+            )
+
     async def snapshot(self, model_id: str) -> dict:
         from creo_mechdog.query_client import read_full_model
 
@@ -625,7 +732,7 @@ class Acceptance:
         self.save()
 
 
-async def live(output: Path) -> None:
+async def live(output: Path, section: str = "all") -> None:
     require_manual_start(ROOT / "config.json")
     from mcp import Client
     from mcp.client.stdio import StdioServerParameters
@@ -655,7 +762,14 @@ async def live(output: Path) -> None:
             await acceptance.wait_ready()
             status = await acceptance.call("creo_session_status", {})
             assert status["connected"], status
-            await acceptance.metric_matrix()
+            if section in ("all", "metric-matrix"):
+                await acceptance.metric_matrix()
+            if section in ("all", "extrude-depth"):
+                await acceptance.extrude_depth_receipt()
+            if section == "extrude-depth":
+                # A section run proves the receipt only; the metric matrix
+                # stays "not_run" so the overall verdict is partial.
+                acceptance.report["native_acceptance"] = "partial"
         except Exception as error:
             acceptance.report.update(
                 native_acceptance="failed", error=f"{type(error).__name__}: {error}"
@@ -670,13 +784,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-session-usable", action="store_true")
     parser.add_argument("--output", type=Path, default=ROOT / "build/t05_native_acceptance.json")
+    parser.add_argument(
+        "--section",
+        choices=("all", "metric-matrix", "extrude-depth"),
+        default="all",
+        help="Limit a live run to one section (default: all)",
+    )
     args = parser.parse_args(argv)
     try:
         enabled = require_live(args)
     except ValueError as error:
         parser.error(str(error))
     if enabled:
-        asyncio.run(live(args.output))
+        asyncio.run(live(args.output, args.section))
     else:
         print(
             "OFFLINE ONLY: no MCP client, connection or native acceptance executed; use both explicit live flags after human session confirmation."

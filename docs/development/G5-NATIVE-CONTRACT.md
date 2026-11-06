@@ -362,6 +362,36 @@ S06 补的是**判据**，不是新树：
 `capabilities.require_available` 在排队前拒绝，消息带上述实测依据。偏置能力维持门禁，
 直到找到能真正移动切口的路线（候选：真实"偏置曲面"特征树、或按法向扫掠构造等距面）。
 
+### 2.7b 新规格复测：Thin 树生效，但只产生厚度带且方向元素无效（2026-11-06）
+
+2.7 的失败原因是把 `PRO_E_THICKNESS`/`PRO_E_STD_USEQLT_SIDE`/`PRO_E_SRF_OFFS_METHOD` 挂在了
+**Use Quilt** 树上（两个 type 元素仍是 `PRO_SURF_TRIM_USE_QLT`）。`ProTrim.h` §(4.1)/(4.2) 明确规定
+这三个元素属于 **Thin** 变体，两个 type 元素必须是 `PRO_SURF_TRIM_THIN`。本次用低层
+`creo_create_feature_tree` 直接构 Thin 树复测（不改公开代码），目标为 40×20 填充面、工具为
+x=`tool_x` 的竖直 YZ quilt/基准面，按 quilt 面积判读：
+
+| 工具 | 厚度 | side | 目标 quilt 面积 | 工具 quilt 盒 |
+| --- | --- | --- | --- | --- |
+| use-quilt 对照（x=20） | — | one | 400/400 | — |
+| 基准面 | 5 | one | 400/400（厚度被忽略） | — |
+| quilt x=2 | 5 | one / two / both | **760** | x∈[-3, 2] |
+| quilt x=20 | 5 | one / two / both | **700** | x∈[15, 20] |
+| quilt x=20 | 10 | one | **600** | x∈[10, 20] |
+| quilt x=20 | -5 | one | 再生成失败 | — |
+
+- 偏置确实生效，判据是目标面积从 800 变为 `800 − 厚度×20`，且工具 quilt 盒恰好沿单一方向移动厚度值。
+- 但语义是**移除厚度带**（目标保留带两侧），不是"切口整体移动"；Thin 树也没有 `PRO_E_MATERIAL_SIDE`/
+  `PRO_E_PRIMARY_QLTSIDE`，实测附加这两个元素也不改变保留区。
+- 方向无法控制：`PRO_E_STD_USEQLT_SIDE` 的 one/two/both、附加 material/primary side、以及
+  `PRO_E_SRF_OFFS_DIRECTION` 指向基准面，六种写法全部得到同一条带；负厚度直接再生成失败。
+  方向由工具 quilt 自身朝向决定。
+- 基准面工具会忽略厚度（走普通 use-quilt 语义）；厚度 0 再生成失败。即 `offset_mm` 只对 quilt 工具成立。
+
+结论：`offset_mm` 可以被兑现为"移除厚度带"（仅 quilt 工具），但 `offset_side` 无法兑现，且 Thin 语义与
+公开契约的 `keep_side`（保留 one/two 一侧）不兼容。两字段门禁保持不变，是否按"带移除"语义开放
+`offset_mm` 需单独决策。证据：`build/live_thin_trim_probe.json`、`build/live_thin_trim_probe2.json`
+（驱动 `build/_live_thin_trim_probe.py`、`build/_live_thin_trim_probe2.py`）。
+
 ### 2.8b 放样其实不走特征树：它由 Creo 的 Blend 面板宏驱动（S05 的真正入口，2026-11-05）
 
 `native/blend_create.cpp` 揭示了已交付放样的真实机制，因此 S05 的入口**不是**猜特征树：

@@ -397,6 +397,7 @@ def annotate_native_result(
         failed_index=failed_index if isinstance(failed_index, int) else None,
     )
     annotate_revolve_axis(result)
+    annotate_extrude_depth(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -669,6 +670,77 @@ def annotate_revolve_axis(result: dict[str, Any]) -> dict[str, Any]:
         if "revolve_axis" not in operation:
             continue
         operation["revolve_axis"] = normalize_revolve_axis(operation.get("revolve_axis"))
+    return result
+
+
+# W05: frozen receipt of "what the caller asked for" vs "what the created
+# feature tree stored". A null request field means the field was omitted (the
+# omission is captured before schema defaults are applied); a null effective
+# field means the tree did not yield a value. Neither side is backfilled from
+# the other, and through_all never gains a fabricated blind depth.
+EXTRUDE_DEPTH_FIELDS = (
+    "source",
+    "query_code",
+    "requested_depth_type",
+    "requested_depth_mm",
+    "effective_depth_type",
+    "effective_depth_mm",
+    "defaulted_fields",
+)
+EXTRUDE_DEPTH_TYPES = ("blind", "through_all", "symmetric")
+EXTRUDE_DEPTH_SOURCES = ("feature_tree", "unknown")
+EXTRUDE_DEPTH_DEFAULTED = ("depth", "depth_type")
+
+
+def _finite_scalar(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if math.isfinite(value) else None
+
+
+def normalize_extrude_depth(block: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {key: None for key in EXTRUDE_DEPTH_FIELDS}
+    entry["source"] = "unknown"
+    entry["defaulted_fields"] = []
+    if not isinstance(block, dict):
+        return entry
+    source = block.get("source")
+    entry["source"] = source if source in EXTRUDE_DEPTH_SOURCES else "unknown"
+    code = block.get("query_code")
+    entry["query_code"] = code if type(code) is int else None
+    requested_type = block.get("requested_depth_type")
+    entry["requested_depth_type"] = (
+        requested_type if requested_type in EXTRUDE_DEPTH_TYPES else None
+    )
+    entry["requested_depth_mm"] = _finite_scalar(block.get("requested_depth_mm"))
+    effective_type = block.get("effective_depth_type")
+    entry["effective_depth_type"] = (
+        effective_type if effective_type in EXTRUDE_DEPTH_TYPES else None
+    )
+    entry["effective_depth_mm"] = _finite_scalar(block.get("effective_depth_mm"))
+    defaulted = block.get("defaulted_fields")
+    if isinstance(defaulted, list):
+        entry["defaulted_fields"] = [
+            field for field in EXTRUDE_DEPTH_DEFAULTED if field in defaulted
+        ]
+    return entry
+
+
+def annotate_extrude_depth(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the extruded feature's depth receipt on its own record.
+
+    A record without the block (legacy jobs or a failed create) is left alone;
+    the projection never invents a receipt from the request.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "extrude":
+            continue
+        if "extrude_depth" not in operation:
+            continue
+        operation["extrude_depth"] = normalize_extrude_depth(operation.get("extrude_depth"))
     return result
 
 

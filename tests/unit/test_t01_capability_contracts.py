@@ -161,11 +161,22 @@ class LocalReleaseStatusTests(unittest.TestCase):
 
 
 def _enum_consts(prop: dict) -> set:
-    """Collect literal values from a tool/op schema property (enum or anyOf-const)."""
+    """Collect literal values from a tool/op schema property (enum or anyOf).
+
+    A nullable argument (``Literal[...] | None``) is published as anyOf with
+    the enum on one branch and null on the other; both forms must yield the
+    same literal set so the contract check still compares the values.
+    """
     values = prop.get("enum")
     if values is not None:
         return set(values)
-    return {item["const"] for item in prop.get("anyOf", []) if "const" in item}
+    collected = set()
+    for item in prop.get("anyOf", []):
+        if "const" in item:
+            collected.add(item["const"])
+        elif "enum" in item:
+            collected.update(item["enum"])
+    return collected
 
 
 class ExtrudeEnumContractTests(unittest.IsolatedAsyncioTestCase):
