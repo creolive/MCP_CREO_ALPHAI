@@ -77,6 +77,11 @@ def get_mass_properties(model_id: str, density_g_cm3: float | None = None) -> di
     """
     from creo_mechdog.mass_properties import normalize_mass_properties
 
+    if model_info(model_id).get("model_type", "part") == "assembly":
+        raise ValueError(
+            "Mass properties for assemblies are unsupported; query managed parts individually"
+        )
+
     operation: dict = {"op": "mass_properties"}
     if density_g_cm3 is not None:
         operation["density_g_cm3"] = float(density_g_cm3)
@@ -305,6 +310,10 @@ def submit(
 
                 validate_baseline(model)
         actual_type = model.get("model_type", "part")
+        if actual_type == "assembly" and any(op["op"] == "mass_properties" for op in operations):
+            raise ValueError(
+                "Mass properties for assemblies are unsupported; query managed parts individually"
+            )
         assembly_ops = {
             "assemble_component",
             "component_placement",

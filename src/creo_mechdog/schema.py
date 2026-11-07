@@ -10,6 +10,7 @@ from pydantic import (
     BeforeValidator,
     Field,
     TypeAdapter,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -35,6 +36,7 @@ from creo_mechdog.surface_ops import (
     SurfaceTrimOp,
     quilt_reference_problem,
 )
+from creo_mechdog.validation_errors import operation_validation_error
 
 # Compatibility: the label pattern stays reachable from this module.
 _LABEL_PATTERN = _schema_base._LABEL_PATTERN
@@ -1921,10 +1923,16 @@ class BooleanOp(StrictModel):
         if self.method != "subtract" and self.keep_tools:
             raise ValueError("keep_tools only applies to subtraction")
         refs = [*self.targets, *self.tools]
-        if any(
-            r.get("kind") != "body" or type(r.get("id")) is not int or r["id"] < 0 for r in refs
-        ):
+        if any(r.get("kind") != "body" or type(r.get("id")) is not int for r in refs):
             raise ValueError("Explicit body IDs are required")
+        if any(r["id"] < 0 for r in refs):
+            raise ValueError(
+                "BOOLEAN_BODY_REFERENCE_UNSUPPORTED: negative body IDs can be returned by "
+                "inspection but are not supported by this Boolean feature path; this is a "
+                "capability limit, not a malformed body reference. Sheetmetal-to-solid fusion "
+                "is unverified even with positive IDs; keep separate bodies or use verified "
+                "sheetmetal wall/flange operations"
+            )
         if len({r["id"] for r in refs}) != len(refs):
             raise ValueError("Target and tool bodies must be distinct")
         return self
@@ -2047,7 +2055,10 @@ def validate_operations(operations: list[dict]) -> list[dict]:
         missing = [field for field in ("depth", "depth_type") if field not in raw]
         if missing:
             defaulted_extrude_fields[index] = missing
-    result = OPERATIONS.validate_python(operations)
+    try:
+        result = OPERATIONS.validate_python(operations)
+    except ValidationError as exc:
+        raise operation_validation_error(exc, single_operation=len(operations) == 1) from None
     labels = [x.label for x in result if hasattr(x, "label")]
     if len(labels) != len(set(labels)):
         raise ValueError("Feature labels must be unique within a plan")

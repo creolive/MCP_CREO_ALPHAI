@@ -157,7 +157,8 @@
 | hole.placement/reference1/reference2 | 各自直接传入裸引用，placement 为放置面，reference1/2 为定位参考；平面定位参考可用 `datum_plane.id` 几何 ID |
 | hole.standard | `{"series":"ISO","size":"M6","thread_depth":8}`：按安装孔表建螺纹孔。此时 `diameter` 可省略（给了必须等于表内名义直径），`depth` 必填，`thread_depth` 必须严格小于钻尖深度且不超表内上限；回执给 `thread_metadata` 与 `thread_metadata_verified`（只有创建后特征树回读一致才为 true），非标准孔回执不变 |
 | draft.surfaces/neutral_plane/pull_direction | surfaces 是裸面引用数组；neutral_plane 和 pull_direction 分别是裸单引用，neutral_plane 可用 `datum_plane.id` 几何 ID |
-| boolean_bodies.targets/tools | 裸 body 引用数组，须明确不同 body ID；不能传特征 ID |
+| boolean_bodies.targets/tools | 裸 body 引用数组，须明确不同 body ID；不能传特征 ID。巡检可能返回负 body ID，但当前布尔入口不支持把负 ID 作为目标或工具；这不表示巡检记录无效。正 ID 也不保证能把独立实体并入钣金主体：报告方在 Creo 10 对钣金体与实体做双向 union 均遇到原生 `-1` 并回滚，当前未提供钣金体融合能力 |
+| 钣金模型的 extrude/revolve add | 普通 `extrude(mode="add", thin=null, new_body=false)` 在建模前以 `SHEETMETAL_SOLID_ADD_UNSUPPORTED` 拒绝；`new_body=true` 创建的是独立实体，不保证能与钣金主体融合。`thin` 增料与 `revolve` 增料未被该准入规则阻断，但目标 body 与合并结果尚无可靠契约，不能据此视为钣金主体增料 |
 | solidify.reference | 裸平面/曲面参考，可用已验证平面的 `plane.id` 几何 ID；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
 | surface_fill.sketch | 草图特征标签或特征 ID（字符串或整数），无需 `{kind:...}` 对象 |
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |

@@ -171,6 +171,10 @@ def families() -> dict:
             "scope": "Read-only volume, mass, density and centre of mass of a part",
             "density": "Model material density first; density_g_cm3 is an explicit what-if fallback; neither means null mass",
             "parts_only": True,
+            "mass_value_unit": "g",
+            "native_mass_unit": "Model unit; also retained in the compatibility mass_unit field",
+            "mass_source": ["native", "computed_from_density", "none"],
+            "job_id": "Finished execution record; the synchronous query needs no polling",
         },
         "job_reporting": {
             "failed_stage": "Terminal failed jobs prefer the native failed_stage when reported; otherwise retain the last known stage",
@@ -567,7 +571,7 @@ def families() -> dict:
         "boolean_bodies": {
             "enabled": True,
             "native_test": "overlapping cubes: union 1500, difference 500 and intersection 500 mm3",
-            "limits": "multi-target/tool lists and keep_tools require further native validation",
+            "limits": "multi-target/tool lists and keep_tools require further native validation; negative body IDs are inspection identities unsupported by this Boolean feature path; sheetmetal-to-solid fusion is unverified even with positive IDs",
         },
         "rib": {
             "enabled": True,

@@ -11,7 +11,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
@@ -59,6 +58,7 @@ from creo_mechdog.session_erase import erase_session_models
 from creo_mechdog.session_health import snapshot as session_health
 from creo_mechdog.session_models import list_session_models
 from creo_mechdog.sheetmetal import project_wall_contour
+from creo_mechdog.validation_errors import ValidationMCPServer
 from version import VERSION
 
 logging.basicConfig(level=logging.WARNING)
@@ -77,6 +77,7 @@ _SOURCE_NAMES = (
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
     "src/creo_mechdog/paths.py",
+    "src/creo_mechdog/validation_errors.py",
     "src/creo_mechdog/product_rules.py",
     "examples/product_rules/box_frame.json",
     "src/creo_mechdog/references.py",
@@ -188,7 +189,7 @@ async def server_lifespan(app):
         startup.stop()
 
 
-mcp = MCPServer(
+mcp = ValidationMCPServer(
     "MCP_CREO_MechDog",
     version=VERSION,
     lifespan=server_lifespan,
@@ -2291,8 +2292,11 @@ async def creo_get_mass_properties(
     otherwise pass density_g_cm3 for an explicit what-if and the receipt reports
     density_source=request. With neither, mass is null with a hint - it is never
     filled in from an assumed density. mass_g is grams and density_g_cm3 is
-    g/cm3; mass_unit is the model's own mass unit and only g/kg/tonne are
-    converted. When mass is null, mass_unavailable_reason names the broken link
+    g/cm3; mass_value_unit is always g. native_mass_unit and the compatibility
+    mass_unit field name the model unit; only g/kg/tonne are converted.
+    mass_source is native, computed_from_density or none. The returned job_id
+    identifies the finished execution record; this synchronous call needs no polling.
+    When mass is null, mass_unavailable_reason names the broken link
     (no_density, unsupported_mass_unit, material_density_unavailable,
     material_query_failed, volume_unavailable). Parts only: assemblies are
     refused until their own query path is verified.
@@ -2833,7 +2837,12 @@ async def creo_boolean_bodies(
     tools: list[dict[str, Any]],
     keep_tools: bool = False,
 ) -> dict[str, Any]:
-    """Create a parametric multi-body Boolean feature. Inspect explicit body IDs; all references use {kind:'body',id:...}."""
+    """Create a parametric multi-body Boolean feature using {kind:'body',id:...}.
+
+    Negative IDs reported by inspection are not supported by this feature path.
+    Sheetmetal-to-solid fusion is unverified even with positive IDs; separate
+    new_body solids are not a promise of a later union into the sheetmetal body.
+    """
     return await invoke(
         general.submit,
         [
