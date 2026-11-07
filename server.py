@@ -2290,8 +2290,12 @@ async def creo_get_mass_properties(
     uses the density of the model's material when that material carries one;
     otherwise pass density_g_cm3 for an explicit what-if and the receipt reports
     density_source=request. With neither, mass is null with a hint - it is never
-    filled in from an assumed density. Parts only: assemblies are refused until
-    their own query path is verified.
+    filled in from an assumed density. mass_g is grams and density_g_cm3 is
+    g/cm3; mass_unit is the model's own mass unit and only g/kg/tonne are
+    converted. When mass is null, mass_unavailable_reason names the broken link
+    (no_density, unsupported_mass_unit, material_density_unavailable,
+    material_query_failed, volume_unavailable). Parts only: assemblies are
+    refused until their own query path is verified.
     """
     return await invoke(general.get_mass_properties, model_id, density_g_cm3)
 
