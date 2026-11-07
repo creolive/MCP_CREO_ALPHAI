@@ -51,3 +51,7 @@
 在本 ID 增加受管矩形草图的显式轴对称、指定模型直边投影和四边边距驱动子项；以已保存草图为对象，不控制用户正在编辑的 UI 会话。新约束不得放宽 coordinates 与自定义约束互斥、求解后保真和引用唯一性。
 
 负责人 unassigned；拟 schema、实际编辑入口去重、文件、针对性回归及重载后真实随动矩阵见 [C03 子计划](../superpowers/plans/2026-11-03-alphai-c-editing-plan.md)，协调 [DEV-067](DEV-067.md)。本次只规划，未实施/测试/连 Creo；不关闭原 ID 的求解漂移、spline 或其他任意约束组合未测范围。
+
+## 2026-11-07 离线接续（未发布）
+
+DEV-071公开solver.requested/used/selection_reason及各阶段实际返回码，失败保持部分结果，不把初次Solve=-1误判最终失败。默认容差与显式geometry_tolerance_mm硬门不变。原生诊断源码已编写，尚未SDK构建/Creo实机；53mm线弧形变与frame求解根因仍开放。 见[DEV-071](DEV-071.md)与[三件反馈映射](../validation/feedback-0.16.0-2026-11-07/MAPPING.md)。

@@ -26,28 +26,30 @@
 
 **Files:** operation_results.py、compact_sections.py、job_projection.py、受影响 job 查询入口；现有投影/分页单测及新增 test_feedback016_receipts.py；capabilities.py、references.py、REFERENCE_SYNTAX.md。
 **Interfaces:** 生产/读取统一 annotate_native_result，原生字段名 miter_cuts/adjacent_bend_ends_allowed 不变。
-- [ ] 新增 aliases-only 折边回执在 compact/full/sections 可见的失败测试；错误 label/缺字段/未执行不补造。
-- [ ] 实现最小映射和字段白名单；统一 offset 的实体体积与源 quilt 文案，保留缺测量状态。
-- [ ] 定向测试通过，提交 FEAT-014/023 修复。
+- [x] 新增 aliases-only 折边回执在 compact/full/sections 可见的失败测试；错误 label/缺字段/未执行不补造。
+- [x] 实现最小映射和字段白名单；统一 offset 的实体体积与源 quilt 文案，保留缺测量状态。
+- [x] 定向测试通过，提交 FEAT-014/023 修复。
 
 ### Task 2: 更新检查预算与缓存语义
 
 **Files:** src/creo_mechdog/update_check.py、tests/unit/test_update_check.py、docs/UPDATE_CHECK.md；必要时 server.py 仅改工具说明。
 **Interfaces:** UpdateChecker.check(force=False) 不变；环境变量 MECHDOG_UPDATE_TIMEOUT_SECONDS；snapshot 增 network_timeout_seconds/cache_age_seconds/retry_after_at。
-- [ ] 新增 force 绕过失败/unknown 冷却、预算配置非法/1/30、失败缓存年龄及自动重试时间的失败测试。
-- [ ] 实现有界配置与回执；单个总预算涵盖全部分页；不联网运行测试。
-- [ ] 保留并发共用、取消隔离、旧缓存失败降级测试，更新文档并提交 FEAT-020。
+- [x] 新增 force 绕过失败/unknown 冷却、预算配置非法/1/30、失败缓存年龄及自动重试时间的失败测试。
+- [x] 实现有界配置与回执；单个总预算涵盖全部分页；不联网运行测试。
+- [x] 保留并发共用、取消隔离、旧缓存失败降级测试，更新文档并提交 FEAT-020。
 
 ### Task 3: 草图求解上下文
 
 **Files:** native/sketch_coordinates.cpp、sketch_solver.cpp、generic.cpp、sketch_edit.cpp；operation_results.py、compact_sections.py、failure_context.py；草图/失败上下文单测。
 **Interfaces:** solver 复用 requested/used，新增 selection_reason、阶段返回码；失败同块进入 failed_operation，未调用阶段为 null。
-- [ ] 补模式选择/恢复成功/最终失败/缺失旧字段的离线契约与投影测试。
-- [ ] 在既有求解调用处捕获真实码并发布；选择原因由原生原选择算法产生，不另写 Python 猜测器。
-- [ ] 定向回归通过，明确原生未构建/未实机，提交 FEAT-010 诊断。
+- [x] 补模式选择/恢复成功/最终失败/缺失旧字段的离线契约与投影测试。
+- [x] 在既有求解调用处捕获真实码并发布；选择原因由原生原选择算法产生，不另写 Python 猜测器。
+- [x] 定向回归通过，明确原生未构建/未实机，提交 FEAT-010 诊断。
 
 ### Task 4: 验证与交接
 
 **Files:** DEV-071 工作卡、BACKLOG、反馈 MAPPING/manifest、离线验证记录。
-- [ ] 完整离线单元与语言检查，仅在独立工作树执行；记录源码身份、命令、结果及环境限制。
-- [ ] 独立 reviewer 核查全分支；修复重要问题，提交文档并给用户分支/提交/未实机范围。
+- [x] 完整离线单元与语言检查，仅在独立工作树执行；记录源码身份、命令、结果及环境限制。
+- [x] 独立 reviewer 核查全分支；修复重要问题，提交文档并给用户分支/提交/未实机范围。
+
+完成记录：代码提交f1826a2，固定源码短路径副本2741项通过（2跳过），语言检查通过；独立复核已修正并通过。原生源码未SDK构建/实机，不代表形变根因已修复，见DEV-071工作卡。
