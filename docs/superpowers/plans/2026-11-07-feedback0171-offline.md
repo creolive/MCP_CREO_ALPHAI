@@ -59,4 +59,6 @@
 - [x] 三件原稿逐字节归档，manifest 校验，映射已交付/本批代码/需实机边界。
 - [x] 修正三行台账与相关卡首页，补逐 ID 人工检查与发布后外置核验记录规则，保留历史验证原件。
 - [x] 全量中复现真实 busy 影响旧 UDF/非法名称测试，仅在 `tests/test_development_validation.py` / `tests/unit/test_model_naming.py` 隔离通道并断言不启动进程；`tests/unit/test_t07_preview.py` 更新共享 helper 接线断言，67 项专项通过。
-- [ ] 专项测试、统一 dev_check、独立审查；记录提交、dirty、源码指纹与未编译/未实机范围。
+- [x] 专项测试、统一 dev_check、独立审查；记录提交、dirty、源码指纹与未编译/未实机范围。
+
+最终统一检查：2744 项全部通过（受测 dirty 快照 SHA256 `bfdac50c351f548fd27cd55c7db89e5024f8a07b72c85e25fd42ad8382d696a9`）。并行协作保存 `ebb59de` 后合入 0.17.3 的组合不在该结论内，详见 DEV-072 最终证据。
