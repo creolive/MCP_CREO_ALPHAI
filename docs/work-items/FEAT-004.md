@@ -52,3 +52,7 @@
 受测源码身份：提交 `3d0c31c`、`dirty=false`、`checked_source_sha256=dbca883f…b908`。
 
 **未重跑实机**：2026-11-03 的 19 例实机记录（[A02 验收摘要](../development/ALPHAI-A02-ACCEPTANCE.md)，基线 `7b3d90e`）保留为历史证据，不当作 rebase 后源码的实机结论；rebase 只做了离线重建与回归。Creo 9/10、装配/骨架/族表驱动尺寸、同一计划内 `set_parameters` 与 pin 的先后语义、WorkBuddy 黑盒仍未验证。合并与发版另行排期，不随本轮进行。
+
+## 2026-11-07 rebase 后实机回归（本机 Creo 12.4.0.0）
+
+`tools/test_adoption_dimension_guards.py --live --confirm-session-usable` → `build/acceptance_dimension_guards.json`（SHA256 `34e1752a…491a`），18/18 用例通过、`success=true`、0 失败。补齐上一节缺失的“当前源码实机”证据；Creo 9/10、装配/骨架/族表驱动尺寸与 WorkBuddy 仍未验证。
