@@ -537,7 +537,7 @@ H06 的缺口是“保留侧缺 centroid/bbox/世界方向”，此前 `kept_sid
 并按契约 §4.5 在符号与 `keep_side` 矛盾时失败回滚。Python 侧新增
 `operation_results.normalize_kept_side_basis/annotate_kept_side_basis`，只做“值不脱离状态”的投影。
 
-实机（run `20261107-121303-781400`，43 项检查全通过，6 个 job）：
+实机（run `20261107-121303-781400`，41 项检查全通过，6 个 job）：
 
 | 工具 | keep_side | job_id | 面积 mm² | target→kept 形心 | 差值 mm | 保留 bbox x | 方向 | 保存重载 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

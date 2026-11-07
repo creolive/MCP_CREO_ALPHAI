@@ -106,7 +106,7 @@ quilt 工具的实测面法向是 `(−1,0,0)`，与草图支撑面法向 `(+1,0
 | 定向单测 9 个模块（含新增 16 项） | 138 项 OK |
 | `ruff check` + `ruff format --check`（3 个 Python 文件） | All checks passed / already formatted |
 | `clang-format --style=file` （2 个 native 文件） | clean |
-| `tools\test_surface_chain.py --case trim --live --confirm-session-usable` | `passed=true`，43 项检查全通过 |
+| `tools\test_surface_chain.py --case trim --live --confirm-session-usable` | `passed=true`，41 项检查全通过 |
 
 ## 6. 未覆盖 / 风险
 
