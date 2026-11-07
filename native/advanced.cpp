@@ -1,5 +1,8 @@
 #include "assembly_pose.h"
 #include "constraint_names.h"
+#include "geometry_diagnostics.h"
+#include <iomanip>
+#include <sstream>
 
 // Native feature families added for version 0.21. Included after generic helpers.
 static J component_sources = J::object();
@@ -1548,6 +1551,7 @@ struct FlangeEdgeScan {
     double scale = 1;
     std::set<int> seen;
     std::set<int> matches;
+    std::vector<geometry_diagnostics::Candidate> candidates;
     int straight = 0;
 };
 static bool flange_point_within(const V &actual, const V &expected, double tolerance) {
@@ -1571,6 +1575,7 @@ static ProError flange_match_edge(ProEdge edge, ProError status, ProAppData data
     scan->straight++;
     V first = {start[0] * scan->scale, start[1] * scan->scale, start[2] * scan->scale};
     V second = {end[0] * scan->scale, end[1] * scan->scale, end[2] * scan->scale};
+    scan->candidates.push_back(geometry_diagnostics::candidate(id, first, second, scan->points));
     if ((flange_point_within(first, scan->points[0], scan->tolerance) &&
          flange_point_within(second, scan->points[1], scan->tolerance)) ||
         (flange_point_within(second, scan->points[0], scan->tolerance) &&
@@ -1630,13 +1635,32 @@ static int flange_geometry_edge_id(const J &edge_ref) {
         (int)scan.matches.size(), scan.tolerance);
     if (scan.matches.size() == 1)
         return *scan.matches.begin();
-    if (scan.matches.empty())
+    if (scan.matches.empty()) {
+        std::string nearest;
+        auto mm = [](double value) {
+            std::ostringstream stream;
+            stream << std::setprecision(12) << value;
+            return stream.str();
+        };
+        for (const auto &item : geometry_diagnostics::nearest_candidates(scan.candidates)) {
+            auto point = [&mm](const geometry_diagnostics::Point &value) {
+                return "[" + mm(value[0]) + ", " + mm(value[1]) + ", " + mm(value[2]) + "]";
+            };
+            nearest += (nearest.empty() ? "" : "; ") + std::string("id=") +
+                       std::to_string(item.id) + " endpoints_mm=" + point(item.endpoints[0]) + "," +
+                       point(item.endpoints[1]) + " endpoint_errors_mm=[" +
+                       mm(item.endpoint_errors_mm[0]) + ", " + mm(item.endpoint_errors_mm[1]) + "]";
+        }
         throw std::runtime_error(
             "sheetmetal_flange edge_geometry endpoints " + point_text(0) + " and " + point_text(1) +
             " matched none of the " + std::to_string(scan.straight) +
             " straight model edges (tolerance_mm=" + std::to_string(scan.tolerance) +
-            "); edge ids and geometry change when the model rebuilds, so re-read "
+            "); nearest straight edges (diagnostic only; endpoint errors use the best "
+            "undirected one-to-one request pairing): " +
+            (nearest.empty() ? "none" : nearest) +
+            "; edge ids and geometry change when the model rebuilds, so re-read "
             "creo_inspect_model edges[].start/end and pass current coordinates");
+    }
     std::string ids;
     for (int id : scan.matches)
         ids += (ids.empty() ? "" : ", ") + std::to_string(id);

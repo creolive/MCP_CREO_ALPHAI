@@ -135,6 +135,7 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
+    "native/geometry_diagnostics.h",
     "native/surface_measure.h",
     "native/quilt_gauge_guard.h",
     "native/quilt_query.h",
@@ -1739,8 +1740,11 @@ async def creo_sheetmetal_planar_wall(
     exists, was deleted, or repeats inside the same plan). Verification is measured, not echoed:
     read the planar_wall block on the job result (creo_get_job detail=compact keeps it) with
     feature_id, origin, dimension_count (4+ point dimensions, so a square is not silently
-    under-constrained), volume_mm3, thickness_measured_mm/thickness_verified (read back from the
-    wall body), and the signed envelope (envelope.u/v/n min/max). Use
+    under-constrained), volume_mm3, thickness_validation (status, source, value_mm, reason,
+    context), and the signed envelope (envelope.u/v/n min/max). thickness_validation is the
+    source-aware gauge verdict. thickness_measured_mm/thickness_verified describe only the body
+    API readback; they can remain null/false when geometry_normal_span verifies the gauge.
+    thickness_api_scope/reason and thickness_fallback_source explain that case. Use
     creo_resize_sheetmetal_planar_wall to change the rectangle; do not rebuild the wall. A flange
     can attach to this wall, which then makes the wall a parent of that feature.
     """
@@ -1783,9 +1787,12 @@ async def creo_resize_sheetmetal_planar_wall(
     the gauge is re-read from the saved file, so a wall whose thickness did not survive a
     save/reload is refused too. Verify with the planar_wall block on the job result (creo_get_job
     detail=compact keeps it): feature_id must equal feature_id_before, feature_id_unchanged must
-    be true, volume_mm3 must equal length*width*thickness, thickness_loaded_mm and
-    thickness_measured_mm must both equal the recorded gauge, and the signed envelope must match
-    the recorded direction.
+    be true, volume_mm3 must equal length*width*thickness, both thickness_validation and
+    thickness_loaded_validation must verify the recorded gauge in their stated contexts, and
+    the signed envelope must match the recorded direction. thickness_measured_mm and
+    thickness_loaded_mm are body API readbacks only; either can be null when a validated
+    geometry_normal_span fallback is used. The corresponding *_api_scope, *_api_reason and
+    *_fallback_source fields explain the API result and fallback.
     """
     payload = await invoke(
         general.submit,

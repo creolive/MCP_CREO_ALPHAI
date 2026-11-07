@@ -189,8 +189,9 @@ class NativeSharedStep(unittest.TestCase):
             "PRO_FEAT_SUPPRESSED",
             "PRO_MDL_PART",
             "PRO_TK_E_NOT_FOUND",
-            "!probe.unknown &&",
-            "!probe.renderable",
+            "geometry_diagnostics::preview_skip(",
+            "kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY, probe.renderable,",
+            "&& !probe.unknown",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, probe)

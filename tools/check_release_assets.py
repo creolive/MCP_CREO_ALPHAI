@@ -9,7 +9,6 @@ source packager can gate the same four paths even when they live in two director
 """
 
 import argparse
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -17,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
+from creo_mechdog.release_download import download
 from creo_mechdog.release_integrity import (
     expected_assets,
     read_sidecar,
@@ -34,22 +34,6 @@ __all__ = [
 ]
 
 
-def download(tag: str, directory: Path) -> None:
-    """Download every asset of ``tag`` with the gh CLI, or raise ``RuntimeError``."""
-    try:
-        result = subprocess.run(
-            ["gh", "release", "download", tag, "--dir", str(directory), "--clobber"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except FileNotFoundError as error:
-        raise RuntimeError(f"gh CLI is not available ({error.filename or 'gh'})") from None
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "no output"
-        raise RuntimeError(f"gh release download failed for {tag}: {detail}")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", required=True, help="Release tag, for example v0.12.0")
@@ -60,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dir",
         type=Path,
-        help="Verify an existing download directory instead of calling gh",
+        help="Verify an existing download directory instead of downloading the Release",
     )
     args = parser.parse_args(argv)
     version = args.version or args.tag.removeprefix("v")
@@ -70,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory() as temp:
             try:
                 download(args.tag, Path(temp))
-            except RuntimeError as error:
+            except (RuntimeError, OSError) as error:
                 fallback = ROOT / "build/release-assets" / args.tag
                 print(f"{args.tag}: {error}", file=sys.stderr)
                 print("The remote Release was not checked.", file=sys.stderr)

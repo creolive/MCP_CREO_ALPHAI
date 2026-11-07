@@ -3,6 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -43,11 +44,20 @@ class NormalizeModelName(unittest.TestCase):
 
 
 class SubmitAdmissionNameRule(unittest.TestCase):
-    """The generic submit admission validates names before any channel work."""
+    """Isolated submit admission validates names before persisting a job."""
 
     def test_invalid_name_is_refused_before_job_creation(self):
-        with self.assertRaisesRegex(ValueError, "uppercase input is normalized"):
-            general.submit([], None, "PRT 001")
+        with (
+            patch.object(bridge, "toolkit_lock"),
+            patch.object(bridge, "admission_holder") as holder,
+            patch("pathlib.Path.mkdir") as mkdir,
+            patch("subprocess.Popen") as start,
+        ):
+            with self.assertRaisesRegex(ValueError, "uppercase input is normalized"):
+                general.submit([], None, "PRT 001")
+            holder.assert_not_called()
+            mkdir.assert_not_called()
+            start.assert_not_called()
 
     def test_digit_first_name_passes_admission(self):
         # Validation happens before job persistence; capture the created model
