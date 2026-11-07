@@ -492,6 +492,10 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 这条路线满足"join 需求"，但它产出的是**一个合并后的实体**，不是**单一合并 quilt**；
 后者仍需要 Merge 特征的真实元素树（本机没有，缺口是参照树）。
 
+2026-11-07 复核：按 `surface_loft` 的 INCOMPLETE 骨架路线重试 join（create=0、extract=0、
+内核补全 SIDE/TYPE、redefine 后 ACTIVE）仍是 0 个 `PRO_QUILT`、4 个 `PRO_SURFACE`、quilt
+访问 -4（§2.4 补充与 H03 证据），因此 `quilt_merge` 门禁与本节替代路线结论均不变。
+
 ### 2.10 曲面链示例文件：可运行的分阶段计划（2026-11-05）
 
 `examples/` 里新增两个**可运行**的曲面链示例，配套 `tools/test_surface_chain.py --example <file>`：
@@ -684,6 +688,18 @@ PRO_E_FEATURE_TREE
 - `PRO_E_SRF_MRG_QUILT_SIDE` 是可选项，且在参与者 >2 时不可用；首版不设置它，保留区域由默认行为决定并**测量**，不按 GUI 观感假设。
 
 数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
+
+**2026-11-07 实测补充（H03，保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
+redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交 join：
+`ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` 返回 **0**、
+`ProErrorlist.total=0`、`ProFeatureElemtreeExtract` 返回 **0**，抽取树 11 个元素，其中
+`PRO_E_SRF_MRG_QUILT_SIDE=1` 与 `PRO_E_SRF_MRG_TYPE=1`（JOIN）都是**内核自己补全**的；
+redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_QUILT`、
+4 个 `PRO_SURFACE`（132/134/136/138），与显式写 SIDE 的 HEAD 实现逐项相同。
+输入面积 800.0 mm² 可测，结果面积/闭合不可测；两次失败作业均清理新建模型
+（`terminal_effect.managed_model=no_effect`）。结论：本机数组树即使由内核补全也不产出
+结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
+[FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
 
 ---
 

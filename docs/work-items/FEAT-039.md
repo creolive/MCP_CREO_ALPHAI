@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
+> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持（H03 曲面合并已于 2026-11-07 按 INCOMPLETE 骨架路线实机反证，见文末 H03 段）；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
 
 日期：2026-10-18。类型：功能。优先级：P1。状态：所列子项已交付，余项开放。**0.13.0 已交付**：S02 曲面修剪、S04 投影曲线、S05 曲面扫掠（开放/加盖/实体化）、S06 实体化判据、S07 法向偏置（`creo_surface_offset`）、S08 完整链路、S09 模块化、W01 端点焊接本体；**0.14.0 已交付**（2026-11-06 发布）：W05 `extrude_depth` 回执与 W06 只读预览/失败回滚。**0.15.0 已交付**（2026-11-06）：R05 矩阵/失败上下文、R07 曲面引用契约与 R09 折边文案；四壁/merge/多截面放样仍 gated。**仍 gated / 未交付**：S03 缝合——四条原生路线只建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，待新路线；多截面放样/边界混合仍缺，Direct Blend 元素树抽取返回 -18，且没有 `surface_loft` 工具或已注册操作；`surface_trim` 的 `offset_mm`/`offset_side` 继续门禁（2026-11-06 Thin 树复测只得到“移除厚度带”语义，[G5 §2.7b](../development/G5-NATIVE-CONTRACT.md)）。S10 的发布交付见 0.13.0 发布记录。公开工具 100。目标版本：0.13.0（已发布）/ 0.14.0（已发布）/ 0.15.0（已发布）；余下曲面项未排期。
 
@@ -584,3 +584,35 @@ H04 的缺口是"组级闭合、公差 0.01、缝隙/重叠"，此前只有逐 q
 - 证据：[EVIDENCE](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md)（报告 SHA256
   `D530B999…2D5C9970`）。**未覆盖**：Creo 9/10、非 mm 单位、多面/曲面成员、`open_edges=0` 的
   闭合壳体组、重叠面积精度与 `gap_search_mm` 之外的间距量化。
+
+## 2026-11-07 H03 反证：INCOMPLETE 骨架路线未救回 quilt_merge（实机，保持门禁）
+
+按 `surface_loft` 的成功经验（`PRO_FEAT_CR_INCOMPLETE_FEAT` 只建最小骨架、抽取后 redefine，
+不预先手写可选元素）重试两片共边 20×20 填充的 join。结果与历史失败形态逐项相同：
+
+| 尝试 | job_id | create | extract | ProErrorlist | feature_status | quilt 访问 | quilt 数 | surface 数 | 输入面积 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| HEAD 一次性创建 | `0065877624af4cf4932a8179682908b3` | —（旧实现未记录） | — | — | 0（ACTIVE） | -4 | 0 | 4（132/134/136/138） | 800.0 mm² |
+| INCOMPLETE → extract → redefine | `80adc5a5ae714cf5bc40f9936ec6122d` | **0** | **0** | **total=0** | 0（ACTIVE） | **-4** | **0** | 4（同上） | 800.0 mm² |
+
+内核补全后的抽取树共 11 个元素：`PRO_E_FEATURE_TYPE=946`、`PRO_E_SRF_MRG_QUILT_ARR` 两个
+`PRO_E_SRF_MRG_QUILT_CMPD`（各含 `PRO_E_SRF_MRG_QUILT_REF` 与**内核自补**的
+`PRO_E_SRF_MRG_QUILT_SIDE=1`）、`PRO_E_SRF_MRG_TYPE=1`（JOIN）、特征名。即：**是否预先写
+SIDE 并不改变结果**，内核补全值与显式值一致；`surface_loft` 的「少写可选值」根因在此不成立。
+特征再生成功但只拥有 4 个 `PRO_SURFACE`，不拥有 `PRO_QUILT`，`result_quilt_id`、面积、闭合
+都无法测量，也没有可交给 `thicken`/`solidify` 的对象。
+
+两次失败作业的 `terminal_effect.managed_model` 均为 `no_effect / new_model_cleanup_confirmed`
+（新建模型被清理），未产生半成品。诊断期间一次 `ProQuiltInit` id 扫描使原生 worker 超时
+（job `9b64c0fb330b49a285200d286934bc06`，`unknown_outcome`）；按 BUG-001 约定未重试、未清
+unknown 保护、未改模型，诊断代码已删除。
+
+**结论**：`quilt_merge` 继续保持 `UNAVAILABLE_OPERATIONS`，门禁文案与能力边界不变；
+链式三片、保存重载、失败回滚等验收项在没有结果 quilt 前无可验收对象。下一步若继续，应先
+在 Creo 界面手工建一个 Merge 特征并用 `tools/read_reference_tree.py` 读回真实树
+（种子库没有 Merge 参照件），而不是再猜 `ProMerge.h` 数组树。
+
+证据：[EVIDENCE](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)、
+[merge_probe_report.json](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/merge_probe_report.json)
+（SHA256 `1634C563…B6E26FEC`）。**未覆盖**：结果 quilt 的链式/重载/回滚验收、Creo 9/10、
+非 mm 单位、非平面成员。
