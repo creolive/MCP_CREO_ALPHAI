@@ -2753,6 +2753,32 @@ async def creo_surface_trim(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_loft(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    sections: list[str | int],
+    interpolation: Literal["straight"] = "straight",
+) -> dict[str, Any]:
+    """Create a native boundary-blend surface quilt from exactly two sketch sections.
+
+    sections accepts sketch labels or integer feature IDs in loft order (index 0 is
+    the start section); each sketch must own exactly one non-composite curve, and the
+    two sections must be distinct. interpolation is 'straight' only. The result is one
+    open datum-surface quilt (quilt_id, surface_area_mm2, quilt_closed_native); no
+    solid material is created. Multi-section, smooth, closed and continuity requests
+    are refused before a job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_loft", label=label, sections=sections, interpolation=interpolation)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_quilt_merge(
     model_id: str,
     expected_revision: int,

@@ -3882,6 +3882,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "advanced.cpp"
 #include "surfaces.cpp"
 #include "surface_trim.cpp"
+#include "surface_loft.cpp"
 #include "quilt_merge.cpp"
 #include "project_curve.cpp"
 #include "udf.cpp"
@@ -4164,6 +4165,8 @@ static void execute_operation_body(const J &op) {
         generic_surface_offset(op);
     else if (kind == "surface_trim")
         generic_surface_trim(op);
+    else if (kind == "surface_loft")
+        generic_surface_loft(op);
     else if (kind == "quilt_merge")
         generic_quilt_merge(op);
     else if (kind == "project_curve")

@@ -186,6 +186,8 @@ PRO_E_FEATURE_TREE
 - 曲线以 chain holder + `PRO_E_STD_CURVE_COLLECTION_APPL` 表达；本机已有可复用的 `native/generic.cpp:2393` `curve_collection()`（`ProCrvcollectionAlloc` + `PRO_CURVCOLL_ADD_ONE_INSTR`）。
 - **首版不写** `PRO_E_BBL_ADD_CLOSED`、不写 `PRO_E_BNBLN_TAN_COND`（`TAN_COND_FREE` 无符号定义）。
 
+**2026-11-07 实测回填（H02）：** 上述裸骨架可以创建。流程为 `ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` → `ProFeatureElemtreeExtract` → `ProFeatureWithoptionsRedefine` → ACTIVE。内核在抽取树中自行补齐 `PRO_E_EXT_SURF_CUT_SOLID_TYPE=942` 与 `PRO_E_BNBLN_TAN_COND`（`TAN_COND_TYPE`=1,1,0,0、`TAN_FLD_TYPE`=-1,-1,0,0），所以实现**不需要也不得**在创建前写这些值。细节、job 与面积/闭合读数见 §9.4。`PRO_E_CTRL_PTS`/`PRO_E_BLEND_TYPE` 仍不需要。
+
 ### 2.2 project_curve：实测定论与实际实现树（S04 回填，2026-11-04）
 
 #### 2.2.1 两族投影元素都不可用（实测，P2 结论）
@@ -467,6 +469,8 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 `surface_loft` 保持未开工，`loft` 的曲面模式仍由 `capabilities.require_available` 明确拒绝
 （"Direct Blend supports solid add into the default body only"）。
 
+**2026-11-07 更正：** §2.8 探的是 `PRO_E_BLEND_*` 系列（普通 Blend/无 `ProBlend.h` 文档），不能外推到 `Probbl.h` 的边界混合。按 §2.1 的 `Probbl.h` 树 + INCOMPLETE 创建/抽取/redefine 已于同日实机成功并交付 `surface_loft`（见 §9.4）；`PRO_E_BLEND_*` 的结论只说明那条族不可用。
+
 ### 2.9 join 的可测量并集：trim + thicken（S03 的替代路线，2026-11-05 实机）
 
 `quilt_merge` 本身仍然门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
@@ -698,6 +702,8 @@ PRO_E_FEATURE_TREE
 | 输出 | 曲面（datum surface），**不是实体** | `mode`/`new_body`（曲面放样不产实体） |
 
 `sections` 顺序 = 放样方向，**index 0 是起点截面**。实现必须把顺序原样写进 `PRO_E_BNBLN_DIR_CURVES` 数组，不排序、不去重（去重由 schema 拒绝重复引用解决）。
+
+**实现状态（2026-11-07）：** 本节边界已按原样交付为 `surface_loft` / `creo_surface_loft`，Creo 12.4 实机验收见 §9.4；上表"首版明确拒绝"的各参数在 schema 层直接拒绝，不走原生降级。
 
 ### 3.2 project_curve
 
@@ -1187,3 +1193,30 @@ PRO_E_FEATURE_TREE
 
 证据：`build/live_solidify_probe.json`（两个用例的完整量测）与 `build/surface_chain/<run_id>/report.json`。
 解析期望值由**实测外框**推导（半径取 Y 向跨度的一半、高度取 X 向跨度），不写死常数，避免平面映射假设。
+
+### 9.4 2026-11-07 H02 实机：surface_loft 路线成立并交付
+
+环境：Creo 12.4.0.0 / Toolkit x86e_win64 / 本机匹配 SDK；分支 `codex/DEV-074-feedback0174-offline`（取证时 HEAD `c4948d3` + 本轮改动），`bridge.py build` 退出 0，指定驱动 `tools/test_surface_loft.py --live --confirm-session-usable`（22/22 检查通过）。
+
+**与 §9 P1 的差别：** P1 在创建前写入 `PRO_E_EXT_SURF_CUT_SOLID_TYPE` 与 `PRO_E_BNBLN_TAN_COND*` 的值，得到 status 6。H02 按 §2.1 只建裸骨架，用 `PRO_FEAT_CR_INCOMPLETE_FEAT` 创建、`ProFeatureElemtreeExtract` 取树、`ProFeatureWithoptionsRedefine` 再生，成功。抽取树（103 元素）显示内核自行补齐：
+
+| 元素 | 内核补齐值 |
+| --- | --- |
+| `PRO_E_EXT_SURF_CUT_SOLID_TYPE` | 942（`PRO_FEAT_DATUM_SURF`） |
+| `PRO_E_BNBLN_TAN_COND` | 4 个 `PRO_E_BNBLN_TNC_BNDRY`，`TAN_COND_TYPE`=1,1,0,0；`TAN_FLD_TYPE`=-1,-1,0,0 |
+| `PRO_E_BNBLN_CURVES/1DIR/DIR_CURVES` | 2 个 `PRO_E_STD_CHAIN_HOLDER`，各持 1 条曲线集合 |
+
+**验收读数（job / 模型）：**
+
+| 项 | 读数 |
+| --- | --- |
+| 放样 | `7a29b97ddb564a0e820c90f02b56921f`：`create_code=0`、`extract_code=0`、`feature_type=942`、`feature_status=0`、`quilt_count=1`、`quilt_id=61`、`surface_area_mm2=800.0`、`quilt_closed_native=open`（`ProQuiltVolumeEval=-18`）、`has_solid=false`、`saved_file_reloaded_and_verified=true` |
+| 保存重载查询 | 同一 quilt_id 61、`area_mm2=800.0` |
+| trim x=20 两侧 | `caf35a74...` 400.0 mm²（one）；`7ad3e820...` 400.0 mm²（two）；合计 800.0 |
+| thicken 2 mm | `286b88cb...`：`volume_after_mm3=1599.9999999999995` |
+
+**顺序约束（实测）：** 同一模型先 `thicken` 再 `surface_trim` 时，trim 的 `ProFeatureWithoptionsCreate` 返回 -1（job `ddf1f332...`）。加厚后的 quilt 不能再作为该 trim 的目标；验收顺序改为 trim 在 thicken 之前或使用独立模型。未继续排查该顺序问题，也未改动 trim/thicken 既有逻辑。
+
+**未验证：** ≥3 截面、smooth、闭合、相切/曲率连续性、非平行/扭转或圆弧截面、Creo 9/10 实机、字面 erase 后重载。
+
+证据：[FEAT-009-H02-2026-11-07](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)（含 `live_report.json` 与首跑含抽取树的 `first_run_loft_receipt.json`）。

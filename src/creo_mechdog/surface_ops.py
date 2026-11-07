@@ -8,9 +8,10 @@ re-exports these classes, so both import paths stay valid.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+import re
+from typing import Annotated, Any, Literal
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 
 from creo_mechdog.schema_base import Label, Positive, StrictModel
 
@@ -97,6 +98,43 @@ class SurfaceTrimOp(StrictModel):
                 "surface_trim offset applies to the use-quilt trimming variant; a curve "
                 "tool has no surface to offset"
             )
+        return self
+
+
+class SurfaceLoftOp(StrictModel):
+    """Minimal two-section boundary blend (FEAT-009/H02).
+
+    Exactly two sections, each one MCP-owned sketch that owns one
+    non-composite curve, and straight interpolation only. Multi-section,
+    smooth, closed and continuity requests are refused before a job exists; the
+    operator never falls back to a solid Blend.
+    """
+
+    op: Literal["surface_loft"]
+    label: Label
+    sections: Annotated[list[str | int], Field(min_length=2, max_length=2)]
+    interpolation: Literal["straight"] = "straight"
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def normalize_section_ids(cls, values: Any) -> Any:
+        # Same public-client tolerance as LoftOp: digit-only strings are
+        # integer feature IDs, because a label must start with a letter.
+        if isinstance(values, list):
+            values = [
+                int(value) if isinstance(value, str) and re.fullmatch(r"[0-9]+", value) else value
+                for value in values
+            ]
+            if any(type(value) is int and not 0 <= value <= 2147483647 for value in values):
+                raise ValueError("Surface loft section IDs must be nonnegative 32-bit integers")
+            if any(isinstance(value, bool) for value in values):
+                raise ValueError("Surface loft section IDs cannot be booleans")
+        return values
+
+    @model_validator(mode="after")
+    def two_distinct_sections(self):
+        if len(self.sections) != len(set(self.sections)):
+            raise ValueError("Surface loft sections must be two distinct sketches")
         return self
 
 

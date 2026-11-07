@@ -1,6 +1,6 @@
 # FEAT-009：放样曲面模式与多截面能力
 
-日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：待规划（2026-11-06 复核：`surface_loft` 仍未公开，`capabilities` 继续拒绝 `loft` 曲面模式；0.13.0 只公开了 `creo_surface_trim`/`creo_project_curve`/`creo_surface_offset`，不属本卡范围；Direct Blend 元素树抽取返回 -18，树路线仍关闭）。目标版本：未排期。
+日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：**部分交付（2026-11-07）**：最小两截面直纹曲面放样 `surface_loft` / `creo_surface_loft` 已实现并在 Creo 12.4.0.0 实机通过（1 个开放 quilt、800.0 mm²、保存重载、x=20 两侧 400 mm²、2 mm 加厚 1600 mm³），见[证据](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)；多截面、smooth/闭合/连续性、非平行/扭转截面仍不公开，`creo_loft` 继续只建实体。目标版本：0.18.x 开发分支（未发布）。
 
 来源：[0.3.5 曲面反馈](../validation/feedback-0.3.5-surface-2026-10-18/report.md) 与[能力边界反馈](../validation/FEEDBACK-0.3.5-CAPABILITY-2026-10-18.md)；[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §2（`surface_loft` 元素树路线）；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-039](FEAT-039.md)（纯曲面链路算子）、[FEAT-053](FEAT-053.md)（三点定面）、[BUG-052](BUG-052.md)（曲面类型查询）。
 
@@ -48,9 +48,19 @@
 
 **下一步：** Q08 按契约 §2.1/§6.1/§6.2 实现 `surface_loft`（Python 模型 `SurfaceLoftOp`；原生 `generic_surface_loft`）；开工前必须先完成契约 §7 的 **P1 实机探针**并回填实际元素树。P1 判定"路线不成立"时**只阻断 Q08**，Q09/Q10 不受阻。共享测量 helper 唯一归属 `native/surface_measure.h`（契约 §4.7，本卡实现者为首个维护人）。
 
-### 2026-11-01 P1 实机探针：路线不成立
+### 2026-11-01 P1 实机探针：路线不成立（已于 2026-11-07 被 H02 推翻）
 
 `creo_create_feature_tree` 用契约 §2.1 树 + `PRO_E_EXT_SURF_CUT_SOLID_TYPE`/`PRO_E_BNBLN_TAN_FLD_TYPE`/`PRO_E_BNBLN_TAN_COND_TYPE` 尝试创建两直线截面边界混合：`ProFeatureWithoptionsCreate=0`，但生成特征 status 6（`PRO_FEAT_UNREGENERATED`）、无 geometry item，作业按“再生产生失败/抑制/不完整特征”回滚，无 `ProErrorlist`。详见[契约 §9](../development/G5-NATIVE-CONTRACT.md#9-2026-11-01-实机探针结果p1p3)。**Q08 不开工**，需重新取得可行树后再实现。
+
+2026-11-07 复核：该失败发生在**创建前手写切线条件/表面类型**的树上；按 §2.1 只建裸骨架并用 INCOMPLETE 创建、抽取、redefine 的路线成功。上述历史记录保留，不再代表当前结论。
+
+## 2026-11-07 H02 实机：最小两截面曲面放样交付
+
+路线 A 成立：`PRO_FEAT_CR_INCOMPLETE_FEAT` 建 `PRO_FEAT_DATUM_SURF` + `PRO_E_DTM_SRF_TYPE_BND_BLEND` 裸树 → `ProFeatureElemtreeExtract`（103 元素）→ `ProFeatureWithoptionsRedefine` → ACTIVE。内核自行补齐 `PRO_E_EXT_SURF_CUT_SOLID_TYPE=942` 与 `PRO_E_BNBLN_TAN_COND` 默认值（`TAN_COND_TYPE`=1,1,0,0、`TAN_FLD_TYPE`=-1,-1,0,0），说明旧探针的失败是创建前写入值与内核默认冲突，不是元素被拒。
+
+交付内容：`surface_loft` / `creo_surface_loft`，恰好 2 条单曲线草图截面、`interpolation="straight"`；拒绝 ≥3 截面、smooth、闭合、连续性、模式开关；产出恰好 1 个开放 datum-surface quilt，不产实体。实机读数：quilt_id 61、`surface_area_mm2=800.0`、`quilt_closed_native=open`、`has_solid=false`、`saved_file_reloaded_and_verified=true`；x=20 基准面修剪两侧各 400.0 mm²；2 mm 加厚 1599.9999999999995 mm³。详见[证据](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)。
+
+未公开/未验证：多截面、smooth、闭合、相切/曲率连续性、非平行/扭转截面、圆弧截面、Creo 9/10 实机；同一模型先加厚再修剪会失败（-1），验收顺序为 trim 在 thicken 之前或用独立模型。
 
 
 ## 2026-11-01 Q15 离线集成状态

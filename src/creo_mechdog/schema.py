@@ -32,6 +32,7 @@ from creo_mechdog.sheetmetal import first_wall_section_problem
 from creo_mechdog.surface_ops import (
     ProjectCurveOp,
     QuiltMergeOp,
+    SurfaceLoftOp,
     SurfaceTrimOp,
     quilt_reference_problem,
 )
@@ -2002,6 +2003,7 @@ Operation = Annotated[
         SurfaceOffsetOp,
         SolidifyOp,
         SurfaceTrimOp,
+        SurfaceLoftOp,
         QuiltMergeOp,
         ProjectCurveOp,
         BooleanOp,
