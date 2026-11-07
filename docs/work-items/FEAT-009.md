@@ -1,6 +1,6 @@
 # FEAT-009：放样曲面模式与多截面能力
 
-日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：**部分交付（2026-11-07）**：最小两截面直纹曲面放样 `surface_loft` / `creo_surface_loft` 已实现并在 Creo 12.4.0.0 实机通过（1 个开放 quilt、800.0 mm²、保存重载、x=20 两侧 400 mm²、2 mm 加厚 1600 mm³），见[证据](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)；多截面、smooth/闭合/连续性、非平行/扭转截面仍不公开，`creo_loft` 继续只建实体。目标版本：0.18.x 开发分支（未发布）。
+日期：2026-10-31（工作卡补建）。类型：功能。优先级：P2。状态：**已交付 0.18.3 子项（2026-11-07）**：最小两截面直纹曲面放样 `surface_loft` / `creo_surface_loft` 已实现并在 Creo 12.4.0.0 实机通过（1 个开放 quilt、800.0 mm²、保存重载、x=20 两侧 400 mm²、2 mm 加厚 1600 mm³），见[证据](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)；多截面、smooth/闭合/连续性、非平行/扭转截面未排期且不公开，`creo_loft` 继续只建实体。目标版本：0.18.3（子项已交付）；剩余范围未排期。
 
 来源：[0.3.5 曲面反馈](../validation/feedback-0.3.5-surface-2026-10-18/report.md) 与[能力边界反馈](../validation/FEEDBACK-0.3.5-CAPABILITY-2026-10-18.md)；[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §2（`surface_loft` 元素树路线）；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-039](FEAT-039.md)（纯曲面链路算子）、[FEAT-053](FEAT-053.md)（三点定面）、[BUG-052](BUG-052.md)（曲面类型查询）。
 

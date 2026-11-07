@@ -8,9 +8,22 @@
 
 本轮离线补齐：无 Git 来源降级、日志头尾阶段归因、失败 ID 与 loaded 回执、有效板厚判据、空预览路径/字节/判定依据、过期 startup 提示、更新检查在途字段、曲面能力与门禁文案、附件 API 二级备用路线、发布勘误与统计口径。原生 resize 仅补诊断，**功能缺陷仍开放**。
 
+## 完成状态（2026-11-07，随 0.18.3 交付）
+
+| 编号 | 状态 | 证据 |
+| --- | --- | --- |
+| H01 / FEAT-058 | **完成**：非零 origin 大跨度 resize 修复，Creo 12.4.0.0 实机 14/14 | [SUMMARY](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md) |
+| H02 / FEAT-009 | **完成**：两截面直纹曲面放样 `surface_loft` / `creo_surface_loft`，实机 quilt 800 mm²、trim 两侧各 400、thicken 2 mm=1600 mm³ | [SUMMARY](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md) |
+| H04 / FEAT-039 | **完成**：曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量，实机四例 42 检查通过 | [EVIDENCE](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md) |
+| H06 / FEAT-039 | **完成（保留侧几何子项）**：保留侧真实形心/bbox/世界方向，实机 41 检查通过；trim 标签下游引用 `-4` 仍开放 | [EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md) |
+| H03 / FEAT-039 | **反证完成，门禁保持**：INCOMPLETE 骨架路线仍 4 面 0 quilt，`quilt_merge` 不解除 | [EVIDENCE](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md) |
+| H11 / DEV-072/074 | **完成**：0.17.3–0.18.2 的 tag/main/Release/四附件/body 本机独立核对 | [POSTCHECK](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md) |
+| H13 / DEV-066 | **完成**：剩余 17 处 Git 读取迁入 `source_provenance.local_provenance`，缺 Git 时明确降级 | 本页 H13 行、[DEV-074 卡](../work-items/DEV-074.md) |
+| H05 / H07 / H08 / H09 / H10 / H12 | **未完成**，保留在下表 | — |
+
 ## 验证结果
 
-仓库内 `tools/dev_check.py --work-item DEV-074` 已通过：2850项单测、0失败、0错误，风格24条lint/12个未格式化文件为既有基线，没有新增基线问题；`bridge.py build`退出0。最终源码在无`.git`、PATH无Git的独立分发目录全量2850项、0失败/0错误、2项SDK检查跳过；464个源码文件与工作树一致。完整来源、命令与审查限制见[验收记录](DEV-074-ACCEPTANCE.md)。上述轮次没有连接 Creo；所有新原生字段、非零原点 resize、真实附件下载、WorkBuddy、Creo 9/10/12 新实机结果均不能记为通过。
+仓库内 `tools/dev_check.py --work-item DEV-074` 已通过：2850项单测、0失败、0错误，风格24条lint/12个未格式化文件为既有基线，没有新增基线问题；`bridge.py build`退出0。最终源码在无`.git`、PATH无Git的独立分发目录全量2850项、0失败/0错误、2项SDK检查跳过；464个源码文件与工作树一致。完整来源、命令与审查限制见[验收记录](DEV-074-ACCEPTANCE.md)。上述轮次没有连接 Creo；所有新原生字段、非零原点 resize、真实附件下载、WorkBuddy、Creo 9/10/12 新实机结果均不能记为通过。**0.18.3 发布门槛另行实测**：工作树 2916 项、0 失败 0 错误（`dev_check` 源码指纹 `2aeceda9…`），源码包解压 2916 项、0 失败 0 错误、3 项 SDK 跳过，见[发布记录](../validation/RELEASE-0.18.3.md)。
 
 后续增量（2026-11-07，H01 实机）：非零原点跨轴 resize 已在 Creo 12.4.0.0 实机定性并修复（14 例矩阵通过，驱动 `tools/test_planar_wall_origin_resize.py`），证据 [FEAT-058-H01-2026-11-07](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)；本页其余离线结论不受影响。
 
@@ -28,12 +41,12 @@
 | H08 / FEAT-055 | 曲面边圆角、曲率梳/斑马纹、跨边G1偏差尚无接口。 | 各自登记最小契约，取得曲面边选择/几何结果或分析图、方向/曲率数值及保存重载证据。实体 round 不等于曲面 fillet。 |
 | H09 / FEAT-039 | 任意非平面 fill 未支持。 | 先交付明确替代：旋转球面用于中心R8场景；任意闭合边界的非平面填充需新原生路线，单独验收，不放宽现有 planar fill。 |
 | H10 / FEAT-039 | 多quilt实体化/加厚、开口面与0.3壁厚整链验收未完成。 | H02/H03/H04完成后再跑完整五爪任务；验证闭合、无缝/重叠、质量/厚度、开口面、保存重载与后续编辑。 |
-| H11 / DEV-072/074 | 0.17.4与当前版本的真实远端 tag/main/Release/四附件/body 后核对尚未独立实施；新 API asset-ID 路线仅离线mock。 | 有网络时执行 `tools/check_release_assets.py --tag v0.17.4 --version 0.17.4`，记录Asia/Shanghai查询时间、提交、大小、API digest、本地SHA256与sidecar/body；写新POSTCHECK文件，保留旧validation/tag/附件字节。本轮[勘误](DEV-074-RELEASE-ERRATA.md)区分报告方实测与本机未查。 |
+| H11 / DEV-072/074 | **已完成（2026-11-07 本机只读核对）**。对 `v0.17.3`、`v0.17.4`、`v0.18.0`、`v0.18.1`、`v0.18.2` 执行 `tools/check_release_assets.py --tag` 与 `gh api` 核对：5 个附注标签均指向 main 合并提交、Release 非草稿、四附件齐全，20 个文件本地 SHA256 = sidecar = API digest。证据 [POSTCHECK](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md)。仍开放：`v0.17.3` body 缺附件 SHA256 与独立环境段的**历史瑕疵**需用户决定补记方式；API asset-ID 作为「browser_download_url 失败」回退的**触发路径**未做故障注入，只证明端点可用。 | 后续：按用户决定在后续版本勘误或台账备注 v0.17.3 body 历史瑕疵；回退触发需隔离环境另验，不在本批做故障注入。 |
 | H12 / BUG-115、BUG-109、DEV-074 | BUG-115原生根因和Creo10精确失败形态未知；新诊断/回执/预览依据尚无本轮MCP实机、保存重载与新WorkBuddy证据。 | 先确认健康会话，重编译后用MCP复验新字段及原始失败样本；默认保护保持。若按release收窄或新增opt-out，先补原生证据及独立设计。真实断流/原生并发/保存失败不得以单元mock记通过。 |
-| H13 / DEV-066及历史反馈 | 2026-11-07 第二轮已把剩余 17 个仍自行调用 `git rev-parse/ls-files/status` 的证据/驱动函数迁到 `source_provenance.local_provenance`：`test_update_check.provenance`、`test_toolkit_recovery.provenance`、`test_toolkit_channel.provenance`、`test_startup_retry.provenance`、`test_sketch_shift_batch._environment`、`test_geometry_transform_copies._identity`、`test_sketch_geometry_deviation.provenance`、`test_native_countersink.provenance`、`test_sheetmetal_box_live.local_provenance`、`test_g5_native_probe.local_provenance`、`test_first_wall_origin.source_identity`、`test_failed_model_cleanup.local_provenance`、`test_assembly_bundle.provenance`、`test_assembly_ack_failure._identity`、`test_adoption_product_rules.git_identity`、`test_adoption_planar_wall.source_identity`、`dev_check.git_state`（连带 `guarded_live_run`、`test_editing_closeout`）。所有报告保留原字段，仅新增 `git_status`；缺 Git/非仓库时 commit/branch/dirty 为 null。`docs/validation/bug-001-repro-2026-10-16/g0_driver.py` 是不可改历史原件，不迁移。负例日志降噪仅处理已登记的种子摘要负例：`tests/unit/test_seed_record_gate.py` 的 CLI 负例改用 `redirect_stdout` 捕获并断言错误文本仍存在，不再向全量测试打印红字；未改无关日志。缺失的旧反馈原稿与原始失败现场仍开放。 | 本轮已完成上述 17 处并新增 `tests/unit/test_source_provenance_drivers.py`（Git 缺失/非仓库/正常仓库三态 + 全部迁移入口降级）；全量单测与 ruff 结果见 DEV-074 证据节。逐脚本迁移仍不等于 37 个历史工具全部完成；剩余只有不可改历史原件。旧反馈原稿需向原报告方取得后校验归档，不能凭空补造。 |
+| H13 / DEV-066及历史反馈 | **已完成（本批）**。2026-11-07 第二轮已把剩余 17 个仍自行调用 `git rev-parse/ls-files/status` 的证据/驱动函数迁到 `source_provenance.local_provenance`：`test_update_check.provenance`、`test_toolkit_recovery.provenance`、`test_toolkit_channel.provenance`、`test_startup_retry.provenance`、`test_sketch_shift_batch._environment`、`test_geometry_transform_copies._identity`、`test_sketch_geometry_deviation.provenance`、`test_native_countersink.provenance`、`test_sheetmetal_box_live.local_provenance`、`test_g5_native_probe.local_provenance`、`test_first_wall_origin.source_identity`、`test_failed_model_cleanup.local_provenance`、`test_assembly_bundle.provenance`、`test_assembly_ack_failure._identity`、`test_adoption_product_rules.git_identity`、`test_adoption_planar_wall.source_identity`、`dev_check.git_state`（连带 `guarded_live_run`、`test_editing_closeout`）。所有报告保留原字段，仅新增 `git_status`；缺 Git/非仓库时 commit/branch/dirty 为 null。`docs/validation/bug-001-repro-2026-10-16/g0_driver.py` 是不可改历史原件，不迁移。负例日志降噪仅处理已登记的种子摘要负例：`tests/unit/test_seed_record_gate.py` 的 CLI 负例改用 `redirect_stdout` 捕获并断言错误文本仍存在，不再向全量测试打印红字；未改无关日志。缺失的旧反馈原稿与原始失败现场仍开放。 | 本轮已完成上述 17 处并新增 `tests/unit/test_source_provenance_drivers.py`（Git 缺失/非仓库/正常仓库三态 + 全部迁移入口降级）；全量单测与 ruff 结果见 DEV-074 证据节。逐脚本迁移仍不等于 37 个历史工具全部完成；剩余只有不可改历史原件。旧反馈原稿需向原报告方取得后校验归档，不能凭空补造。 |
 
 结构化最近候选边已完成原生失败结果、compact白名单与保护证据链路；仅离线测试/编译，实机失配场景仍由H12接手，不从错误message正则提取“测量值”代替原生结构化证据。
 
 ## 接手约束
 
-本机只使用 `MCP_CREO_MechDog_dev`，不擅自连接、结束Creo、清unknown或故障注入。当前服务版本保持0.18.0，本次不合main、不发Release；后续用户授权合main时必须遵守项目同次Release交付规则。开始时用户已有 `docs/work-items/DEV-054.md`、`.trae/`、`docs/superpowers/plans/2026-11-06-feat-014-miter-cuts-route.md` 未提交内容，不属于本批提交。
+本机只使用 `MCP_CREO_MechDog_dev`，不擅自连接、结束Creo、清unknown或故障注入。上述「当前服务版本保持0.18.0、不合main、不发Release」为离线批时点约束；2026-11-07 后续已完成 H01/H02/H04/H06/H11/H13 并以 0.18.3 交付，发布证据见[发布记录](../validation/RELEASE-0.18.3.md)。开始时用户已有 `docs/work-items/DEV-054.md`、`.trae/`、`docs/superpowers/plans/2026-11-06-feat-014-miter-cuts-route.md` 未提交内容，不属于本批提交。

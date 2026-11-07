@@ -105,7 +105,7 @@ class ReleaseDownloadTests(unittest.TestCase):
             patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
             patch.object(release_download, "urlopen", side_effect=open_url),
         ):
-            with self.assertRaisesRegex(RuntimeError, "no valid API id"):
+            with self.assertRaisesRegex(RuntimeError, "github.com unavailable"):
                 release_download.download(self.tag, self.directory)
         self.assertEqual(list(self.directory.iterdir()), [])
 
