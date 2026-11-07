@@ -13,6 +13,17 @@ from typing import Any
 
 DENSITY_SOURCES = ("model_material", "request", "none")
 
+#: Why a reading carries no mass. The native executor names the broken link so
+#: the receipt does not repeat "assign a material" when a material already
+#: exists but its unit (or density) cannot be used.
+MASS_UNAVAILABLE_REASONS = (
+    "no_density",
+    "unsupported_mass_unit",
+    "material_density_unavailable",
+    "material_query_failed",
+    "volume_unavailable",
+)
+
 
 def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     """Return the public receipt for one native ``mass_properties`` block."""
@@ -25,6 +36,11 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     source = raw.get("density_source")
     if source not in DENSITY_SOURCES:
         raise ValueError(f"Unknown density source: {source!r}")
+    reason = raw.get("mass_unavailable_reason")
+    if reason is not None and reason not in MASS_UNAVAILABLE_REASONS:
+        raise ValueError(f"Unknown mass unavailable reason: {reason!r}")
+    if source != "none" and reason is not None:
+        raise ValueError("A mass reading with a density source cannot carry an unavailable reason")
 
     if source == "none":
         if mass is not None or density is not None:
@@ -49,6 +65,7 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
         "mass_g": mass,
         "density_g_cm3": density,
         "density_source": source,
+        "mass_unavailable_reason": reason,
         "center_of_mass_mm": _triple_or_none(raw.get("center_of_mass_mm")),
         "material_assigned": bool(raw.get("material_assigned")),
         "mass_unit": raw.get("mass_unit"),

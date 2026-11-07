@@ -1,6 +1,6 @@
 import unittest
 
-from creo_mechdog.mass_properties import normalize_mass_properties
+from creo_mechdog.mass_properties import MASS_UNAVAILABLE_REASONS, normalize_mass_properties
 
 
 def reading(**overrides):
@@ -187,6 +187,45 @@ class NormalizeMassPropertiesTest(unittest.TestCase):
     def test_center_of_mass_must_be_three_numbers(self):
         result = normalize_mass_properties(reading(center_of_mass_mm=[1.0, 2.0]))
         self.assertIsNone(result["center_of_mass_mm"])
+
+    def test_unavailable_reasons_are_echoed_without_mass(self):
+        for reason in MASS_UNAVAILABLE_REASONS:
+            with self.subTest(reason=reason):
+                result = normalize_mass_properties(
+                    reading(
+                        mass_g=None,
+                        density_g_cm3=None,
+                        density_source="none",
+                        mass_unavailable_reason=reason,
+                    )
+                )
+                self.assertEqual(result["mass_unavailable_reason"], reason)
+                self.assertIsNone(result["mass_g"])
+
+    def test_missing_reason_stays_none_for_older_native_readings(self):
+        result = normalize_mass_properties(
+            reading(mass_g=None, density_g_cm3=None, density_source="none")
+        )
+        self.assertIsNone(result["mass_unavailable_reason"])
+
+    def test_unknown_unavailable_reason_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "unavailable reason"):
+            normalize_mass_properties(
+                reading(
+                    mass_g=None,
+                    density_g_cm3=None,
+                    density_source="none",
+                    mass_unavailable_reason="assumed",
+                )
+            )
+
+    def test_unavailable_reason_with_density_source_is_refused(self):
+        for source in ("request", "model_material"):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(ValueError, "cannot carry an unavailable reason"):
+                    normalize_mass_properties(
+                        reading(density_source=source, mass_unavailable_reason="no_density")
+                    )
 
 
 if __name__ == "__main__":

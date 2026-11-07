@@ -1,6 +1,6 @@
 # FEAT-057：真实材料质量属性
 
-类型：功能。优先级：P2。状态：开发中（工具已随 0.18.0 集成；离线数值守卫子项完成；材料重心及契约待收口）。目标版本：未排期。
+类型：功能。优先级：P2。状态：部分交付（0.18.1 发布密度/单位/缺失原因回执契约，离线验证；主惯量、装配汇总与 Creo 实机待收口）。目标版本：0.18.1（已发布）；剩余范围未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -44,3 +44,14 @@
 独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（稳定日志 `build/feat057_numeric_guards_20261104/unit-full.log`）。此结果与失败的 dev_check 分别记录。
 
 本子项稳定本机证据目录为 `build/feat057_numeric_guards_20261104/`（Git 忽略）：`task-1-report.md` 为交接报告，`red.log` / `green.log` 为专项红绿回归，`dev-check.log` 为失败的完整开发检查，`unit-full.log` 为独立全量离线单测，`unchanged-style-files.json` 为四个格式阻断文件相对基线未变的哈希证据。该目录保留证据以供计划临时目录清理后追溯。
+
+## 2026-11-07 密度/单位/缺失原因契约补步
+
+分支 `codex/FEAT-057-density-contract`（基线 `58dd76b`，0.18.0 发布提交）。本次只补回执契约，不做实机：
+
+- 单位口径固定：`mass_g` 恒为克，`density_g_cm3` 恒为 g/cm³；`mass_unit` 是模型自身质量单位名，只有 `g`/`kg`/`tonne`(t) 会被换算，其余单位不猜换算因子。
+- 原生 `mass_properties` 新增 `mass_unavailable_reason`：材料存在但查询失败 `material_query_failed`、单位不可换算 `unsupported_mass_unit`、材料无可用密度 `material_density_unavailable`、仅给请求密度但体积未知 `volume_unavailable`、既无材料也无请求密度 `no_density`；对应 hint 不再一律提示“先赋材料”。
+- Python 归一化新增原因枚举校验：未知原因拒绝；`density_source` 非 `none` 时携带原因拒绝；旧原生回执无该字段时保留 `null`（版本错配不误判）。
+- 工具说明同步单位与原因，`material_assigned`/`mass_unit`/`density_source` 语义不变。
+
+验收：`tests/unit/test_mass_properties.py` 24/24 通过；`bridge.py build` 组合编译通过（Windows x64 / Creo 12.4.0.0 匹配 SDK）。**未连接 Creo/Toolkit**：原生原因分支、真实材料密度、英寸/磅单位模型、保存重载均无实机证据；主惯量、装配 occurrence 汇总与 `complete` 契约仍开放。已随 0.18.1 发布（离线），发布记录见 [RELEASE-0.18.1](../validation/RELEASE-0.18.1.md)。

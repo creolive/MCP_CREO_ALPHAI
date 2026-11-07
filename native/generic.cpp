@@ -722,6 +722,7 @@ static J mass_properties_json(const J &op) {
              {"mass_query_code", nullptr},
              {"units_query_code", nullptr},
              {"density_source", "none"},
+             {"mass_unavailable_reason", nullptr},
              {"hint", nullptr},
              {"source", "ProSolidMassPropertyWithDensityGet"}};
     auto length_units = inspect_length_units(board);
@@ -782,6 +783,18 @@ static J mass_properties_json(const J &op) {
                 return out;
             }
         }
+        // FEAT-057: a material exists but the mass still failed, so the receipt
+        // must say which link broke instead of repeating "assign a material".
+        if (mass_code != PRO_TK_NO_ERROR) {
+            out["mass_unavailable_reason"] = "material_query_failed";
+            out["hint"] = "The model material could not be measured; mass is unavailable";
+        } else if (!grams_per_unit) {
+            out["mass_unavailable_reason"] = "unsupported_mass_unit";
+            out["hint"] = "The model mass unit is not g, kg or tonne; mass is not converted";
+        } else {
+            out["mass_unavailable_reason"] = "material_density_unavailable";
+            out["hint"] = "The model material reports no usable density";
+        }
     }
     // Caller-supplied density: geometry stays measured, the density is labelled
     // as a request so nobody mistakes a what-if for the part's material.
@@ -794,9 +807,11 @@ static J mass_properties_json(const J &op) {
             out["density_source"] = "request";
             return out;
         }
+        out["mass_unavailable_reason"] = "volume_unavailable";
         out["hint"] = "Volume is unknown, so a supplied density cannot yield a mass";
         return out;
     }
+    out["mass_unavailable_reason"] = "no_density";
     out["hint"] = "Assign a material with a density, or pass density_g_cm3, to get mass";
     return out;
 }
