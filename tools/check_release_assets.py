@@ -49,7 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     version = args.version or args.tag.removeprefix("v")
     if args.dir:
-        problems = validate_directory(args.dir.resolve(), version)
+        try:
+            problems = validate_directory(args.dir.resolve(), version)
+        except OSError as error:
+            print(f"{args.tag}: could not read {args.dir}: {error}", file=sys.stderr)
+            return 2
     else:
         with tempfile.TemporaryDirectory() as temp:
             try:

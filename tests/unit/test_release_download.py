@@ -1,6 +1,7 @@
 """Offline tests for the GitHub Release API download fallback."""
 
 import hashlib
+import http.client
 import io
 import json
 import subprocess
@@ -81,6 +82,37 @@ class ReleaseDownloadTests(unittest.TestCase):
         ):
             release_download.download(self.tag, self.directory)
         self.assertEqual(validate_directory(self.directory, self.version), [])
+
+    def test_successful_gh_with_missing_asset_uses_api(self):
+        def incomplete(command, **kwargs):
+            stage = Path(command[command.index("--dir") + 1])
+            for name in self.names[:-1]:
+                (stage / name).write_bytes(self.payloads[name])
+            return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+        with patch.object(release_download.subprocess, "run", side_effect=incomplete), self.api():
+            release_download.download(self.tag, self.directory)
+        self.assertEqual(validate_directory(self.directory, self.version), [])
+
+    def test_invalid_api_json_fails_with_reasons(self):
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            patch.object(release_download, "urlopen", return_value=io.BytesIO(b"not json")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "GitHub API fallback failed"):
+                release_download.download(self.tag, self.directory)
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_api_http_error_is_reported(self):
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            patch.object(
+                release_download, "urlopen", side_effect=http.client.IncompleteRead(b"")
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "GitHub API fallback failed"):
+                release_download.download(self.tag, self.directory)
+        self.assertEqual(list(self.directory.iterdir()), [])
 
     def test_failed_gh_uses_api(self):
         result = SimpleNamespace(returncode=1, stderr="gh unavailable", stdout="")

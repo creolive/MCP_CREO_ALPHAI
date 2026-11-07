@@ -136,6 +136,7 @@ _SOURCE_NAMES = (
     "native/loft_seed.cpp",
     "native/advanced.cpp",
     "native/geometry_diagnostics.h",
+    "native/preview.h",
     "native/surface_measure.h",
     "native/quilt_gauge_guard.h",
     "native/quilt_query.h",
@@ -1747,7 +1748,7 @@ async def creo_sheetmetal_planar_wall(
     context), and the signed envelope (envelope.u/v/n min/max). thickness_validation is the
     source-aware gauge verdict. thickness_measured_mm/thickness_verified describe only the body
     API readback; they can remain null/false when geometry_normal_span verifies the gauge.
-    thickness_api_scope/reason and thickness_fallback_source explain that case. Use
+    thickness_api_scope/thickness_api_reason and thickness_fallback_source explain that case. Use
     creo_resize_sheetmetal_planar_wall to change the rectangle; do not rebuild the wall. A flange
     can attach to this wall, which then makes the wall a parent of that feature.
     """

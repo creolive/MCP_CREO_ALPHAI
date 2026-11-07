@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace geometry_diagnostics {
@@ -32,10 +33,17 @@ inline Candidate candidate(int id, Point first, Point second, const Point wanted
             use_reverse ? std::max(reverse[0], reverse[1]) : std::max(direct[0], direct[1])};
 }
 
+inline double sort_error(const Candidate &value) {
+    return std::isfinite(value.error_mm) ? value.error_mm
+                                         : std::numeric_limits<double>::infinity();
+}
+
 inline std::vector<Candidate> nearest_candidates(std::vector<Candidate> candidates) {
     std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
-        if (a.error_mm != b.error_mm)
-            return a.error_mm < b.error_mm;
+        const double left = sort_error(a);
+        const double right = sort_error(b);
+        if (left != right)
+            return left < right;
         return a.id < b.id;
     });
     if (candidates.size() > 5)

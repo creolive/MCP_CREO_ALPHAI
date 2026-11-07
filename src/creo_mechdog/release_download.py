@@ -1,5 +1,6 @@
 """Download and verify the four assets of an exact GitHub Release tag."""
 
+import http.client
 import json
 import shutil
 import subprocess
@@ -128,7 +129,14 @@ def download(tag: str, directory: Path, repo: str = REPOSITORY) -> None:
                 stage = Path(api_temp)
                 try:
                     _download_api(tag, stage, repo, version)
-                except (OSError, ValueError, KeyError, TypeError, RuntimeError) as api_error:
+                except (
+                    OSError,
+                    ValueError,
+                    KeyError,
+                    TypeError,
+                    RuntimeError,
+                    http.client.HTTPException,
+                ) as api_error:
                     raise RuntimeError(
                         f"{gh_error}; GitHub API fallback failed: {api_error}"
                     ) from None
