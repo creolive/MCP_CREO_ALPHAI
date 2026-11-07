@@ -373,16 +373,109 @@ static double planar_wall_measured_volume(const J &state) {
     return state["volume_mm3"].get<double>();
 }
 
+// The measured signed envelope is appended when it is available: a volume
+// mismatch on a non-zero origin is otherwise only a number, and the axis that
+// solved to the wrong side cannot be identified from it.
 static void planar_wall_require_volume(double measured, double length, double width,
-                                       double thickness, const char *phase) {
+                                       double thickness, const char *phase,
+                                       const J *envelope = nullptr) {
     double expected = length * width * thickness;
     double tolerance = std::max(0.01, fabs(expected) * PLANAR_WALL_VOLUME_TOLERANCE);
     log("PLANAR_WALL_VOLUME phase=%s measured_mm3=%.9f expected_mm3=%.9f tolerance=%.9f\n", phase,
         measured, expected, tolerance);
-    if (fabs(measured - expected) > tolerance)
-        throw std::runtime_error(std::string("The ") + phase + " wall volume " +
-                                 std::to_string(measured) + " mm3 does not match length*width*" +
-                                 "thickness = " + std::to_string(expected) + " mm3");
+    if (fabs(measured - expected) > tolerance) {
+        std::string message = std::string("The ") + phase + " wall volume " +
+                              std::to_string(measured) + " mm3 does not match length*width*" +
+                              "thickness = " + std::to_string(expected) + " mm3";
+        if (envelope) {
+            message += " (measured u=[" + std::to_string((*envelope)["u"]["min"].get<double>()) +
+                       ", " + std::to_string((*envelope)["u"]["max"].get<double>()) + "] v=[" +
+                       std::to_string((*envelope)["v"]["min"].get<double>()) + ", " +
+                       std::to_string((*envelope)["v"]["max"].get<double>()) + "] n=[" +
+                       std::to_string((*envelope)["n"]["min"].get<double>()) + ", " +
+                       std::to_string((*envelope)["n"]["max"].get<double>()) + "] mm)";
+        }
+        throw std::runtime_error(message);
+    }
+}
+
+// R10/H01: a coordinate dimension reports the distance to a section axis, so
+// its value cannot say which side the point sits on. These two dumps record the
+// references of every driven dimension and the solved rectangle corners, so a
+// wrong branch can be read from native.log instead of inferred from a volume.
+static void planar_wall_log_dimension_reference(ProSection section, int id, const std::string &name,
+                                                const char *phase) {
+    int *entities = nullptr, count = 0;
+    ProSectionPointType *points = nullptr;
+    if (ProSecdimReferencesGet(section, id, &entities, &points, &count) != PRO_TK_NO_ERROR)
+        return;
+    std::string refs;
+    for (int i = 0; i < count; i++)
+        refs += (i ? "," : "") + std::to_string(entities[i]) + ":" + std::to_string((int)points[i]);
+    ProSecdimType type = PRO_TK_DIM_NONE;
+    ProSecdimTypeGet(section, id, &type);
+    Pro2dPnt place = {0, 0};
+    ProSecdimLocationGet(section, id, place);
+    log("PLANAR_WALL_RESIZE_DIMREF phase=%s name=%s id=%d type=%d refs=%s place=%.9f,%.9f\n", phase,
+        name.c_str(), id, (int)type, refs.c_str(), place[0], place[1]);
+    ProArrayFree((ProArray *)&entities);
+    ProArrayFree((ProArray *)&points);
+}
+
+// A coordinate dimension's value is a distance along the direction the
+// dimension was created with, and that direction is fixed in the dimension. It
+// cannot be read from the value alone, but it follows from the pair (current
+// value, current point coordinate): value = side * coordinate, so side is the
+// sign of their product. Without this the resize assumed the direction from the
+// recorded size, which is only right before the first crossing (H01: a second
+// resize assumed the reversed side and solved v [-116,-64] for 150x180).
+static bool planar_wall_dimension_side(ProSection section, int id, int axis, double value,
+                                       double &side) {
+    int *entities = nullptr, count = 0;
+    ProSectionPointType *points = nullptr;
+    if (ProSecdimReferencesGet(section, id, &entities, &points, &count) != PRO_TK_NO_ERROR)
+        return false;
+    bool found = false;
+    double coordinate = 0;
+    for (int i = 0; i < count; i++) {
+        Pro2dEntdef *def = nullptr;
+        if (ProSectionEntityGet(section, entities[i], &def) != PRO_TK_NO_ERROR || !def)
+            continue;
+        if (def->type != PRO_2D_LINE && def->type != PRO_2D_CENTER_LINE)
+            continue;
+        auto line = (Pro2dLinedef *)def;
+        const double *point = points[i] == PRO_ENT_END     ? line->end2
+                              : points[i] == PRO_ENT_START ? line->end1
+                                                           : nullptr;
+        if (!point)
+            continue;
+        coordinate = point[axis];
+        found = true;
+    }
+    ProArrayFree((ProArray *)&entities);
+    ProArrayFree((ProArray *)&points);
+    if (!found)
+        return false;
+    side = value * coordinate > 0 ? 1.0 : value * coordinate < 0 ? -1.0 : 0.0;
+    return true;
+}
+
+static void planar_wall_log_corners(ProSection section, const J &sketch_meta, const char *phase) {
+    if (!sketch_meta.contains("entity_ids") || !sketch_meta["entity_ids"].is_object())
+        return;
+    for (int corner = 0; corner < 4; corner++) {
+        const std::string name = "wall_" + std::to_string(corner);
+        if (!sketch_meta["entity_ids"].contains(name))
+            continue;
+        Pro2dEntdef *def = nullptr;
+        if (ProSectionEntityGet(section, sketch_meta["entity_ids"][name].get<int>(), &def) !=
+                PRO_TK_NO_ERROR ||
+            !def || def->type != PRO_2D_LINE)
+            continue;
+        auto line = (Pro2dLinedef *)def;
+        log("PLANAR_WALL_RESIZE_CORNER phase=%s entity=%s start=%.9f,%.9f end=%.9f,%.9f\n", phase,
+            name.c_str(), line->end1[0], line->end1[1], line->end2[0], line->end2[1]);
+    }
 }
 
 // PRO_E_STD_DIRECTION grows along the *support surface* normal, which is not
@@ -679,6 +772,10 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
       frame_v = vec(frame["v_axis"]);
     ProMatrix loc;
     CK(ProSectionLocationGet(section, loc));
+    log("PLANAR_WALL_RESIZE_LOCATION m=%.9f,%.9f,%.9f,%.9f;%.9f,%.9f,%.9f,%.9f;"
+        "%.9f,%.9f,%.9f,%.9f;%.9f,%.9f,%.9f,%.9f\n",
+        loc[0][0], loc[0][1], loc[0][2], loc[0][3], loc[1][0], loc[1][1], loc[1][2], loc[1][3],
+        loc[2][0], loc[2][1], loc[2][2], loc[2][3], loc[3][0], loc[3][1], loc[3][2], loc[3][3]);
     bool loc_is_identity = true;
     for (int row = 0; row < 4; row++)
         for (int col = 0; col < 4; col++)
@@ -726,6 +823,7 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     log("PLANAR_WALL_RESIZE axes u=%d,v=%d slope=%d,%d offset=%.9f,%.9f origin=%.9f,%.9f\n",
         map_u.axis, map_v.axis, (int)map_u.slope, (int)map_v.slope, map_u.offset, map_v.offset, u0,
         v0);
+    planar_wall_log_corners(section, *sketch_meta, "before");
 
     // Rectangle traversal: min -> (max.x,min.y) -> max -> (min.x,max.y).
     static const double corner_u[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
@@ -773,15 +871,30 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
         double resized_coordinate = slope * (on_u ? resized_u : resized_v) + offset;
         double expected = fabs(recorded_coordinate);
         double tolerance = std::max(1e-6, fabs(expected) * 1e-6);
-        if (fabs(current - expected) > tolerance)
+        // A negative dimension value is the documented way to put the
+        // referenced point on the other side of the section axis, so a corner
+        // that must cross the origin is written negative. The sign follows the
+        // dimension's fixed direction, which is measured from the current value
+        // and point (see planar_wall_dimension_side); writing fabs() kept every
+        // corner on its creation side (H01: 185x232 -> 100x60 at origin
+        // [-92.5,-116] solved v [-116,56] and was refused).
+        double side = 0;
+        if (!planar_wall_dimension_side(section, it.value().get<int>(),
+                                        on_u ? map_u.axis : map_v.axis, current, side) ||
+            side == 0)
+            side = recorded_coordinate < 0 ? -1.0 : 1.0;
+        const double written = side * resized_coordinate;
+        if (fabs(fabs(current) - expected) > tolerance)
             throw std::runtime_error("The driving sketch dimension " + name + " is " +
                                      std::to_string(current) + " mm instead of the recorded " +
                                      std::to_string(expected) + " mm; the wall stayed untouched");
         log("PLANAR_WALL_RESIZE_DIMENSION name=%s id=%d recorded_signed_mm=%.9f "
-            "target_signed_mm=%.9f current_mm=%.9f target_magnitude_mm=%.9f\n",
+            "target_signed_mm=%.9f current_mm=%.9f target_magnitude_mm=%.9f side=%.0f "
+            "written_mm=%.9f\n",
             name.c_str(), it.value().get<int>(), recorded_coordinate, resized_coordinate, current,
-            fabs(resized_coordinate));
-        writes.push_back({it.value().get<int>(), fabs(resized_coordinate)});
+            fabs(resized_coordinate), side, written);
+        planar_wall_log_dimension_reference(section, it.value().get<int>(), name, "before");
+        writes.push_back({it.value().get<int>(), written});
     }
     if (writes.empty())
         throw std::runtime_error("The driving sketch carries no readable coordinate dimensions; "
@@ -792,6 +905,7 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     CK(ProSecerrorAlloc(&error));
     CK(ProSectionRegenerate(section, &error));
     ProSecerrorFree(&error);
+    planar_wall_log_corners(section, *sketch_meta, "after_solve");
     CK(ProElementSpecialvalueSet(section_element, (ProAppData)section));
     redefine(&sketch_feature, root);
     CK(ProFeatureElemtreeFree(&sketch_feature, root));
@@ -803,10 +917,14 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
     ProFeature after_wall = feature(label);
     J state = inspection();
     double measured = planar_wall_measured_volume(state);
-    planar_wall_require_volume(measured, length, width, thickness, "resized");
     J bounds = planar_wall_material_bounds(state);
     J envelope = planar_wall_envelope(bounds, vec(frame["origin"]), vec(frame["u_axis"]),
                                       vec(frame["v_axis"]), vec(frame["normal"]));
+    log("PLANAR_WALL_RESIZE_ENVELOPE u=[%.9f,%.9f] v=[%.9f,%.9f] n=[%.9f,%.9f]\n",
+        envelope["u"]["min"].get<double>(), envelope["u"]["max"].get<double>(),
+        envelope["v"]["min"].get<double>(), envelope["v"]["max"].get<double>(),
+        envelope["n"]["min"].get<double>(), envelope["n"]["max"].get<double>());
+    planar_wall_require_volume(measured, length, width, thickness, "resized", &envelope);
     int dimensions = planar_wall_dimension_count(sketch_name);
     PlanarWallBodies bodies = planar_wall_bodies();
     planar_wall_log_bodies(bodies, "resized");

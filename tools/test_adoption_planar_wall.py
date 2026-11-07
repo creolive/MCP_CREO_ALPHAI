@@ -95,27 +95,19 @@ SOURCE_FILES = (
 )
 
 
-def git(*arguments: str) -> str:
-    return subprocess.run(
-        ["git", *arguments], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
-
-
 def source_identity() -> dict:
     """What this run actually executed, so the report is self-contained."""
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in SOURCE_FILES
-    }
+    from creo_mechdog.source_provenance import local_provenance
+
+    evidence = local_provenance(ROOT, SOURCE_FILES)
     worker = ROOT / "build" / "creo_worker.exe"
     return {
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
+        "commit": evidence["commit"],
+        "branch": evidence["branch"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+        "source_sha256": evidence["source_sha256"],
+        "source_fingerprint": evidence["source_fingerprint"],
         "worker_sha256": hashlib.sha256(worker.read_bytes()).hexdigest()
         if worker.is_file()
         else None,

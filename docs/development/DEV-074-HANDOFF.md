@@ -10,13 +10,15 @@
 
 ## 验证结果
 
-仓库内 `tools/dev_check.py --work-item DEV-074` 已通过：2850项单测、0失败、0错误，风格24条lint/12个未格式化文件为既有基线，没有新增基线问题；`bridge.py build`退出0。最终源码在无`.git`、PATH无Git的独立分发目录全量2850项、0失败/0错误、2项SDK检查跳过；464个源码文件与工作树一致。完整来源、命令与审查限制见[验收记录](DEV-074-ACCEPTANCE.md)。本轮没有连接 Creo；所有新原生字段、非零原点 resize、真实附件下载、WorkBuddy、Creo 9/10/12 新实机结果均不能记为通过。
+仓库内 `tools/dev_check.py --work-item DEV-074` 已通过：2850项单测、0失败、0错误，风格24条lint/12个未格式化文件为既有基线，没有新增基线问题；`bridge.py build`退出0。最终源码在无`.git`、PATH无Git的独立分发目录全量2850项、0失败/0错误、2项SDK检查跳过；464个源码文件与工作树一致。完整来源、命令与审查限制见[验收记录](DEV-074-ACCEPTANCE.md)。上述轮次没有连接 Creo；所有新原生字段、非零原点 resize、真实附件下载、WorkBuddy、Creo 9/10/12 新实机结果均不能记为通过。
+
+后续增量（2026-11-07，H01 实机）：非零原点跨轴 resize 已在 Creo 12.4.0.0 实机定性并修复（14 例矩阵通过，驱动 `tools/test_planar_wall_origin_resize.py`），证据 [FEAT-058-H01-2026-11-07](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)；本页其余离线结论不受影响。
 
 ## 未完成清单（接手顺序）
 
 | 编号 / 条目 | 未完成内容与当前文件 | 下一动作与验收 |
 | --- | --- | --- |
-| H01 / FEAT-058，P1 | **非零原点大跨度 resize 尚未修复**。`native/planar_wall.cpp` 对 secdim 写绝对值，本轮仅新增 `PLANAR_WALL_RESIZE_DIMENSION`。现象：origin=[-92.5,-116]，185×232×1→100×60×1 得17200而非6000，已被体积守卫回滚。 | 先确认 Creo 会话可操作并取得实机授权；记录5个尺寸的名称/ID、有向目标和写值，确定解算分支。优先最小原生修复，保持 feature ID、origin、厚度与回滚。矩阵覆盖零/正/负/混合 origin、跨/不跨轴、恒等/缩小/放大、XY/XZ/YZ、正负厚度方向、同/跨计划、保存擦除重载和失败后继续编辑。不得删除体积/包络守卫。 |
+| H01 / FEAT-058，P1 | **已修复（Creo 12.4.0.0 实机 14 例通过）**。根因实测：5 个坐标尺寸是到截面轴的距离，方向属于尺寸本身；`coord_wall_1_end_y` 的目标角点必须跨到截面轴另一侧，`fabs()` 写法只能留在原侧，解出 v 跨距 172、体积 17200 被回滚。`native/planar_wall.cpp` 现在用 `ProSecdimReferencesGet` 实测每个尺寸方向后写有符号值（负值即翻侧），读回比较绝对值，并新增定位矩阵/角点/尺寸引用/包络诊断；守卫、feature ID、origin、厚度与 `origin=[0,0]` 路径不变。矩阵覆盖零/正/负/混合 origin、跨/不跨轴、恒等/缩小/放大/连续改型、XY/XZ/YZ、正负厚度方向、同计划、跨计划与 save/reload 后 resize，均 6000/42920 等预期值且保存重载 true。证据：[SUMMARY](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)。未验证：字面会话擦除后重载（工具约束）、Creo 9/10 实机、`test_adoption_planar_wall.py --live` 77 项因其它客户端占用通道未跑完。 | 后续：有健康会话时补 Creo 10/9 实机与完整 77 项回归；若需要字面 erase/reload，先扩展受管模型的擦除路线，不要删除现有体积/包络/子特征守卫。 |
 | H02 / FEAT-009、FEAT-055，主线阻塞 | 多截面曲面 loft / boundary blend / G1 桥接没有可用路线。`native/surfaces.cpp`、`docs/development/G5-NATIVE-CONTRACT.md`。 | 先用可复现手工参考树定位原生元素，最小交付2截面直纹，再G1；取得真实quilt ID、面积、保存重载和后续 trim 证据后才能公开。 |
 | H03 / FEAT-039，主线阻塞 | `quilt_merge` 保持门禁，既有树无可用结果 quilt，不能逐片缝合封闭。 | 原生 join/intersect 两片→链式，测 result_quilt_id、面积、闭合、失败回滚；修复前不解除 unavailable，不声称最终瓶底可实体化。 |
 | H04 / FEAT-039/055 | 曲面组闭合、公差0.01、缝隙/重叠缺组级测量。 | 定义并实现 open_edges/gap_max/overlap 测量，实机区分开放、闭合、微缝与重叠；逐片 closed 不能替代组级通过。 |
@@ -28,7 +30,7 @@
 | H10 / FEAT-039 | 多quilt实体化/加厚、开口面与0.3壁厚整链验收未完成。 | H02/H03/H04完成后再跑完整五爪任务；验证闭合、无缝/重叠、质量/厚度、开口面、保存重载与后续编辑。 |
 | H11 / DEV-072/074 | 0.17.4与当前版本的真实远端 tag/main/Release/四附件/body 后核对尚未独立实施；新 API asset-ID 路线仅离线mock。 | 有网络时执行 `tools/check_release_assets.py --tag v0.17.4 --version 0.17.4`，记录Asia/Shanghai查询时间、提交、大小、API digest、本地SHA256与sidecar/body；写新POSTCHECK文件，保留旧validation/tag/附件字节。本轮[勘误](DEV-074-RELEASE-ERRATA.md)区分报告方实测与本机未查。 |
 | H12 / BUG-115、BUG-109、DEV-074 | BUG-115原生根因和Creo10精确失败形态未知；新诊断/回执/预览依据尚无本轮MCP实机、保存重载与新WorkBuddy证据。 | 先确认健康会话，重编译后用MCP复验新字段及原始失败样本；默认保护保持。若按release收窄或新增opt-out，先补原生证据及独立设计。真实断流/原生并发/保存失败不得以单元mock记通过。 |
-| H13 / DEV-066及历史反馈 | 其它证据工具全面无Git化、负例日志降噪、缺失的旧反馈原稿与原始失败现场仍按既有卡开放。 | 本轮明确修复范围见最终测试；逐脚本迁移不要把25个来源入口通过等同于37工具全部完成。仅有本次四份md，缺失旧原件不能制造；需要时向原报告方取得原稿后校验归档。 |
+| H13 / DEV-066及历史反馈 | 2026-11-07 第二轮已把剩余 17 个仍自行调用 `git rev-parse/ls-files/status` 的证据/驱动函数迁到 `source_provenance.local_provenance`：`test_update_check.provenance`、`test_toolkit_recovery.provenance`、`test_toolkit_channel.provenance`、`test_startup_retry.provenance`、`test_sketch_shift_batch._environment`、`test_geometry_transform_copies._identity`、`test_sketch_geometry_deviation.provenance`、`test_native_countersink.provenance`、`test_sheetmetal_box_live.local_provenance`、`test_g5_native_probe.local_provenance`、`test_first_wall_origin.source_identity`、`test_failed_model_cleanup.local_provenance`、`test_assembly_bundle.provenance`、`test_assembly_ack_failure._identity`、`test_adoption_product_rules.git_identity`、`test_adoption_planar_wall.source_identity`、`dev_check.git_state`（连带 `guarded_live_run`、`test_editing_closeout`）。所有报告保留原字段，仅新增 `git_status`；缺 Git/非仓库时 commit/branch/dirty 为 null。`docs/validation/bug-001-repro-2026-10-16/g0_driver.py` 是不可改历史原件，不迁移。负例日志降噪仅处理已登记的种子摘要负例：`tests/unit/test_seed_record_gate.py` 的 CLI 负例改用 `redirect_stdout` 捕获并断言错误文本仍存在，不再向全量测试打印红字；未改无关日志。缺失的旧反馈原稿与原始失败现场仍开放。 | 本轮已完成上述 17 处并新增 `tests/unit/test_source_provenance_drivers.py`（Git 缺失/非仓库/正常仓库三态 + 全部迁移入口降级）；全量单测与 ruff 结果见 DEV-074 证据节。逐脚本迁移仍不等于 37 个历史工具全部完成；剩余只有不可改历史原件。旧反馈原稿需向原报告方取得后校验归档，不能凭空补造。 |
 
 结构化最近候选边已完成原生失败结果、compact白名单与保护证据链路；仅离线测试/编译，实机失配场景仍由H12接手，不从错误message正则提取“测量值”代替原生结构化证据。
 

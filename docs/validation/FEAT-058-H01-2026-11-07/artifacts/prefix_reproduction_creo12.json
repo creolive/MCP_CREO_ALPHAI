@@ -1,0 +1,103 @@
+[
+  {
+    "case": "pn",
+    "model_id": "4a44b55a46cf4d3eb9c2581745dbc57f",
+    "steps": [
+      {
+        "step": "create",
+        "job_id": "0b3fa0443864412d932eecd12e5cf2f0",
+        "status": "succeeded",
+        "message": "General feature plan completed",
+        "planar_wall": {
+          "feature_id": 49,
+          "volume_mm3": 42920.00000000001,
+          "envelope": {
+            "n": {
+              "max": 1.0,
+              "min": 0.0
+            },
+            "u": {
+              "max": 92.5,
+              "min": -92.5
+            },
+            "v": {
+              "max": 116.00000000000001,
+              "min": -116.00000000000001
+            }
+          },
+          "bounds_mm": [
+            [
+              -92.5,
+              -116.00000000000001,
+              0.0
+            ],
+            [
+              92.5,
+              116.00000000000001,
+              1.0
+            ]
+          ],
+          "origin": [
+            -92.5,
+            -116.0
+          ],
+          "dimension_count": 5,
+          "verified": null
+        }
+      },
+      {
+        "step": "step0",
+        "operations": [
+          {
+            "op": "resize_sheetmetal_planar_wall",
+            "feature": "base",
+            "length": 100.0,
+            "width": 60.0
+          }
+        ],
+        "job_id": "9f721835d84d44ff8c6c63d547f542f8",
+        "status": "failed",
+        "message": "The resized wall volume 17200.000000 mm3 does not match length*width*thickness = 6000.000000 mm3 (measured u=[-92.500000, 7.500000] v=[-116.000000, 56.000000] n=[0.000000, 1.000000] mm)",
+        "planar_wall": {
+          "feature_id": null,
+          "feature_id_before": null,
+          "volume_mm3": null,
+          "envelope": null,
+          "bounds_mm": null,
+          "origin": null,
+          "dimension_count": null,
+          "verified": null
+        },
+        "native": [
+          "PLANAR_WALL_BODIES phase=loaded total=2 sheetmetal=2 material=1 thickness_mm=1.000000000 thickness_known=1 thickness_code=0 gauge_source=api gauge_reason=- linked=1 linked_known=1",
+          "PLANAR_WALL_RESIZE feature_id=49 children=0",
+          "PLANAR_WALL_RESIZE_LOCATION m=0.000000000,-1.000000000,0.000000000,0.000000000;1.000000000,0.000000000,0.000000000,0.000000000;0.000000000,0.000000000,1.000000000,0.000000000;0.000000000,0.000000000,0.000000000,1.000000000",
+          "PLANAR_WALL_RESIZE axes u=1,v=0 slope=1,-1 offset=0.000000000,0.000000000 origin=-92.500000000,-116.000000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=before entity=wall_0 start=116.000000000,-92.500000000 end=116.000000000,92.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=before entity=wall_1 start=116.000000000,92.500000000 end=-116.000000000,92.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=before entity=wall_2 start=-116.000000000,92.500000000 end=-116.000000000,-92.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=before entity=wall_3 start=-116.000000000,-92.500000000 end=116.000000000,-92.500000000",
+          "PLANAR_WALL_RESIZE_DIMENSION name=coord_wall_0_end_x id=6 recorded_signed_mm=92.500000000 target_signed_mm=7.500000000 current_mm=92.500000000 target_magnitude_mm=7.500000000",
+          "PLANAR_WALL_RESIZE_DIMREF phase=before name=coord_wall_0_end_x id=6 type=8 refs=2:4,5:3 place=108.812770611,90.815884403",
+          "PLANAR_WALL_RESIZE_DIMENSION name=coord_wall_0_start_x id=4 recorded_signed_mm=-92.500000000 target_signed_mm=-92.500000000 current_mm=92.500000000 target_magnitude_mm=92.500000000",
+          "PLANAR_WALL_RESIZE_DIMREF phase=before name=coord_wall_0_start_x id=4 type=8 refs=2:4,5:2 place=108.812770611,-94.184115597",
+          "PLANAR_WALL_RESIZE_DIMENSION name=coord_wall_0_start_y id=5 recorded_signed_mm=116.000000000 target_signed_mm=116.000000000 current_mm=116.000000000 target_magnitude_mm=116.000000000",
+          "PLANAR_WALL_RESIZE_DIMREF phase=before name=coord_wall_0_start_y id=5 type=7 refs=2:4,5:2 place=107.504294180,-94.184115597",
+          "PLANAR_WALL_RESIZE_DIMENSION name=coord_wall_1_end_y id=7 recorded_signed_mm=-116.000000000 target_signed_mm=56.000000000 current_mm=116.000000000 target_magnitude_mm=56.000000000",
+          "PLANAR_WALL_RESIZE_DIMREF phase=before name=coord_wall_1_end_y id=7 type=7 refs=2:4,6:3 place=-124.495705820,90.815884403",
+          "PLANAR_WALL_RESIZE_DIMENSION name=coord_wall_2_end_x id=8 recorded_signed_mm=-92.500000000 target_signed_mm=-92.500000000 current_mm=92.500000000 target_magnitude_mm=92.500000000",
+          "PLANAR_WALL_RESIZE_DIMREF phase=before name=coord_wall_2_end_x id=8 type=8 refs=2:4,7:3 place=-123.187229389,-94.184115597",
+          "PLANAR_WALL_RESIZE_CORNER phase=after_solve entity=wall_0 start=116.000000000,-92.500000000 end=116.000000000,7.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=after_solve entity=wall_1 start=116.000000000,7.500000000 end=-56.000000000,7.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=after_solve entity=wall_2 start=-56.000000000,7.500000000 end=-56.000000000,-92.500000000",
+          "PLANAR_WALL_RESIZE_CORNER phase=after_solve entity=wall_3 start=-56.000000000,-92.500000000 end=116.000000000,-92.500000000",
+          "PLANAR_WALL_RESIZE_ENVELOPE u=[-92.500000000,7.500000000] v=[-116.000000000,56.000000000] n=[0.000000000,1.000000000]",
+          "PLANAR_WALL_VOLUME phase=resized measured_mm3=17200.000000000 expected_mm3=6000.000000000 tolerance=0.010000000"
+        ]
+      }
+    ],
+    "final": {
+      "revision": 2
+    }
+  }
+]

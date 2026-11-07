@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 import platform
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,21 +85,14 @@ def run_checks() -> dict:
 
 def git_identity() -> dict:
     """Record read-only CLI provenance; an unavailable Git identity stays explicit."""
-    try:
+    from creo_mechdog.source_provenance import local_provenance
 
-        def read(*args: str) -> str:
-            return subprocess.run(
-                ["git", *args],
-                cwd=SOURCE_PATHS.resource_root,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=10,
-            ).stdout.strip()
-
-        return {"commit": read("rev-parse", "HEAD"), "dirty": bool(read("status", "--porcelain"))}
-    except (OSError, subprocess.SubprocessError) as error:
-        return {"commit": None, "dirty": None, "error": str(error)}
+    evidence = local_provenance(SOURCE_PATHS.resource_root)
+    return {
+        "commit": evidence["commit"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -29,7 +29,6 @@ import argparse
 import asyncio
 import hashlib
 import json
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -43,22 +42,17 @@ REPORT = ROOT / "build" / "assembly_ack_failure_report.json"
 PLATE = [[0.0, 0.0], [60.0, 0.0], [60.0, 20.0], [0.0, 20.0]]
 
 
-def _git(*args: str) -> str:
-    try:
-        return subprocess.run(
-            ["git", *args], cwd=ROOT, capture_output=True, text=True, timeout=20
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return ""
-
-
 def _identity() -> dict:
+    from creo_mechdog.source_provenance import local_provenance
+
     worker = ROOT / "build/creo_worker.exe"
     fingerprint = ROOT / "build/source.sha256"
+    identity = local_provenance(ROOT)
     return {
-        "commit": _git("rev-parse", "HEAD"),
-        "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
-        "dirty": bool(_git("status", "--porcelain")),
+        "commit": identity["commit"],
+        "branch": identity["branch"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
         "source_fingerprint": (
             fingerprint.read_text(encoding="utf-8").strip() if fingerprint.is_file() else None
         ),

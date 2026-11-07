@@ -1,0 +1,299 @@
+{
+  "task": "FEAT-058/H01 origin resize matrix",
+  "run_id": "20261107T192325_86be80e9",
+  "mode": "live",
+  "started_at": 1794050605.7049751,
+  "source": {
+    "source_sha256": {
+      "native/planar_wall.cpp": "1c09254701a2079621964f56528aefefb43927c5effa5bb5e5d88888aafb4fbd",
+      "native/planar_wall.h": "da6159fa0f9c622efe4c5ad49b9cebb5d9468650e01d6c56fe24c910517fdf3c",
+      "native/generic.cpp": "00f6757cf53bb1f1d7c559d7c0cb5286d6693af5101ecc39d48f372ef5ed9b3d",
+      "src/creo_mechdog/native_planar_wall.py": "fc56c6aa4c866c3db95cfd25b411cd0babe91d79ccc32365d751813103aea383",
+      "tools/test_planar_wall_origin_resize.py": "2d8aac3f63e3a46fe1dfd6a1e55a02f3265e42ba9d4bf009977efd539e778aa9"
+    },
+    "worker_sha256": "71ee9ad462aeb5a10b93b978f596c47c390c7b97615d614ea1de5e63df5fe0c1"
+  },
+  "cases": [
+    {
+      "case": "yz_neg_cross",
+      "plane": "YZ",
+      "direction": "positive",
+      "origin": [
+        -92.5,
+        -116.0
+      ],
+      "steps": [
+        {
+          "step": "create",
+          "model_id": "fe3ece3e78f545e78ca5f84ee12f8c4d",
+          "job_id": "49a8d42884f74ff8942e35862d258107",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 1,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 42920.00000000001,
+          "feature_id": 49
+        },
+        {
+          "step": "resize",
+          "job_id": "67761b5f7f3a40ac8e95640d31b87387",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 2,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 6000.0,
+          "bbox_mm": [
+            [
+              0.0,
+              -92.5,
+              -116.0
+            ],
+            [
+              1.0,
+              7.5,
+              -56.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              -92.5,
+              -116.0
+            ],
+            "length": 100.0,
+            "width": 60.0,
+            "thickness": 1.0,
+            "volume_mm3": 6000.0,
+            "envelope": {
+              "n": {
+                "max": 1.0,
+                "min": 0.0
+              },
+              "u": {
+                "max": 7.5,
+                "min": -92.5
+              },
+              "v": {
+                "max": -56.0,
+                "min": -116.0
+              }
+            },
+            "bounds_mm": [
+              [
+                0.0,
+                -92.5,
+                -116.0
+              ],
+              [
+                1.0,
+                7.5,
+                -56.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        }
+      ],
+      "model_id": "fe3ece3e78f545e78ca5f84ee12f8c4d",
+      "feature_id": 49,
+      "expected": {
+        "volume_mm3": 6000.0,
+        "bbox_mm": [
+          [
+            0.0,
+            -92.5,
+            -116.0
+          ],
+          [
+            1.0,
+            7.5,
+            -56.0
+          ]
+        ],
+        "envelope_mm": {
+          "u": [
+            -92.5,
+            7.5
+          ],
+          "v": [
+            -116.0,
+            -56.0
+          ],
+          "n": [
+            0.0,
+            1.0
+          ]
+        },
+        "feature_id": 49
+      },
+      "assertions": {
+        "resize_succeeded": true,
+        "volume_matches": true,
+        "bbox_matches": true,
+        "envelope_matches": true,
+        "feature_id_kept": true,
+        "origin_kept": true,
+        "thickness_kept": true,
+        "saved_and_reloaded": true,
+        "revision_advanced": true
+      },
+      "passed": true
+    },
+    {
+      "case": "xy_neg_negative_direction",
+      "plane": "XY",
+      "direction": "negative",
+      "origin": [
+        -92.5,
+        -116.0
+      ],
+      "steps": [
+        {
+          "step": "create",
+          "model_id": "4bbe29a10c934a2db35e133e8835a2c4",
+          "job_id": "27587abc4e6141e7be877a6f16feac28",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 1,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 42920.00000000001,
+          "feature_id": 49
+        },
+        {
+          "step": "resize",
+          "job_id": "e143772f69e049a58894b2d4f449206d",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 2,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 6000.0,
+          "bbox_mm": [
+            [
+              -92.5,
+              -116.0,
+              -1.0
+            ],
+            [
+              7.5,
+              -56.0,
+              0.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              -92.5,
+              -116.0
+            ],
+            "length": 100.0,
+            "width": 60.0,
+            "thickness": 1.0,
+            "volume_mm3": 6000.0,
+            "envelope": {
+              "n": {
+                "max": 0.0,
+                "min": -1.0
+              },
+              "u": {
+                "max": 7.5,
+                "min": -92.5
+              },
+              "v": {
+                "max": -56.0,
+                "min": -116.0
+              }
+            },
+            "bounds_mm": [
+              [
+                -92.5,
+                -116.0,
+                -1.0
+              ],
+              [
+                7.5,
+                -56.0,
+                0.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        }
+      ],
+      "model_id": "4bbe29a10c934a2db35e133e8835a2c4",
+      "feature_id": 49,
+      "expected": {
+        "volume_mm3": 6000.0,
+        "bbox_mm": [
+          [
+            -92.5,
+            -116.0,
+            -1.0
+          ],
+          [
+            7.5,
+            -56.0,
+            0.0
+          ]
+        ],
+        "envelope_mm": {
+          "u": [
+            -92.5,
+            7.5
+          ],
+          "v": [
+            -116.0,
+            -56.0
+          ],
+          "n": [
+            -1.0,
+            0.0
+          ]
+        },
+        "feature_id": 49
+      },
+      "assertions": {
+        "resize_succeeded": true,
+        "volume_matches": true,
+        "bbox_matches": true,
+        "envelope_matches": true,
+        "feature_id_kept": true,
+        "origin_kept": true,
+        "thickness_kept": true,
+        "saved_and_reloaded": true,
+        "revision_advanced": true
+      },
+      "passed": true
+    }
+  ],
+  "stopped": "ToolkitBusy: Creo Toolkit is busy with another operation. No occupying job could be determined; the owner may be a session probe, build or another client. This request was not accepted. A suggested retry interval is 5 seconds, not a completion estimate; retry only when the occupying operation has finished. Re-read the model revision before writing. Do not resubmit an already accepted job.",
+  "stopped_at_case": "xy_neg_same_plan",
+  "not_run": [],
+  "calls": [
+    {
+      "job_id": "49a8d42884f74ff8942e35862d258107",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "67761b5f7f3a40ac8e95640d31b87387",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "27587abc4e6141e7be877a6f16feac28",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "e143772f69e049a58894b2d4f449206d",
+      "status": "succeeded"
+    }
+  ],
+  "finished_at": 1794050669.0685372,
+  "passed": false
+}

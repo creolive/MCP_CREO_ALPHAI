@@ -161,15 +161,14 @@ def regressions(current: dict, baseline: dict) -> list[str]:
 
 
 def git_state(root: Path) -> dict:
-    try:
-        repository = Path(command(["git", "rev-parse", "--show-toplevel"], cwd=root).strip())
-        if repository.resolve() != root.resolve():
-            return {"commit": None, "dirty": None}
-        commit = command(["git", "rev-parse", "HEAD"], cwd=root).strip()
-        dirty = bool(command(["git", "status", "--porcelain"], cwd=root).strip())
-        return {"commit": commit, "dirty": dirty}
-    except (OSError, RuntimeError):
-        return {"commit": None, "dirty": None}
+    from creo_mechdog.source_provenance import local_provenance
+
+    evidence = local_provenance(root)
+    return {
+        "commit": evidence["commit"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+    }
 
 
 def save_json(path: Path, value: dict) -> None:
