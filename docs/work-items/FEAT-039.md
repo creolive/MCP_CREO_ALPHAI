@@ -614,5 +614,5 @@ unknown 保护、未改模型，诊断代码已删除。
 
 证据：[EVIDENCE](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)、
 [merge_probe_report.json](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/merge_probe_report.json)
-（SHA256 `1634C563…B6E26FEC`）。**未覆盖**：结果 quilt 的链式/重载/回滚验收、Creo 9/10、
+（SHA256 `BCE2E488…7071FF16`）。**未覆盖**：结果 quilt 的链式/重载/回滚验收、Creo 9/10、
 非 mm 单位、非平面成员。

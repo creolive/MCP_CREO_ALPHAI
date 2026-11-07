@@ -15,8 +15,8 @@
 - 为提交被门禁的算子，故意门禁只在**工作树内临时**移除；探针结束后已把
   `src/creo_mechdog/capabilities.py` 与 `native/quilt_merge.cpp` 还原到 HEAD，
   最终提交不含任何门禁或原生行为改动。
-- 证据原始值：[merge_probe_report.json](merge_probe_report.json)，10739 B，SHA256
-  `1634C5637E5B8641CC379D28EAD907A7B8241244B93B9CA4E2C1CBC4B6E26FEC`。
+- 证据原始值：[merge_probe_report.json](merge_probe_report.json)，10394 B（LF 行尾），SHA256
+  `BCE2E488CB5FD65B9CF13EF7EE4189F68AB0D3A42A0853682698ED057071FF16`。
 
 构造：两张共面 20×20 `surface_fill`，A 覆盖 x∈[0,20]、B 覆盖 x∈[20,40]，z=0，
 沿 x=20 共边；输入 quilt 91/127，输入面积合计 **800.0 mm²**（`input_area_status.available=true`）。
