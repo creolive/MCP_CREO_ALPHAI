@@ -716,7 +716,7 @@ body”；**不能**做到“整组一次实体化/得到一张闭合 quilt”�
 gated、开放成员无法 `solidify`，且已加厚成员不能回到组级测量。因此五爪瓶底不能声称本轮已可整体实体化。
 证据：[EVIDENCE](../validation/feat039-h10-multi-quilt-2026-11-07/EVIDENCE.md)、
 [live_multi_quilt_report.json](../validation/feat039-h10-multi-quilt-2026-11-07/live_multi_quilt_report.json)
-（SHA256 `95E23A7F…2D8238E9`，46/46）。**未覆盖**：Creo 9/10、非 mm、非平面/弯曲成员组、
+（SHA256 `115D5828…56AD085E`，46/46）。**未覆盖**：Creo 9/10、非 mm、非平面/弯曲成员组、
 0.3 mm 整瓶全链、五爪阵列与瓶底收口（仍依赖 merge）、WorkBuddy。
 
 

@@ -8,8 +8,8 @@
 - 构建：`.\.venv\Scripts\python.exe bridge.py build`（退出 0）。
 - 驱动：`.\.venv\Scripts\python.exe tools\test_multi_quilt_group.py --live --confirm-session-usable`
 - run：`20261108-011157-8a32d4`；46 项检查全部通过（`passed=true`、`native_multi_quilt_group="verified"`）。
-- 报告：[live_multi_quilt_report.json](live_multi_quilt_report.json)，21 825 B，SHA256
-  `95E23A7FDBD547DE6E7C9CC0809518266816DDE60368455336B900DD2D8238E9`。
+- 报告：[live_multi_quilt_report.json](live_multi_quilt_report.json)，20 987 B，SHA256
+  `115D5828AFF9A1E8FEAC9EE1685B2169FC0D67A8DB7C5E3CAD8D594D56AD085E`（LF 行尾）。
 - 模型：组 A `18820cd7e831457caa2865e8ff40252d`，组 B `aef3374fd71344dd9c30ea048d94ed9d`。
 - 作业：`30696732…`（组 A 构建）、`b4808ce3…`（组级测量）、`c831e45a…`（0.3 mm 加厚）、
   `d0fdabe2…`（重载后组测量）、`a1601d62…`（开放单片实体化失败）、`96f36d7a…`（第二次加厚）、
