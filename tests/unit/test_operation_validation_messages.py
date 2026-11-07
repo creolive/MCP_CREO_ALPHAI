@@ -4,11 +4,16 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import ValidationError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
+from pydantic import BaseModel, ValidationError
 
 import server
 from creo_mechdog.schema import validate_operations
+from creo_mechdog.validation_errors import ValidationMCPServer
+
+
+class OutputReading(BaseModel):
+    count: int
 
 
 class OperationValidationMessages(unittest.TestCase):
@@ -120,6 +125,17 @@ class OperationValidationMessages(unittest.TestCase):
     def test_unknown_tool_error_keeps_original_behavior(self):
         with self.assertRaisesRegex(ToolError, "Unknown tool: missing_tool"):
             asyncio.run(server.mcp.call_tool("missing_tool", {}))
+
+    def test_output_validation_crashes_keep_sdk_masking(self):
+        api = ValidationMCPServer("output_contract_test")
+
+        @api.tool()
+        def broken_output() -> OutputReading:
+            return {"count": "secret_internal_output"}
+
+        with self.assertRaises(UnexpectedToolError) as caught:
+            asyncio.run(api.call_tool("broken_output", {}))
+        self.assertNotIn("secret_internal_output", str(caught.exception))
 
 
 if __name__ == "__main__":

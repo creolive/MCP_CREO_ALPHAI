@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
@@ -95,6 +95,9 @@ class ValidationMCPServer(MCPServer):
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Any = None) -> Any:
         try:
             return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError:
+            # Output conversion failures and validator crashes keep SDK masking.
+            raise
         except ToolError as exc:
             if isinstance(exc.__cause__, ValidationError):
                 safe = operation_validation_error(exc.__cause__, single_operation=None)
