@@ -34,20 +34,33 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 
 try:  # the driver runs as a script and as a package module
-    from surface_chain_chains import case_chain_open_live, case_chain_open_offline
+    from surface_chain_chains import (
+        case_chain_open_live,
+        case_chain_open_offline,
+        section,
+        submit_plan,
+    )
     from surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
     from surface_chain_example import case_example_live, case_example_offline
+    from surface_chain_group import case_group_live, case_group_offline
     from surface_chain_join import case_join_live, case_join_offline
     from surface_chain_offset import case_offset_live, case_offset_offline
     from surface_chain_sweep import case_sweep_live, case_sweep_offline
 except ImportError:  # pragma: no cover - the package import path
-    from tools.surface_chain_chains import case_chain_open_live, case_chain_open_offline
+    from tools.surface_chain_chains import (
+        case_chain_open_live,
+        case_chain_open_offline,
+        section,
+        submit_plan,
+    )
     from tools.surface_chain_closed import case_chain_closed_live, case_chain_closed_offline
     from tools.surface_chain_example import case_example_live, case_example_offline
+    from tools.surface_chain_group import case_group_live, case_group_offline
     from tools.surface_chain_join import case_join_live, case_join_offline
     from tools.surface_chain_offset import case_offset_live, case_offset_offline
     from tools.surface_chain_sweep import case_sweep_live, case_sweep_offline
@@ -66,6 +79,7 @@ CASES = (
     "join",
     "sweep_surface",
     "offset",
+    "group",
 )
 BUSY_EXIT = 2
 OVERWRITE_EXIT = 3
@@ -357,19 +371,97 @@ TRIM_WIDTH, TRIM_HEIGHT, TRIM_X = 40.0, 20.0, 5.0
 # Live 2026-11-04: keep_side one keeps the +X side of the tool plane normal
 # (700 mm2), two keeps the -X side (100 mm2). The cut is asymmetric on purpose -
 # a cut at x=20 leaves 400 mm2 on both sides, so the area cannot name the
-# retained side.
+# retained side. DEV-074/H06 adds measured centroids/bboxes/normals so the side
+# is proven by geometry, not by the area alone.
 TRIM_EXPECTED_AREA = {
     "one": (TRIM_WIDTH - TRIM_X) * TRIM_HEIGHT,
     "two": TRIM_X * TRIM_HEIGHT,
 }
+TRIM_TARGET_CENTROID_X = TRIM_WIDTH / 2.0
+# The quilt tool is a 60x60 fill on the YZ plane at x=TRIM_X, so it cuts at the
+# same place as the datum plane and must yield the same retained regions.
+TRIM_TOOL_QUILT_SIZE = 60.0
 
 
-def trim_plan(keep_side: str) -> list[dict]:
-    """One 40x20 fill trimmed at x=5 by a datum plane (plan S02 step 4).
+def trim_expected_kept_centroid_x(keep_side: str) -> float:
+    return (TRIM_X + TRIM_WIDTH) / 2.0 if keep_side == "one" else TRIM_X / 2.0
 
-    The retained region is judged by measured area and position, never by
-    comparing quilt ids across two independent models (contract §4.5 / R5).
+
+def trim_plan(keep_side: str, tool: str = "plane") -> list[dict]:
+    """One 40x20 fill trimmed at x=5 (plan S02 step 4, H06 matrix).
+
+    ``tool="plane"`` uses a datum plane; ``tool="quilt"`` uses a perpendicular
+    60x60 fill on the YZ plane at the same x. The retained region is judged by
+    measured area, position and centroid, never by comparing quilt ids across
+    two independent models (contract §4.5 / R5).
     """
+    operations = [
+        {
+            "op": "sketch",
+            "label": "trim_profile",
+            "entities": [
+                {
+                    "type": "rectangle",
+                    "name": "rect",
+                    "min": [0, 0],
+                    "max": [TRIM_WIDTH, TRIM_HEIGHT],
+                }
+            ],
+        },
+        {"op": "surface_fill", "label": "trim_target", "sketch": "trim_profile"},
+    ]
+    if tool == "quilt":
+        half = TRIM_TOOL_QUILT_SIZE / 2.0
+        operations.extend(
+            [
+                {
+                    "op": "sketch",
+                    "label": "trim_cut_profile",
+                    "plane": "YZ",
+                    "offset": TRIM_X,
+                    "entities": [
+                        {
+                            "type": "rectangle",
+                            "name": "cut_rect",
+                            "min": [-half, -half],
+                            "max": [half, half],
+                        }
+                    ],
+                },
+                {
+                    "op": "surface_fill",
+                    "label": "trim_cut_quilt",
+                    "sketch": "trim_cut_profile",
+                },
+            ]
+        )
+        tool_reference = {"kind": "quilt_feature", "label": "trim_cut_quilt"}
+    else:
+        operations.append(
+            {
+                "op": "datum_plane",
+                "label": "trim_cut_plane",
+                # Geometric plane references resolve by axis/normal; a label here
+                # is refused (live 2026-11-04: it silently resolved to TOP).
+                "reference": {"kind": "datum_plane", "axis": "x", "offset": 0},
+                "offset": TRIM_X,
+            }
+        )
+        tool_reference = {"kind": "datum_plane", "label": "trim_cut_plane"}
+    operations.append(
+        {
+            "op": "surface_trim",
+            "label": "trim_result",
+            "target": {"kind": "quilt_feature", "label": "trim_target"},
+            "tool": tool_reference,
+            "keep_side": keep_side,
+        }
+    )
+    return operations
+
+
+def trim_failure_base_plan() -> list[dict]:
+    """A 40x20 fill plus a plane at x=100 that cannot cut it."""
     return [
         {
             "op": "sketch",
@@ -386,20 +478,22 @@ def trim_plan(keep_side: str) -> list[dict]:
         {"op": "surface_fill", "label": "trim_target", "sketch": "trim_profile"},
         {
             "op": "datum_plane",
-            "label": "trim_cut_plane",
-            # Geometric plane references resolve by axis/normal; a label here is
-            # refused (live 2026-11-04: it silently resolved to TOP).
+            "label": "trim_far_plane",
             "reference": {"kind": "datum_plane", "axis": "x", "offset": 0},
-            "offset": TRIM_X,
-        },
-        {
-            "op": "surface_trim",
-            "label": "trim_result",
-            "target": {"kind": "quilt_feature", "label": "trim_target"},
-            "tool": {"kind": "datum_plane", "label": "trim_cut_plane"},
-            "keep_side": keep_side,
+            "offset": TRIM_WIDTH * 2.5,
         },
     ]
+
+
+TRIM_FAILURE_PLAN = [
+    {
+        "op": "surface_trim",
+        "label": "trim_impossible",
+        "target": {"kind": "quilt_feature", "label": "trim_target"},
+        "tool": {"kind": "datum_plane", "label": "trim_far_plane"},
+        "keep_side": "one",
+    }
+]
 
 
 def case_trim_offline() -> dict:
@@ -417,6 +511,19 @@ def case_trim_offline() -> dict:
     check(
         "trim_plan_validates",
         validated[0]["op"] == "surface_trim" and validated[0]["keep_side"] == "one",
+    )
+    # The quilt-tool branch and the rollback case are real plans too; a schema
+    # regression there must not wait for the live window to surface.
+    quilt_plan = validate_operations(trim_plan("two", "quilt"))
+    check(
+        "quilt_tool_plan_validates",
+        quilt_plan[-1]["keep_side"] == "two"
+        and quilt_plan[-1]["tool"] == {"kind": "quilt_feature", "label": "trim_cut_quilt"},
+    )
+    check(
+        "failure_plan_validates",
+        validate_operations(trim_failure_base_plan() + TRIM_FAILURE_PLAN)[-1]["op"]
+        == "surface_trim",
     )
 
     def rejects(candidate: dict, pattern: str) -> bool:
@@ -496,9 +603,27 @@ def case_trim_offline() -> dict:
             )
         ),
     )
+    # DEV-074/H06: the retained side is now proven by measured region geometry;
+    # the old "quilt_centroid_not_measured" null block must be gone.
     check(
-        "native_reports_missing_centroids_honestly",
-        '"target_centroid", nullptr' in native and '"signed_offset_mm", nullptr' in native,
+        "native_kept_side_geometry_wired",
+        "quilt_region_geometry" in native
+        and "quilt_centroid_not_measured" not in native
+        and all(
+            field in native
+            for field in (
+                "target_centroid_status",
+                "kept_centroid_status",
+                "target_bbox_mm",
+                "kept_bbox_mm",
+                "target_bbox_status",
+                "kept_bbox_status",
+                "target_direction",
+                "kept_direction",
+                "target_direction_status",
+                "kept_direction_status",
+            )
+        ),
     )
 
     passed = all(item["ok"] for item in checks)
@@ -511,8 +636,31 @@ def case_trim_offline() -> dict:
     }
 
 
+def _near(value: Any, expected: float, tolerance: float) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and abs(float(value) - expected) <= tolerance
+    )
+
+
+def _near_point(value: Any, expected: tuple[float, float, float], tolerance: float) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 3
+        and all(_near(item, want, tolerance) for item, want in zip(value, expected, strict=True))
+    )
+
+
 async def case_trim_live() -> dict:
-    """Two independent 40x20 trims at x=5 judged by measured area/position."""
+    """H06 matrix: keep_side one/two x plane/quilt tool plus a clean rollback.
+
+    Every successful case must prove the retained side by measured geometry:
+    the target and retained centroids, their difference, the retained bounds and
+    the region normal. A failing trim must roll back and leave the 800 mm2 fill
+    intact. Each successful job is also required to report
+    ``saved_file_reloaded_and_verified``.
+    """
     from mcp import Client
     from mcp.client.stdio import StdioServerParameters
 
@@ -522,6 +670,7 @@ async def case_trim_live() -> dict:
         checks.append({"check": name, "ok": bool(ok), **({"detail": detail} if detail else {})})
 
     jobs: list[str] = []
+    evidence: list[dict] = []
     async with Client(
         StdioServerParameters(command=sys.executable, args=[str(ROOT / "server.py")], cwd=str(ROOT))
     ) as client:
@@ -555,52 +704,223 @@ async def case_trim_live() -> dict:
                 ),
                 "checks": checks,
             }
-        run_job = job_runner(client, jobs)
-        for side in ("one", "two"):
-            state = await run_job("creo_execute_plan", {"operations": trim_plan(side)})
-            page = (
-                await client.call_tool(
-                    "creo_inspect_model",
+        for tool in ("plane", "quilt"):
+            for side in ("one", "two"):
+                name = f"{tool}_{side}"
+                state = await submit_plan(client, trim_plan(side, tool), jobs)
+                check(
+                    f"trim_{name}_succeeded",
+                    state.get("status") == "succeeded",
+                    {"job_id": state.get("job_id"), "message": state.get("message")},
+                )
+                if state.get("status") != "succeeded":
+                    evidence.append(
+                        {
+                            "tool": tool,
+                            "keep_side": side,
+                            "job_id": state.get("job_id"),
+                            "status": state.get("status"),
+                            "message": state.get("message"),
+                        }
+                    )
+                    continue
+                check(f"trim_{name}_saved_and_reloaded", state.get("saved_verified") is True)
+                operation = state.get("operation") or {}
+                basis = operation.get("kept_side_basis") or {}
+                expected_area = TRIM_EXPECTED_AREA[side]
+                expected_centroid_x = trim_expected_kept_centroid_x(side)
+                delta_x = expected_centroid_x - TRIM_TARGET_CENTROID_X
+                records = await section(client, state["model_id"], "quilts")
+                measured = [
+                    record
+                    for record in records
+                    if _near(record.get("area_mm2"), expected_area, 0.5)
+                ]
+                check(
+                    f"trim_{name}_area",
+                    bool(measured),
                     {
-                        "model_id": state["model_id"],
-                        "detail": "full",
-                        "section": "quilts",
+                        "expected_mm2": expected_area,
+                        "records": [record.get("area_mm2") for record in records],
                     },
                 )
-            ).structured_content
-            records = [
-                record
-                for record in (page.get("data", {}).get("quilts") or [])
-                if record.get("area_mm2") is not None
+                bbox = measured[0].get("bbox_mm") if measured else None
+                low, high = (bbox[0][0], bbox[1][0]) if bbox else (None, None)
+                expected_bounds = (TRIM_X, TRIM_WIDTH) if side == "one" else (0.0, TRIM_X)
+                check(
+                    f"trim_{name}_position",
+                    _near(low, expected_bounds[0], 0.5) and _near(high, expected_bounds[1], 0.5),
+                    {"bbox_mm": bbox},
+                )
+                target_centroid = basis.get("target_centroid")
+                kept_centroid = basis.get("kept_centroid")
+                check(
+                    f"trim_{name}_centroid",
+                    _near_point(
+                        target_centroid, (TRIM_TARGET_CENTROID_X, TRIM_HEIGHT / 2.0, 0.0), 0.05
+                    )
+                    and _near_point(
+                        kept_centroid, (expected_centroid_x, TRIM_HEIGHT / 2.0, 0.0), 0.05
+                    )
+                    and _near_point(basis.get("centroid_delta_mm"), (delta_x, 0.0, 0.0), 0.05),
+                    {
+                        "target_centroid": target_centroid,
+                        "kept_centroid": kept_centroid,
+                        "centroid_delta_mm": basis.get("centroid_delta_mm"),
+                        "centroid_status": basis.get("centroid_status"),
+                    },
+                )
+                kept_bbox = basis.get("kept_bbox_mm") or {}
+                bbox_min = kept_bbox.get("min") or []
+                bbox_max = kept_bbox.get("max") or []
+                check(
+                    f"trim_{name}_bbox",
+                    _near_point(bbox_min, (expected_bounds[0], 0.0, 0.0), 1e-3)
+                    and _near_point(bbox_max, (expected_bounds[1], TRIM_HEIGHT, 0.0), 1e-3)
+                    and _near_point(
+                        kept_bbox.get("size"),
+                        (expected_bounds[1] - expected_bounds[0], TRIM_HEIGHT, 0.0),
+                        1e-3,
+                    ),
+                    {"kept_bbox_mm": kept_bbox, "kept_bbox_status": basis.get("kept_bbox_status")},
+                )
+                direction = basis.get("kept_direction")
+                direction_status = basis.get("kept_direction_status") or {}
+                check(
+                    f"trim_{name}_direction",
+                    isinstance(direction, list)
+                    and len(direction) == 3
+                    and abs(abs(direction[2]) - 1.0) <= 1e-6
+                    and abs(direction[0]) <= 1e-6
+                    and abs(direction[1]) <= 1e-6
+                    and direction_status.get("available") is True
+                    and direction_status.get("planar") is True,
+                    {
+                        "kept_direction": direction,
+                        "target_direction": basis.get("target_direction"),
+                        "kept_direction_status": direction_status,
+                    },
+                )
+                tool_normal = basis.get("tool_normal")
+                if tool == "plane":
+                    normal_source = basis.get("tool_normal_source")
+                    signed = basis.get("signed_offset_mm")
+                    expected_sign = 1.0 if side == "one" else -1.0
+                    check(
+                        f"trim_{name}_tool_normal",
+                        normal_source == "datum_plane_axis"
+                        and _near_point(tool_normal, (1.0, 0.0, 0.0), 1e-6)
+                        and isinstance(signed, (int, float))
+                        and signed * expected_sign > 0
+                        and _near(abs(signed), abs(delta_x), 0.05),
+                        {
+                            "tool_normal": tool_normal,
+                            "tool_normal_source": normal_source,
+                            "signed_offset_mm": signed,
+                            "signed_offset_status": basis.get("signed_offset_status"),
+                        },
+                    )
+                else:
+                    # A quilt tool's face orientation is measured, not anchored,
+                    # so signed_offset stays null with its reason.
+                    check(
+                        f"trim_{name}_tool_normal",
+                        isinstance(tool_normal, list)
+                        and len(tool_normal) == 3
+                        and abs(abs(tool_normal[0]) - 1.0) <= 1e-6
+                        and abs(tool_normal[1]) <= 1e-6
+                        and abs(tool_normal[2]) <= 1e-6
+                        and basis.get("tool_normal_source") == "tool_quilt_face_normal"
+                        and basis.get("signed_offset_mm") is None
+                        and (basis.get("signed_offset_status") or {}).get("reason")
+                        == "tool_normal_unavailable",
+                        {
+                            "tool_normal": tool_normal,
+                            "tool_normal_source": basis.get("tool_normal_source"),
+                            "signed_offset_mm": basis.get("signed_offset_mm"),
+                            "signed_offset_status": basis.get("signed_offset_status"),
+                        },
+                    )
+                evidence.append(
+                    {
+                        "tool": tool,
+                        "keep_side": side,
+                        "job_id": state.get("job_id"),
+                        "model_id": state.get("model_id"),
+                        "revision": state.get("revision"),
+                        "status": state.get("status"),
+                        "area_after_mm2": operation.get("area_after_mm2"),
+                        "target_centroid": target_centroid,
+                        "kept_centroid": kept_centroid,
+                        "centroid_delta_mm": basis.get("centroid_delta_mm"),
+                        "kept_bbox_mm": kept_bbox,
+                        "kept_direction": direction,
+                        "tool_normal": tool_normal,
+                        "tool_normal_source": basis.get("tool_normal_source"),
+                        "signed_offset_mm": basis.get("signed_offset_mm"),
+                        "saved_file_reloaded_and_verified": state.get("saved_verified"),
+                    }
+                )
+        # The two retained regions must sit on opposite sides of the same tool
+        # plane at x=TRIM_X; the coordinates and their difference are the proof.
+        for tool in ("plane", "quilt"):
+            pages = [
+                item
+                for item in evidence
+                if item.get("tool") == tool and isinstance(item.get("kept_centroid"), list)
             ]
-            expected = TRIM_EXPECTED_AREA[side]
+            if len(pages) == 2:
+                sides = {item["keep_side"]: item["kept_centroid"][0] - TRIM_X for item in pages}
+                check(
+                    f"trim_{tool}_sides_are_opposite",
+                    sides.get("one", 0.0) * sides.get("two", 0.0) < 0,
+                    {
+                        "tool_plane_x": TRIM_X,
+                        "kept_centroid_offset_mm": sides,
+                    },
+                )
+        # A trim that cannot cut anything must fail cleanly: the job rolls back,
+        # the revision does not advance and the 800 mm2 fill stays untrimmed.
+        built = await submit_plan(client, trim_failure_base_plan(), jobs)
+        check(
+            "rollback_case_built",
+            built.get("status") == "succeeded" and built.get("saved_verified") is True,
+            {"job_id": built.get("job_id"), "message": built.get("message")},
+        )
+        if built.get("status") == "succeeded":
+            model_id = built["model_id"]
+            revision = built.get("revision")
+            failed = await submit_plan(client, TRIM_FAILURE_PLAN, jobs, model_id, revision)
+            result = failed.get("result") or {}
             check(
-                f"trim_area_{side}",
-                bool(records) and abs(records[0]["area_mm2"] - expected) <= 0.5,
+                "impossible_trim_failed",
+                failed.get("status") == "failed",
+                {"job_id": failed.get("job_id"), "message": failed.get("message")},
+            )
+            check(
+                "impossible_trim_rolled_back",
+                result.get("rollback_succeeded") is True,
                 {
-                    "expected_mm2": expected,
-                    "records": [record.get("area_mm2") for record in records],
+                    "rollback_succeeded": result.get("rollback_succeeded"),
+                    "message": failed.get("message"),
                 },
             )
-            bbox = records[0].get("bbox_mm") if records else None
-            low, high = (bbox[0][0], bbox[1][0]) if bbox else (None, None)
-            if side == "one":
-                check(
-                    f"trim_position_{side}",
-                    low is not None and abs(low - TRIM_X) <= 0.5 and abs(high - TRIM_WIDTH) <= 0.5,
-                    {"bbox_mm": bbox},
-                )
-            else:
-                check(
-                    f"trim_position_{side}",
-                    low is not None and abs(low) <= 0.5 and abs(high - TRIM_X) <= 0.5,
-                    {"bbox_mm": bbox},
-                )
-            basis = state["result"]["operations"][-1].get("kept_side_basis")
+            records = await section(client, model_id, "quilts")
+            areas = [record.get("area_mm2") for record in records]
             check(
-                f"trim_side_basis_{side}",
-                isinstance(basis, dict) and basis.get("keep_side") == side,
-                {"kept_side_basis": basis},
+                "rollback_kept_the_fill",
+                any(_near(area, TRIM_WIDTH * TRIM_HEIGHT, 0.5) for area in areas),
+                {"areas_mm2": areas},
+            )
+            page = (
+                await client.call_tool(
+                    "creo_inspect_model", {"model_id": model_id, "detail": "compact"}
+                )
+            ).structured_content
+            check(
+                "rollback_kept_the_revision",
+                page.get("revision") == revision,
+                {"revision_before": revision, "revision_after": page.get("revision")},
             )
     passed = all(item["ok"] for item in checks)
     return {
@@ -608,6 +928,7 @@ async def case_trim_live() -> dict:
         "passed": passed,
         "native_surface_trim": "verified" if passed else "failed",
         "jobs": jobs,
+        "evidence": evidence,
         "checks": checks,
     }
 
@@ -1542,6 +1863,8 @@ def run_case(case: str, live: bool) -> dict:
         return asyncio.run(case_join_live(wait_ready)) if live else case_join_offline()
     if case == "offset":
         return asyncio.run(case_offset_live(wait_ready)) if live else case_offset_offline()
+    if case == "group":
+        return asyncio.run(case_group_live(wait_ready)) if live else case_group_offline()
     if case == "chain_open":
         return asyncio.run(case_chain_open_live(wait_ready)) if live else case_chain_open_offline()
     if case == "chain_closed":

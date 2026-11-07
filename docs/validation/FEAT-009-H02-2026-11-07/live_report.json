@@ -1,0 +1,186 @@
+{
+  "mode": "live",
+  "passed": true,
+  "native_surface_loft": "verified",
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "message": "Toolkit connection verified; modeling is available"
+      }
+    },
+    {
+      "check": "surface_loft_published",
+      "ok": true
+    },
+    {
+      "check": "loft_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "saved_file_reloaded_and_verified",
+      "ok": true
+    },
+    {
+      "check": "surface_type_is_datum_surface",
+      "ok": true,
+      "detail": "datum_surface"
+    },
+    {
+      "check": "feature_type_is_datum_surface",
+      "ok": true,
+      "detail": 942
+    },
+    {
+      "check": "exactly_one_quilt_item",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "check": "quilt_id_present",
+      "ok": true,
+      "detail": 61
+    },
+    {
+      "check": "measured_area_800",
+      "ok": true,
+      "detail": {
+        "surface_area_mm2": 800.0
+      }
+    },
+    {
+      "check": "quilt_is_open",
+      "ok": true,
+      "detail": "open"
+    },
+    {
+      "check": "no_solid_created",
+      "ok": true
+    },
+    {
+      "check": "model_has_exactly_one_quilt",
+      "ok": true,
+      "detail": {
+        "quilt_count": 1
+      }
+    },
+    {
+      "check": "quilt_id_stable_after_reload",
+      "ok": true,
+      "detail": 61
+    },
+    {
+      "check": "area_stable_after_reload",
+      "ok": true,
+      "detail": {
+        "area_mm2": 800.0
+      }
+    },
+    {
+      "check": "trim_one_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_one_area_400",
+      "ok": true,
+      "detail": {
+        "area_after_mm2": 400.0
+      }
+    },
+    {
+      "check": "thicken_base_loft_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_volume_1600",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 1599.9999999999995
+      }
+    },
+    {
+      "check": "trim_two_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_two_area_400",
+      "ok": true,
+      "detail": {
+        "area_after_mm2": 400.0
+      }
+    },
+    {
+      "check": "two_sides_sum_to_800",
+      "ok": true,
+      "detail": {
+        "one": 400.0,
+        "two": 400.0
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "job_id": "7a29b97ddb564a0e820c90f02b56921f",
+      "status": "succeeded",
+      "model_id": "a03f9fbe7b2347f6b1de315947ec9ed8",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "caf35a74f1b940b4b7775f21d242bba1",
+      "status": "succeeded",
+      "model_id": "a03f9fbe7b2347f6b1de315947ec9ed8",
+      "revision": 2,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "08aa638831714906a0ca890bde085f20",
+      "status": "succeeded",
+      "model_id": "8815013ed0ff43ff91d6dfb7397648de",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "286b88cba21b482d9db76e051a59ec09",
+      "status": "succeeded",
+      "model_id": "8815013ed0ff43ff91d6dfb7397648de",
+      "revision": 2,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "7ad3e82019de4a9e804e444bc2ac1ab4",
+      "status": "succeeded",
+      "model_id": "1246edda397e40f78f396955ef305be5",
+      "revision": 1,
+      "message": "General feature plan completed"
+    }
+  ],
+  "run_id": "20261107-203823-6e9cec",
+  "report_path": "E:\\Projects\\MCP_CREO_MechDog-d074\\build\\surface_loft\\20261107-203823-6e9cec\\report.json"
+}

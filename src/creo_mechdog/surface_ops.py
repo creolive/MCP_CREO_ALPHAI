@@ -8,9 +8,10 @@ re-exports these classes, so both import paths stay valid.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+import re
+from typing import Annotated, Any, Literal
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 
 from creo_mechdog.schema_base import Label, Positive, StrictModel
 
@@ -100,6 +101,43 @@ class SurfaceTrimOp(StrictModel):
         return self
 
 
+class SurfaceLoftOp(StrictModel):
+    """Minimal two-section boundary blend (FEAT-009/H02).
+
+    Exactly two sections, each one MCP-owned sketch that owns one
+    non-composite curve, and straight interpolation only. Multi-section,
+    smooth, closed and continuity requests are refused before a job exists; the
+    operator never falls back to a solid Blend.
+    """
+
+    op: Literal["surface_loft"]
+    label: Label
+    sections: Annotated[list[str | int], Field(min_length=2, max_length=2)]
+    interpolation: Literal["straight"] = "straight"
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def normalize_section_ids(cls, values: Any) -> Any:
+        # Same public-client tolerance as LoftOp: digit-only strings are
+        # integer feature IDs, because a label must start with a letter.
+        if isinstance(values, list):
+            values = [
+                int(value) if isinstance(value, str) and re.fullmatch(r"[0-9]+", value) else value
+                for value in values
+            ]
+            if any(type(value) is int and not 0 <= value <= 2147483647 for value in values):
+                raise ValueError("Surface loft section IDs must be nonnegative 32-bit integers")
+            if any(isinstance(value, bool) for value in values):
+                raise ValueError("Surface loft section IDs cannot be booleans")
+        return values
+
+    @model_validator(mode="after")
+    def two_distinct_sections(self):
+        if len(self.sections) != len(set(self.sections)):
+            raise ValueError("Surface loft sections must be two distinct sketches")
+        return self
+
+
 class QuiltMergeOp(StrictModel):
     """Surface merge of two quilts (FEAT-039/S03).
 
@@ -178,6 +216,41 @@ def _direction_reference_problem(reference: Any) -> str | None:
             "picks the default plane; use {kind:'datum_feature',label:...} for a plane feature"
         )
     return f"unsupported kind '{kind}': use datum_feature, datum_axis_feature or a curve id"
+
+
+class SurfaceGroupMeasureOp(StrictModel):
+    """Read-only group-level boundary measurement (FEAT-039/H04).
+
+    The group is one or more quilts; every member face is part of it. Per-quilt
+    ``closed`` (ProQuiltVolumeEval) cannot say whether two members are joined,
+    slightly apart or overlapping, so the native side measures boundary edges,
+    seam gaps and overlapping face area separately. ``tolerance_mm`` is the
+    join/flush tolerance (0.01 mm by default); ``gap_search_mm`` is the widest
+    boundary-to-boundary distance still reported as a seam gap (1 mm by
+    default). Gaps wider than that are exposed boundary, not a measured gap.
+    """
+
+    op: Literal["surface_group_measure"]
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=8)]
+    tolerance_mm: Positive = 0.01
+    gap_search_mm: Positive = 1.0
+
+    @model_validator(mode="after")
+    def valid_references(self):
+        for index, reference in enumerate(self.references):
+            problem = quilt_reference_problem(reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"surface_group_measure references[{index}] {problem}")
+        if len({repr(sorted(reference.items())) for reference in self.references}) != len(
+            self.references
+        ):
+            raise ValueError("surface_group_measure references must be distinct quilts")
+        if self.gap_search_mm < self.tolerance_mm:
+            raise ValueError(
+                "surface_group_measure gap_search_mm must be at least tolerance_mm; a gap "
+                "search narrower than the join tolerance could never report a gap"
+            )
+        return self
 
 
 class ProjectCurveOp(StrictModel):

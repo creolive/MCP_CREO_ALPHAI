@@ -1637,12 +1637,21 @@ static int flange_geometry_edge_id(const J &edge_ref) {
         return *scan.matches.begin();
     if (scan.matches.empty()) {
         std::string nearest;
+        J nearest_edges = J::array();
         auto mm = [](double value) {
             std::ostringstream stream;
             stream << std::setprecision(12) << value;
             return stream.str();
         };
         for (const auto &item : geometry_diagnostics::nearest_candidates(scan.candidates)) {
+            nearest_edges.push_back(
+                {{"id", item.id},
+                 {"endpoints_mm", J::array({J::array({item.endpoints[0][0], item.endpoints[0][1],
+                                                      item.endpoints[0][2]}),
+                                            J::array({item.endpoints[1][0], item.endpoints[1][1],
+                                                      item.endpoints[1][2]})})},
+                 {"endpoint_errors_mm",
+                  J::array({item.endpoint_errors_mm[0], item.endpoint_errors_mm[1]})}});
             auto point = [&mm](const geometry_diagnostics::Point &value) {
                 return "[" + mm(value[0]) + ", " + mm(value[1]) + ", " + mm(value[2]) + "]";
             };
@@ -1651,6 +1660,11 @@ static int flange_geometry_edge_id(const J &edge_ref) {
                        point(item.endpoints[1]) + " endpoint_errors_mm=[" +
                        mm(item.endpoint_errors_mm[0]) + ", " + mm(item.endpoint_errors_mm[1]) + "]";
         }
+        stage_operation_result({{"edge_geometry_diagnostic",
+                                 {{"nearest_edges", nearest_edges},
+                                  {"tolerance_mm", scan.tolerance},
+                                  {"candidate_limit", 5},
+                                  {"straight_edge_count", scan.straight}}}});
         throw std::runtime_error(
             "sheetmetal_flange edge_geometry endpoints " + point_text(0) + " and " + point_text(1) +
             " matched none of the " + std::to_string(scan.straight) +

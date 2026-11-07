@@ -144,6 +144,7 @@ _SOURCE_NAMES = (
     "native/quilt_gauge_guard.h",
     "native/quilt_query.h",
     "native/surface_trim.cpp",
+    "native/surface_group.cpp",
     "native/quilt_merge.cpp",
     "native/project_curve.cpp",
     "native/component_transform.h",
@@ -2301,6 +2302,32 @@ async def creo_get_mass_properties(
 
 
 @mcp.tool(annotations=READ)
+async def creo_measure_surface_group(
+    model_id: str,
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=8)],
+    tolerance_mm: float = 0.01,
+    gap_search_mm: float = 1.0,
+) -> dict[str, Any]:
+    """Measure a surface group's real boundary: open edges, seam gap and overlap.
+
+    references is one or more quilts ({kind:'quilt',id:N} or
+    {kind:'quilt_feature',label:...}); every member face of every quilt is part
+    of the group. The measurement is read-only: it writes nothing and does not
+    change the revision. group.state is 'closed', 'open', 'micro_gap' or
+    'overlap' and describes the member seams; group.boundary_closed says whether
+    the group boundary itself is a closed shell (open_edges == 0). tolerance_mm
+    (0.01 by default) is the join/flush tolerance; gap_search_mm (1 mm by
+    default) bounds which boundary-to-boundary distance still counts as a seam
+    gap. Each value has its own status: an unmeasurable value is null with a
+    reason, never 0. overlap_area_mm2 is an estimate from the kernel's face
+    tessellation, not a boolean intersection.
+    """
+    return await invoke(
+        general.measure_surface_group, model_id, references, tolerance_mm, gap_search_mm
+    )
+
+
+@mcp.tool(annotations=READ)
 async def creo_inspect_model(
     model_id: str,
     detail: Literal["compact", "full"] = "compact",
@@ -2753,6 +2780,32 @@ async def creo_surface_trim(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_loft(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    sections: list[str | int],
+    interpolation: Literal["straight"] = "straight",
+) -> dict[str, Any]:
+    """Create a native boundary-blend surface quilt from exactly two sketch sections.
+
+    sections accepts sketch labels or integer feature IDs in loft order (index 0 is
+    the start section); each sketch must own exactly one non-composite curve, and the
+    two sections must be distinct. interpolation is 'straight' only. The result is one
+    open datum-surface quilt (quilt_id, surface_area_mm2, quilt_closed_native); no
+    solid material is created. Multi-section, smooth, closed and continuity requests
+    are refused before a job is queued.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_loft", label=label, sections=sections, interpolation=interpolation)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_quilt_merge(
     model_id: str,
     expected_revision: int,
@@ -2763,11 +2816,10 @@ async def creo_quilt_merge(
     """Join two quilts into one surface merge.
 
     Both sides must be explicit quilt references ({kind:'quilt',id:...} or
-    {kind:'quilt_feature',label:...}) and must be distinct. The result reports
-    result_quilt_id, the measured merged area and the real closure status; no
-    tolerance and no gap measurement are offered in this release.
-    This release is registered but gated: the join still needs a live acceptance
-    run, so submissions are refused before a native job is queued.
+    {kind:'quilt_feature',label:...}) and must be distinct. This operation is
+    gated: submissions are refused before a native job is queued. Its draft
+    result fields (result_quilt_id, merged area and closure status) are not
+    available to callers. No tolerance or gap measurement is published.
     """
     return await invoke(
         general.submit,

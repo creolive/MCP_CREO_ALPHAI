@@ -221,6 +221,7 @@ OPERATION_KEYS = (
     "adjacent_bend_ends_allowed",
     "feature_errors",
     "failed_model_cleanup",
+    "edge_geometry_diagnostic",
     "depth_basis",
     "depth_scheme_code",
     "depth_scheme_query",

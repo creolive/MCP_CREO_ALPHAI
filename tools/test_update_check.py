@@ -12,7 +12,6 @@ import argparse
 import asyncio
 import json
 import platform
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -35,21 +34,26 @@ server.mcp.run(transport='stdio')
 """
 
 
+def provenance() -> dict:
+    from creo_mechdog.source_provenance import local_provenance
+
+    identity = local_provenance(ROOT)
+    return {
+        "commit": identity["commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
+    }
+
+
 async def run(args: argparse.Namespace) -> dict:
-    git = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
-    dirty = bool(
-        subprocess.run(
-            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout.strip()
-    )
+    identity = provenance()
     report = {
         "work_item": "FEAT-020",
         "tested_at": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
-        "commit": git,
-        "dirty": dirty,
+        "commit": identity["commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
         "python": sys.version,
         "windows": platform.platform(),
         "transport": "stdio",

@@ -1,0 +1,911 @@
+{
+  "run_id": "20261107-121303-781400",
+  "case": "trim",
+  "mode": "live",
+  "version": "0.18.0",
+  "command": "tools/test_surface_chain.py --case trim --live --confirm-session-usable",
+  "started_at": "2026-11-07T12:13:03.598789+00:00",
+  "passed": true,
+  "native_surface_trim": "verified",
+  "jobs": [
+    "557ad826ccf84e8c8e009e5689361335",
+    "b431322541e74549a82103354b7093c1",
+    "549773db06184377814f7ec71199bc65",
+    "2316d27699e242d289915fae14e565c8",
+    "a9e58c89b091468bb9dc8824f78bea0e",
+    "1fde1a0c702b4713bfd04d3c5291b1ef"
+  ],
+  "evidence": [
+    {
+      "tool": "plane",
+      "keep_side": "one",
+      "job_id": "557ad826ccf84e8c8e009e5689361335",
+      "model_id": "9e4d02b66d734e679541f4d600345bd2",
+      "revision": 1,
+      "status": "succeeded",
+      "area_after_mm2": 700.0,
+      "target_centroid": [
+        20.0,
+        10.0,
+        0.0
+      ],
+      "kept_centroid": [
+        22.5,
+        10.0,
+        0.0
+      ],
+      "centroid_delta_mm": [
+        2.5,
+        0.0,
+        0.0
+      ],
+      "kept_bbox_mm": {
+        "min": [
+          5.0,
+          -0.0,
+          0.0
+        ],
+        "max": [
+          40.0,
+          20.0,
+          0.0
+        ],
+        "size": [
+          35.0,
+          20.0,
+          0.0
+        ]
+      },
+      "kept_direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "tool_normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tool_normal_source": "datum_plane_axis",
+      "signed_offset_mm": 2.5,
+      "saved_file_reloaded_and_verified": true
+    },
+    {
+      "tool": "plane",
+      "keep_side": "two",
+      "job_id": "b431322541e74549a82103354b7093c1",
+      "model_id": "16795bb80d4f4797845c6c4921b908a2",
+      "revision": 1,
+      "status": "succeeded",
+      "area_after_mm2": 100.0,
+      "target_centroid": [
+        20.0,
+        10.0,
+        0.0
+      ],
+      "kept_centroid": [
+        2.5,
+        10.0,
+        0.0
+      ],
+      "centroid_delta_mm": [
+        -17.5,
+        0.0,
+        0.0
+      ],
+      "kept_bbox_mm": {
+        "min": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "max": [
+          5.0,
+          20.0,
+          0.0
+        ],
+        "size": [
+          5.0,
+          20.0,
+          0.0
+        ]
+      },
+      "kept_direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "tool_normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "tool_normal_source": "datum_plane_axis",
+      "signed_offset_mm": -17.5,
+      "saved_file_reloaded_and_verified": true
+    },
+    {
+      "tool": "quilt",
+      "keep_side": "one",
+      "job_id": "549773db06184377814f7ec71199bc65",
+      "model_id": "1a65cc16f736486d931fa0046f20d482",
+      "revision": 1,
+      "status": "succeeded",
+      "area_after_mm2": 700.0,
+      "target_centroid": [
+        20.0,
+        10.0,
+        0.0
+      ],
+      "kept_centroid": [
+        22.5,
+        10.0,
+        0.0
+      ],
+      "centroid_delta_mm": [
+        2.5,
+        0.0,
+        0.0
+      ],
+      "kept_bbox_mm": {
+        "min": [
+          5.0,
+          -0.0,
+          0.0
+        ],
+        "max": [
+          40.0,
+          20.0,
+          0.0
+        ],
+        "size": [
+          35.0,
+          20.0,
+          0.0
+        ]
+      },
+      "kept_direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "tool_normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "tool_normal_source": "tool_quilt_face_normal",
+      "signed_offset_mm": null,
+      "saved_file_reloaded_and_verified": true
+    },
+    {
+      "tool": "quilt",
+      "keep_side": "two",
+      "job_id": "2316d27699e242d289915fae14e565c8",
+      "model_id": "e8ead5863b0a447ba0c5f304767fade6",
+      "revision": 1,
+      "status": "succeeded",
+      "area_after_mm2": 100.0,
+      "target_centroid": [
+        20.0,
+        10.0,
+        0.0
+      ],
+      "kept_centroid": [
+        2.5,
+        10.0,
+        0.0
+      ],
+      "centroid_delta_mm": [
+        -17.5,
+        0.0,
+        0.0
+      ],
+      "kept_bbox_mm": {
+        "min": [
+          0.0,
+          1.9271278906801588e-31,
+          0.0
+        ],
+        "max": [
+          5.0,
+          20.0,
+          0.0
+        ],
+        "size": [
+          5.0,
+          20.0,
+          0.0
+        ]
+      },
+      "kept_direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "tool_normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "tool_normal_source": "tool_quilt_face_normal",
+      "signed_offset_mm": null,
+      "saved_file_reloaded_and_verified": true
+    }
+  ],
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "message": "Toolkit connection verified; modeling is available"
+      }
+    },
+    {
+      "check": "surface_trim_published",
+      "ok": true
+    },
+    {
+      "check": "trim_plane_one_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "557ad826ccf84e8c8e009e5689361335",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_plane_one_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "trim_plane_one_area",
+      "ok": true,
+      "detail": {
+        "expected_mm2": 700.0,
+        "records": [
+          700.0
+        ]
+      }
+    },
+    {
+      "check": "trim_plane_one_position",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            5.0,
+            -6.313573809561144e-48,
+            0.0
+          ],
+          [
+            40.0,
+            20.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "trim_plane_one_centroid",
+      "ok": true,
+      "detail": {
+        "target_centroid": [
+          20.0,
+          10.0,
+          0.0
+        ],
+        "kept_centroid": [
+          22.5,
+          10.0,
+          0.0
+        ],
+        "centroid_delta_mm": [
+          2.5,
+          0.0,
+          0.0
+        ],
+        "centroid_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation"
+        }
+      }
+    },
+    {
+      "check": "trim_plane_one_bbox",
+      "ok": true,
+      "detail": {
+        "kept_bbox_mm": {
+          "min": [
+            5.0,
+            -0.0,
+            0.0
+          ],
+          "max": [
+            40.0,
+            20.0,
+            0.0
+          ],
+          "size": [
+            35.0,
+            20.0,
+            0.0
+          ]
+        },
+        "kept_bbox_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "face_count": 1,
+          "triangle_count": 2,
+          "tessellation_complete": true
+        }
+      }
+    },
+    {
+      "check": "trim_plane_one_direction",
+      "ok": true,
+      "detail": {
+        "kept_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "target_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "kept_direction_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "planar": true,
+          "max_normal_deviation_deg": 0.0
+        }
+      }
+    },
+    {
+      "check": "trim_plane_one_tool_normal",
+      "ok": true,
+      "detail": {
+        "tool_normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "tool_normal_source": "datum_plane_axis",
+        "signed_offset_mm": 2.5,
+        "signed_offset_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        }
+      }
+    },
+    {
+      "check": "trim_plane_two_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "b431322541e74549a82103354b7093c1",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_plane_two_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "trim_plane_two_area",
+      "ok": true,
+      "detail": {
+        "expected_mm2": 100.0,
+        "records": [
+          100.0
+        ]
+      }
+    },
+    {
+      "check": "trim_plane_two_position",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            2.188059324098487e-77,
+            -6.313573809561144e-48,
+            0.0
+          ],
+          [
+            5.0,
+            20.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "trim_plane_two_centroid",
+      "ok": true,
+      "detail": {
+        "target_centroid": [
+          20.0,
+          10.0,
+          0.0
+        ],
+        "kept_centroid": [
+          2.5,
+          10.0,
+          0.0
+        ],
+        "centroid_delta_mm": [
+          -17.5,
+          0.0,
+          0.0
+        ],
+        "centroid_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation"
+        }
+      }
+    },
+    {
+      "check": "trim_plane_two_bbox",
+      "ok": true,
+      "detail": {
+        "kept_bbox_mm": {
+          "min": [
+            0.0,
+            -0.0,
+            0.0
+          ],
+          "max": [
+            5.0,
+            20.0,
+            0.0
+          ],
+          "size": [
+            5.0,
+            20.0,
+            0.0
+          ]
+        },
+        "kept_bbox_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "face_count": 1,
+          "triangle_count": 2,
+          "tessellation_complete": true
+        }
+      }
+    },
+    {
+      "check": "trim_plane_two_direction",
+      "ok": true,
+      "detail": {
+        "kept_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "target_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "kept_direction_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "planar": true,
+          "max_normal_deviation_deg": 0.0
+        }
+      }
+    },
+    {
+      "check": "trim_plane_two_tool_normal",
+      "ok": true,
+      "detail": {
+        "tool_normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "tool_normal_source": "datum_plane_axis",
+        "signed_offset_mm": -17.5,
+        "signed_offset_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_one_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "549773db06184377814f7ec71199bc65",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_quilt_one_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "trim_quilt_one_area",
+      "ok": true,
+      "detail": {
+        "expected_mm2": 700.0,
+        "records": [
+          700.0,
+          3600.0
+        ]
+      }
+    },
+    {
+      "check": "trim_quilt_one_position",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            5.0,
+            -6.313573809561144e-48,
+            0.0
+          ],
+          [
+            40.0,
+            20.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "trim_quilt_one_centroid",
+      "ok": true,
+      "detail": {
+        "target_centroid": [
+          20.0,
+          10.0,
+          0.0
+        ],
+        "kept_centroid": [
+          22.5,
+          10.0,
+          0.0
+        ],
+        "centroid_delta_mm": [
+          2.5,
+          0.0,
+          0.0
+        ],
+        "centroid_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation"
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_one_bbox",
+      "ok": true,
+      "detail": {
+        "kept_bbox_mm": {
+          "min": [
+            5.0,
+            -0.0,
+            0.0
+          ],
+          "max": [
+            40.0,
+            20.0,
+            0.0
+          ],
+          "size": [
+            35.0,
+            20.0,
+            0.0
+          ]
+        },
+        "kept_bbox_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "face_count": 1,
+          "triangle_count": 2,
+          "tessellation_complete": true
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_one_direction",
+      "ok": true,
+      "detail": {
+        "kept_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "target_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "kept_direction_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "planar": true,
+          "max_normal_deviation_deg": 0.0
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_one_tool_normal",
+      "ok": true,
+      "detail": {
+        "tool_normal": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "tool_normal_source": "tool_quilt_face_normal",
+        "signed_offset_mm": null,
+        "signed_offset_status": {
+          "available": false,
+          "reason": "tool_normal_unavailable",
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_two_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "2316d27699e242d289915fae14e565c8",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_quilt_two_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "trim_quilt_two_area",
+      "ok": true,
+      "detail": {
+        "expected_mm2": 100.0,
+        "records": [
+          100.0,
+          3600.0
+        ]
+      }
+    },
+    {
+      "check": "trim_quilt_two_position",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            3.942262514178684e-48,
+            1.9271279282068805e-31,
+            0.0
+          ],
+          [
+            5.0,
+            20.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "trim_quilt_two_centroid",
+      "ok": true,
+      "detail": {
+        "target_centroid": [
+          20.0,
+          10.0,
+          0.0
+        ],
+        "kept_centroid": [
+          2.5,
+          10.0,
+          0.0
+        ],
+        "centroid_delta_mm": [
+          -17.5,
+          0.0,
+          0.0
+        ],
+        "centroid_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation"
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_two_bbox",
+      "ok": true,
+      "detail": {
+        "kept_bbox_mm": {
+          "min": [
+            0.0,
+            1.9271278906801588e-31,
+            0.0
+          ],
+          "max": [
+            5.0,
+            20.0,
+            0.0
+          ],
+          "size": [
+            5.0,
+            20.0,
+            0.0
+          ]
+        },
+        "kept_bbox_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "face_count": 1,
+          "triangle_count": 2,
+          "tessellation_complete": true
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_two_direction",
+      "ok": true,
+      "detail": {
+        "kept_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "target_direction": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "kept_direction_status": {
+          "available": true,
+          "reason": null,
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm",
+          "source": "surface_tessellation",
+          "planar": true,
+          "max_normal_deviation_deg": 0.0
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_two_tool_normal",
+      "ok": true,
+      "detail": {
+        "tool_normal": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "tool_normal_source": "tool_quilt_face_normal",
+        "signed_offset_mm": null,
+        "signed_offset_status": {
+          "available": false,
+          "reason": "tool_normal_unavailable",
+          "query_code": 0,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        }
+      }
+    },
+    {
+      "check": "trim_plane_sides_are_opposite",
+      "ok": true,
+      "detail": {
+        "tool_plane_x": 5.0,
+        "kept_centroid_offset_mm": {
+          "one": 17.5,
+          "two": -2.5
+        }
+      }
+    },
+    {
+      "check": "trim_quilt_sides_are_opposite",
+      "ok": true,
+      "detail": {
+        "tool_plane_x": 5.0,
+        "kept_centroid_offset_mm": {
+          "one": 17.5,
+          "two": -2.5
+        }
+      }
+    },
+    {
+      "check": "rollback_case_built",
+      "ok": true,
+      "detail": {
+        "job_id": "a9e58c89b091468bb9dc8824f78bea0e",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "impossible_trim_failed",
+      "ok": true,
+      "detail": {
+        "job_id": "1fde1a0c702b4713bfd04d3c5291b1ef",
+        "message": "Surface trim regeneration failed (feature_status=6, feature_id=87, target_quilt_id=82, tool=datum_plane, keep_side=one); check that the tool actually intersects the target quilt"
+      }
+    },
+    {
+      "check": "impossible_trim_rolled_back",
+      "ok": true,
+      "detail": {
+        "rollback_succeeded": true,
+        "message": "Surface trim regeneration failed (feature_status=6, feature_id=87, target_quilt_id=82, tool=datum_plane, keep_side=one); check that the tool actually intersects the target quilt"
+      }
+    },
+    {
+      "check": "rollback_kept_the_fill",
+      "ok": true,
+      "detail": {
+        "areas_mm2": [
+          800.0
+        ]
+      }
+    },
+    {
+      "check": "rollback_kept_the_revision",
+      "ok": true,
+      "detail": {
+        "revision_before": 1,
+        "revision_after": 1
+      }
+    }
+  ]
+}

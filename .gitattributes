@@ -88,3 +88,6 @@ docs/validation/feedback-0.11.7-2026-11-04/originals/** -text
 
 # FEAT-063: keep fenced Python examples formatter-stable on every checkout.
 docs/PRODUCT_RULES.md text eol=lf
+
+# DEV-074: preserve the four 0.17.4 feedback originals byte for byte.
+docs/validation/feedback-0.17.4-2026-11-07/originals/** -text

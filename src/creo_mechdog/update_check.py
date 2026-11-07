@@ -226,7 +226,11 @@ class UpdateChecker:
 
     def snapshot(self, *, from_cache: bool = True) -> dict[str, Any]:
         result = dict(self._result)
-        if self._inflight is not None and not self._inflight.done():
+        result["in_flight"] = self._inflight is not None and not self._inflight.done()
+        result["last_completed_status"] = (
+            None if result["status"] == "not_checked" else result["status"]
+        )
+        if result["in_flight"]:
             result["status"] = "checking"
             result["message"] = "正在检查更新；已有版本信息来自缓存。"
         result["network_timeout_seconds"] = self.network_timeout_seconds

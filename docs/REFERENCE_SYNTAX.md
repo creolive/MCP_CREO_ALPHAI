@@ -144,6 +144,8 @@
 
 **loft 的表面模式仍不可用**：`creo_loft` 只接受 `mode="add"`；`mode="surface"`、`cut` 与 `new_body=true` 都在入队前拒绝。没有 `creo_surface_loft` 工具，也没有 `surface_loft` 已注册操作；多截面放样/边界混合曲面仍未发布。
 
+`extrude(mode="surface")`、`revolve(mode="surface")`（含局部角度）以及曲面特征上的 `axis_pattern` 已有 Creo 10 报告方实机正证据；它们不替代多截面放样或 quilt 合并。`creo_quilt_merge` 虽有公开工具签名，仍在提交前门禁，文档中的结果字段仅是待验契约。修剪结果 quilt 通过特征标签再次引用、弯曲 quilt 的偏置距离读回与保留侧的几何判据仍未闭环；需要从当前模型的 `inspect_model(section="quilts")` 获取实际几何 ID，不能把请求值当成实测值。
+
 ## 各工具的外层形状
 
 | 工具 / 参数 | 完整形状或规则 |
@@ -248,3 +250,15 @@ label 永远不是身份：同名 label 可以存在于不同模型，删除重�
 executable=false、plan=null。完整 JSON 上限 32768 UTF-8 字节，超限拒绝而不截断。
 executable 仅表示静态能力/schema 准入；native/saved_reload 恒为 not_run。
 无连接、提交、job_id/model_id/revision；原生模板未验。详见 [产品规则](PRODUCT_RULES.md)。
+
+## 2026-11-07 DEV-074 离线回执增量（开发分支）
+
+- 平面钣金壁 `thickness_verified_effective` 与 resize 的 `thickness_loaded_verified_effective` 来自有来源、上下文正确且与请求厚度一致的验证块；缺块/缺请求尺寸为 null。旧 `thickness_verified` 等字段保留原生 API 读数语义。
+- resize 缺少前后任一 feature ID 时，`feature_id_unchanged=null`；失败且未取得 ID 的 loaded 验证/来源字段显式 null。
+- 几何选边零匹配的失败操作携带 `edge_geometry_diagnostic`，包含 `nearest_edges`（最多5项：`id`、`endpoints_mm`、`endpoint_errors_mm`）、`tolerance_mm`、`candidate_limit` 与 `straight_edge_count`。这些是诊断候选，不会自动吸附或放宽严格匹配；compact 保留该结构。
+- `preview.status=skipped_no_geometry` 时 `path/bytes=null`，`empty_geometry_basis` 透传 `feature_visit_code` 与 `non_datum_feature_count`；未测或查询失败的计数为 null。
+- startup `state/connected` 保持上次观测语义；`connection_verification=unverified_stale_snapshot` 与 `current_connected=null` 表示快照已过期，message 明确提示未验证。状态读取不会探测 Toolkit。
+- 更新快照 `in_flight` 明示正在检查；`last_completed_status` 保留上次完成状态（未检查为null），与 `from_cache/stale` 分别解读。
+- `native_progress.connect_timing` 保存日志头部连接阶段证据；尾部当前阶段没有时间则不填 `idle_seconds`，不能把早期连接时间归给回滚或其它阶段。
+
+这些增量已作离线回归与原生编译；新原生字段的真实MCP/Creo/保存重载验证仍见[接手清单](development/DEV-074-HANDOFF.md)。

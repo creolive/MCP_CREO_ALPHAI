@@ -3882,6 +3882,8 @@ static J choice_inspection(const J &holder, const char *key);
 #include "advanced.cpp"
 #include "surfaces.cpp"
 #include "surface_trim.cpp"
+#include "surface_group.cpp"
+#include "surface_loft.cpp"
 #include "quilt_merge.cpp"
 #include "project_curve.cpp"
 #include "udf.cpp"
@@ -4164,6 +4166,10 @@ static void execute_operation_body(const J &op) {
         generic_surface_offset(op);
     else if (kind == "surface_trim")
         generic_surface_trim(op);
+    else if (kind == "surface_loft")
+        generic_surface_loft(op);
+    else if (kind == "surface_group_measure")
+        generic_surface_group_measure(op);
     else if (kind == "quilt_merge")
         generic_quilt_merge(op);
     else if (kind == "project_curve")
@@ -4375,7 +4381,7 @@ static void execute_operation_body(const J &op) {
     } else if (kind != "regenerate" && kind != "save")
         throw std::runtime_error("Operation is not implemented: " + kind);
     if (kind != "export" && kind != "dump_tree" && kind != "udf_inspect" &&
-        kind != "mass_properties")
+        kind != "mass_properties" && kind != "surface_group_measure")
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
     J post_state = inspection();
     // One terminal record for this input. Branch details and the staged detail

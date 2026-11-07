@@ -21,6 +21,12 @@ struct SurfaceTrimTool {
     ProVector normal = {0.0, 0.0, 0.0};
     bool normal_known = false;
     int curve_id = -1;
+    int quilt_id = -1;
+    ProQuilt quilt = nullptr;
+    // Measured geometry of a quilt tool. A planar tool face gives a real world
+    // normal with source "tool_quilt_face_normal"; a curved one stays null so
+    // callers never read an averaged vector as a plane normal.
+    RegionGeometry geometry;
 };
 
 // The tool side of the trim tree. A quilt reference goes through the S01
@@ -36,16 +42,28 @@ static SurfaceTrimTool surface_trim_tool(const J &reference) {
     if (kind == "quilt" || kind == "quilt_feature") {
         tool.kind = "quilt";
         tool.selection = resolve_quilt_reference(reference, (ProSolid)board, units, scale);
+        tool.quilt_id = quilt_selection_id(tool.selection);
+        if (ProQuiltInit((ProSolid)board, tool.quilt_id, &tool.quilt) == PRO_TK_NO_ERROR)
+            tool.geometry = quilt_region_geometry(tool.quilt);
+        else
+            tool.geometry.reason = "tool_quilt_init_failed";
         return tool;
     }
     if (kind == "datum_plane") {
         tool.kind = "datum_plane";
         tool.selection = resolve({{"kind", "datum_feature"}, {"label", reference.at("label")}});
         // resolve() leaves exactly one entry in `planes` for a datum feature.
+        // The plane data normal is normalized here so tool_normal (contract
+        // §4.5: a unit normal) never inherits the stored vector's length.
         if (planes.size() == 1) {
-            for (int i = 0; i < 3; i++)
-                tool.normal[i] = planes[0].n[i];
-            tool.normal_known = true;
+            const double length =
+                std::sqrt(planes[0].n[0] * planes[0].n[0] + planes[0].n[1] * planes[0].n[1] +
+                          planes[0].n[2] * planes[0].n[2]);
+            if (std::isfinite(length) && length > 1e-12) {
+                for (int i = 0; i < 3; i++)
+                    tool.normal[i] = planes[0].n[i] / length;
+                tool.normal_known = true;
+            }
         }
         return tool;
     }
@@ -101,10 +119,13 @@ static void generic_surface_trim(const J &op) {
     int target_id = quilt_selection_id(target_selection);
     ProQuilt target_quilt = nullptr;
     MeasurementOutcome area_before;
+    RegionGeometry target_geometry;
     if (ProQuiltInit((ProSolid)board, target_id, &target_quilt)) {
         area_before.reason = "target_quilt_init_failed";
+        target_geometry.reason = "target_quilt_init_failed";
     } else {
         area_before = quilt_area_native(target_quilt);
+        target_geometry = quilt_region_geometry(target_quilt);
     }
 
     SurfaceTrimTool tool = surface_trim_tool(op.at("tool"));
@@ -183,14 +204,19 @@ static void generic_surface_trim(const J &op) {
     ProError kept_visit_code = PRO_TK_NO_ERROR;
     int kept_id = surface_trim_kept_quilt(feature, target_id, kept_source, kept_visit_code);
     MeasurementOutcome area_after;
+    RegionGeometry kept_geometry;
     if (kept_id < 0) {
         area_after.reason = "kept_quilt_unresolved";
+        kept_geometry.reason = "kept_quilt_unresolved";
     } else {
         ProQuilt kept_quilt = nullptr;
-        if (ProQuiltInit((ProSolid)board, kept_id, &kept_quilt))
+        if (ProQuiltInit((ProSolid)board, kept_id, &kept_quilt)) {
             area_after.reason = "kept_quilt_init_failed";
-        else
+            kept_geometry.reason = "kept_quilt_init_failed";
+        } else {
             area_after = quilt_area_native(kept_quilt);
+            kept_geometry = quilt_region_geometry(kept_quilt);
+        }
     }
 
     J details =
@@ -206,18 +232,71 @@ static void generic_surface_trim(const J &op) {
     // Where the retained id came from, and what the direct visit said. F03's
     // -4 stays visible instead of being hidden behind a fallback.
     details["kept_quilt_visit_code"] = (int)kept_visit_code;
-    // §4.5 kept_side_basis. tool_normal is a real read only for a datum-plane
-    // tool; centroids have no documented quilt query here, so they stay null
-    // instead of being estimated from a bounding box, and signed_offset_mm is
-    // null because it depends on them.
+    // §4.5 kept_side_basis. Every value below is measured: the centroids, bounds
+    // and directions come from the sampled tessellation of the target and the
+    // retained quilt (quilt_region_geometry), and tool_normal is either the
+    // datum-plane axis (sign anchored by the 2026-11-04 live binding) or the
+    // measured face normal of a planar quilt tool. A curve or curved quilt tool
+    // reports no normal instead of inventing a side.
+    const char *tool_normal_source = nullptr;
     J tool_normal_json = nullptr;
-    if (tool.normal_known && scale.known)
-        tool_normal_json = {tool.normal[0] * scale.scale, tool.normal[1] * scale.scale,
-                            tool.normal[2] * scale.scale};
+    if (tool.normal_known) {
+        tool_normal_json = J::array({tool.normal[0], tool.normal[1], tool.normal[2]});
+        tool_normal_source = "datum_plane_axis";
+    } else if (tool.geometry.available && tool.geometry.planar) {
+        tool_normal_json = region_direction_json(tool.geometry);
+        tool_normal_source = "tool_quilt_face_normal";
+    }
+    J centroid_delta = nullptr;
+    if (target_geometry.available && kept_geometry.available && scale.known) {
+        const double delta[3] = {kept_geometry.centroid[0] - target_geometry.centroid[0],
+                                 kept_geometry.centroid[1] - target_geometry.centroid[1],
+                                 kept_geometry.centroid[2] - target_geometry.centroid[2]};
+        centroid_delta = xyz_json(delta, scale);
+    }
+    // signed_offset_mm = (kept_centroid - target_centroid) · tool_normal. The
+    // sign is only meaningful when the tool normal's own sign is anchored, which
+    // is the datum-plane case; a quilt/curve tool keeps it null with a reason.
+    MeasurementOutcome signed_offset;
+    if (tool.normal_known && target_geometry.available && kept_geometry.available) {
+        double projected = 0.0;
+        for (int i = 0; i < 3; i++)
+            projected += (kept_geometry.centroid[i] - target_geometry.centroid[i]) * tool.normal[i];
+        signed_offset.available = true;
+        signed_offset.value = projected;
+    } else if (!tool.normal_known) {
+        signed_offset.reason = "tool_normal_unavailable";
+    } else {
+        const RegionGeometry &missing = target_geometry.available ? kept_geometry : target_geometry;
+        signed_offset.reason =
+            target_geometry.available ? "kept_centroid_unavailable" : "target_centroid_unavailable";
+        signed_offset.query_code = missing.query_code;
+    }
+    J signed_offset_json = nullptr;
+    if (signed_offset.available && scale.known)
+        signed_offset_json = signed_offset.value * scale.scale;
+
+    // Combined status of the two centroids, kept separate from the per-side
+    // statuses so a failure on one side is not hidden by a success on the other.
+    MeasurementOutcome centroid_outcome;
+    if (target_geometry.available && kept_geometry.available) {
+        centroid_outcome.available = true;
+    } else if (!target_geometry.available) {
+        centroid_outcome.reason = target_geometry.reason;
+        centroid_outcome.query_code = target_geometry.query_code;
+    } else {
+        centroid_outcome.reason = kept_geometry.reason;
+        centroid_outcome.query_code = kept_geometry.query_code;
+    }
+    J centroid_status = measurement_status_json(centroid_outcome, units, scale);
+    centroid_status["source"] = J("surface_tessellation");
+    const J target_status = region_status_json(target_geometry, units, scale);
+    const J kept_status = region_status_json(kept_geometry, units, scale);
     details["kept_side_basis"] = {
         {"keep_side", keep_side},
         {"tool_kind", tool.kind},
         {"tool_curve_id", curve_tool && tool.curve_id >= 0 ? J(tool.curve_id) : J(nullptr)},
+        {"tool_quilt_id", tool.quilt_id >= 0 ? J(tool.quilt_id) : J(nullptr)},
         // A curve tool has no normal of its own: ProTrim.h defines its two sides
         // along the curve direction, so nothing is reported where a plane normal
         // would be.
@@ -225,14 +304,23 @@ static void generic_surface_trim(const J &op) {
         {"primary_quilt_side_value", primary_side},
         {"material_side_value", material_side},
         {"tool_normal", tool_normal_json},
-        {"target_centroid", nullptr},
-        {"kept_centroid", nullptr},
-        {"signed_offset_mm", nullptr},
-        {"centroid_status",
-         {{"available", false},
-          {"reason", "quilt_centroid_not_measured"},
-          {"note", "the retained side is proven by the measured area of the two independent "
-                   "keep_side runs; a quilt centroid query is still unavailable"}}},
+        {"tool_normal_source", tool_normal_source ? J(tool_normal_source) : J(nullptr)},
+        {"target_centroid", region_centroid_json(target_geometry, scale)},
+        {"target_centroid_status", target_status},
+        {"kept_centroid", region_centroid_json(kept_geometry, scale)},
+        {"kept_centroid_status", kept_status},
+        {"centroid_delta_mm", centroid_delta},
+        {"target_bbox_mm", region_bbox_json(target_geometry, scale)},
+        {"target_bbox_status", target_status},
+        {"kept_bbox_mm", region_bbox_json(kept_geometry, scale)},
+        {"kept_bbox_status", kept_status},
+        {"target_direction", region_direction_json(target_geometry)},
+        {"target_direction_status", region_direction_status_json(target_geometry, units, scale)},
+        {"kept_direction", region_direction_json(kept_geometry)},
+        {"kept_direction_status", region_direction_status_json(kept_geometry, units, scale)},
+        {"signed_offset_mm", signed_offset_json},
+        {"signed_offset_status", measurement_status_json(signed_offset, units, scale)},
+        {"centroid_status", centroid_status},
     };
     // A trim that does not regenerate is a hard failure, but the caller needs
     // the raw reason instead of a guess: the status code, the resolved ids and
@@ -272,6 +360,27 @@ static void generic_surface_trim(const J &op) {
         throw std::runtime_error("Surface trim produced no measurable retained region" +
                                  std::string(area_after.reason ? ": " : "") +
                                  (area_after.reason ? area_after.reason : ""));
+    // Contract §4.5: with readable centroids the retained side must agree with
+    // the anchored tool normal; a contradiction fails and rolls back instead of
+    // reporting a side the measured geometry does not show. A zero projection is
+    // not a contradiction - the centroid sits on the tool plane, so the side is
+    // merely unproven.
+    if (signed_offset.available && signed_offset.value != 0.0) {
+        const bool expected_positive = keep_side == "one";
+        if ((signed_offset.value > 0.0) != expected_positive) {
+            stage_operation_result(details);
+            throw std::runtime_error(
+                "Surface trim kept the opposite side of the tool normal (keep_side=" + keep_side +
+                ", signed_offset=" + std::to_string(signed_offset.value) +
+                " native length units, target_centroid=(" +
+                std::to_string(target_geometry.centroid[0]) + ", " +
+                std::to_string(target_geometry.centroid[1]) + ", " +
+                std::to_string(target_geometry.centroid[2]) + "), kept_centroid=(" +
+                std::to_string(kept_geometry.centroid[0]) + ", " +
+                std::to_string(kept_geometry.centroid[1]) + ", " +
+                std::to_string(kept_geometry.centroid[2]) + "))");
+        }
+    }
     remember(op, feature,
              {{"quilt_id", kept_id < 0 ? J(nullptr) : J(kept_id)},
               {"kept_quilt_source", kept_source ? J(kept_source) : J(nullptr)}});

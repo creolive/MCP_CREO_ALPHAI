@@ -1,0 +1,645 @@
+{
+  "run_id": "20261107-132056-710000",
+  "case": "group",
+  "mode": "live",
+  "version": "0.18.0",
+  "command": "tools/test_surface_chain.py --case group --live --confirm-session-usable",
+  "started_at": "2026-11-07T13:20:56.523713+00:00",
+  "passed": true,
+  "native_surface_group": "verified",
+  "jobs": [
+    "4bc91199e98c46aaa7f178085130b3f4",
+    "a1c0f387cc774278bdee35b8070283f8",
+    "e85cc62dd93a46db91a6ad15369f17c5",
+    "d65470b3d5bf4af88ec0012256e10e57",
+    "7bb6e6030a544c6391b34534301e14d5",
+    "f4cbc4901ac546e8b1f3a91ce59e96b6",
+    "b223d959b34948aca928712d268a6db9",
+    "248936751b9742ccba5485ada60a2509"
+  ],
+  "measurements": {
+    "coincident": {
+      "job_id": "a1c0f387cc774278bdee35b8070283f8",
+      "model_id": "05f198424d0e4b55b50b84382e200ad7",
+      "build_job_id": "4bc91199e98c46aaa7f178085130b3f4",
+      "built_revision": 1,
+      "measured_revision": 1,
+      "quilt_ids": [
+        82,
+        127
+      ],
+      "unit_name": "mm",
+      "state": "closed",
+      "state_reason": null,
+      "open_edges": 6,
+      "boundary_edges": 8,
+      "joined_edges": 2,
+      "boundary_closed": false,
+      "gap_max_mm": 0.0,
+      "gap_status": {
+        "available": true,
+        "candidate_pairs": 1,
+        "gap_pairs": 0,
+        "gap_search_mm": 1.0,
+        "joined_pairs": 1,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm",
+        "within_tolerance": true
+      },
+      "overlap_area_mm2": 0.0,
+      "overlap_status": {
+        "area_below_sample_resolution": false,
+        "area_is_estimate": true,
+        "available": true,
+        "buried_boundary_edges": 0,
+        "containment_error_code": 0,
+        "containment_errors": 0,
+        "containment_inside_samples": 0,
+        "containment_off_surface": 0,
+        "containment_outside": 220,
+        "detected": false,
+        "face_pairs_tested": 1,
+        "method": "face_tessellation_sample_containment",
+        "overlapping_face_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "sample_resolution_mm2": 7.2727272727272565,
+        "sample_tests": 220,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm"
+      },
+      "open_edges_status": {
+        "available": true,
+        "boundary_edges": 8,
+        "joined_edges": 2,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "topologically_shared_edges": 0,
+        "unit_name": "mm"
+      }
+    },
+    "micro_gap": {
+      "job_id": "d65470b3d5bf4af88ec0012256e10e57",
+      "model_id": "108bc1327658490c9db8a24d802bc9ab",
+      "build_job_id": "e85cc62dd93a46db91a6ad15369f17c5",
+      "built_revision": 1,
+      "measured_revision": 1,
+      "quilt_ids": [
+        82,
+        127
+      ],
+      "unit_name": "mm",
+      "state": "micro_gap",
+      "state_reason": null,
+      "open_edges": 6,
+      "boundary_edges": 8,
+      "joined_edges": 2,
+      "boundary_closed": false,
+      "gap_max_mm": 0.005000000000009663,
+      "gap_status": {
+        "available": true,
+        "candidate_pairs": 1,
+        "gap_pairs": 0,
+        "gap_search_mm": 1.0,
+        "joined_pairs": 1,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm",
+        "within_tolerance": true
+      },
+      "overlap_area_mm2": 0.0,
+      "overlap_status": {
+        "area_below_sample_resolution": false,
+        "area_is_estimate": true,
+        "available": true,
+        "buried_boundary_edges": 0,
+        "containment_error_code": 0,
+        "containment_errors": 0,
+        "containment_inside_samples": 0,
+        "containment_off_surface": 0,
+        "containment_outside": 220,
+        "detected": false,
+        "face_pairs_tested": 1,
+        "method": "face_tessellation_sample_containment",
+        "overlapping_face_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "sample_resolution_mm2": 7.272726925936586,
+        "sample_tests": 220,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm"
+      },
+      "open_edges_status": {
+        "available": true,
+        "boundary_edges": 8,
+        "joined_edges": 2,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "topologically_shared_edges": 0,
+        "unit_name": "mm"
+      }
+    },
+    "gap": {
+      "job_id": "f4cbc4901ac546e8b1f3a91ce59e96b6",
+      "model_id": "c7dc3d8809fc4e02a460620f2f0a0f25",
+      "build_job_id": "7bb6e6030a544c6391b34534301e14d5",
+      "built_revision": 1,
+      "measured_revision": 1,
+      "quilt_ids": [
+        82,
+        127
+      ],
+      "unit_name": "mm",
+      "state": "open",
+      "state_reason": null,
+      "open_edges": 8,
+      "boundary_edges": 8,
+      "joined_edges": 0,
+      "boundary_closed": false,
+      "gap_max_mm": 0.5,
+      "gap_status": {
+        "available": true,
+        "candidate_pairs": 1,
+        "gap_pairs": 1,
+        "gap_search_mm": 1.0,
+        "joined_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm",
+        "within_tolerance": false
+      },
+      "overlap_area_mm2": 0.0,
+      "overlap_status": {
+        "area_below_sample_resolution": false,
+        "area_is_estimate": true,
+        "available": true,
+        "buried_boundary_edges": 0,
+        "containment_error_code": 0,
+        "containment_errors": 0,
+        "containment_inside_samples": 0,
+        "containment_off_surface": 0,
+        "containment_outside": 220,
+        "detected": false,
+        "face_pairs_tested": 1,
+        "method": "face_tessellation_sample_containment",
+        "overlapping_face_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "sample_resolution_mm2": 7.2727272727272565,
+        "sample_tests": 220,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm"
+      },
+      "open_edges_status": {
+        "available": true,
+        "boundary_edges": 8,
+        "joined_edges": 0,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "topologically_shared_edges": 0,
+        "unit_name": "mm"
+      }
+    },
+    "overlap": {
+      "job_id": "248936751b9742ccba5485ada60a2509",
+      "model_id": "bba78bbfa94e406ba97c992d89b0e4d3",
+      "build_job_id": "b223d959b34948aca928712d268a6db9",
+      "built_revision": 1,
+      "measured_revision": 1,
+      "quilt_ids": [
+        82,
+        127
+      ],
+      "unit_name": "mm",
+      "state": "overlap",
+      "state_reason": null,
+      "open_edges": 8,
+      "boundary_edges": 8,
+      "joined_edges": 0,
+      "boundary_closed": false,
+      "gap_max_mm": 0.5,
+      "gap_status": {
+        "available": true,
+        "candidate_pairs": 1,
+        "gap_pairs": 1,
+        "gap_search_mm": 1.0,
+        "joined_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm",
+        "within_tolerance": false
+      },
+      "overlap_area_mm2": 0.0,
+      "overlap_status": {
+        "area_below_sample_resolution": true,
+        "area_is_estimate": true,
+        "available": true,
+        "buried_boundary_edges": 2,
+        "containment_error_code": 0,
+        "containment_errors": 0,
+        "containment_inside_samples": 0,
+        "containment_off_surface": 0,
+        "containment_outside": 220,
+        "detected": true,
+        "face_pairs_tested": 1,
+        "method": "face_tessellation_sample_containment",
+        "overlapping_face_pairs": 0,
+        "query_code": 0,
+        "reason": null,
+        "sample_resolution_mm2": 7.2727272727272565,
+        "sample_tests": 220,
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm"
+      },
+      "open_edges_status": {
+        "available": true,
+        "boundary_edges": 8,
+        "joined_edges": 0,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "topologically_shared_edges": 0,
+        "unit_name": "mm"
+      }
+    }
+  },
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "message": "Toolkit connection verified; modeling is available"
+      }
+    },
+    {
+      "check": "coincident_group_built",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "saved_file_reloaded_and_verified": true,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "coincident_two_800_patches",
+      "ok": true,
+      "detail": {
+        "quilt_ids": [
+          82,
+          127
+        ]
+      }
+    },
+    {
+      "check": "coincident_measurement_finished",
+      "ok": true,
+      "detail": {
+        "state": "closed",
+        "state_reason": null
+      }
+    },
+    {
+      "check": "coincident_state_is_closed",
+      "ok": true,
+      "detail": {
+        "state": "closed",
+        "reason": null
+      }
+    },
+    {
+      "check": "coincident_open_edges_6",
+      "ok": true,
+      "detail": {
+        "open_edges": 6
+      }
+    },
+    {
+      "check": "coincident_gap_max_0.0",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": 0.0
+      }
+    },
+    {
+      "check": "coincident_overlap_detected_false",
+      "ok": true,
+      "detail": {
+        "detected": false,
+        "area": 0.0,
+        "buried": 0
+      }
+    },
+    {
+      "check": "coincident_revision_unchanged_by_the_read_only_query",
+      "ok": true,
+      "detail": {
+        "built": 1,
+        "measured": 1
+      }
+    },
+    {
+      "check": "coincident_units_are_mm",
+      "ok": true,
+      "detail": {
+        "unit": "mm",
+        "scale": 1.0
+      }
+    },
+    {
+      "check": "coincident_boundary_is_an_open_sheet",
+      "ok": true,
+      "detail": {
+        "boundary_closed": false
+      }
+    },
+    {
+      "check": "micro_gap_group_built",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "saved_file_reloaded_and_verified": true,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "micro_gap_two_800_patches",
+      "ok": true,
+      "detail": {
+        "quilt_ids": [
+          82,
+          127
+        ]
+      }
+    },
+    {
+      "check": "micro_gap_measurement_finished",
+      "ok": true,
+      "detail": {
+        "state": "micro_gap",
+        "state_reason": null
+      }
+    },
+    {
+      "check": "micro_gap_state_is_micro_gap",
+      "ok": true,
+      "detail": {
+        "state": "micro_gap",
+        "reason": null
+      }
+    },
+    {
+      "check": "micro_gap_open_edges_6",
+      "ok": true,
+      "detail": {
+        "open_edges": 6
+      }
+    },
+    {
+      "check": "micro_gap_gap_max_0.005",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": 0.005000000000009663
+      }
+    },
+    {
+      "check": "micro_gap_overlap_detected_false",
+      "ok": true,
+      "detail": {
+        "detected": false,
+        "area": 0.0,
+        "buried": 0
+      }
+    },
+    {
+      "check": "micro_gap_revision_unchanged_by_the_read_only_query",
+      "ok": true,
+      "detail": {
+        "built": 1,
+        "measured": 1
+      }
+    },
+    {
+      "check": "micro_gap_units_are_mm",
+      "ok": true,
+      "detail": {
+        "unit": "mm",
+        "scale": 1.0
+      }
+    },
+    {
+      "check": "micro_gap_boundary_is_an_open_sheet",
+      "ok": true,
+      "detail": {
+        "boundary_closed": false
+      }
+    },
+    {
+      "check": "gap_group_built",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "saved_file_reloaded_and_verified": true,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "gap_two_800_patches",
+      "ok": true,
+      "detail": {
+        "quilt_ids": [
+          82,
+          127
+        ]
+      }
+    },
+    {
+      "check": "gap_measurement_finished",
+      "ok": true,
+      "detail": {
+        "state": "open",
+        "state_reason": null
+      }
+    },
+    {
+      "check": "gap_state_is_open",
+      "ok": true,
+      "detail": {
+        "state": "open",
+        "reason": null
+      }
+    },
+    {
+      "check": "gap_open_edges_8",
+      "ok": true,
+      "detail": {
+        "open_edges": 8
+      }
+    },
+    {
+      "check": "gap_gap_max_0.5",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": 0.5
+      }
+    },
+    {
+      "check": "gap_overlap_detected_false",
+      "ok": true,
+      "detail": {
+        "detected": false,
+        "area": 0.0,
+        "buried": 0
+      }
+    },
+    {
+      "check": "gap_revision_unchanged_by_the_read_only_query",
+      "ok": true,
+      "detail": {
+        "built": 1,
+        "measured": 1
+      }
+    },
+    {
+      "check": "gap_units_are_mm",
+      "ok": true,
+      "detail": {
+        "unit": "mm",
+        "scale": 1.0
+      }
+    },
+    {
+      "check": "gap_boundary_is_an_open_sheet",
+      "ok": true,
+      "detail": {
+        "boundary_closed": false
+      }
+    },
+    {
+      "check": "overlap_group_built",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "saved_file_reloaded_and_verified": true,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "overlap_two_800_patches",
+      "ok": true,
+      "detail": {
+        "quilt_ids": [
+          82,
+          127
+        ]
+      }
+    },
+    {
+      "check": "overlap_measurement_finished",
+      "ok": true,
+      "detail": {
+        "state": "overlap",
+        "state_reason": null
+      }
+    },
+    {
+      "check": "overlap_state_is_overlap",
+      "ok": true,
+      "detail": {
+        "state": "overlap",
+        "reason": null
+      }
+    },
+    {
+      "check": "overlap_open_edges_8",
+      "ok": true,
+      "detail": {
+        "open_edges": 8
+      }
+    },
+    {
+      "check": "overlap_gap_max_0.5",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": 0.5
+      }
+    },
+    {
+      "check": "overlap_overlap_detected_true",
+      "ok": true,
+      "detail": {
+        "detected": true,
+        "area": 0.0,
+        "buried": 2
+      }
+    },
+    {
+      "check": "overlap_overlap_area_is_small_but_present",
+      "ok": true,
+      "detail": {
+        "area_mm2": 0.0,
+        "status": {
+          "area_below_sample_resolution": true,
+          "area_is_estimate": true,
+          "available": true,
+          "buried_boundary_edges": 2,
+          "containment_error_code": 0,
+          "containment_errors": 0,
+          "containment_inside_samples": 0,
+          "containment_off_surface": 0,
+          "containment_outside": 220,
+          "detected": true,
+          "face_pairs_tested": 1,
+          "method": "face_tessellation_sample_containment",
+          "overlapping_face_pairs": 0,
+          "query_code": 0,
+          "reason": null,
+          "sample_resolution_mm2": 7.2727272727272565,
+          "sample_tests": 220,
+          "scale_to_mm_known": true,
+          "tolerance_mm": 0.01,
+          "unit_name": "mm"
+        }
+      }
+    },
+    {
+      "check": "overlap_revision_unchanged_by_the_read_only_query",
+      "ok": true,
+      "detail": {
+        "built": 1,
+        "measured": 1
+      }
+    },
+    {
+      "check": "overlap_units_are_mm",
+      "ok": true,
+      "detail": {
+        "unit": "mm",
+        "scale": 1.0
+      }
+    },
+    {
+      "check": "overlap_boundary_is_an_open_sheet",
+      "ok": true,
+      "detail": {
+        "boundary_closed": false
+      }
+    }
+  ]
+}

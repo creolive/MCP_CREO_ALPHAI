@@ -346,6 +346,7 @@ PROTECTED_OPERATION_KEYS = (
 #: ``failed_operation`` block is failure evidence too (FEAT-012/FEAT-008).
 FAILED_EVIDENCE_KEYS = (
     "feature_errors",
+    "edge_geometry_diagnostic",
     "failed_stage",
     "failed_toolkit_call",
     "failed_operation",
@@ -673,6 +674,8 @@ def annotate_native_result(
     annotate_extrude_depth(result)
     annotate_source_area_status(result)
     annotate_offset_distance_status(result)
+    annotate_kept_side_basis(result)
+    annotate_surface_group(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -1170,6 +1173,235 @@ def annotate_offset_distance_status(result: dict[str, Any]) -> dict[str, Any]:
             status["reason"] = status["reason"] or "offset_distance_not_finite"
         operation["offset_distance_status"] = status
         operation["measured_offset_distance_mm"] = measured if status["available"] else None
+    return result
+
+
+# FEAT-039/H06: the §4.5 kept-side evidence of surface_trim. The executor now
+# samples the target and retained regions (tessellation triangles) and reports
+# the centroid, axis-aligned bounds and world normal beside the status that
+# produced each one. This projection only enforces the frozen rule that a value
+# never outlives its status: an unavailable status nulls its value, a point or
+# bbox without a known unit scale stays null, and a non-planar region has no
+# direction. Blocks that were never reported stay untouched (legacy jobs are
+# never given a synthetic receipt).
+KEPT_SIDE_VALUE_KEYS = (
+    ("target_centroid", "target_centroid_status", "point"),
+    ("kept_centroid", "kept_centroid_status", "point"),
+    ("target_bbox_mm", "target_bbox_status", "bbox"),
+    ("kept_bbox_mm", "kept_bbox_status", "bbox"),
+    ("target_direction", "target_direction_status", "direction"),
+    ("kept_direction", "kept_direction_status", "direction"),
+)
+
+#: Diagnostics reported beside the measurement status. They ride through
+#: unchanged: this projection never derives or repairs them.
+KEPT_SIDE_STATUS_DIAGNOSTICS = (
+    "source",
+    "planar",
+    "face_count",
+    "triangle_count",
+    "tessellation_complete",
+    "max_normal_deviation_deg",
+)
+
+
+def _finite_vector(value: Any, size: int) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != size:
+        return None
+    entries: list[float] = []
+    for item in value:
+        scalar = _finite_scalar(item)
+        if scalar is None:
+            return None
+        entries.append(scalar)
+    return entries
+
+
+def _bbox_value(value: Any) -> dict[str, list[float]] | None:
+    if not isinstance(value, dict):
+        return None
+    minimum = _finite_vector(value.get("min"), 3)
+    maximum = _finite_vector(value.get("max"), 3)
+    size = _finite_vector(value.get("size"), 3)
+    if minimum is None or maximum is None or size is None:
+        return None
+    return {"min": minimum, "max": maximum, "size": size}
+
+
+def normalize_region_measurement_status(block: Any, key: str) -> dict[str, Any]:
+    """One measurement status of the kept-side evidence (§4.4.1 shape)."""
+    label = key[:-7] if key.endswith("_status") else key
+    entry: dict[str, Any] = {
+        "available": False,
+        "reason": None,
+        "query_code": None,
+        "scale_to_mm_known": False,
+        "unit_name": None,
+    }
+    if not isinstance(block, dict):
+        entry["reason"] = f"{label}_missing"
+        return entry
+    entry["available"] = block.get("available") is True
+    reason = block.get("reason")
+    entry["reason"] = reason if isinstance(reason, str) and reason else None
+    code = block.get("query_code")
+    entry["query_code"] = code if type(code) is int else None
+    unit = block.get("unit_name")
+    entry["unit_name"] = unit if isinstance(unit, str) and unit else None
+    entry["scale_to_mm_known"] = block.get("scale_to_mm_known") is True
+    for diagnostic in KEPT_SIDE_STATUS_DIAGNOSTICS:
+        if diagnostic in block:
+            entry[diagnostic] = block.get(diagnostic)
+    if not entry["available"] and entry["reason"] is None:
+        entry["reason"] = f"{label}_unavailable"
+    return entry
+
+
+def _kept_side_value(
+    value: Any, shape: str, status: dict[str, Any]
+) -> list[float] | dict[str, list[float]] | None:
+    if not status["available"]:
+        return None
+    if shape == "point":
+        if not status["scale_to_mm_known"]:
+            return None
+        return _finite_vector(value, 3)
+    if shape == "bbox":
+        if not status["scale_to_mm_known"]:
+            return None
+        return _bbox_value(value)
+    # A direction is unitless, but a non-planar region has no single normal.
+    if status.get("planar") is not True:
+        return None
+    return _finite_vector(value, 3)
+
+
+def normalize_kept_side_basis(basis: Any) -> dict[str, Any] | None:
+    """Normalize one surface_trim ``kept_side_basis`` block.
+
+    Unknown keys (keep_side, tool_normal, ...) pass through unchanged; the
+    measured values are only ever dropped, never invented or repaired.
+    """
+    if not isinstance(basis, dict):
+        return None
+    cleaned = dict(basis)
+    for value_key, status_key, shape in KEPT_SIDE_VALUE_KEYS:
+        if status_key not in cleaned and value_key not in cleaned:
+            continue
+        status = normalize_region_measurement_status(cleaned.get(status_key), status_key)
+        cleaned[status_key] = status
+        cleaned[value_key] = _kept_side_value(cleaned.get(value_key), shape, status)
+    if "centroid_status" in cleaned:
+        cleaned["centroid_status"] = normalize_region_measurement_status(
+            cleaned.get("centroid_status"), "centroid_status"
+        )
+    target = _finite_vector(cleaned.get("target_centroid"), 3)
+    kept = _finite_vector(cleaned.get("kept_centroid"), 3)
+    if "centroid_delta_mm" in cleaned:
+        cleaned["centroid_delta_mm"] = (
+            _finite_vector(cleaned.get("centroid_delta_mm"), 3)
+            if target is not None and kept is not None
+            else None
+        )
+    if "signed_offset_status" in cleaned:
+        status = normalize_region_measurement_status(
+            cleaned.get("signed_offset_status"), "signed_offset_status"
+        )
+        measured = _finite_scalar(cleaned.get("signed_offset_mm"))
+        if status["available"] and (measured is None or not status["scale_to_mm_known"]):
+            status["available"] = False
+            status["reason"] = status["reason"] or (
+                "signed_offset_not_finite" if measured is None else "unit_scale_unknown"
+            )
+        cleaned["signed_offset_status"] = status
+        cleaned["signed_offset_mm"] = measured if status["available"] else None
+    elif cleaned.get("signed_offset_mm") is not None:
+        # A number without a status is an unbacked claim.
+        cleaned["signed_offset_mm"] = None
+    return cleaned
+
+
+def annotate_kept_side_basis(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the surface_trim kept-side evidence before it is persisted."""
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "surface_trim":
+            continue
+        if "kept_side_basis" not in operation:
+            continue
+        basis = normalize_kept_side_basis(operation.get("kept_side_basis"))
+        if basis is not None:
+            operation["kept_side_basis"] = basis
+    return result
+
+
+# FEAT-039/H04: the group-level boundary receipt of surface_group_measure (and
+# of the surface_loft block that carries the same shape). The native executor
+# measures the real boundary; this projection only enforces §4.4.1 — a value
+# never outlives its own status, and an unknown unit scale keeps the mm value
+# null. It never computes a gap, an overlap or a state.
+SURFACE_GROUP_STATES = ("closed", "open", "micro_gap", "overlap")
+
+
+def normalize_surface_group(group: Any) -> dict[str, Any] | None:
+    """Normalize one native ``group`` block; unknown keys pass through."""
+    if not isinstance(group, dict):
+        return None
+    cleaned = dict(group)
+    open_status = cleaned.get("open_edges_status")
+    open_available = isinstance(open_status, dict) and open_status.get("available") is True
+    open_edges = cleaned.get("open_edges")
+    cleaned["open_edges"] = (
+        open_edges if open_available and type(open_edges) is int and open_edges >= 0 else None
+    )
+
+    gap_status = cleaned.get("gap_max_status")
+    gap_available = isinstance(gap_status, dict) and gap_status.get("available") is True
+    gap = _finite_scalar(cleaned.get("gap_max_mm"))
+    cleaned["gap_max_mm"] = gap if gap_available and gap is not None else None
+
+    overlap_status = cleaned.get("overlap_status")
+    overlap_available = isinstance(overlap_status, dict) and overlap_status.get("available") is True
+    area = _finite_scalar(cleaned.get("overlap_area_mm2"))
+    cleaned["overlap_area_mm2"] = area if overlap_available and area is not None else None
+    if isinstance(overlap_status, dict) and not overlap_available:
+        # `detected` is a conclusion drawn from the measurement, so an
+        # unavailable measurement cannot keep a conclusion.
+        overlap_status = dict(overlap_status)
+        overlap_status["detected"] = None
+        cleaned["overlap_status"] = overlap_status
+
+    state = cleaned.get("state")
+    if state not in SURFACE_GROUP_STATES:
+        cleaned["state"] = None
+        if cleaned.get("state_reason") is None:
+            cleaned["state_reason"] = "surface_group_state_unknown"
+    boundary_closed = cleaned.get("boundary_closed")
+    cleaned["boundary_closed"] = boundary_closed if isinstance(boundary_closed, bool) else None
+    return cleaned
+
+
+def annotate_surface_group(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the group boundary receipt before it is persisted."""
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        if operation.get("op") == "surface_group_measure":
+            if "group" in operation:
+                group = normalize_surface_group(operation.get("group"))
+                if group is not None:
+                    operation["group"] = group
+        elif operation.get("op") == "surface_loft":
+            block = operation.get("surface_group")
+            if isinstance(block, dict) and "group" in block:
+                group = normalize_surface_group(block.get("group"))
+                if group is not None:
+                    block["group"] = group
     return result
 
 

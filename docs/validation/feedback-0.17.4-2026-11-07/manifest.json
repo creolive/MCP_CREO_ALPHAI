@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-07",
+  "work_item": "DEV-074",
+  "files": [
+    {
+      "id": "F01",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.17.4\\2026-11-07_CREO_0.17.4_三项反馈修复实机通过但origin非零大跨度resize产出错误体积并回滚.md",
+      "archived_path": "originals/2026-11-07_CREO_0.17.4_三项反馈修复实机通过但origin非零大跨度resize产出错误体积并回滚.md",
+      "bytes": 19306,
+      "sha256": "1a619d431eeb62d0bab757370d1ea596b2824900bc826baca09a32b6284dd321"
+    },
+    {
+      "id": "F02",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.17.4\\2026-11-07CREO10.0.0.0-0.17.4-源码包解压后单测13项因git硬依赖报错与发布后核对未回填及门禁数字不一致.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.17.4-源码包解压后单测13项因git硬依赖报错与发布后核对未回填及门禁数字不一致.md",
+      "bytes": 15919,
+      "sha256": "e94283069d5d146e74800d25a3c60f60dd3f849e3686992e190e650c6b47ab5d"
+    },
+    {
+      "id": "F03",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.17.4\\2026-11-07CREO10.0.0.0-0.17.4全程曲面法缺曲面放样缝合与修剪侧判据.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.17.4全程曲面法缺曲面放样缝合与修剪侧判据.md",
+      "bytes": 23666,
+      "sha256": "077b29cf0f971390972bacac75518f609216858574bb8898256703258fdf281f"
+    },
+    {
+      "id": "F04",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.17.4\\2026-11-07CREO10.0.0.0-0.17.4失败作业connect计时被tail截断与曲面整链仍门禁.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.17.4失败作业connect计时被tail截断与曲面整链仍门禁.md",
+      "bytes": 22729,
+      "sha256": "98fc4a1a1c452e0b59479d06b6fc50e437278a61167993e1fb11c32446268c79"
+    }
+  ]
+}

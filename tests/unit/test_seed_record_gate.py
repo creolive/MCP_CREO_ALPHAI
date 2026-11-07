@@ -7,6 +7,8 @@ the existing fixture writes its own record, so a forgotten backfill only
 surfaced when someone ran the packager. This test is that gate.
 """
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -73,10 +75,12 @@ class RepositoryRecordGateTests(unittest.TestCase):
         original = package_seeds.build_seed_archive
         package_seeds.build_seed_archive = fake_build
         try:
-            code = package_seeds.main(["--output", str(self.archive)])
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                code = package_seeds.main(["--output", str(self.archive)])
         finally:
             package_seeds.build_seed_archive = original
         self.assertNotEqual(code, 0)
+        self.assertIn("ERROR: Seed archive SHA256", output.getvalue())
         self.assertTrue(self.archive.exists(), "the built archive must stay for inspection")
 
     def test_cli_exit_zero_when_the_record_matches(self):
@@ -91,7 +95,10 @@ class RepositoryRecordGateTests(unittest.TestCase):
         original = package_seeds.build_seed_archive
         package_seeds.build_seed_archive = fake_build
         try:
-            code = package_seeds.main(["--output", str(self.archive), "--allow-record-mismatch"])
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = package_seeds.main(
+                    ["--output", str(self.archive), "--allow-record-mismatch"]
+                )
         finally:
             package_seeds.build_seed_archive = original
         self.assertEqual(code, 0)

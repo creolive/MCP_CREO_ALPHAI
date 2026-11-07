@@ -482,13 +482,25 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
         api_reason, fallback_source = _api_explanation(validation)
         projection["thickness_api_reason"] = api_reason
         projection["thickness_fallback_source"] = fallback_source
+    projection["thickness_verified_effective"] = (
+        not _validation_problems("current plan", validation, thickness)
+        if validation is not None and thickness is not None
+        else None
+    )
     loaded_validation = None
     if resize:
         projection["feature_id_before"] = result.get("feature_id_before")
-        projection["feature_id_unchanged"] = result.get("feature_id_before") == result.get(
-            "feature_id"
+        before, after = result.get("feature_id_before"), result.get("feature_id")
+        projection["feature_id_unchanged"] = (
+            before == after if isinstance(before, int) and isinstance(after, int) else None
         )
         projection["thickness_loaded_mm"] = _number(result, "thickness_loaded_mm")
+        if not isinstance(after, int):
+            projection["thickness_loaded_validation"] = None
+            projection["thickness_loaded_api_scope"] = None
+            projection["thickness_loaded_api_reason"] = None
+            projection["thickness_loaded_fallback_source"] = None
+            projection["thickness_loaded_verified_effective"] = None
         loaded_validation = gauge_validation(result, "thickness_loaded_validation")
         if loaded_validation is not None:
             # R03: a current-plan receipt is only valid when this job created
@@ -506,6 +518,11 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
             api_reason, fallback_source = _api_explanation(loaded_validation)
             projection["thickness_loaded_api_reason"] = api_reason
             projection["thickness_loaded_fallback_source"] = fallback_source
+            projection["thickness_loaded_verified_effective"] = (
+                not _validation_problems("loaded", loaded_validation, thickness)
+                if thickness is not None
+                else None
+            )
     problems: list[str] = []
     if origin_problem:
         problems.append(origin_problem)
@@ -517,7 +534,7 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
             "the rectangle is not fully dimensioned "
             f"({dimensions!r} < {MIN_RECTANGLE_DIMENSIONS} point dimensions)"
         )
-    if result.get("op") == PLANAR_WALL_RESIZE_OP and not projection["feature_id_unchanged"]:
+    if result.get("op") == PLANAR_WALL_RESIZE_OP and projection["feature_id_unchanged"] is False:
         problems.append("the resize changed the wall feature identity")
     if direction not in DIRECTIONS:
         problems.append(f"the native result carries no usable direction ({direction!r})")

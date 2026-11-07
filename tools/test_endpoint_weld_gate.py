@@ -26,11 +26,7 @@ implemented here; ``native_acceptance`` is therefore always ``not_run``.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-import platform
-import subprocess
 import sys
 import time
 import uuid
@@ -137,46 +133,13 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
     return path
 
 
-def local_provenance() -> dict[str, Any]:
-    from version import VERSION
+def local_provenance() -> dict:
+    """Collect source evidence even when running from an extracted release."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    return collect(
+        ROOT, ("tools/test_endpoint_weld_gate.py", "tests/unit/test_endpoint_weld_gate.py")
     )
-    names.update(("tools/test_endpoint_weld_gate.py", "tests/unit/test_endpoint_weld_gate.py"))
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-        if (ROOT / name).exists()
-    }
-    return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
 
 
 def offline_checks(run_id: str) -> dict[str, Any]:

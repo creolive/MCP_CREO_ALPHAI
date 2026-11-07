@@ -70,6 +70,45 @@ class ReleaseDownloadTests(unittest.TestCase):
             release_download.download(self.tag, self.directory)
         self.assertEqual(validate_directory(self.directory, self.version), [])
 
+    def test_browser_download_failure_uses_asset_api_id(self):
+        release = self.release()
+        for number, asset in enumerate(release["assets"], 1):
+            asset["id"] = number
+
+        def open_url(request, timeout):
+            self.assertEqual(timeout, release_download.TIMEOUT_SECONDS)
+            url = request.full_url
+            if "/releases/tags/" in url:
+                return io.BytesIO(json.dumps(release).encode())
+            if "github.com/" in url and "api.github.com" not in url:
+                raise OSError("github.com unavailable")
+            self.assertEqual(request.get_header("Accept"), "application/octet-stream")
+            asset_id = int(url.rsplit("/", 1)[-1])
+            return io.BytesIO(self.payloads[self.names[asset_id - 1]])
+
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            patch.object(release_download, "urlopen", side_effect=open_url),
+        ):
+            release_download.download(self.tag, self.directory)
+        self.assertEqual(validate_directory(self.directory, self.version), [])
+
+    def test_browser_download_failure_without_valid_id_does_not_trust_api(self):
+        release = self.release()
+
+        def open_url(request, timeout):
+            if "/releases/tags/" in request.full_url:
+                return io.BytesIO(json.dumps(release).encode())
+            raise OSError("github.com unavailable")
+
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            patch.object(release_download, "urlopen", side_effect=open_url),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "github.com unavailable"):
+                release_download.download(self.tag, self.directory)
+        self.assertEqual(list(self.directory.iterdir()), [])
+
     def test_complete_gh_skips_api(self):
         def complete(command, **kwargs):
             stage = Path(command[command.index("--dir") + 1])

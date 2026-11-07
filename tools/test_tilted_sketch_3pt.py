@@ -23,11 +23,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
-import hashlib
 import json
 import math
-import platform
-import subprocess
 import sys
 import time
 import uuid
@@ -39,7 +36,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.test_datum_plane_through_points import converted_smoke_operations  # noqa: E402
-from version import VERSION  # noqa: E402
 
 SMOKE_POINTS = {
     "dpa0": [-95.191114, 40.0, -88.395141],
@@ -74,36 +70,12 @@ def expected_normal() -> list[float]:
 
 
 def provenance() -> dict:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True, timeout=15
-        ).stdout.strip()
+    """Collect evidence without requiring Git in an extracted release."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    return collect(
+        ROOT, ("tests/unit/test_tilted_sketch_3pt.py", "tools/test_tilted_sketch_3pt.py")
     )
-    names.update({"tools/test_tilted_sketch_3pt.py", "tests/unit/test_tilted_sketch_3pt.py"})
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
 
 
 def offline_checks() -> dict:

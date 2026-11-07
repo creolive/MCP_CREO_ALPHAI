@@ -130,7 +130,8 @@ class DevelopmentWorkflow(unittest.TestCase):
             root = Path(temporary)
             with patch.object(dev_check, "command", return_value=str(root)):
                 self.assertEqual(
-                    dev_check.git_state(root / "extracted"), {"commit": None, "dirty": None}
+                    dev_check.git_state(root / "extracted"),
+                    {"commit": None, "dirty": None, "git_status": "unavailable"},
                 )
 
     def test_unit_failure_and_timeout_cannot_pass_the_combined_check(self):

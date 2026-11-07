@@ -17,9 +17,6 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
-import platform
-import subprocess
 import sys
 import time
 import unittest
@@ -986,37 +983,19 @@ async def run_live(
 
 
 def provenance() -> dict:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
+    from creo_mechdog.source_provenance import local_provenance
 
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    evidence = local_provenance(
+        ROOT,
+        ("tests/unit/test_native_countersink.py", "tools/test_native_countersink.py"),
     )
-    names.update(("tests/unit/test_native_countersink.py", "tools/test_native_countersink.py"))
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
     return {
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
+        "commit": evidence["commit"],
+        "branch": evidence["branch"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+        "source_fingerprint": evidence["source_fingerprint"],
+        "environment": evidence["environment"],
     }
 
 

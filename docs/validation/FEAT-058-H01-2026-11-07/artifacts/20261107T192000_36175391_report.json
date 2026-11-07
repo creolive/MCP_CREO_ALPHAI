@@ -1,0 +1,500 @@
+{
+  "task": "FEAT-058/H01 origin resize matrix",
+  "run_id": "20261107T192000_36175391",
+  "mode": "live",
+  "started_at": 1794050400.7314522,
+  "source": {
+    "source_sha256": {
+      "native/planar_wall.cpp": "1c09254701a2079621964f56528aefefb43927c5effa5bb5e5d88888aafb4fbd",
+      "native/planar_wall.h": "da6159fa0f9c622efe4c5ad49b9cebb5d9468650e01d6c56fe24c910517fdf3c",
+      "native/generic.cpp": "00f6757cf53bb1f1d7c559d7c0cb5286d6693af5101ecc39d48f372ef5ed9b3d",
+      "src/creo_mechdog/native_planar_wall.py": "fc56c6aa4c866c3db95cfd25b411cd0babe91d79ccc32365d751813103aea383",
+      "tools/test_planar_wall_origin_resize.py": "2d8aac3f63e3a46fe1dfd6a1e55a02f3265e42ba9d4bf009977efd539e778aa9"
+    },
+    "worker_sha256": "71ee9ad462aeb5a10b93b978f596c47c390c7b97615d614ea1de5e63df5fe0c1"
+  },
+  "cases": [
+    {
+      "case": "xy_neg_cross_consecutive",
+      "plane": "XY",
+      "direction": "positive",
+      "origin": [
+        -92.5,
+        -116.0
+      ],
+      "steps": [
+        {
+          "step": "create",
+          "model_id": "97f4551e210d45f6a880e9d89a1e81f3",
+          "job_id": "a0e77978bba2448fbfbcf3439313ae2c",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 1,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 42920.00000000001,
+          "feature_id": 49
+        },
+        {
+          "step": "resize",
+          "job_id": "b49d029a970a4f6381f5e36b1eef859c",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 2,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 6000.0,
+          "bbox_mm": [
+            [
+              -92.5,
+              -116.0,
+              0.0
+            ],
+            [
+              7.5,
+              -56.0,
+              1.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              -92.5,
+              -116.0
+            ],
+            "length": 100.0,
+            "width": 60.0,
+            "thickness": 1.0,
+            "volume_mm3": 6000.0,
+            "envelope": {
+              "n": {
+                "max": 1.0,
+                "min": 0.0
+              },
+              "u": {
+                "max": 7.5,
+                "min": -92.5
+              },
+              "v": {
+                "max": -56.0,
+                "min": -116.0
+              }
+            },
+            "bounds_mm": [
+              [
+                -92.5,
+                -116.0,
+                0.0
+              ],
+              [
+                7.5,
+                -56.0,
+                1.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        },
+        {
+          "step": "resize",
+          "job_id": "a0366dd7d6e04c0d919e167e7d8af77f",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 3,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 27000.0,
+          "bbox_mm": [
+            [
+              -92.5,
+              -116.0,
+              0.0
+            ],
+            [
+              57.5,
+              64.0,
+              1.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              -92.5,
+              -116.0
+            ],
+            "length": 150.0,
+            "width": 180.0,
+            "thickness": 1.0,
+            "volume_mm3": 27000.0,
+            "envelope": {
+              "n": {
+                "max": 1.0,
+                "min": 0.0
+              },
+              "u": {
+                "max": 57.5,
+                "min": -92.5
+              },
+              "v": {
+                "max": 64.00000000000001,
+                "min": -116.00000000000001
+              }
+            },
+            "bounds_mm": [
+              [
+                -92.5,
+                -116.00000000000001,
+                0.0
+              ],
+              [
+                57.5,
+                64.00000000000001,
+                1.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        }
+      ],
+      "model_id": "97f4551e210d45f6a880e9d89a1e81f3",
+      "feature_id": 49,
+      "expected": {
+        "volume_mm3": 27000.0,
+        "bbox_mm": [
+          [
+            -92.5,
+            -116.0,
+            0.0
+          ],
+          [
+            57.5,
+            64.0,
+            1.0
+          ]
+        ],
+        "envelope_mm": {
+          "u": [
+            -92.5,
+            57.5
+          ],
+          "v": [
+            -116.0,
+            64.0
+          ],
+          "n": [
+            0.0,
+            1.0
+          ]
+        },
+        "feature_id": 49
+      },
+      "assertions": {
+        "resize_succeeded": true,
+        "volume_matches": true,
+        "bbox_matches": true,
+        "envelope_matches": true,
+        "feature_id_kept": true,
+        "origin_kept": true,
+        "thickness_kept": true,
+        "saved_and_reloaded": true,
+        "revision_advanced": true
+      },
+      "passed": true
+    },
+    {
+      "case": "xy_neg_grow",
+      "plane": "XY",
+      "direction": "positive",
+      "origin": [
+        -92.5,
+        -116.0
+      ],
+      "steps": [
+        {
+          "step": "create",
+          "model_id": "e43c3b0fac98489a8ac9500da68580a4",
+          "job_id": "7b361bc3bb444ad7bdc2e379b052a6cd",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 1,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 6000.0,
+          "feature_id": 49
+        },
+        {
+          "step": "resize",
+          "job_id": "5f91aba0854940d4adfb8bf79f67e66f",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 2,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 42919.999999999985,
+          "bbox_mm": [
+            [
+              -92.5,
+              -115.99999999999999,
+              0.0
+            ],
+            [
+              92.5,
+              115.99999999999999,
+              1.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              -92.5,
+              -116.0
+            ],
+            "length": 185.0,
+            "width": 232.0,
+            "thickness": 1.0,
+            "volume_mm3": 42919.999999999985,
+            "envelope": {
+              "n": {
+                "max": 1.0,
+                "min": 0.0
+              },
+              "u": {
+                "max": 92.50000000000001,
+                "min": -92.5
+              },
+              "v": {
+                "max": 115.99999999999999,
+                "min": -115.99999999999999
+              }
+            },
+            "bounds_mm": [
+              [
+                -92.5,
+                -115.99999999999999,
+                0.0
+              ],
+              [
+                92.50000000000001,
+                115.99999999999999,
+                1.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        }
+      ],
+      "model_id": "e43c3b0fac98489a8ac9500da68580a4",
+      "feature_id": 49,
+      "expected": {
+        "volume_mm3": 42920.0,
+        "bbox_mm": [
+          [
+            -92.5,
+            -116.0,
+            0.0
+          ],
+          [
+            92.5,
+            116.0,
+            1.0
+          ]
+        ],
+        "envelope_mm": {
+          "u": [
+            -92.5,
+            92.5
+          ],
+          "v": [
+            -116.0,
+            116.0
+          ],
+          "n": [
+            0.0,
+            1.0
+          ]
+        },
+        "feature_id": 49
+      },
+      "assertions": {
+        "resize_succeeded": true,
+        "volume_matches": true,
+        "bbox_matches": true,
+        "envelope_matches": true,
+        "feature_id_kept": true,
+        "origin_kept": true,
+        "thickness_kept": true,
+        "saved_and_reloaded": true,
+        "revision_advanced": true
+      },
+      "passed": true
+    },
+    {
+      "case": "xy_zero_cross",
+      "plane": "XY",
+      "direction": "positive",
+      "origin": [
+        0.0,
+        0.0
+      ],
+      "steps": [
+        {
+          "step": "create",
+          "model_id": "8435f7489e1b4952936c1ff0b6f9a0cd",
+          "job_id": "439019b35f924fbda60a5c8398b0ef76",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 1,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 42919.999999999985,
+          "feature_id": 49
+        },
+        {
+          "step": "resize",
+          "job_id": "ff1600a0b6ad46b1bccb71e7d732265c",
+          "status": "succeeded",
+          "message": "General feature plan completed",
+          "revision": 2,
+          "saved_file_reloaded_and_verified": true,
+          "volume_mm3": 6000.0,
+          "bbox_mm": [
+            [
+              0.0,
+              -7.882557713891051e-32,
+              0.0
+            ],
+            [
+              100.0,
+              60.0,
+              1.0
+            ]
+          ],
+          "planar_wall": {
+            "feature_id": 49,
+            "feature_id_before": 49,
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "length": 100.0,
+            "width": 60.0,
+            "thickness": 1.0,
+            "volume_mm3": 6000.0,
+            "envelope": {
+              "n": {
+                "max": 1.0,
+                "min": 0.0
+              },
+              "u": {
+                "max": 100.0,
+                "min": 0.0
+              },
+              "v": {
+                "max": 60.0,
+                "min": -7.882557713891051e-32
+              }
+            },
+            "bounds_mm": [
+              [
+                0.0,
+                -7.882557713891051e-32,
+                0.0
+              ],
+              [
+                100.0,
+                60.0,
+                1.0
+              ]
+            ],
+            "dimension_count": 5,
+            "verified": null,
+            "thickness_measured_mm": 1.0,
+            "thickness_verified": true
+          }
+        }
+      ],
+      "model_id": "8435f7489e1b4952936c1ff0b6f9a0cd",
+      "feature_id": 49,
+      "expected": {
+        "volume_mm3": 6000.0,
+        "bbox_mm": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            100.0,
+            60.0,
+            1.0
+          ]
+        ],
+        "envelope_mm": {
+          "u": [
+            0.0,
+            100.0
+          ],
+          "v": [
+            0.0,
+            60.0
+          ],
+          "n": [
+            0.0,
+            1.0
+          ]
+        },
+        "feature_id": 49
+      },
+      "assertions": {
+        "resize_succeeded": true,
+        "volume_matches": true,
+        "bbox_matches": true,
+        "envelope_matches": true,
+        "feature_id_kept": true,
+        "origin_kept": true,
+        "thickness_kept": true,
+        "saved_and_reloaded": true,
+        "revision_advanced": true
+      },
+      "passed": true
+    }
+  ],
+  "calls": [
+    {
+      "job_id": "a0e77978bba2448fbfbcf3439313ae2c",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "b49d029a970a4f6381f5e36b1eef859c",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "a0366dd7d6e04c0d919e167e7d8af77f",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "7b361bc3bb444ad7bdc2e379b052a6cd",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "5f91aba0854940d4adfb8bf79f67e66f",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "439019b35f924fbda60a5c8398b0ef76",
+      "status": "succeeded"
+    },
+    {
+      "job_id": "ff1600a0b6ad46b1bccb71e7d732265c",
+      "status": "succeeded"
+    }
+  ],
+  "finished_at": 1794050500.1392498,
+  "passed": true
+}
