@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
+> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
 
 日期：2026-10-18。类型：功能。优先级：P1。状态：所列子项已交付，余项开放。**0.13.0 已交付**：S02 曲面修剪、S04 投影曲线、S05 曲面扫掠（开放/加盖/实体化）、S06 实体化判据、S07 法向偏置（`creo_surface_offset`）、S08 完整链路、S09 模块化、W01 端点焊接本体；**0.14.0 已交付**（2026-11-06 发布）：W05 `extrude_depth` 回执与 W06 只读预览/失败回滚。**0.15.0 已交付**（2026-11-06）：R05 矩阵/失败上下文、R07 曲面引用契约与 R09 折边文案；四壁/merge/多截面放样仍 gated。**仍 gated / 未交付**：S03 缝合——四条原生路线只建出 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，待新路线；多截面放样/边界混合仍缺，Direct Blend 元素树抽取返回 -18，且没有 `surface_loft` 工具或已注册操作；`surface_trim` 的 `offset_mm`/`offset_side` 继续门禁（2026-11-06 Thin 树复测只得到“移除厚度带”语义，[G5 §2.7b](../development/G5-NATIVE-CONTRACT.md)）。S10 的发布交付见 0.13.0 发布记录。公开工具 100。目标版本：0.13.0（已发布）/ 0.14.0（已发布）/ 0.15.0（已发布）；余下曲面项未排期。
 
@@ -555,3 +555,32 @@ quilt 工具实测面法向为 `(−1,0,0)`（与草图支撑面相反），因�
 [live_trim_report.json](../validation/feat039-h06-kept-side-2026-11-07/live_trim_report.json)
 （SHA256 `4911D20D…0936C6A`）。**未覆盖**：非平面区域、非 mm 单位、多面 quilt、quilt 工具法向跨重建稳定性、
 Creo 9/10；`rollback_kept_the_revision` 不含 unknown_outcome。
+
+## 2026-11-07 H04 交付：曲面组级测量（实机）
+
+H04 的缺口是"组级闭合、公差 0.01、缝隙/重叠"，此前只有逐 quilt 的 `ProQuiltVolumeEval` 布尔。
+本轮新增 `native/surface_group.cpp` 与只读算子 `surface_group_measure`
+（MCP 工具 `creo_measure_surface_group`）：把一组 quilt 的全部成员面当作组，用真实边界拓扑回答
+`open_edges`、`gap_max_mm`（含 `tolerance_mm`/`gap_search_mm`）、`overlap_area_mm2` 与四态
+`state`（`closed`/`open`/`micro_gap`/`overlap`），每值独立 `*_status`，单位未知时 mm 值保持 null。
+
+- **拓扑/几何依据**：`ProQuiltSurfaceVisit` → `ProSurfaceContourVisit` → `ProContourEdgeVisit`；
+  同一 `ProEdge` 被两个成员面引用即拓扑共享缝；其余边界边按采样折线做一对一配对（横向距离 +
+  纵向重叠 ≥10%），容差内 joined、容差外但在 `gap_search_mm` 内计 gap。
+- **重叠**：面网格细分采样 + `ProSurfaceParamEval`/`ProSurfaceXyzdataEval`/`ProSurfaceUvpntVerify`
+  判断采样点是否落在另一面裁剪域内；另计"埋入边界"，使细于采样间距的重叠带也能检出。
+  面积是估计值，`area_below_sample_resolution` 明确标出"检出重叠但面积估计为 0"。
+- **入口**：`surface_chain` 的 `surface_loft` 回执新增 `surface_group` 块（单 quilt 自身面组）；
+  独立只读查询 `creo_measure_surface_group`。Python 侧 `operation_results.normalize_surface_group`
+  只做"值不脱离状态"的投影，不重算任何量。
+- **实机（run `20261107-132056-710000`，42 项检查全通过）**：两张 40×20 填充按 offset 构造
+  ①共边 → `closed`、`open_edges=6`、`gap_max=0.0`；②0.005 mm 缝 → `micro_gap`、
+  `gap_max=0.005000000000009663`；③0.5 mm 缝 → `open`、`gap_max=0.5`；④0.5 mm 重叠 →
+  `overlap`、`buried_boundary_edges=2`、面积为 0 并标 `area_below_sample_resolution=true`。
+  四例 revision 均 1→1（只读测量不推进），建模作业 `saved_file_reloaded_and_verified=true`。
+- **构造限制（实测）**：autodim 会把草图轮廓量化到 0.01 mm（请求 40.005 实测 40.01），
+  0.005 mm 用例必须用 `dimensioning="coordinates"`；共面两片仍无法 `quilt_merge`（H03 gated），
+  因此组级测量只对独立 quilt 集合取证。
+- 证据：[EVIDENCE](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md)（报告 SHA256
+  `D530B999…2D5C9970`）。**未覆盖**：Creo 9/10、非 mm 单位、多面/曲面成员、`open_edges=0` 的
+  闭合壳体组、重叠面积精度与 `gap_search_mm` 之外的间距量化。

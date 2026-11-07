@@ -218,6 +218,41 @@ def _direction_reference_problem(reference: Any) -> str | None:
     return f"unsupported kind '{kind}': use datum_feature, datum_axis_feature or a curve id"
 
 
+class SurfaceGroupMeasureOp(StrictModel):
+    """Read-only group-level boundary measurement (FEAT-039/H04).
+
+    The group is one or more quilts; every member face is part of it. Per-quilt
+    ``closed`` (ProQuiltVolumeEval) cannot say whether two members are joined,
+    slightly apart or overlapping, so the native side measures boundary edges,
+    seam gaps and overlapping face area separately. ``tolerance_mm`` is the
+    join/flush tolerance (0.01 mm by default); ``gap_search_mm`` is the widest
+    boundary-to-boundary distance still reported as a seam gap (1 mm by
+    default). Gaps wider than that are exposed boundary, not a measured gap.
+    """
+
+    op: Literal["surface_group_measure"]
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=8)]
+    tolerance_mm: Positive = 0.01
+    gap_search_mm: Positive = 1.0
+
+    @model_validator(mode="after")
+    def valid_references(self):
+        for index, reference in enumerate(self.references):
+            problem = quilt_reference_problem(reference, allow_datum_plane=False)
+            if problem:
+                raise ValueError(f"surface_group_measure references[{index}] {problem}")
+        if len({repr(sorted(reference.items())) for reference in self.references}) != len(
+            self.references
+        ):
+            raise ValueError("surface_group_measure references must be distinct quilts")
+        if self.gap_search_mm < self.tolerance_mm:
+            raise ValueError(
+                "surface_group_measure gap_search_mm must be at least tolerance_mm; a gap "
+                "search narrower than the join tolerance could never report a gap"
+            )
+        return self
+
+
 class ProjectCurveOp(StrictModel):
     """Project one curve onto one quilt along an explicit direction (FEAT-039/S04).
 

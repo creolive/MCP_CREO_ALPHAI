@@ -949,6 +949,51 @@ PRO_E_FEATURE_TREE
 - Python 侧不新建共享测量模块：字段投影复用既有 `src/creo_mechdog/operation_results.py` 的投影入口。
 - 既有 `native/inspection_units.h`（单位查询）与 `native/assembly_units.h`（比例换算）**只读复用，不改写**。
 
+### 4.8 曲面组级测量字段（FEAT-039/H04）
+
+**测量对象**：一组 quilt（`creo_measure_surface_group`，只读作业）或 `surface_loft` 自身产出的
+quilt（回执里的 `surface_group` 块）。组成员面 = 每个 quilt 经 `ProQuiltSurfaceVisit` 得到的全部面。
+
+**方法（全部来自真实拓扑/几何，不用面积或体积反推）**：
+
+- 每个面的轮廓用 `ProSurfaceContourVisit`，轮廓边用 `ProContourEdgeVisit`（`ProEdge`）；
+- 同一 `ProEdge` 被组内两个面引用 ⇒ 拓扑共享（内部缝），`topologically_shared_edges`；
+- 其余边界边两两比较采样折线（`ProEdgeTessellationGet`，点太少时改用
+  `ProEdgeXyzdataEval` 参数采样）：横向距离 ≤ `tolerance_mm` 且纵向重叠 ≥ 较短边 10% 记为
+  joined（一对一贪心配对）；介于 `tolerance_mm` 与 `gap_search_mm` 记为 gap；
+- 重叠面积：对每个面取内核三角网格（`ProSurfaceTessellationGet`）细分采样，用
+  `ProSurfaceParamEval` + `ProSurfaceXyzdataEval` + `ProSurfaceUvpntVerify` 判断采样点是否落在
+  另一面的裁剪域内；另计"埋入边界"（一条边界边落在另一面内部且离该面边界 > 容差），
+  使细于采样间距的重叠带也能被检出。
+
+**冻结字段**（每个值独立 `*_status`，结构见 §4.4.1；单位未知时 mm 值为 null）：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `open_edges` / `open_edges_status` | `int \| null` | 组内未被两张面共享（容差内）的边界边数 |
+| `boundary_edges` / `joined_edges` | `int \| null` | 边界边总数与已接合边数 |
+| `gap_max_mm` / `gap_max_status` | `float \| null` | 候选缝对的最大实测间距；无候选缝时为 null + `no_member_seam_candidate` |
+| `gap_max_status.tolerance_mm` / `.gap_search_mm` | `float` | 判定容差与搜索窗口（请求值回显） |
+| `gap_max_status.joined_pairs` / `.gap_pairs` / `.candidate_pairs` | `int \| null` | 配对计数 |
+| `gap_max_status.within_tolerance` | `bool \| null` | `gap_max_mm <= tolerance_mm` |
+| `overlap_area_mm2` / `overlap_status` | `float \| null` | 重叠面积**估计值**（来自面网格采样），失败给 reason，不填 0 |
+| `overlap_status.detected` | `bool \| null` | 面积估计 > 0 或存在埋入边界 |
+| `overlap_status.buried_boundary_edges` | `int \| null` | 埋入另一面内部的边界边数 |
+| `overlap_status.sample_resolution_mm2` | `float \| null` | 单采样点代表的面积（估计分辨率） |
+| `overlap_status.area_below_sample_resolution` | `bool \| null` | 检出重叠但面积估计为 0 时为 true，避免把 0 读成"无重叠" |
+| `state` / `state_reason` | `"closed" \| "open" \| "micro_gap" \| "overlap" \| null` | 成员缝四态；不可判定时为 null + 原因 |
+| `boundary_closed` | `bool \| null` | `open_edges == 0`：整组边界是否闭合壳体 |
+| `faces` / `quilt_ids` / `face_count` | `list` / `list[int]` / `int` | 参与的成员面与 quilt |
+
+**四态判据（冻结）**：检出重叠 ⇒ `overlap`；边界边不可访问 ⇒ `state=null`；存在采样失败 ⇒
+`state=null` + `boundary_edge_sampling_failed`；`open_edges == 0` ⇒ `closed`；
+`gap_max > tolerance` ⇒ `open`；有 joined 缝且 `max_joined_gap > 1e-6 mm` ⇒ `micro_gap`；其余有
+joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candidate`。`state` 描述**成员缝**，
+不是外壳闭合；外壳由 `boundary_closed` 单独表达（两块平面拼接的缝可以闭合而整体仍是开放片）。
+
+**边界**：`gap_search_mm` 之外的间距不计入 `gap_max_mm`（仍按开放边计数）；重叠面积是网格采样
+估计而不是布尔求交；判定基于采样边界几何，不是内核缝/布尔特征。
+
 ---
 
 ## 5. 最小几何 oracle（三个 op 各一个）

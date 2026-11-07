@@ -144,6 +144,7 @@ _SOURCE_NAMES = (
     "native/quilt_gauge_guard.h",
     "native/quilt_query.h",
     "native/surface_trim.cpp",
+    "native/surface_group.cpp",
     "native/quilt_merge.cpp",
     "native/project_curve.cpp",
     "native/component_transform.h",
@@ -2298,6 +2299,32 @@ async def creo_get_mass_properties(
     refused until their own query path is verified.
     """
     return await invoke(general.get_mass_properties, model_id, density_g_cm3)
+
+
+@mcp.tool(annotations=READ)
+async def creo_measure_surface_group(
+    model_id: str,
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=8)],
+    tolerance_mm: float = 0.01,
+    gap_search_mm: float = 1.0,
+) -> dict[str, Any]:
+    """Measure a surface group's real boundary: open edges, seam gap and overlap.
+
+    references is one or more quilts ({kind:'quilt',id:N} or
+    {kind:'quilt_feature',label:...}); every member face of every quilt is part
+    of the group. The measurement is read-only: it writes nothing and does not
+    change the revision. group.state is 'closed', 'open', 'micro_gap' or
+    'overlap' and describes the member seams; group.boundary_closed says whether
+    the group boundary itself is a closed shell (open_edges == 0). tolerance_mm
+    (0.01 by default) is the join/flush tolerance; gap_search_mm (1 mm by
+    default) bounds which boundary-to-boundary distance still counts as a seam
+    gap. Each value has its own status: an unmeasurable value is null with a
+    reason, never 0. overlap_area_mm2 is an estimate from the kernel's face
+    tessellation, not a boolean intersection.
+    """
+    return await invoke(
+        general.measure_surface_group, model_id, references, tolerance_mm, gap_search_mm
+    )
 
 
 @mcp.tool(annotations=READ)

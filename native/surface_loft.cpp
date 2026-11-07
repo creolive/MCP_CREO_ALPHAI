@@ -275,6 +275,12 @@ static void generic_surface_loft(const J &op) {
     details["closure"] = {{"available", closed.available},
                           {"query_code", (int)closed.query_code},
                           {"reason", closed.reason ? J(closed.reason) : J(nullptr)}};
+    // FEAT-039/H04: the quilt's own faces are a group too, so the boundary
+    // measurement is published beside the boolean closure probe. A single
+    // boundary-blend quilt reports its exposed edges; the seam fields stay
+    // null with a reason instead of a fabricated zero.
+    details["surface_group"] =
+        quilt_id >= 0 ? surface_group_receipt({quilt_id}, 0.01, 1.0) : J(nullptr);
     details["has_solid"] = inspection(false)["has_solid"];
     details["surface_type"] =
         feature_type == PRO_FEAT_DATUM_SURF ? J("datum_surface") : J("unknown");

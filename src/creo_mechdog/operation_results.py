@@ -675,6 +675,7 @@ def annotate_native_result(
     annotate_source_area_status(result)
     annotate_offset_distance_status(result)
     annotate_kept_side_basis(result)
+    annotate_surface_group(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -1333,6 +1334,74 @@ def annotate_kept_side_basis(result: dict[str, Any]) -> dict[str, Any]:
         basis = normalize_kept_side_basis(operation.get("kept_side_basis"))
         if basis is not None:
             operation["kept_side_basis"] = basis
+    return result
+
+
+# FEAT-039/H04: the group-level boundary receipt of surface_group_measure (and
+# of the surface_loft block that carries the same shape). The native executor
+# measures the real boundary; this projection only enforces §4.4.1 — a value
+# never outlives its own status, and an unknown unit scale keeps the mm value
+# null. It never computes a gap, an overlap or a state.
+SURFACE_GROUP_STATES = ("closed", "open", "micro_gap", "overlap")
+
+
+def normalize_surface_group(group: Any) -> dict[str, Any] | None:
+    """Normalize one native ``group`` block; unknown keys pass through."""
+    if not isinstance(group, dict):
+        return None
+    cleaned = dict(group)
+    open_status = cleaned.get("open_edges_status")
+    open_available = isinstance(open_status, dict) and open_status.get("available") is True
+    open_edges = cleaned.get("open_edges")
+    cleaned["open_edges"] = (
+        open_edges if open_available and type(open_edges) is int and open_edges >= 0 else None
+    )
+
+    gap_status = cleaned.get("gap_max_status")
+    gap_available = isinstance(gap_status, dict) and gap_status.get("available") is True
+    gap = _finite_scalar(cleaned.get("gap_max_mm"))
+    cleaned["gap_max_mm"] = gap if gap_available and gap is not None else None
+
+    overlap_status = cleaned.get("overlap_status")
+    overlap_available = isinstance(overlap_status, dict) and overlap_status.get("available") is True
+    area = _finite_scalar(cleaned.get("overlap_area_mm2"))
+    cleaned["overlap_area_mm2"] = area if overlap_available and area is not None else None
+    if isinstance(overlap_status, dict) and not overlap_available:
+        # `detected` is a conclusion drawn from the measurement, so an
+        # unavailable measurement cannot keep a conclusion.
+        overlap_status = dict(overlap_status)
+        overlap_status["detected"] = None
+        cleaned["overlap_status"] = overlap_status
+
+    state = cleaned.get("state")
+    if state not in SURFACE_GROUP_STATES:
+        cleaned["state"] = None
+        if cleaned.get("state_reason") is None:
+            cleaned["state_reason"] = "surface_group_state_unknown"
+    boundary_closed = cleaned.get("boundary_closed")
+    cleaned["boundary_closed"] = boundary_closed if isinstance(boundary_closed, bool) else None
+    return cleaned
+
+
+def annotate_surface_group(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the group boundary receipt before it is persisted."""
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        if operation.get("op") == "surface_group_measure":
+            if "group" in operation:
+                group = normalize_surface_group(operation.get("group"))
+                if group is not None:
+                    operation["group"] = group
+        elif operation.get("op") == "surface_loft":
+            block = operation.get("surface_group")
+            if isinstance(block, dict) and "group" in block:
+                group = normalize_surface_group(block.get("group"))
+                if group is not None:
+                    block["group"] = group
     return result
 
 

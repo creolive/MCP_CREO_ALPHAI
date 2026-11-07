@@ -140,7 +140,19 @@ SURFACE_LOFT_KEYS = (
     "surface_area_status",
     "quilt_closed_native",
     "closure",
+    "surface_group",
     "has_solid",
+)
+
+#: Keys produced by native/surface_group.cpp (FEAT-039/H04). The whole group
+#: block is kept together: every value carries its own status, so a compact
+#: poll can still tell a measured zero from an unmeasured seam.
+SURFACE_GROUP_KEYS = (
+    "unit_name",
+    "length_scale_to_mm",
+    "tolerance_mm",
+    "gap_search_mm",
+    "group",
 )
 
 #: Keys produced by native/surfaces.cpp::generic_surface_solid. ``closure`` is
@@ -180,6 +192,7 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
     "surface_loft": SURFACE_LOFT_KEYS,
+    "surface_group_measure": SURFACE_GROUP_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
     "solidify": SOLIDIFY_KEYS,

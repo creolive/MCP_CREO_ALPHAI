@@ -62,6 +62,7 @@ REGISTERED_OPERATIONS = (
     "solidify",
     "surface_trim",
     "surface_loft",
+    "surface_group_measure",
     "quilt_merge",
     "project_curve",
     "boolean_bodies",
@@ -549,13 +550,16 @@ def families() -> dict:
                 "creo_surface_trim",
                 "creo_project_curve",
                 "creo_surface_offset",
+                "creo_measure_surface_group",
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
                 "(straight interpolation, measured area and closure); trim one quilt "
                 "with another quilt, a datum-plane label or a curve geometry id; "
                 "project one curve geometry id onto one quilt along an explicit "
-                "direction reference; offset one quilt along its surface normal"
+                "direction reference; offset one quilt along its surface normal; "
+                "measure a group of quilts read-only (open boundary edges, seam gap "
+                "against a tolerance, overlapping face area)"
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
@@ -570,7 +574,12 @@ def families() -> dict:
                 "refused; surface_offset returns the offset wall, not a standalone offset "
                 "quilt; it can add solid volume, and target_quilt_id names the source quilt; "
                 "trimmed quilt feature-label reuse and curved-quilt offset measurement "
-                "have no published geometric guarantee"
+                "have no published geometric guarantee; "
+                "creo_measure_surface_group reports member seams (state closed/open/"
+                "micro_gap/overlap) while boundary_closed tells whether the whole group "
+                "boundary is a shell; its overlap area is a tessellation estimate, gaps "
+                "wider than gap_search_mm are not quantified, and the join judgement is "
+                "sampled boundary geometry rather than a kernel boolean"
             ),
         },
         "boolean_bodies": {
