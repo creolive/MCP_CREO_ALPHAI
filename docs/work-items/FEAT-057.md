@@ -1,6 +1,6 @@
 # FEAT-057：真实材料质量属性
 
-类型：功能。优先级：P2。状态：开发中（工具已随 0.18.0 集成；密度/单位/缺失原因契约已补，离线验证；实机、主惯量与装配汇总待收口）。目标版本：未排期。
+类型：功能。优先级：P2。状态：部分交付（0.18.1 发布密度/单位/缺失原因回执契约，离线验证；主惯量、装配汇总与 Creo 实机待收口）。目标版本：0.18.1（已发布）；剩余范围未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -54,4 +54,4 @@
 - Python 归一化新增原因枚举校验：未知原因拒绝；`density_source` 非 `none` 时携带原因拒绝；旧原生回执无该字段时保留 `null`（版本错配不误判）。
 - 工具说明同步单位与原因，`material_assigned`/`mass_unit`/`density_source` 语义不变。
 
-验收：`tests/unit/test_mass_properties.py` 24/24 通过；`bridge.py build` 组合编译通过（Windows x64 / Creo 12.4.0.0 匹配 SDK）。**未连接 Creo/Toolkit**：原生原因分支、真实材料密度、英寸/磅单位模型、保存重载均无实机证据；主惯量、装配 occurrence 汇总与 `complete` 契约仍开放。未合入 main，未发布。
+验收：`tests/unit/test_mass_properties.py` 24/24 通过；`bridge.py build` 组合编译通过（Windows x64 / Creo 12.4.0.0 匹配 SDK）。**未连接 Creo/Toolkit**：原生原因分支、真实材料密度、英寸/磅单位模型、保存重载均无实机证据；主惯量、装配 occurrence 汇总与 `complete` 契约仍开放。已随 0.18.1 发布（离线），发布记录见 [RELEASE-0.18.1](../validation/RELEASE-0.18.1.md)。
