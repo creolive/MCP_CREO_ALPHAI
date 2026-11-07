@@ -15,7 +15,7 @@
 | 驱动 | `tools/test_feedback0174_receipts.py` SHA256 `6F12AF6D0D713464A520FBA3F20E76CE6CD4A155AFBEC338A04983675AE187DE` |
 | 受测投影源码 | `src/creo_mechdog/native_planar_wall.py` `FC56C6AA…AEA383`；`src/creo_mechdog/preview.py` `D3385FAB…27386B`；`creo_startup.py` `46B63333…56F0C`；`native/advanced.cpp` `09CA464B…A29EBB` |
 | 命令 | `.\.venv\Scripts\python.exe tools\test_feedback0174_receipts.py --live --confirm-session-usable` |
-| 原始报告 | [live_receipts_report.json](live_receipts_report.json)（91195 bytes，SHA256 `65EA57BAB677F9BB940076DC5001FE2634E8F368F5F111314619FFE29F714FDC`，run `20261108T002653_283`） |
+| 原始报告 | [live_receipts_report.json](live_receipts_report.json)：驱动写出的工作树副本 91195 bytes，SHA256 `65EA57BAB677F9BB940076DC5001FE2634E8F368F5F111314619FFE29F714FDC`；提交进 Git 后按 LF 归一化为 88297 bytes，blob SHA256 `78FB0A303BCDF2EE892F5CDA60E5B34A2023610CA8FB8F397180EA9228AFD236`（内容相同），run `20261108T002653_283` |
 | 只读补核 | [followup_full_compare.json](followup_full_compare.json)：同一批 job 的 `detail=full` 与 compact 回执比对，以及空模型 job 的保存结论（不提交、不改模型） |
 
 纪律：单连接、每个用例只提交一次、失败不重提；未启动/关闭 Creo、未清 unknown 保护、未做故障注入、未并发提交。
