@@ -422,3 +422,27 @@ def normalize_geometry_deviation(block: Any) -> dict[str, Any]:
         "accepted_rigid": accepted_rigid,
         "stages": stages,
     }
+
+
+def normalize_solver_receipt(block: Any) -> dict[str, Any] | None:
+    """Keep bounded native solver facts; missing stages never imply success."""
+    if not isinstance(block, dict):
+        return None
+    stages = block.get("stages")
+    stages = stages if isinstance(stages, dict) else {}
+    result: dict[str, Any] = {
+        key: block[key][:128] if isinstance(block.get(key), str) else None
+        for key in ("requested", "used", "selection_reason")
+    }
+    result["stages"] = {
+        key: stages[key] if type(stages.get(key)) is int else None
+        for key in (
+            "initial_solve",
+            "retry_without_inference",
+            "autodimension",
+            "section_regenerate",
+        )
+    }
+    for key in ("completed", "recovered"):
+        result[key] = block[key] if type(block.get(key)) is bool else None
+    return result

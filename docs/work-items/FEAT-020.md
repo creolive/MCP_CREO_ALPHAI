@@ -124,3 +124,7 @@ WorkBuddy 最终验收仅通过已连接 MCP 的公开工具检查用户可见�
 - 实现摘要：`UpdateChecker._refresh` 失败分支按计划口径区分“尚无成功检查”（`latest_version=null`，message 为“未取得最新版本信息：本次更新检查失败，不代表已是最新版本；15 分钟后可重试”）与“有旧缓存”（保留过期字段并说明须结合 `status=failed`/`stale`/`error`）；`status=failed`、净化后的 `error`、15 分钟失败冷却与不阻塞建模的既有行为未动；工具描述与 UPDATE_CHECK.md 同步。
 - 本次证据：离线全量 612 项单测通过（含该新增用例）、`tools/dev_check.py` exit 0（success=true）。本轮**未**做真实断网/限流或 GitHub 超时注入；实机回归期间的更新检查未作为本卡验收项。
 - 未测范围：local_dev/领先公开版语义、真实断网/限流/高版本提醒、客户端会话去重、网络失败期间继续建模仍缺；本轮只收敛失败文案，不改变“验收中”。
+
+## 2026-11-07 离线接续（未发布）
+
+DEV-071修正force=true绕过已完成的失败/unknown缓存，普通15分钟冷却保留，在途仍共用。默认5秒总预算可由MECHDOG_UPDATE_TIMEOUT_SECONDS配置有限1..30，非法回退5；新增实际预算/cache_age_seconds/retry_after_at。仅MockTransport/AsyncMock验证，不以离线单测宣称网络问题已消失。 见[DEV-071](DEV-071.md)与[三件反馈映射](../validation/feedback-0.16.0-2026-11-07/MAPPING.md)。

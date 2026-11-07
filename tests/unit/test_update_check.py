@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -128,6 +129,51 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         self.now = 100.0
         self.enterContext(patch.object(updates, "monotonic", side_effect=lambda: self.now))
 
+    async def test_timeout_configuration_is_validated_once(self):
+        for value, expected in [
+            ("1", 1),
+            ("30", 30),
+            ("2.5", 2.5),
+            ("", 5),
+            ("true", 5),
+            ("False", 5),
+            ("nan", 5),
+            ("inf", 5),
+            ("-inf", 5),
+            ("0", 5),
+            ("31", 5),
+            ("bad", 5),
+        ]:
+            with (
+                self.subTest(value=value),
+                patch.dict(os.environ, {"MECHDOG_UPDATE_TIMEOUT_SECONDS": value}),
+            ):
+                checker = updates.UpdateChecker("0.2.6")
+                self.assertEqual(checker.snapshot()["network_timeout_seconds"], expected)
+                with patch.dict(os.environ, {"MECHDOG_UPDATE_TIMEOUT_SECONDS": "29"}):
+                    self.assertEqual(checker.snapshot()["network_timeout_seconds"], expected)
+
+    async def test_completed_age_and_retry_timestamp(self):
+        self.assertIsNone(self.checker.snapshot()["cache_age_seconds"])
+        self.assertIsNone(self.checker.snapshot()["retry_after_at"])
+        self.fetch.side_effect = OSError("secret")
+        result = await self.checker.check()
+        self.assertEqual(result["cache_age_seconds"], 0)
+        from datetime import datetime
+
+        retry = datetime.fromisoformat(result["retry_after_at"])
+        checked = datetime.fromisoformat(result["checked_at"])
+        self.assertEqual((retry - checked).total_seconds(), updates.RETRY_SECONDS)
+        self.assertIn("force=true", result["message"])
+        self.now += 7
+        self.assertEqual(self.checker.snapshot()["cache_age_seconds"], 7)
+        self.fetch.side_effect = None
+        result = await self.checker.check(force=True)
+        self.assertEqual(result["status"], "update_available")
+        self.assertIsNone(result["retry_after_at"])
+        self.assertEqual(result["cache_age_seconds"], 0)
+        self.fetch.assert_awaited_with(self.checker.network_timeout_seconds)
+
     async def test_first_check_cache_and_force(self):
         self.assertEqual(self.checker.snapshot()["status"], "not_checked")
         result = await self.checker.check()
@@ -154,7 +200,7 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(failed["stale"])
         self.assertNotIn("secret", json.dumps(failed))
         await self.checker.check(force=True)
-        self.assertEqual(self.fetch.await_count, 2)
+        self.assertEqual(self.fetch.await_count, 3)
         self.now += updates.RETRY_SECONDS
         self.fetch.side_effect = None
         self.assertEqual((await self.checker.check())["status"], "update_available")
@@ -202,8 +248,10 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         result = await self.checker.check()
         self.assertEqual(result["status"], "unknown")
         self.assertIsNone(result["latest_version"])
-        await self.checker.check(force=True)
+        await self.checker.check()
         self.assertEqual(self.fetch.await_count, 1)
+        await self.checker.check(force=True)
+        self.assertEqual(self.fetch.await_count, 2)
         self.now += updates.RETRY_SECONDS
         self.fetch.return_value = [release()]
         self.assertEqual((await self.checker.check())["status"], "update_available")
@@ -212,7 +260,7 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         gate = asyncio.Event()
         started = asyncio.Event()
 
-        async def blocked():
+        async def blocked(*args):
             started.set()
             await gate.wait()
             return [release()]
@@ -250,7 +298,7 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
         gate = asyncio.Event()
         started = asyncio.Event()
 
-        async def blocked():
+        async def blocked(*args):
             started.set()
             await gate.wait()
             return [release()]
@@ -268,12 +316,17 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_total_deadline_and_lifespan_shutdown(self):
         gate = asyncio.Event()
-        self.fetch.side_effect = gate.wait
-        with patch.object(updates, "NETWORK_SECONDS", 0.02):
+
+        async def wait_for_gate(*args):
+            await gate.wait()
+
+        self.fetch.side_effect = wait_for_gate
+        with patch.object(self.checker, "network_timeout_seconds", 0.02):
             result = await self.checker.check()
         self.assertEqual(result["status"], "failed")
         self.assertIsNone(result["latest_version"])
-        self.assertIn("预算", result["error"])
+        self.assertIn("0.02 秒网络预算", result["error"])
+        self.assertEqual(result["network_timeout_seconds"], 0.02)
         self.now += updates.RETRY_SECONDS
         with (
             patch.object(server, "updates", self.checker),
@@ -321,6 +374,9 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
                     "last_success_at",
                     "from_cache",
                     "stale",
+                    "network_timeout_seconds",
+                    "cache_age_seconds",
+                    "retry_after_at",
                     "message",
                     "error",
                 },
@@ -353,6 +409,27 @@ class GitHubResponseTests(unittest.IsolatedAsyncioTestCase):
             data = await updates.fetch_releases()
         self.assertEqual(calls, [1, 2])
         self.assertEqual(updates.select_release(data, "0.2.6")["latest_version"], "0.4.0-rc.1")
+
+    async def test_configured_timeout_reaches_each_request_and_all_pages_share_deadline(self):
+        calls = []
+
+        async def handler(request):
+            calls.append(request)
+            self.assertEqual(request.extensions["timeout"]["read"], 0.2)
+            if len(calls) > 1:
+                await asyncio.Event().wait()
+            return httpx2.Response(200, json=[release()] * 100)
+
+        checker = updates.UpdateChecker("0.2.6")
+        checker.network_timeout_seconds = 0.2
+        with self.client(handler):
+            result = await checker.check()
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result["status"], "failed")
+        self.assertIsNone(result["latest_version"])
+        self.assertEqual(result["network_timeout_seconds"], 0.2)
+        self.assertIn("0.2 秒", result["error"])
+        await checker.stop()
 
     async def test_short_page_next_link_does_not_redirect_to_external_host(self):
         calls = []

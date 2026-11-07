@@ -48,3 +48,7 @@
 | 命令与结果 | 先红灯（10 项）→ 实现 → 绿灯；`unittest tests.unit.test_recolor_palette_resolution tests.unit.test_assembly_appearance` 49 项 OK；全量 2158 项 OK；`dev_check` `success=true` |
 | 构建 | 同 [BUG-104](BUG-104.md)（执行器 `a61fad90…`，随 0.11.3 发布） |
 | 未验证 | 随机上色在实机的写后读回与保存重载、80 组件夹具的族色区分；Creo 9/10、WorkBuddy 黑盒 |
+
+## 2026-11-07 实机（0.17.3，Creo 12.4.0.0）
+
+临时探针 `build/live_appearance_0173.py`（不入库）在 3 源件 / 3 组件装配上：`random:true` 预览 `palette_source=random`、3 族颜色互异；执行成功、revision +1、全部组件 `appearance.state=present`；提交回执记录 `palette_source=random`。组件标签键（`{"c01":…,"c02":…,"c03":…}`）预览与执行均为 `family_label`。报告 `build/live_appearance_0173.json`（SHA256 `3dc0812fe228927d1e4b2afcd48b765b376d92bcde39b4a5819d91106df3d979`）。未测：80 组件 / 12 族夹具（FEAT-052 专测）、歧义标签拒绝的实机路径、Creo 9/10。

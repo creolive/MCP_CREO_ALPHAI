@@ -321,3 +321,7 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 
 **边界**：本轮验证的是 miter_cuts 固定 1/1 基线、两组换参、native_planar 路线与展开/折回/失败回滚；relief 材料几何、更大厚度/半径范围、跨计划多级改型仍未覆盖，FEAT-014 的 relief 子项保持开放。
 
+
+## 2026-11-07 离线接续（未发布）
+
+DEV-071补齐aliases-only的miter_cuts/adjacent_bend_ends_allowed到公开操作回执：新收尾及历史受控sidecar只读投影，compact/full/sections同源。回执保留dict，缺字段不伪造成功。原生切角语义不变。 见[DEV-071](DEV-071.md)与[三件反馈映射](../validation/feedback-0.16.0-2026-11-07/MAPPING.md)。

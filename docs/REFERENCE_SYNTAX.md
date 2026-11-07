@@ -138,7 +138,7 @@
  "side": "positive"}
 ```
 
-`creo_surface_offset` 的结果是**偏置壁**，按“面积 × 距离”计量，既不是独立偏置 quilt，也不是 `creo_thicken`/`creo_solidify` 那种实体厚度壁；后者从 quilt 生成实体，前者只把 quilt 沿法向移动。`side` 只回显请求侧，几何 z 符号不回读。该工具用 `distance`，不吃 `offset_mm`；`surface_trim` 的 `offset_mm` 是另一条被门禁的薄修剪路线，当前拒绝文案为：
+`creo_surface_offset` 的结果是会增加实体体积的**偏置壁**，不是独立偏置 quilt。`target_quilt_id` 指向源 quilt，不代表新产生、可供下游修剪或合并的 quilt。只有单一平面源、偏置前体积近零等计量条件满足时才以体积÷面积发布实测距离；其他情况实测距离为 null，原因见 `offset_distance_status`。`creo_thicken`/`creo_solidify` 保留各自从 quilt 生成实体的独立契约。`side` 只回显请求侧，几何 z 符号不回读。该工具用 `distance`，不吃 `offset_mm`；`surface_trim` 的 `offset_mm` 是另一条被门禁的薄修剪路线，当前拒绝文案为：
 
 > surface_trim offset_mm is not published: the documented Thin tree (PRO_SURF_TRIM_THIN with PRO_E_THICKNESS/PRO_E_SRF_OFFS_METHOD) only removes a band of that thickness when the tool is a quilt, keeps both sides instead of the requested keep_side, and offset_side has no observable effect (2026-11-06 six direction variants all produced the same band; negative thickness fails regeneration)
 
@@ -160,7 +160,7 @@
 | thicken.reference | 裸 quilt 或 quilt_feature 引用 |
 | surface_trim.target/tool | target 一个 quilt；tool 一个 quilt、基准面标签或曲线几何 ID；`keep_side` 只用 `one`/`two`，实际依据见 `kept_side_basis`；`offset_mm` 仍拒绝 |
 | project_curve.target/source/direction_ref | target 一个 quilt；source 只接受 `{"kind":"curve","id":N}`（不接受 edge/axis 或曲线标签）；direction_ref 接受 `datum_feature`/`datum_axis_feature` 标签或曲线 ID，不接受 `datum_plane` 标签或裸向量 |
-| surface_offset.reference | 裸 quilt 或 quilt_feature 引用；距离字段是 `distance`，结果按面积×距离计量的偏置壁，不是独立 quilt 或实体厚度壁 |
+| surface_offset.reference | 裸 quilt 或 quilt_feature 引用；距离字段是 `distance`，结果为会增加实体体积的偏置壁；源 quilt id 不是新结果 quilt，实测距离可用性见 offset_distance_status |
 | sheetmetal_flange.edge | 裸引用（计划路径 `operations[i].edge`），两种形态：`{"kind":"edge","id":N}`，`id` 取当前 `creo_inspect_model` 的边 ID；或 `{"kind":"edge_geometry","endpoints_mm":[[x,y,z],[x,y,z]],"tolerance_mm":1e-6}`，用当前模型坐标毫米的两端点点名一条直线边，原生在执行每个 op 时重查当前几何、要求无向唯一匹配，因此计划可跨边 ID 重排。`tolerance_mm` 可省略（默认 1e-6，范围 1e-9..1000），不接受单位字段；0/多候选、非有限坐标、退化边或无法换算模型长度单位时明确拒绝。两种形态都不得再加 edge/reference 包装。首壁来源为 `native_planar` 时，报错只指向 `creo_sheetmetal_planar_wall` 的 frame/envelope；只有 `sheetmetal_wall` 转换首壁才引用 `wall_contract`；来源未知不给旧首壁配方 |
 | sheetmetal_unbend/flat_pattern/bend_back.fixed_surface | 裸面引用，如 `{"kind":"surface","id":N}`，取自当前巡检；`references` 省略时作用全部折弯，能否固定由原生执行判定 |
 | sheetmetal_flange.relief | 可选对象 `{type:"none"\|"rectangular", ends:"both"\|"side1"\|"side2", width:>0, depth:>=0}`；省略等于 `none`（两端保持 `PRO_BEND_RLF_NONE`）。宽深是**绝对模型单位**、不按板厚缩放；`rip`/`stretch`/`obround`/`param`、角部释放与边撕裂不支持。这是 **bend-end relief**，不是 corner relief 或斜接，当前未证明能解决角部重叠；传入它也不会跳过 `adjacent_bend_ends` 创建前拒绝。释放是创建期属性，改它要删除/抑制折边后重建，没有就地改释放的入口 |

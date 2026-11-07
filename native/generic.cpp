@@ -2154,7 +2154,8 @@ static J sketch(const J &op) {
     J dims = J::object();
     J coordinate_plan;
     J solving_op = op;
-    solving_op["dimensioning"] = profile_dimensioning(op);
+    last_sketch_solver_info = profile_dimensioning_choice(op);
+    solving_op["dimensioning"] = last_sketch_solver_info["used"];
     // FEAT-010/BUG-049: resolve the deviation policy before solving so a
     // malformed explicit tolerance fails before any mutation.
     const DeviationPolicy deviation_policy =
@@ -2315,6 +2316,7 @@ static J sketch(const J &op) {
     // the reported revolve_axis.id for an internal centerline is verifiable
     // from the client-visible result (same id space, no guessing).
     J sketch_result = {{"surface_id", frame.surface},
+                       {"solver", sketch_solver_receipt(solver_info)},
                        {"origin", frame.origin},
                        {"normal", frame.n},
                        {"u_axis", frame.u},
@@ -6717,6 +6719,9 @@ static J failed_operation_context(const J &operation, int index, bool executing,
                {"determinant", nullptr},
                {"orthogonality_residual", nullptr}};
     if (in_flight) {
+        if (!last_sketch_solver_info.is_null() &&
+            (kind == "sketch" || kind == "update_sketch_geometry" || kind == "update_airfoil"))
+            block["solver"] = sketch_solver_receipt(last_sketch_solver_info);
         // Only a string label/reference is a name; an integer sketch id stays
         // unnamed rather than being turned into a label.
         if (operation.contains("label") && operation.at("label").is_string()) {
@@ -6971,6 +6976,7 @@ static int run_generic(const std::wstring &job) {
                 suppress_seed_for_profiles(request["loft_seed"]["feature_id"], true);
             }
             for (auto op : request["operations"]) {
+                last_sketch_solver_info = nullptr;
                 ++operation_index;
                 operation_position = operation_index;
                 operation_in_flight = op;
