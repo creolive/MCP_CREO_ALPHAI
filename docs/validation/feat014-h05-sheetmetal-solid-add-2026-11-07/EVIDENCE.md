@@ -89,6 +89,8 @@ Creo 10 从未实际尝试；本证据只覆盖本机 Creo 12.4.0.0、mm、下�
 
 即几何上「成功」，但结果不再具备可用钣金身份：没有可挂折边的壁面轮廓，展开失败。另一模型在反向 union 后追加 `new_body` 凸台并以合并体为 target 再做实体-实体 union 也成功（job `32eae0e83d7d4f6eaacc65ca0782c163`，6800 mm³、1 体、保存重载 true），反证 id 116 此时已不是钣金体（否则会像 C1 一样 `-1`）。
 
+板厚记录：合并前平面壁回执给出 `thickness_measured_mm=1.0`（原生 body 读取）；合并后公开巡检没有板厚读取字段，原生 `ProSmtBodyThicknessValueGet` 也只在 wall 操作路径内调用，因此**不宣称**合并后的板厚数字，只把「壁面轮廓 0 eligible + 展开失败」作为钣金身份丢失的证据。
+
 ### D. 同件「实体-实体」union 对照
 
 模型 `6d755207dd534263803100d6b340a30e`：第二个 `new_body` 凸台 10×10×5（job `abfb4e0e4c244682ba38275749317eac`，6900 mm³、2 体），再 union 116 ← 188（job `32eae0e83d7d4f6eaacc65ca0782c163`）→ `succeeded`、6800 mm³、1 体、`saved_file_reloaded_and_verified=true`。说明布尔特征本身在该钣金件可创建；C1 的 `-1` 特定于钣金体作为 target。
