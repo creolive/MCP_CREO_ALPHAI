@@ -1,6 +1,6 @@
 # FEAT-057：真实材料质量属性
 
-类型：功能。优先级：P2。状态：开发中（f4be20e分支已有实现/19例报告；数值守卫、材料重心及契约待收口）。目标版本：未排期。
+类型：功能。优先级：P2。状态：开发中（工具已随 0.18.0 集成；离线数值守卫子项完成；材料重心及契约待收口）。目标版本：未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -28,3 +28,19 @@
 已有实现及显式密度的用户决定按A01验收摘要保留。本次纯函数复现NaN质量/Inf重心未被拒绝；材料实际重心、P00回执差异、卡头/工具文案需收口。此状态不代表main已包含该工具；接续R03，不从零重做。
 
 详见[核验记录](../development/DEV067-POST0120-AUDIT-2026-11-04.md)和[后续计划](../superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)。本次只改记录/计划，未修改该任务产品代码或进行新实机。
+
+## 2026-11-04 离线数值守卫子项
+
+本次只修改回执归一化模块和专项测试：拒绝三标量/三维重心中的 NaN、±Inf，把巨大整数转 float 的溢出统一为含字段/坐标位置的 ValueError，在自洽比较前拒绝乘法和差值的非有限中间值。保留缺省/None、非数字/形状错误重心的旧行为、有限负重心、正常 6000 mm³ / 7.85 g/cm³ / 47.1 g 和回执元数据；未改公共签名、字段、单位或密度优先级。
+
+环境为 Windows x64 / Python 3.12.14，解释器 `.venv/Scripts/python.exe`、实际包路径 `src/creo_mechdog/mass_properties.py` 与 `SOURCE_PATHS.resource_root` 均核对属于 `E:\Projects\codex-A01`。受测基线 `f4be20e9cc1921ae031d453b61cf1b27c4317f4a`，测试时 dirty=true；开发检查受测源码指纹 `e99c50c61fedb59dc7372aadfa5a346f168b3875f48ca45607af4b3d59a0e428`。
+
+- `.\.venv\Scripts\python.exe -m unittest tests.unit.test_mass_properties -v`：修复前 20 例，48 failures / 12 errors；修复及格式化后 20/20 通过。
+- `.\.venv\Scripts\python.exe -m ruff check src/creo_mechdog/mass_properties.py tests/unit/test_mass_properties.py` 及相同文件的 `ruff format --check`：通过。
+- `.\.venv\Scripts\python.exe tools/dev_check.py --work-item FEAT-057-numeric-guards`：失败，四个未修改测试文件的既有格式问题阻断（test_callback_admission、test_reference_contract、test_t01_capability_contracts、test_update_check），unit_tests=not_run；未改其他文件或重建基线。不得将单独单测结果等同于该检查通过。
+
+本次无原生改动/构建、无 Toolkit/Creo/MCP 连接、无 live 驱动。真实材料重心、混合单位/未知单位、同步/异步接口、主惯量与 complete 契约等其余 A01 范围仍开放，历史实机记录不构成本次证据。原始日志和详细交接保存在本机 `build/feat057_numeric_guards_20261104/task-1-report.md`，交控制者独立审查。
+
+独立全量离线单测 `.\.venv\Scripts\python.exe tools/test_unit.py`：2288/2288 通过、0 failures / 0 errors，退出码 0（稳定日志 `build/feat057_numeric_guards_20261104/unit-full.log`）。此结果与失败的 dev_check 分别记录。
+
+本子项稳定本机证据目录为 `build/feat057_numeric_guards_20261104/`（Git 忽略）：`task-1-report.md` 为交接报告，`red.log` / `green.log` 为专项红绿回归，`dev-check.log` 为失败的完整开发检查，`unit-full.log` 为独立全量离线单测，`unchanged-style-files.json` 为四个格式阻断文件相对基线未变的哈希证据。该目录保留证据以供计划临时目录清理后追溯。

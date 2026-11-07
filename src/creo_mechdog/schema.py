@@ -1812,6 +1812,18 @@ class DumpTreeOp(StrictModel):
     feature: str | int
 
 
+class MassPropertiesOp(StrictModel):
+    """FEAT-057: read-only mass properties of the model itself.
+
+    ``density_g_cm3`` is an explicit what-if input, used only when the model's
+    own material carries no usable density. It never replaces a real material
+    density, and the receipt reports which source produced the mass.
+    """
+
+    op: Literal["mass_properties"]
+    density_g_cm3: Annotated[float | None, Field(gt=0, le=30)] = None
+
+
 class CsysOp(StrictModel):
     op: Literal["datum_csys"]
     label: Label
@@ -1971,6 +1983,7 @@ Operation = Annotated[
         SimpleOp,
         ExportOp,
         DumpTreeOp,
+        MassPropertiesOp,
         DrawingModelOp,
         DrawingSheetOp,
         DrawingViewOp,

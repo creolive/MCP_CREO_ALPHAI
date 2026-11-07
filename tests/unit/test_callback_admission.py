@@ -81,11 +81,11 @@ class CallbackAdmission(unittest.TestCase):
 
     def test_both_public_tools_are_registered_and_startup_probe_stays_offline(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
-        # 99 = the 97 published in 0.12.1 plus creo_surface_trim (live P3) and
-        # creo_project_curve (live S04), both published by 0.12.2 on 2026-11-04.
-        # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
-        # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-        self.assertEqual(len(tools), 101)
+        # 102 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
+        # creo_project_curve (live S04), creo_surface_offset (live S07,
+        # 2026-11-05), the offline creo_plan_product_variant (FEAT-063) and the
+        # read-only creo_get_mass_properties (FEAT-057).
+        self.assertEqual(len(tools), 102)
         self.assertIn("creo_reconcile_model", tools)
         self.assertTrue(tools["creo_callback_status"].annotations.read_only_hint)
         with (

@@ -354,10 +354,11 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(direct, (await server.creo_startup_status())["update"])
             tools = {tool.name: tool for tool in await server.mcp.list_tools()}
             tool = tools["creo_check_update"]
-            # 101 includes offline creo_plan_product_variant.
+            # 102 includes offline creo_plan_product_variant (FEAT-063) and
+            # read-only creo_get_mass_properties (FEAT-057).
             # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
             # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-            self.assertEqual(len(tools), 101)
+            self.assertEqual(len(tools), 102)
             self.assertTrue(tool.annotations.read_only_hint)
             self.assertTrue(tool.annotations.open_world_hint)
             self.assertFalse(tool.annotations.destructive_hint)

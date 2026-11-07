@@ -2281,6 +2281,22 @@ async def creo_lookup_constants(prefix: str, limit: int = 100) -> dict[str, Any]
 
 
 @mcp.tool(annotations=READ)
+async def creo_get_mass_properties(
+    model_id: str, density_g_cm3: float | None = None
+) -> dict[str, Any]:
+    """Read the model's own mass properties (volume, mass, density, centre of mass).
+
+    Volume and the centre of mass are measured from the model geometry. The mass
+    uses the density of the model's material when that material carries one;
+    otherwise pass density_g_cm3 for an explicit what-if and the receipt reports
+    density_source=request. With neither, mass is null with a hint - it is never
+    filled in from an assumed density. Parts only: assemblies are refused until
+    their own query path is verified.
+    """
+    return await invoke(general.get_mass_properties, model_id, density_g_cm3)
+
+
+@mcp.tool(annotations=READ)
 async def creo_inspect_model(
     model_id: str,
     detail: Literal["compact", "full"] = "compact",

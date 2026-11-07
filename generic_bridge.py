@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -54,6 +55,57 @@ def list_models(limit: int = 10, detail: str = "compact", cursor: str | None = N
             }
         models.append(model_summary(model))
     return list_page(models, model_info, detail, limit, cursor)
+
+
+MASS_PROPERTIES_TIMEOUT_SECONDS = 120.0
+_MASS_PROPERTIES_TERMINAL = (
+    "succeeded",
+    "failed",
+    "aborted",
+    "cancelled",
+    "unknown_outcome",
+)
+
+
+def get_mass_properties(model_id: str, density_g_cm3: float | None = None) -> dict:
+    """FEAT-057: read the model's mass properties through a read-only job.
+
+    Synchronous on purpose: the query writes nothing, so the caller gets the
+    normalized receipt instead of a job id it would have to poll. The material
+    density decides the mass when it exists; ``density_g_cm3`` is only the
+    explicit fallback, and the receipt always says which one was used.
+    """
+    from creo_mechdog.mass_properties import normalize_mass_properties
+
+    operation: dict = {"op": "mass_properties"}
+    if density_g_cm3 is not None:
+        operation["density_g_cm3"] = float(density_g_cm3)
+    accepted = submit([operation], model_id=model_id, readonly=True)
+    job_id = accepted["job_id"]
+    deadline = time.monotonic() + MASS_PROPERTIES_TIMEOUT_SECONDS
+    record: dict = {}
+    while True:
+        path = bridge.job_path(job_id) / "job.json"
+        if path.exists():
+            record = bridge.read_json(path)
+            if record.get("status") in _MASS_PROPERTIES_TERMINAL:
+                break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"Mass properties query did not finish: job {job_id}")
+        time.sleep(0.25)
+    if record.get("status") != "succeeded":
+        message = record.get("message") or f"Mass properties query failed: job {job_id}"
+        raise RuntimeError(str(message))
+    for entry in (record.get("result") or {}).get("operations") or []:
+        if isinstance(entry, dict) and isinstance(entry.get("mass_properties"), dict):
+            receipt = normalize_mass_properties(entry["mass_properties"])
+            return {
+                "job_id": job_id,
+                "model_id": model_id,
+                "revision": record.get("revision"),
+                **receipt,
+            }
+    raise RuntimeError(f"Mass properties query returned no reading: job {job_id}")
 
 
 def inspect_model(
@@ -193,7 +245,8 @@ def submit(
     if loft_seed and (model_id is not None or readonly or model_type != "part"):
         raise ValueError("Native loft seed initialization is only available for a new part")
     if readonly and any(
-        op["op"] not in ("dump_tree", "export", "udf_inspect") for op in operations
+        op["op"] not in ("dump_tree", "export", "udf_inspect", "mass_properties")
+        for op in operations
     ):
         raise ValueError("Read-only requests may only inspect/export")
     with bridge.toolkit_lock(operation="submit", model_id=model_id):
@@ -289,6 +342,7 @@ def submit(
                 "save",
                 "export",
                 "dump_tree",
+                "mass_properties",
                 "feature_tree",
             }:
                 raise ValueError("This operation requires a part model")
