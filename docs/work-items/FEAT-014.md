@@ -2,7 +2,7 @@
 
 > **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
 >
-> **2026-11-07 补充**：`new_body=true` + `boolean_bodies(union)` 已实机反证（Creo 12.4 不可用，Creo 10 未测），门禁保持，见文末 H05 节。
+> **2026-11-07 补充（随 0.18.4 交付）：** `new_body=true` + `boolean_bodies(union)` 已实机反证（Creo 12.4 不可用，Creo 10 未测），门禁保持，见文末 H05 节与 [H05 证据](../validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md)。附着增料仍是不可用结论，不构成新增能力。
 
 ## 2026-11-07：0.17.1 反馈离线增量（DEV-072）
 

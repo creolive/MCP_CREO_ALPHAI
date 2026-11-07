@@ -1,8 +1,8 @@
-# MCP_CREO_MechDog 0.18.3
+# MCP_CREO_MechDog 0.18.4
 
-![version](https://img.shields.io/badge/version-0.18.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
+![version](https://img.shields.io/badge/version-0.18.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
 
-当前正式版 **0.18.3**（PATCH，用户指定编号的例外：本版含新增公开工具，按语义化版本本应为 MINOR——DEV-074 0.17.4 反馈批：非零 origin 大跨度钣金改型修复、两截面直纹曲面放样 `creo_surface_loft`、曲面组级四态测量、保留侧真实形心/bbox/方向；公开工具 102→104） · [版本说明](docs/RELEASE_NOTES_0.18.3.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
+当前正式版 **0.18.4**（PATCH——DEV-074 0.18.3 后续实机批：非平面填充替代「旋转球面」、多 quilt 组整链、曲面边圆角可行性、钣金附着增料与独立 quilt 偏置反证（门禁保持）、BUG-115 回执 MCP 复验；公开工具仍 104，无 schema/接口不兼容变更） · [版本说明](docs/RELEASE_NOTES_0.18.4.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
 
 > 让 AI 客户端通过 MCP，直接在 Creo Parametric 里创建**原生可编辑的参数化特征**——不是导出网格，也不是脚本模拟。
 
@@ -105,7 +105,7 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 | 确认哪些功能已实测 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
 | 种子库 / 换电脑换 Agent | [docs/SEED_LIBRARY.md](docs/SEED_LIBRARY.md)、[docs/MIGRATION.md](docs/MIGRATION.md) |
 | 直接混合的一次性回调 | [docs/CALLBACK_LIFECYCLE.md](docs/CALLBACK_LIFECYCLE.md) |
-| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.18.3 版本说明](docs/RELEASE_NOTES_0.18.3.md) |
+| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.18.4 版本说明](docs/RELEASE_NOTES_0.18.4.md) |
 | 参与开发 / 看台账 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)、[docs/BACKLOG.md](docs/BACKLOG.md) |
 
 ## 已知限制
