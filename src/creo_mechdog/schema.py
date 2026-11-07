@@ -16,6 +16,7 @@ from pydantic import (
 
 from creo_mechdog import schema_base as _schema_base
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
+from creo_mechdog.hole_standards import resolve_standard_hole, tip_cone_height_mm
 from creo_mechdog.profile_diagnostics import validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
@@ -602,6 +603,48 @@ class Countersink(StrictModel):
     angle: Annotated[float, Field(gt=0, lt=180)]
 
 
+class StandardHoleSpec(StrictModel):
+    """FEAT-035 frozen shape: a table row plus a usable thread depth.
+
+    ``fastener_id`` is the installed hole chart's own name for the row
+    ("M6x1"). It is optional here because the resolver supplies it; a caller
+    value is only accepted when it matches the frozen table row.
+    """
+
+    series: str
+    size: str
+    thread_depth: Annotated[float, Field(gt=0)]
+    fastener_id: str | None = None
+    nominal_diameter_mm: float | None = None
+    tap_drill_mm: float | None = None
+    thread_depth_limit_mm: float | None = None
+
+    @field_validator("series", "size", "fastener_id", mode="before")
+    @classmethod
+    def table_name(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError("standard hole series and size are table names, not booleans")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("standard hole series and size must not be empty")
+        text = value.strip()
+        if text in {".", ".."} or "/" in text or "\\" in text or ":" in text:
+            raise ValueError("standard hole series and size must be table names, not paths")
+        return text
+
+    @field_validator("thread_depth", mode="before")
+    @classmethod
+    def thread_depth_is_finite(cls, value: Any) -> Any:
+        # A bool is an int in Python and Inf passes a plain gt=0 bound; both
+        # would otherwise become a hole depth instead of a refused request.
+        if isinstance(value, bool):
+            raise ValueError("standard hole thread depth must be a number, not a boolean")
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("standard hole thread depth must be finite")
+        return value
+
+
 class HoleOp(StrictModel):
     op: Literal["hole"]
     label: Label
@@ -610,30 +653,100 @@ class HoleOp(StrictModel):
     reference2: dict[str, Any]
     offset1: float = 0
     offset2: float = 0
-    diameter: Positive
+    diameter: Positive | None = None
     depth: Positive | None = None
     flip: bool = False
     counterbore: Counterbore | None = None
     countersink: Countersink | None = None
+    standard: StandardHoleSpec | None = None
 
     @model_validator(mode="after")
     def hole_options_valid(self):
         if self.counterbore is not None and self.countersink is not None:
             raise ValueError("counterbore and countersink are mutually exclusive")
+        if self.standard is not None:
+            if self.counterbore is not None or self.countersink is not None:
+                raise ValueError(
+                    "standard threaded holes cannot be combined with counterbore or countersink"
+                )
+            self._check_standard_hole()
+            return self
+        if self.diameter is None:
+            raise ValueError("a hole without standard requires diameter")
+        self._check_plain_hole(self.diameter)
+        return self
+
+    def _check_plain_hole(self, diameter: float) -> None:
         if self.counterbore is not None:
-            if self.counterbore.diameter <= self.diameter:
+            if self.counterbore.diameter <= diameter:
                 raise ValueError("counterbore diameter must exceed hole diameter")
             if self.depth is not None and self.counterbore.depth >= self.depth:
                 raise ValueError("counterbore depth must be less than blind hole depth")
         if self.countersink is not None:
-            if self.countersink.diameter <= self.diameter:
+            if self.countersink.diameter <= diameter:
                 raise ValueError("countersink diameter must exceed hole diameter")
-            sink_depth = (self.countersink.diameter - self.diameter) / (
+            sink_depth = (self.countersink.diameter - diameter) / (
                 2 * math.tan(math.radians(self.countersink.angle / 2))
             )
             if self.depth is not None and sink_depth >= self.depth:
                 raise ValueError("countersink cone must be shallower than blind hole depth")
-        return self
+
+    def _check_standard_hole(self) -> None:
+        assert self.standard is not None
+        row = resolve_standard_hole(self.standard.series, self.standard.size)
+        if "fastener_id" not in row:
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} has no hole-chart fastener id"
+            )
+        if self.standard.fastener_id not in (None, row["fastener_id"]):
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} fastener id is "
+                f"{row['fastener_id']!r}, not {self.standard.fastener_id!r}"
+            )
+        if self.standard.tap_drill_mm is not None and (
+            abs(self.standard.tap_drill_mm - row["tap_drill_diameter_mm"]) > 1e-9
+        ):
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} tap drill is "
+                f"{row['tap_drill_diameter_mm']} mm, not {self.standard.tap_drill_mm} mm"
+            )
+        if self.standard.nominal_diameter_mm is not None and (
+            abs(self.standard.nominal_diameter_mm - row["nominal_diameter_mm"]) > 1e-9
+        ):
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} nominal diameter is "
+                f"{row['nominal_diameter_mm']} mm, not {self.standard.nominal_diameter_mm} mm"
+            )
+        if self.standard.thread_depth_limit_mm is not None and (
+            abs(self.standard.thread_depth_limit_mm - row["thread_depth_limit_mm"]) > 1e-9
+        ):
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} thread depth limit is "
+                f"{row['thread_depth_limit_mm']} mm, not "
+                f"{self.standard.thread_depth_limit_mm} mm"
+            )
+        if self.diameter is not None and (abs(self.diameter - row["nominal_diameter_mm"]) > 1e-9):
+            raise ValueError(
+                f"standard hole {row['series']} {row['size']} has a nominal diameter of "
+                f"{row['nominal_diameter_mm']} mm, but diameter is {self.diameter} mm"
+            )
+        if self.standard.thread_depth > row["thread_depth_limit_mm"]:
+            raise ValueError(
+                f"thread depth {self.standard.thread_depth} mm exceeds the "
+                f"{row['series']} {row['size']} table limit of "
+                f"{row['thread_depth_limit_mm']} mm"
+            )
+        if self.depth is None:
+            raise ValueError(
+                "a standard threaded hole requires an explicit depth: the usable thread must "
+                "stay strictly inside the drilled tip depth"
+            )
+        tip_depth = self.depth + tip_cone_height_mm(row["tap_drill_diameter_mm"])
+        if self.standard.thread_depth >= tip_depth:
+            raise ValueError(
+                f"thread depth {self.standard.thread_depth} mm must be strictly inside the "
+                f"{row['series']} {row['size']} tip depth {tip_depth:.4f} mm"
+            )
 
 
 class RoundOp(StrictModel):
@@ -1699,6 +1812,18 @@ class DumpTreeOp(StrictModel):
     feature: str | int
 
 
+class MassPropertiesOp(StrictModel):
+    """FEAT-057: read-only mass properties of the model itself.
+
+    ``density_g_cm3`` is an explicit what-if input, used only when the model's
+    own material carries no usable density. It never replaces a real material
+    density, and the receipt reports which source produced the mass.
+    """
+
+    op: Literal["mass_properties"]
+    density_g_cm3: Annotated[float | None, Field(gt=0, le=30)] = None
+
+
 class CsysOp(StrictModel):
     op: Literal["datum_csys"]
     label: Label
@@ -1858,6 +1983,7 @@ Operation = Annotated[
         SimpleOp,
         ExportOp,
         DumpTreeOp,
+        MassPropertiesOp,
         DrawingModelOp,
         DrawingSheetOp,
         DrawingViewOp,

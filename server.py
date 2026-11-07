@@ -31,6 +31,7 @@ from creo_mechdog.file_adoption import adopt_file
 from creo_mechdog.generation_reclaim import reclaim_generations
 from creo_mechdog.open_file import open_file as submit_open_file
 from creo_mechdog.paths import SOURCE_PATHS
+from creo_mechdog.product_rules import build_product_plan
 from creo_mechdog.reconciliation import reconcile
 from creo_mechdog.references import (
     PLANE_REFERENCE_DESCRIPTION,
@@ -76,6 +77,8 @@ _SOURCE_NAMES = (
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
     "src/creo_mechdog/paths.py",
+    "src/creo_mechdog/product_rules.py",
+    "examples/product_rules/box_frame.json",
     "src/creo_mechdog/references.py",
     "src/creo_mechdog/update_check.py",
     "src/creo_mechdog/blend_callback.py",
@@ -260,6 +263,17 @@ async def invoke(fn, *args, **kwargs):
                 structured_content=payload,
             )
         raise ToolError(str(exc)) from None
+
+
+@mcp.tool(annotations=READ)
+async def creo_plan_product_variant(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    """Plan the sole template box_frame offline in mm. parameters accepts length_mm/width_mm/height_mm/wall_mm; {} defaults to 100/60/40/2. First three range 10..1000, wall 0.5..20; L-2t, W-2t and H-t must be at least 1 mm. Returns four operations for explicit creo_execute_plan use, without connecting or submitting work. executable means static capability/schema admission only; native and saved reload remain not_run."""
+    return await invoke(
+        build_product_plan,
+        template_id,
+        parameters,
+        {"operations": [op for op in REGISTERED_OPERATIONS if op not in UNAVAILABLE_OPERATIONS]},
+    )
 
 
 @mcp.tool(annotations=READ)
@@ -1249,16 +1263,17 @@ async def creo_hole(
     model_id: str,
     expected_revision: int,
     label: str,
-    diameter: float,
     placement: dict[str, Any],
     reference1: dict[str, Any],
     reference2: dict[str, Any],
+    diameter: float | None = None,
     offset1: float = 0,
     offset2: float = 0,
     depth: float | None = None,
     flip: bool = False,
     counterbore: dict[str, Any] | None = None,
     countersink: dict[str, Any] | None = None,
+    standard: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a native straight hole on a planar face using two independent planar
     references or coplanar straight edges and signed offsets. For edge references,
@@ -1266,11 +1281,17 @@ async def creo_hole(
     depth makes a blind hole. flip reverses the native cutting side. A hole that removes
     no material fails and rolls back. Successful operation details include native axes
     and material_removed_mm3.
+
+    standard={series,size,thread_depth} creates a table-driven threaded hole from the
+    installed hole chart instead of a plain hole: diameter is optional then (it must
+    match the table when given), depth is required, thread_depth must stay inside the
+    drilled tip depth and the table limit. The detail carries thread_metadata (applied
+    row and table identity) and thread_metadata_verified, which is true only when the
+    created feature's own tree reads back the same series, fastener id and thread depth.
     """
     op = {
         "op": "hole",
         "label": label,
-        "diameter": diameter,
         "placement": placement,
         "reference1": reference1,
         "reference2": reference2,
@@ -1278,12 +1299,16 @@ async def creo_hole(
         "offset2": offset2,
         "flip": flip,
     }
+    if diameter is not None:
+        op["diameter"] = diameter
     if depth is not None:
         op["depth"] = depth
     if counterbore is not None:
         op["counterbore"] = counterbore
     if countersink is not None:
         op["countersink"] = countersink
+    if standard is not None:
+        op["standard"] = standard
     return await invoke(general.submit, [op], model_id, None, expected_revision)
 
 
@@ -2253,6 +2278,22 @@ async def creo_lookup_constants(prefix: str, limit: int = 100) -> dict[str, Any]
     constants = bridge.read_json(path)
     items = {k: v for k, v in constants.items() if k.startswith(prefix)}
     return {"constants": dict(list(items.items())[:limit]), "total_matches": len(items)}
+
+
+@mcp.tool(annotations=READ)
+async def creo_get_mass_properties(
+    model_id: str, density_g_cm3: float | None = None
+) -> dict[str, Any]:
+    """Read the model's own mass properties (volume, mass, density, centre of mass).
+
+    Volume and the centre of mass are measured from the model geometry. The mass
+    uses the density of the model's material when that material carries one;
+    otherwise pass density_g_cm3 for an explicit what-if and the receipt reports
+    density_source=request. With neither, mass is null with a hint - it is never
+    filled in from an assumed density. Parts only: assemblies are refused until
+    their own query path is verified.
+    """
+    return await invoke(general.get_mass_properties, model_id, density_g_cm3)
 
 
 @mcp.tool(annotations=READ)

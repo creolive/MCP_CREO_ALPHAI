@@ -15,9 +15,11 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shipped_summaries_match_registered_tools_and_family_modes(self):
         tools = {tool.name for tool in await server.mcp.list_tools()}
+        # 102 adds the offline creo_plan_product_variant (FEAT-063) and the
+        # read-only creo_get_mass_properties (FEAT-057) to the 100 tools.
         # 100 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
         # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-        self.assertEqual(len(tools), 100)
+        self.assertEqual(len(tools), 102)
         status = server._support_status()
         families = capabilities.families()
         for summary, family in (

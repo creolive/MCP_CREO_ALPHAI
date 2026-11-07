@@ -153,6 +153,7 @@
 | datum_axis.references | 裸引用数组，如两张基准平面；圆柱面、直边或现有轴需满足实际几何要求 |
 | datum_csys / datum_points.reference | 裸坐标系引用，如 `{"kind":"default_csys"}`、几何 csys ID 或 datum_csys_feature 标签 |
 | hole.placement/reference1/reference2 | 各自直接传入裸引用，placement 为放置面，reference1/2 为定位参考；平面定位参考可用 `datum_plane.id` 几何 ID |
+| hole.standard | `{"series":"ISO","size":"M6","thread_depth":8}`：按安装孔表建螺纹孔。此时 `diameter` 可省略（给了必须等于表内名义直径），`depth` 必填，`thread_depth` 必须严格小于钻尖深度且不超表内上限；回执给 `thread_metadata` 与 `thread_metadata_verified`（只有创建后特征树回读一致才为 true），非标准孔回执不变 |
 | draft.surfaces/neutral_plane/pull_direction | surfaces 是裸面引用数组；neutral_plane 和 pull_direction 分别是裸单引用，neutral_plane 可用 `datum_plane.id` 几何 ID |
 | boolean_bodies.targets/tools | 裸 body 引用数组，须明确不同 body ID；不能传特征 ID |
 | solidify.reference | 裸平面/曲面参考，可用已验证平面的 `plane.id` 几何 ID；平面裁剪示例使用 mode=cut，quilt 分支按既有能力限制验收 |
@@ -235,3 +236,15 @@ label 永远不是身份：同名 label 可以存在于不同模型，删除重�
 ## 待核对的补充契约
 
 [FEAT-008 首批任务](work-items/FEAT-008.md)跟进专用底板holes的客户端传输形状、对称拉伸depth口径与“查当前可编辑尺寸再修改”的闭环；[BUG-031](work-items/BUG-031.md)核对共面多候选/默认基准选择，结合字符串plane+offset产生构造特征的可见性说明。[履带反馈补录](validation/TRACK-FEEDBACK-2026-10-16.md)仅提供外部来源。上述是待核对工作，不是已新增字段或已变更接口；仍须按当前工具schema和真实返回使用，不把报告中的建议引用/参数当作已支持形式。
+
+
+## 产品规则只读规划（FEAT-063，开发分支未发布）
+
+`creo_plan_product_variant(template_id="box_frame", parameters={})` 使用 READ 注解。
+参数仅 length_mm/width_mm/height_mm/wall_mm，默认 100/60/40/2 mm；前三项范围
+[10,1000]，壁厚 [0.5,20]，内腔每向至少 1 mm。拒绝 bool、字符串、非有限数、
+未知字段和模板路径。服务从当前启用操作构造快照，不接受调用方能力声明。
+返回 plan.operations、解析 expected_geometry 和 blocking_items；缺 sketch/extrude 时
+executable=false、plan=null。完整 JSON 上限 32768 UTF-8 字节，超限拒绝而不截断。
+executable 仅表示静态能力/schema 准入；native/saved_reload 恒为 not_run。
+无连接、提交、job_id/model_id/revision；原生模板未验。详见 [产品规则](PRODUCT_RULES.md)。

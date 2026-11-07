@@ -51,6 +51,7 @@ REGISTERED_OPERATIONS = (
     "save",
     "export",
     "dump_tree",
+    "mass_properties",
     "udf_inspect",
     "udf_create",
     "datum_csys",
@@ -153,6 +154,24 @@ def require_available(operations: list[dict]) -> None:
 
 def families() -> dict:
     return {
+        "product_rules": {
+            "enabled": True,
+            "tool": "creo_plan_product_variant",
+            "read_only": True,
+            "templates": ["box_frame"],
+            "units": {"length": "mm", "angle": "deg"},
+            "parameters": ["length_mm", "width_mm", "height_mm", "wall_mm"],
+            "scope": "Offline fixed-template planning; no connection or job submission. executable means enabled static operations and schema admission only; expected_geometry contains analytic expectations, not native measurements.",
+            "native": "not_run",
+            "saved_reload": "not_run",
+        },
+        "mass_properties": {
+            "enabled": True,
+            "tool": "creo_get_mass_properties",
+            "scope": "Read-only volume, mass, density and centre of mass of a part",
+            "density": "Model material density first; density_g_cm3 is an explicit what-if fallback; neither means null mass",
+            "parts_only": True,
+        },
         "job_reporting": {
             "failed_stage": "Terminal failed jobs prefer the native failed_stage when reported; otherwise retain the last known stage",
             "busy": "Busy requests are rejected without a job; blocking owner fields are preserved",
