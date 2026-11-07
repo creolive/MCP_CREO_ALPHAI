@@ -34,8 +34,7 @@ inline Candidate candidate(int id, Point first, Point second, const Point wanted
 }
 
 inline double sort_error(const Candidate &value) {
-    return std::isfinite(value.error_mm) ? value.error_mm
-                                         : std::numeric_limits<double>::infinity();
+    return std::isfinite(value.error_mm) ? value.error_mm : std::numeric_limits<double>::infinity();
 }
 
 inline std::vector<Candidate> nearest_candidates(std::vector<Candidate> candidates) {

@@ -106,9 +106,7 @@ class ReleaseDownloadTests(unittest.TestCase):
     def test_api_http_error_is_reported(self):
         with (
             patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
-            patch.object(
-                release_download, "urlopen", side_effect=http.client.IncompleteRead(b"")
-            ),
+            patch.object(release_download, "urlopen", side_effect=http.client.IncompleteRead(b"")),
         ):
             with self.assertRaisesRegex(RuntimeError, "GitHub API fallback failed"):
                 release_download.download(self.tag, self.directory)
