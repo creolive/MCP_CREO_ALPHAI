@@ -235,3 +235,15 @@ label 永远不是身份：同名 label 可以存在于不同模型，删除重�
 ## 待核对的补充契约
 
 [FEAT-008 首批任务](work-items/FEAT-008.md)跟进专用底板holes的客户端传输形状、对称拉伸depth口径与“查当前可编辑尺寸再修改”的闭环；[BUG-031](work-items/BUG-031.md)核对共面多候选/默认基准选择，结合字符串plane+offset产生构造特征的可见性说明。[履带反馈补录](validation/TRACK-FEEDBACK-2026-10-16.md)仅提供外部来源。上述是待核对工作，不是已新增字段或已变更接口；仍须按当前工具schema和真实返回使用，不把报告中的建议引用/参数当作已支持形式。
+
+
+## 产品规则只读规划（FEAT-063，开发分支未发布）
+
+`creo_plan_product_variant(template_id="box_frame", parameters={})` 使用 READ 注解。
+参数仅 length_mm/width_mm/height_mm/wall_mm，默认 100/60/40/2 mm；前三项范围
+[10,1000]，壁厚 [0.5,20]，内腔每向至少 1 mm。拒绝 bool、字符串、非有限数、
+未知字段和模板路径。服务从当前启用操作构造快照，不接受调用方能力声明。
+返回 plan.operations、解析 expected_geometry 和 blocking_items；缺 sketch/extrude 时
+executable=false、plan=null。完整 JSON 上限 32768 UTF-8 字节，超限拒绝而不截断。
+executable 仅表示静态能力/schema 准入；native/saved_reload 恒为 not_run。
+无连接、提交、job_id/model_id/revision；原生模板未验。详见 [产品规则](PRODUCT_RULES.md)。
