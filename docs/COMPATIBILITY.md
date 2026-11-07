@@ -243,6 +243,18 @@ FEAT-042无盘prepare/apply、FEAT-043会话枚举及BUG-071预检收尾已实�
 - **可用**：钣金件上的 `cut`；`surface`/`thin` 拉伸；`new_body=true`（产出**独立实体**，整块 +500 mm³，不与钣金体合并，不等于钣金增料）。
 - **准入拒绝**：钣金模型上的实体增料在建模前以 `SHEETMETAL_SOLID_ADD_UNSUPPORTED` 拒绝，消息给出 `sheetmetal_wall` / `sheetmetal_flange` / `new_body=true` 指引；不再以裸 `-1` 暗示该组合可用。`revolve` 增料未纳入本规则（同路径但未实测）。
 
+### 2026-11-07 追加：`new_body=true` + `boolean_bodies` 不构成附着增料路线（FEAT-014 H05）
+
+本机 Creo 12.4.0.0 串行实机（`native_planar` 100×60×1 平面壁 + 10×10×5 `new_body` 凸台，证据见 [EVIDENCE](validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md)）：
+
+- **直接 add**（探针内仅绕过 Python 门禁，生产门禁不变）：`execute_extrude` → `ProFeatureWithoptionsCreate=-1`，元素错误为空，回滚成功，体积 6000 mm³、1 个实体体、revision 不变。
+- **凸台 `new_body=true`**：成功，+500 mm³（整件 6500 mm³），2 个实体体（钣金体 + 独立实体），保存重载 true；两者不合并。
+- **union 以钣金体为 target**（52 ← 116）：`execute_boolean_bodies` → `ProFeatureWithoptionsCreate=-1`，回滚成功，6500 mm³、2 体、revision 不变。
+- **反向 union 以凸台为 target**（116 ← 52）：成功，6400 mm³、1 体、保存重载 true，但**钣金体被吞并**：之后 36 条边全部 `ProSmtedgeContourGet=-8`（0 条 eligible 壁面轮廓），`sheetmetal_unbend` 失败（`-1`，回滚）。
+- **同件实体-实体 union 对照**：成功（6800 mm³、1 体、保存重载 true），说明布尔特征本身在该钣金件可用，`-1` 特定于钣金体。
+
+因此 `new_body=true` 只能产出**独立实体**，不能作为附着增料或一体化成形的替代验收；Creo 10 从未实际尝试。凸台、百叶、格栅、铰链、门板耳仍无原生一体通道。
+
 该结论只覆盖本机 Creo 12.4 与上述输入形态，不外推为其他 Creo 版本或其他钣金增料形式。
 
 ## 2026-10-30：Creo 10 SDK 编译兼容与 SDK 门控 API 清单（BUG-090 N01）

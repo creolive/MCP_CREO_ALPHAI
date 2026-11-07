@@ -1,6 +1,8 @@
 # FEAT-014：钣金折弯释放与四壁能力
 
 > **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
+>
+> **2026-11-07 补充**：`new_body=true` + `boolean_bodies(union)` 已实机反证（Creo 12.4 不可用，Creo 10 未测），门禁保持，见文末 H05 节。
 
 ## 2026-11-07：0.17.1 反馈离线增量（DEV-072）
 
@@ -329,3 +331,23 @@ DEV-071补齐aliases-only的miter_cuts/adjacent_bend_ends_allowed到公开操作
 ## 2026-11-07 DEV-074 反馈对照（离线）
 
 0.17.4 四份外部 Creo 10 报告与当前代码已逐项对照。已有正证据、此次离线增量和未完成边界见 [MAPPING](../validation/feedback-0.17.4-2026-11-07/MAPPING.md) 与 [接手清单](../development/DEV-074-HANDOFF.md)。本轮未连接 Creo；不以离线编译/单元测试关闭原生几何或保存重载验收，不改变历史证据结论。
+
+## 2026-11-07 H05 实机反证：`new_body=true` + `boolean_bodies(union)` 不能给钣金体附着增料
+
+分支 `codex/DEV-074-h05h12`，HEAD `3a29c0d`，worktree `MCP_CREO_MechDog-d074`；Creo 12.4.0.0 手工启动会话、单通道串行，`auto_start_creo=false`，未启动/关闭 Creo、未清 unknown、未故障注入。完整原始码、job/model 与体积见 [EVIDENCE](../validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md)。
+
+夹具：`native_planar` 100×60×1 平面壁（6000 mm³，body 52）+ `new_body=true` 的 10×10×5 凸台（body 116，+500 mm³，两体 6500 mm³，保存重载 true）。
+
+| 路径 | 原始结果 |
+| --- | --- |
+| 直接 `extrude(add)`（探针内仅绕过 Python 纯函数，生产门禁不变） | `execute_extrude` → `ProFeatureWithoptionsCreate=-1`，元素错误为空，回滚 true，6000 mm³、1 体、revision 不变 |
+| union 以钣金体为 target（52 ← 116） | `execute_boolean_bodies` → `ProFeatureWithoptionsCreate=-1`，回滚 true，6500 mm³、2 体、revision 不变 |
+| 反向 union（116 ← 52） | 成功、6400 mm³、1 体、保存重载 true；但壁面候选边 8 eligible → **0 eligible（24 查全 `-8`）**，`sheetmetal_unbend` 失败（`-1`，回滚，revision 4→4、体积不变） |
+| 同件实体-实体 union 对照 | 成功、6800 mm³、1 体、保存重载 true → 布尔特征本身可用，`-1` 特定于钣金体 |
+| 独立零件 + 装配放置（仅可行性） | 零件 500 mm³、装配放置 job succeeded、revision 1→2、保存重载 true；是独立组件，不是一体成形 |
+
+**判定：不可用，保持门禁。** union 两个方向要么被拒，要么以吞并钣金体为代价；`new_body=true` 只能产出独立实体，不能作为凸台/百叶/格栅/铰链/门板耳的附着增料替代验收。能力文案与准入消息已补「Creo 12.4 不支持、Creo 10 未测」，未开放任何 opt-in，未放宽校验。
+
+**仍未交付（本轮只记录）**：连续多边折边（非矩形链、切角量/角部间隙未定标）、corner relief、百叶/成形/hem/jog、格栅孔（只能 cut）、凸台/铰链/门板耳、Creo 9/10 实机、非 mm 与其他板厚/几何、WorkBuddy。
+
+验证：`bridge.py build` 退出 0；定向单测与 `ruff check` / `ruff format --check` 仅覆盖本轮改动文件；未新增 C++ 文件。

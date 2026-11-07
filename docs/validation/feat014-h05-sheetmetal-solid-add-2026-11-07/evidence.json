@@ -1,0 +1,139 @@
+{
+  "task": "FEAT-014 / H05 sheetmetal attached solid material and boolean union",
+  "conclusion": "unavailable",
+  "gate": "SHEETMETAL_SOLID_ADD_UNSUPPORTED unchanged",
+  "date": "2026-11-07",
+  "environment": {
+    "os": "Windows x64",
+    "creo": "12.4.0.0",
+    "units": "mm",
+    "auto_start_creo": false,
+    "creo_launch_or_restart": false,
+    "fault_injection": false,
+    "source_commit": "3a29c0d",
+    "branch": "codex/DEV-074-h05h12",
+    "worktree_dirty_at_probe": false,
+    "worker_sha256": "3ac423dd831674a668ad3df081839189aedfd6d009a3dbec843c02b5b584e2cb",
+    "build_exit_code": 0
+  },
+  "fixture": {
+    "wall": {
+      "model_id": "87f6ec8b82b44b95a98b2e8f1b1f8eee",
+      "model_name": "h05_clean_8ada34",
+      "op": "sheetmetal_planar_wall",
+      "plane": "XY",
+      "length_mm": 100.0,
+      "width_mm": 60.0,
+      "thickness_mm": 1.0,
+      "origin": [0.0, 0.0],
+      "direction": "positive",
+      "job_id": "fed780e0071b4d9ca4171bdc9d9d5a94",
+      "revision": 2,
+      "volume_mm3": 6000.0,
+      "body_id": 52,
+      "bbox": [[0.0, 0.0, 0.0], [100.0, 60.0, 1.0]],
+      "wall_contour": {"checked_edges": 12, "eligible": 8, "ineligible": 4, "unknown": 0},
+      "saved_file_reloaded_and_verified": true
+    },
+    "boss_new_body": {
+      "job_id": "29f11db4290342af8aa435ec69ca6865",
+      "revision": 3,
+      "volume_mm3": 6500.0,
+      "body_id": 116,
+      "bbox": [[20.0, 20.0, 0.0], [30.0, 30.0, 5.0]],
+      "saved_file_reloaded_and_verified": true
+    }
+  },
+  "paths": {
+    "direct_add": {
+      "model_id": "8a4bef3d81d840e392c8ef2919e1d3c4",
+      "job_id": "db9eecbd3a6e4e7caff0aec7e560972f",
+      "gate_bypass": "in-process probe only: solid_add_on_sheetmetal_problem returned None; production gate unchanged",
+      "status": "failed",
+      "failed_stage": "execute_extrude",
+      "failed_toolkit_call": "ProFeatureWithoptionsCreate",
+      "toolkit_code": -1,
+      "element_errors": [],
+      "rollback_succeeded": true,
+      "revision_before": 2,
+      "revision_after": 2,
+      "volume_mm3": 6000.0,
+      "material_bodies": 1,
+      "saved_file_reloaded_and_verified": false
+    },
+    "union_sheetmetal_target": {
+      "model_id": "6d755207dd534263803100d6b340a30e",
+      "job_id": "caf37e4944c641bd8c1a4a6a9f9fba46",
+      "target_body": 52,
+      "tool_body": 116,
+      "status": "failed",
+      "failed_stage": "execute_boolean_bodies",
+      "failed_toolkit_call": "ProFeatureWithoptionsCreate",
+      "toolkit_code": -1,
+      "rollback_succeeded": true,
+      "revision_before": 3,
+      "revision_after": 3,
+      "volume_mm3": 6500.0,
+      "material_bodies": 2,
+      "saved_file_reloaded_and_verified": false
+    },
+    "union_solid_target": {
+      "clean_model_id": "87f6ec8b82b44b95a98b2e8f1b1f8eee",
+      "clean_job_id": "0099c06293d84a71b5b09f2e0a5d6b86",
+      "repeat_job_id": "6c35874d77c8456c9f374ae5c57ff53b",
+      "target_body": 116,
+      "tool_body": 52,
+      "status": "succeeded",
+      "toolkit_code": 0,
+      "revision_before": 3,
+      "revision_after": 4,
+      "volume_mm3": 6400.0,
+      "material_bodies": 1,
+      "result_body_bbox": [[0.0, 0.0, 0.0], [100.0, 60.0, 5.0]],
+      "saved_file_reloaded_and_verified": true,
+      "wall_contour_after": {"checked_edges": 24, "eligible": 0, "ineligible": 24, "unknown": 0},
+      "unbend": {
+        "job_id": "f3c83cbf19ee432cb1f5d463111cf94c",
+        "status": "failed",
+        "toolkit_code": -1,
+        "failed_stage": "execute_sheetmetal_unbend",
+        "rollback_succeeded": true,
+        "revision_before": 4,
+        "revision_after": 4,
+        "volume_mm3": 6400.0
+      }
+    },
+    "solid_to_solid_control": {
+      "model_id": "6d755207dd534263803100d6b340a30e",
+      "second_boss_job_id": "abfb4e0e4c244682ba38275749317eac",
+      "union_job_id": "32eae0e83d7d4f6eaacc65ca0782c163",
+      "status": "succeeded",
+      "toolkit_code": 0,
+      "volume_mm3": 6799.999999999999,
+      "material_bodies": 1,
+      "saved_file_reloaded_and_verified": true,
+      "meaning": "the boolean feature is legal in this sheetmetal part; the -1 is specific to the sheetmetal body as target"
+    },
+    "separate_part_assembly": {
+      "part_model_id": "929ebf222bb4486d8f3165895bbda94d",
+      "part_job_id": "7fa88204f92a4c8c98740ed472e08920",
+      "part_volume_mm3": 499.99999999999994,
+      "assembly_model_id": "cb5440cf1d904978bf8d1d243a28cded",
+      "assembly_job_id": "46c729279ce546808e81cb70f78e67eb",
+      "placement_job_id": "f70d238a64bf44f2815c4f124b0ec090",
+      "placement_status": "succeeded",
+      "assembly_revision": 2,
+      "saved_file_reloaded_and_verified": true,
+      "scope": "feasibility only; two separate components, not a one-piece sheetmetal result"
+    }
+  },
+  "not_verified": [
+    "Creo 10 and Creo 9",
+    "other boss shapes, gauges, positions and larger overlaps",
+    "recovering sheetmetal identity after the reverse union",
+    "louver, grille, hinge, door ear, forms, hem, jog",
+    "continuous multi-edge flanges beyond the miter_cuts four-wall box",
+    "corner relief",
+    "WorkBuddy black-box acceptance"
+  ]
+}

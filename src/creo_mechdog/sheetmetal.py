@@ -61,6 +61,19 @@ def first_wall_section_problem(entities: list[dict[str, Any]]) -> str | None:
 # same add with new_body=true succeeds as a separate solid body (+500 mm3, no
 # merge). Adding material to the sheet therefore has to go through the wall or
 # flange operations; the solid protrusion path cannot feed the sheetmetal body.
+#
+# FEAT-014 H05 (2026-11-07, Creo 12.4.0.0) closed the "separate body, then union
+# it back" question, so new_body=true is not an attached-material route either:
+# a native_planar wall (100x60x1, body 52) plus a new_body 10x10x5 boss (body 116)
+# gives two material bodies (6000 / 6500 mm3). Union with the sheetmetal body as
+# target (52 <- 116) fails at ProFeatureWithoptionsCreate=-1 with an empty element
+# error list and a verified rollback (6500 mm3, 2 bodies, revision unchanged).
+# The reverse union (116 <- 52) builds and saves (6400 mm3, one body, reload
+# verified), but it absorbs the sheetmetal body: afterwards all 36 edges answer
+# ProSmtedgeContourGet=-8 (0 eligible wall contours) and sheetmetal_unbend fails
+# with -1 and rolls back. A solid-to-solid union on the same sheetmetal part
+# succeeds (6800 mm3), so the boolean feature itself is legal there and the
+# failure is specific to the sheetmetal body. Creo 10 has never been tried.
 SOLID_ADD_UNSUPPORTED = "SHEETMETAL_SOLID_ADD_UNSUPPORTED"
 
 
@@ -81,7 +94,10 @@ def solid_add_on_sheetmetal_problem(operations: list[dict[str, Any]]) -> str | N
         f"{SOLID_ADD_UNSUPPORTED}: Creo rejects an extrude add that merges solid material "
         "into a sheetmetal body (ProFeatureWithoptionsCreate returns -1, measured on Creo "
         "12.4.0.0 with and without overlap). Add material with sheetmetal_wall or "
-        "sheetmetal_flange, or request new_body=true to create a separate solid body; "
+        "sheetmetal_flange, or request new_body=true to create a separate solid body; that "
+        "body cannot be merged back on Creo 12.4 (union into the sheetmetal body also returns "
+        "-1, and the reverse union consumes the sheetmetal body: wall contours answer -8 and "
+        "unbend fails). Creo 10 is untested. "
         f"cut, surface and thin extrudes are unaffected. Blocked operations: {labels}"
     )
 

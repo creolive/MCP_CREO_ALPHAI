@@ -723,7 +723,14 @@ def families() -> dict:
                 "Creo cuts the end overlap; the four-wall box route is live verified "
                 "2026-11-06 (four walls built, saved and reloaded), while the cut amount "
                 "produced by a given width/offset is not yet quantified; forms, hems and "
-                "jogs are not high-level tools"
+                "jogs are not high-level tools; attaching solid material (bosses, louvers, "
+                "grilles, hinges, door ears) to an existing sheetmetal body is unsupported: "
+                "on Creo 12.4.0.0 (2026-11-07) an extrude add and a boolean union with the "
+                "sheetmetal body as target both return ProFeatureWithoptionsCreate=-1, and "
+                "the reverse union builds but consumes the sheetmetal body (all wall contours "
+                "answer ProSmtedgeContourGet=-8 and unbend fails), so new_body=true stays a "
+                "separate solid body instead of a one-piece sheetmetal result; Creo 10 has "
+                "never been tried"
             ),
         },
         "assembly": {
