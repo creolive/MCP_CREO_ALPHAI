@@ -45,6 +45,7 @@
 
 ## 5. 交付清单
 
-- 标签 `v0.17.4`
+- 标签 `v0.17.4`（指向合入 main 后的本次交付提交）
 - 附件：`MCP_CREO_MechDog-0.17.4-source.zip` + `.sha256`、`MCP_CREO_MechDog-0.17.4-seed-library.zip` + `.sha256`
-- `tools/check_release_assets.py --tag v0.17.4` 核对结果：待填
+- 本地四附件闸门：四个文件齐全，两份 sidecar 与 ZIP 摘要一致（`tools/package.py` 输出）；源码包 1449 个文件，包含 `tests/native/test_dev072_geometry.cpp`。
+- 发布时 SHA256 写入 Release 说明与两个 `.sha256` 附件；种子包两次构建同摘要。
