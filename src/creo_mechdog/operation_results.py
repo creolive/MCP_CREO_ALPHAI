@@ -679,6 +679,47 @@ def annotate_native_result(
         annotate_profiles(result, inputs)
         annotate_arc_geometry(result, inputs)
         annotate_feature_state(result, inputs)
+        annotate_standard_hole(result, inputs)
+    return result
+
+
+def annotate_standard_hole(result: dict[str, Any], inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    """FEAT-035: compose the frozen standard-hole receipt from table plus readback.
+
+    ``thread_metadata`` names the applied table row (series, size, thread depth,
+    table identity). ``thread_metadata_verified`` is decided only by the native
+    readback of the created feature: a missing or mismatched readback stays
+    ``false`` and is never inferred from the request.
+    """
+    operations = result.get("operations")
+    if not isinstance(operations, list) or not isinstance(inputs, list):
+        return result
+    from creo_mechdog.hole_standards import resolve_standard_hole
+
+    for position, record in enumerate(operations):
+        if not isinstance(record, dict) or record.get("op") != "hole":
+            continue
+        source = inputs[position] if position < len(inputs) else None
+        standard = source.get("standard") if isinstance(source, dict) else None
+        if not isinstance(standard, dict):
+            continue
+        try:
+            row = resolve_standard_hole(str(standard.get("series")), str(standard.get("size")))
+        except ValueError:
+            continue
+        readback = record.get("thread_readback")
+        record["thread_metadata"] = {
+            "series": row["series"],
+            "size": row["size"],
+            "thread_depth_mm": standard.get("thread_depth"),
+            "table_id": row["table_id"],
+            "table_sha256": row["table_sha256"],
+        }
+        record["thread_metadata_verified"] = bool(
+            isinstance(readback, dict) and readback.get("verified") is True
+        )
+        if isinstance(readback, dict):
+            record["thread_readback"] = readback
     return result
 
 

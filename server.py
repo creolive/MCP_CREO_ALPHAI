@@ -1263,16 +1263,17 @@ async def creo_hole(
     model_id: str,
     expected_revision: int,
     label: str,
-    diameter: float,
     placement: dict[str, Any],
     reference1: dict[str, Any],
     reference2: dict[str, Any],
+    diameter: float | None = None,
     offset1: float = 0,
     offset2: float = 0,
     depth: float | None = None,
     flip: bool = False,
     counterbore: dict[str, Any] | None = None,
     countersink: dict[str, Any] | None = None,
+    standard: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a native straight hole on a planar face using two independent planar
     references or coplanar straight edges and signed offsets. For edge references,
@@ -1280,11 +1281,17 @@ async def creo_hole(
     depth makes a blind hole. flip reverses the native cutting side. A hole that removes
     no material fails and rolls back. Successful operation details include native axes
     and material_removed_mm3.
+
+    standard={series,size,thread_depth} creates a table-driven threaded hole from the
+    installed hole chart instead of a plain hole: diameter is optional then (it must
+    match the table when given), depth is required, thread_depth must stay inside the
+    drilled tip depth and the table limit. The detail carries thread_metadata (applied
+    row and table identity) and thread_metadata_verified, which is true only when the
+    created feature's own tree reads back the same series, fastener id and thread depth.
     """
     op = {
         "op": "hole",
         "label": label,
-        "diameter": diameter,
         "placement": placement,
         "reference1": reference1,
         "reference2": reference2,
@@ -1292,12 +1299,16 @@ async def creo_hole(
         "offset2": offset2,
         "flip": flip,
     }
+    if diameter is not None:
+        op["diameter"] = diameter
     if depth is not None:
         op["depth"] = depth
     if counterbore is not None:
         op["counterbore"] = counterbore
     if countersink is not None:
         op["countersink"] = countersink
+    if standard is not None:
+        op["standard"] = standard
     return await invoke(general.submit, [op], model_id, None, expected_revision)
 
 

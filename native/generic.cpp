@@ -2874,6 +2874,196 @@ static J hole_depth_basis_json(ProFeature &f) {
     ProFeatureElemtreeFree(&f, tree);
     return block;
 }
+// FEAT-035 standard hole: the request is not evidence. Read the thread back
+// from the hole feature Creo actually built, after regeneration, and report
+// null when the element is missing instead of echoing the input. Element ids
+// come from ProHole.h: the depth VALUE is PRO_E_HLE_THRDDEPTH (double), while
+// PRO_E_HLE_THRD_DEPTH is its type enum; PRO_E_THREAD_DEPTH belongs to the
+// cosmetic thread feature and says nothing about a hole.
+static std::string narrow(const wchar_t *text) {
+    if (!text)
+        return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 1)
+        return std::string();
+    std::string out((size_t)size - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text, -1, out.data(), size, nullptr, nullptr);
+    return out;
+}
+// The installed hole chart names a size by its fastener id ("M6x1" for ISO
+// coarse M6), never by the nominal "M6" the frozen table exposes. The resolved
+// id travels with the operation, and the chart itself still has the final say:
+// an unknown id comes back as PRO_TK_INVALID_NAME from the setter.
+static std::string std_hole_fastener_id(const J &op) {
+    const J &standard = op["standard"];
+    if (standard.contains("fastener_id") && standard["fastener_id"].is_string())
+        return standard["fastener_id"].get<std::string>();
+    return standard.at("size").get<std::string>();
+}
+static J hole_thread_json(ProFeature &f, const J &op) {
+    J block = {{"add_thread", nullptr},
+               {"thread_depth_mm", nullptr},
+               {"thread_depth_type", nullptr},
+               {"thread_series", nullptr},
+               {"screw_size", nullptr},
+               {"standard_type", nullptr},
+               {"requested_thread_depth_mm", op["standard"].at("thread_depth")},
+               {"requested_fastener_id", std_hole_fastener_id(op)},
+               {"verified", false},
+               {"query_code", nullptr}};
+    ProElement tree = nullptr;
+    ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
+    block["query_code"] = (int)code;
+    if (code != PRO_TK_NO_ERROR)
+        return block;
+    ProError com_code = PRO_TK_NO_ERROR;
+    ProElement com = get_optional(tree, {PRO_E_HLE_COM}, &com_code);
+    if (com_code == PRO_TK_NO_ERROR && com) {
+        const struct {
+            const char *key;
+            int id;
+        } ints[] = {{"add_thread", PRO_E_HLE_ADD_THREAD},
+                    {"thread_depth_type", PRO_E_HLE_THRD_DEPTH},
+                    {"thread_series", PRO_E_HLE_THRDSERIS},
+                    {"screw_size", PRO_E_HLE_SCREWSIZE},
+                    {"standard_type", PRO_E_HLE_STAN_TYPE}};
+        for (const auto &item : ints) {
+            ProError c = PRO_TK_NO_ERROR;
+            ProElement elem = get_optional(com, {item.id}, &c);
+            if (c != PRO_TK_NO_ERROR || !elem)
+                continue;
+            int value = 0;
+            if (!ProElementIntegerGet(elem, nullptr, &value))
+                block[item.key] = value;
+        }
+        ProError depth_code = PRO_TK_NO_ERROR;
+        ProElement depth = get_optional(com, {PRO_E_HLE_THRDDEPTH}, &depth_code);
+        if (depth_code == PRO_TK_NO_ERROR && depth) {
+            double value = 0.0;
+            if (!ProElementDoubleGet(depth, nullptr, &value))
+                block["thread_depth_mm"] = value;
+        }
+    }
+    // Names, not indices: the chart decides what "ISO"/"M6" mean, so the
+    // receipt carries the names Creo resolved rather than our raw ints.
+    wchar_t *series_name = nullptr;
+    ProError series_name_code = ProElementHoleThreadSeriesGet(tree, (ProMdl)board, &series_name);
+    block["thread_series_name_query_code"] = (int)series_name_code;
+    if (series_name_code == PRO_TK_NO_ERROR && series_name) {
+        block["thread_series_name"] = narrow(series_name);
+        ProWstringFree(series_name);
+    }
+    wchar_t *size_name = nullptr;
+    ProError size_name_code = ProElementHoleScrewSizeGet(tree, (ProMdl)board, &size_name);
+    block["screw_size_name_query_code"] = (int)size_name_code;
+    if (size_name_code == PRO_TK_NO_ERROR && size_name) {
+        block["screw_size_name"] = narrow(size_name);
+        ProWstringFree(size_name);
+    }
+    // Fallback: Creo may relocate the depth into another subnode, so keep the
+    // tree ids in the native log and take a relocated depth when the direct
+    // path was empty. A silent miss stays null instead of echoing the request.
+    struct ScanState {
+        bool relocated = false;
+        double depth = 0.0;
+        std::vector<int> ids;
+    } scan;
+    if (!block["thread_depth_mm"].is_number()) {
+        ProElemtreeElementVisit(
+            tree, nullptr, nullptr,
+            [](ProElement, ProElement elem, ProElempath, ProAppData data) -> ProError {
+                auto *state = (ScanState *)data;
+                ProElemId id = (ProElemId)0;
+                if (ProElementIdGet(elem, &id))
+                    return PRO_TK_NO_ERROR;
+                if (state->ids.size() < 128)
+                    state->ids.push_back((int)id);
+                if ((int)id == PRO_E_HLE_THRDDEPTH) {
+                    double value = 0.0;
+                    if (!ProElementDoubleGet(elem, nullptr, &value)) {
+                        state->relocated = true;
+                        state->depth = value;
+                    }
+                }
+                return PRO_TK_NO_ERROR;
+            },
+            &scan);
+        if (scan.relocated)
+            block["thread_depth_mm"] = scan.depth;
+    }
+    if (!scan.ids.empty()) {
+        log("HOLE_THREAD_TREE_IDS");
+        for (int id : scan.ids)
+            log(" %d", id);
+        log("\n");
+    }
+    double requested = op["standard"].at("thread_depth").get<double>();
+    bool depth_ok = block["thread_depth_mm"].is_number() &&
+                    fabs(block["thread_depth_mm"].get<double>() - requested) <= 1e-6;
+    bool names_ok = block["thread_series_name"].is_string() &&
+                    block["screw_size_name"].is_string() &&
+                    block["thread_series_name"].get<std::string>() ==
+                        op["standard"].at("series").get<std::string>() &&
+                    block["screw_size_name"].get<std::string>() == std_hole_fastener_id(op);
+    bool verified = block["add_thread"].is_number() &&
+                    block["add_thread"].get<int>() == PRO_HLE_ADD_THREAD && depth_ok && names_ok;
+    block["verified"] = verified;
+    log("HOLE_THREAD add_thread=%s depth=%s requested=%.9f verified=%d\n",
+        block["add_thread"].dump().c_str(), block["thread_depth_mm"].dump().c_str(), requested,
+        (int)verified);
+    ProFeatureElemtreeFree(&f, tree);
+    return block;
+}
+// FEAT-035 standard tapped hole. ProHole.h Table Hole:2 makes the standard
+// branch its own element tree: PRO_E_HLE_TYPE_NEW = STANDARD, a tapped stan
+// type, chart-bound series/size, and the thread depth pair. The straight-hole
+// tree accepts an ADD_THREAD flag but drops the depth, so a standard hole that
+// borrowed it would only look threaded.
+static void standard_hole_elements(ProElement com, ProElement root, const J &op) {
+    const J &standard = op["standard"];
+    // The prepared row carries the chart's tap drill; native never derives it
+    // from the nominal diameter, which would drill the wrong hole.
+    if (!standard.contains("tap_drill_mm") || !standard["tap_drill_mm"].is_number() ||
+        !(standard["tap_drill_mm"].get<double>() > 0.0))
+        throw std::runtime_error(
+            "Standard hole requires the resolved hole-table tap drill diameter");
+    double tap_drill = standard["tap_drill_mm"].get<double>();
+    double thread_depth = standard.at("thread_depth").get<double>();
+    integer(com, PRO_E_HLE_STAN_TYPE, PRO_HLE_TAPPED_TYPE);
+    integer(com, PRO_E_HLE_FITTYPE, PRO_HLE_CLOSE_FIT);
+    integer(com, PRO_E_HLE_ADD_THREAD, PRO_HLE_ADD_THREAD);
+    integer(com, PRO_E_HLE_ADD_CBORE, PRO_HLE_NO_CBORE);
+    integer(com, PRO_E_HLE_ADD_CSINK, PRO_HLE_NO_CSINK);
+    integer(com, PRO_E_HLE_ADD_EXIT_CSINK, PRO_HLE_NO_EXIT_CSINK);
+    real(com, PRO_E_HLE_HOLEDIAM, tap_drill);
+    real(com, PRO_E_HLE_DRILLANGLE, 118.0);
+    real(com, PRO_E_HLE_THRDDEPTH, thread_depth);
+    integer(com, PRO_E_HLE_THRD_DEPTH, PRO_HLE_VARIABLE_THREAD);
+    integer(com, PRO_E_HLE_DEPTH,
+            op.contains("depth") ? PRO_HLE_STD_VAR_DEPTH : PRO_HLE_STD_THRU_ALL_DEPTH);
+    if (op.contains("depth")) {
+        real(com, PRO_E_HLE_DRILLDEPTH, op.at("depth"));
+        integer(com, PRO_E_HLE_DEPTH_DIM_TYPE, PRO_HLE_DEP_SHOULDER_DIM_SCHEME);
+    }
+    // Chart-bound lookups: "M6x1" is the chart's fastener id, "M6" is not.
+    integer(com, PRO_E_HLE_THRDSERIS, 0);
+    integer(com, PRO_E_HLE_SCREWSIZE, 0);
+    std::wstring series = wide(standard.at("series").get<std::string>());
+    std::wstring fastener = wide(std_hole_fastener_id(op));
+    ProError series_code = ProElementHoleThreadSeriesSet(root, (ProMdl)board, series.data());
+    log("HOLE_THREAD_SERIES_SET name=%ls code=%d\n", series.c_str(), (int)series_code);
+    if (series_code != PRO_TK_NO_ERROR)
+        throw std::runtime_error(
+            "Standard hole thread series " + standard.at("series").get<std::string>() +
+            " is not in the installed hole chart (code " + std::to_string((int)series_code) + ")");
+    ProError size_code = ProElementHoleScrewSizeSet(root, (ProMdl)board, fastener.data());
+    log("HOLE_THREAD_SIZE_SET name=%ls code=%d\n", fastener.c_str(), (int)size_code);
+    if (size_code != PRO_TK_NO_ERROR)
+        throw std::runtime_error("Standard hole size " + std_hole_fastener_id(op) +
+                                 " is not in the installed " +
+                                 standard.at("series").get<std::string>() + " hole chart (code " +
+                                 std::to_string((int)size_code) + ")");
+}
 static J generic_hole(const J &op) {
     double before_volume = volume();
     bool counterbore = op.contains("counterbore");
@@ -2881,12 +3071,17 @@ static J generic_hole(const J &op) {
     if (counterbore && countersink)
         throw std::runtime_error("Counterbore and countersink are mutually exclusive");
     bool custom = counterbore || countersink;
+    bool standard = op.contains("standard") && !op["standard"].is_null();
+    if (custom && standard)
+        throw std::runtime_error("Standard threaded holes and custom holes are mutually exclusive");
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_HOLE);
     integer(root, PRO_E_FEATURE_FORM, PRO_HLE_TYPE_STRAIGHT);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op.at("label")).c_str());
     ProElement com = node(root, PRO_E_HLE_COM);
-    integer(com, PRO_E_HLE_TYPE_NEW, custom ? PRO_HLE_CUSTOM_TYPE : PRO_HLE_NEW_TYPE_STRAIGHT);
+    integer(com, PRO_E_HLE_TYPE_NEW,
+            custom ? PRO_HLE_CUSTOM_TYPE
+                   : (standard ? PRO_HLE_NEW_TYPE_STANDARD : PRO_HLE_NEW_TYPE_STRAIGHT));
     if (custom) {
         integer(com, PRO_E_HLE_ADD_CBORE, counterbore ? PRO_HLE_ADD_CBORE : PRO_HLE_NO_CBORE);
         integer(com, PRO_E_HLE_ADD_CSINK, countersink ? PRO_HLE_ADD_CSINK : PRO_HLE_NO_CSINK);
@@ -2909,6 +3104,8 @@ static J generic_hole(const J &op) {
             real(com, PRO_E_HLE_CSINKDIAM, op["countersink"].at("diameter"));
             real(com, PRO_E_HLE_CSINKANGLE, op["countersink"].at("angle"));
         }
+    } else if (standard) {
+        standard_hole_elements(com, root, op);
     } else {
         integer(com, PRO_E_HLE_MAKE_LIGHTWT, PRO_HLE_REGULAR);
         real(com, PRO_E_DIAMETER, op.at("diameter"));
@@ -2977,12 +3174,19 @@ static J generic_hole(const J &op) {
         ProSelectionFree(&r2);
         remember(op, f);
         J basis = hole_depth_basis_json(f);
-        return {{"feature_id", f.id},
-                {"material_removed_mm3", removed},
-                {"axes", geometry},
-                {"depth_basis", basis["depth_basis"]},
-                {"depth_scheme_code", basis["depth_scheme_code"]},
-                {"depth_scheme_query", basis["depth_scheme_query"]}};
+        J out = {{"feature_id", f.id},
+                 {"material_removed_mm3", removed},
+                 {"axes", geometry},
+                 {"depth_basis", basis["depth_basis"]},
+                 {"depth_scheme_code", basis["depth_scheme_code"]},
+                 {"depth_scheme_query", basis["depth_scheme_query"]}};
+        // Plain holes keep their old receipt; only a standard hole carries the
+        // readback of the thread Creo really stored. The frozen receipt keys
+        // (thread_metadata/thread_metadata_verified) are composed in Python from
+        // this evidence plus the table identity.
+        if (op.contains("standard") && !op["standard"].is_null())
+            out["thread_readback"] = hole_thread_json(f, op);
+        return out;
     } catch (...) {
         if (face)
             ProSelectionFree(&face);
