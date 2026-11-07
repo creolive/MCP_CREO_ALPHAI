@@ -12,7 +12,6 @@ import hashlib
 import json
 import math
 import platform
-import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -477,14 +476,11 @@ def validate_cases(cases: list[dict]) -> None:
 
 
 def provenance() -> dict:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True, timeout=15
-        ).stdout.strip()
+    from creo_mechdog.git_evidence import git_facts, source_paths
 
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    facts = git_facts(ROOT)
     names.update(
         {"tools/test_tilted_sketch_lifecycle.py", "tests/unit/test_tilted_sketch_lifecycle.py"}
     )
@@ -493,9 +489,11 @@ def provenance() -> dict:
         for name in sorted(names)
     }
     return {
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
         "source_fingerprint": hashlib.sha256(
             json.dumps(hashes, sort_keys=True).encode()
         ).hexdigest(),

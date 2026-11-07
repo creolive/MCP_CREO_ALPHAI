@@ -7,6 +7,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -208,6 +209,64 @@ class ReleaseDownloadTests(unittest.TestCase):
             self.api(release),
         ):
             with self.assertRaisesRegex(RuntimeError, "unsafe download address"):
+                release_download.download(self.tag, self.directory)
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def asset_api_route(self, release, failures=None):
+        """Serve the tag document, the asset API and (optionally) fail github.com."""
+        failures = failures or set()
+        by_asset_url = {
+            f"https://api.github.com/repos/{release_download.REPOSITORY}/releases/assets/"
+            f"{asset.get('id')}": asset["name"]
+            for asset in release["assets"]
+            if isinstance(asset.get("id"), int)
+        }
+
+        def open_url(request, timeout):
+            url = request.full_url
+            if url.endswith(f"/releases/tags/{self.tag}"):
+                return io.BytesIO(json.dumps(release).encode())
+            if url in by_asset_url:
+                self.assertEqual(request.get_header("Accept"), "application/octet-stream")
+                if "asset" in failures:
+                    raise urllib.error.URLError("asset API unreachable")
+                return io.BytesIO(self.payloads[by_asset_url[url]])
+            if "browser" in failures:
+                raise urllib.error.URLError("github.com unreachable")
+            return io.BytesIO(self.payloads[url.rsplit("/", 1)[-1]])
+
+        return patch.object(release_download, "urlopen", side_effect=open_url)
+
+    def with_asset_ids(self):
+        release = self.release()
+        for index, asset in enumerate(release["assets"], start=1):
+            asset["id"] = index
+        return release
+
+    def test_asset_api_is_used_when_github_com_is_unreachable(self):
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            self.asset_api_route(self.with_asset_ids(), failures={"browser"}),
+        ):
+            release_download.download(self.tag, self.directory)
+        self.assertEqual(validate_directory(self.directory, self.version), [])
+
+    def test_asset_api_is_used_for_an_unexpected_download_host(self):
+        release = self.with_asset_ids()
+        release["assets"][0]["browser_download_url"] = "https://evil.example/file"
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            self.asset_api_route(release),
+        ):
+            release_download.download(self.tag, self.directory)
+        self.assertEqual(validate_directory(self.directory, self.version), [])
+
+    def test_asset_api_failure_reports_both_channels(self):
+        with (
+            patch.object(release_download.subprocess, "run", side_effect=FileNotFoundError("gh")),
+            self.asset_api_route(self.with_asset_ids(), failures={"browser", "asset"}),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "asset API fallback failed"):
                 release_download.download(self.tag, self.directory)
         self.assertEqual(list(self.directory.iterdir()), [])
 
