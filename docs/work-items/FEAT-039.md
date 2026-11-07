@@ -521,3 +521,37 @@ run `20261106T004748_84fc913a`，报告
 ## 2026-11-07 DEV-074 反馈对照（离线）
 
 0.17.4 四份外部 Creo 10 报告与当前代码已逐项对照。已有正证据、此次离线增量和未完成边界见 [MAPPING](../validation/feedback-0.17.4-2026-11-07/MAPPING.md) 与 [接手清单](../development/DEV-074-HANDOFF.md)。本轮未连接 Creo；不以离线编译/单元测试关闭原生几何或保存重载验收，不改变历史证据结论。
+
+## 2026-11-07 H06 交付：保留侧真实几何测量（实机）
+
+H06 的缺口是“保留侧缺 centroid/bbox/世界方向”，此前 `kept_side_basis` 的质心恒为 null
+（`quilt_centroid_not_measured`）。本轮确认 `ProQuilt.h` 没有质心/bbox 查询，但
+`ProQuiltSurfaceVisit` 暴露成员面，`ProSurfaceTessellationGet`（`ProSurface.h:701`）能取到
+**修剪后**面的三角网格；据此在 `native/surface_measure.h` 新增统一 `RegionGeometry` /
+`quilt_region_geometry()`，用面片面积加权得到质心、轴对齐 bbox 与绕向对齐的平均法向。
+非平面区域不报方向（`region_not_planar`），单位未知时毫米值保持 null，失败一律带 reason 与 query_code。
+
+`surface_trim` 现在报告 `target_centroid`/`kept_centroid`、`centroid_delta_mm`、`target_bbox_mm`/
+`kept_bbox_mm`、`target_direction`/`kept_direction` 及各自 `*_status`；`tool_normal` 对平面 quilt 工具
+给出实测面法向并标注 `tool_normal_source`；`signed_offset_mm` 只在法向符号可锚定（基准面）时发布，
+并按契约 §4.5 在符号与 `keep_side` 矛盾时失败回滚。Python 侧新增
+`operation_results.normalize_kept_side_basis/annotate_kept_side_basis`，只做“值不脱离状态”的投影。
+
+实机（run `20261107-121303-781400`，43 项检查全通过，6 个 job）：
+
+| 工具 | keep_side | job_id | 面积 mm² | target→kept 形心 | 差值 mm | 保留 bbox x | 方向 | 保存重载 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 基准面 x=5 | one | `557ad826…` | 700.0 | (20,10,0)→(22.5,10,0) | +2.5 | [5,40] | (0,0,−1) planar | true |
+| 基准面 x=5 | two | `b4313225…` | 100.0 | (20,10,0)→(2.5,10,0) | −17.5 | [0,5] | (0,0,−1) planar | true |
+| quilt x=5 | one | `549773db…` | 700.0 | (20,10,0)→(22.5,10,0) | +2.5 | [5,40] | (0,0,−1) planar | true |
+| quilt x=5 | two | `2316d276…` | 100.0 | (20,10,0)→(2.5,10,0) | −17.5 | [0,5] | (0,0,−1) planar | true |
+
+两个保留侧的形心分别落在工具平面 x=5 两侧（+17.5 / −2.5），不再用面积减小证明“外侧”。
+quilt 工具实测面法向为 `(−1,0,0)`（与草图支撑面相反），因此其 `signed_offset_mm` 保持 null 并给
+`tool_normal_unavailable`，侧别由形心坐标证明。失败用例（x=100 的工具不相交）：job
+`1fde1a0c…` 失败、`rollback_succeeded=true`、模型仍为 800.0 mm² 未修剪填充、revision 1→1。
+
+证据：[EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)、
+[live_trim_report.json](../validation/feat039-h06-kept-side-2026-11-07/live_trim_report.json)
+（SHA256 `4911D20D…0936C6A`）。**未覆盖**：非平面区域、非 mm 单位、多面 quilt、quilt 工具法向跨重建稳定性、
+Creo 9/10；`rollback_kept_the_revision` 不含 unknown_outcome。

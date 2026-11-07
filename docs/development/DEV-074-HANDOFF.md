@@ -23,7 +23,7 @@
 | H03 / FEAT-039，主线阻塞 | `quilt_merge` 保持门禁，既有树无可用结果 quilt，不能逐片缝合封闭。 | 原生 join/intersect 两片→链式，测 result_quilt_id、面积、闭合、失败回滚；修复前不解除 unavailable，不声称最终瓶底可实体化。 |
 | H04 / FEAT-039/055 | 曲面组闭合、公差0.01、缝隙/重叠缺组级测量。 | 定义并实现 open_edges/gap_max/overlap 测量，实机区分开放、闭合、微缝与重叠；逐片 closed 不能替代组级通过。 |
 | H05 / FEAT-014 | 钣金附着增料、百叶/格栅/凸台/铰链/耳、连续多边与 corner relief 尚缺原生能力/验收。`src/creo_mechdog/sheetmetal.py`、`native/advanced.cpp`。 | 先核查已有 FEAT-014 计划和用户未提交计划，避免重写。Creo 10 增料未实际尝试，12.4已有失败；不得直接开放 opt-in 或宣称 new_body+union 可用。分项定义树、材料连续性、板厚、角部实际去料量、展开回折与重载矩阵。 |
-| H06 / FEAT-039 | trim 特征标签下游引用 visit -4；保留侧缺 centroid/bbox/世界方向。 | 修 native 结果 quilt 解析，读真实保留区域几何；quilt/平面工具、one/two 两侧、失败回滚、跨计划标签复用均验；不以面积减小证明“外侧”。 |
+| H06 / FEAT-039 | trim 特征标签下游引用 visit -4 **未修**；保留侧 centroid/bbox/世界方向已于 2026-11-07 实机补齐。 | 已交付：`surface_measure.h::quilt_region_geometry`（面片面积加权质心/bbox/法向）+ `surface_trim` 新字段与 `*_status`；基准面/quilt 工具 × one/two 四组形心分居工具两侧（±17.5/−2.5 mm）、保存重载 true、失败用例回滚且 revision 1→1。证据见 [EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)。仍待：trim 特征标签下游引用 `-4` 修复、跨计划标签复用、非平面/非 mm/多面 quilt 实机矩阵、Creo 9/10。 |
 | H07 / FEAT-039 | 独立 quilt offset、弯曲源实测偏置距离/0.3壁厚未实现。现有 surface_offset 是偏置壁。 | 分开设计 offset wall 与 quilt offset；测真实结果quilt及曲面距离，mm/in/混合/未知单位矩阵；未知保持null，不能用体积/面积估算冒充局部厚度。 |
 | H08 / FEAT-055 | 曲面边圆角、曲率梳/斑马纹、跨边G1偏差尚无接口。 | 各自登记最小契约，取得曲面边选择/几何结果或分析图、方向/曲率数值及保存重载证据。实体 round 不等于曲面 fillet。 |
 | H09 / FEAT-039 | 任意非平面 fill 未支持。 | 先交付明确替代：旋转球面用于中心R8场景；任意闭合边界的非平面填充需新原生路线，单独验收，不放宽现有 planar fill。 |

@@ -44,6 +44,19 @@
 - **修剪失败可诊断**：再生失败分支回写 `regeneration`（`feature_status`、`feature_id`、`target_quilt_id`、`tool_kind`、两侧枚举值、结果特征的 quilt 访问码），失败消息带同一组数值；`area_before/after`、`kept_quilt_*` 等测量字段在失败记录里保持可见。
 - **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询）、失败回滚的实机表现、`quilt_merge` 全套实机项。证据：`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`（jobs `247f76de…`、`7ae993e6…`）。
 
+### 0.4 H06 保留侧测量回填（2026-11-07，DEV-074）
+
+- §4.5 的 `target_centroid`/`kept_centroid` 不再因为“`ProQuilt` 没有质心查询”而恒为 null：
+  `ProQuiltSurfaceVisit` 暴露成员面，`ProSurfaceTessellationGet`（`ProSurface.h:701`）返回**修剪后**面的三角网格，
+  据此可算面片面积加权质心、轴对齐 bbox 与绕向对齐的平均法向。实现唯一归属
+  `native/surface_measure.h` 的 `RegionGeometry`/`quilt_region_geometry`（§4.7 的扩展由集成人在 H06 收取）。
+- `surface_trim` 新增字段：`centroid_delta_mm`、`target_bbox_mm`/`kept_bbox_mm`、`target_direction`/`kept_direction`
+  及各自的 `*_status`。非平面区域 `target_direction`/`kept_direction` 为 null，`reason="region_not_planar"`；
+  单位比例未知时质心/bbox 保持 null（`scale_to_mm_known=false`），不填 0。
+- `tool_normal` 对平面 quilt 工具给出实测面法向，`tool_normal_source` 区分 `datum_plane_axis` 与
+  `tool_quilt_face_normal`；只有符号可锚定的基准面工具发布 `signed_offset_mm`，其余保持 null 并给原因。
+- §4.5 的“矛盾即失败”在 `tool_normal` 可锚定且两侧质心可读时生效；实测 `one`→正、`two`→负。
+
 ---
 
 ## 1. SDK 逐项核实结论表
@@ -886,7 +899,12 @@ PRO_E_FEATURE_TREE
 
 - `tool_normal`：修剪工具（quilt 或基准面）读出的**单位法向**（模型坐标）。
 - `target_centroid` / `kept_centroid`：被修剪 quilt 与保留区域各自的几何质心（模型坐标，mm）；读不出时为 `null`。
+  2026-11-07 起由 `ProQuiltSurfaceVisit` + `ProSurfaceTessellationGet` 的三角面片面积加权实测（§0.4），
+  不是外框中心；`centroid_delta_mm` 给出差值，`target_bbox_mm`/`kept_bbox_mm` 与
+  `target_direction`/`kept_direction` 提供同一次采样的包围盒与平面法向。
 - `signed_offset_mm` = `(kept_centroid − target_centroid) · tool_normal`，用于独立判断保留侧确实落在工具法向的一侧。
+  只有法向符号可锚定的工具（基准面）发布该值；quilt 工具的实测面法向朝向不保证与 `keep_side` 绑定，
+  因此其 `signed_offset_mm` 为 null 并给 `tool_normal_unavailable`，侧别由质心坐标证明。
 
 **一致性与失败规则**：
 
