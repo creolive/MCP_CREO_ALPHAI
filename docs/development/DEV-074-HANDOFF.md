@@ -17,9 +17,10 @@
 | H04 / FEAT-039 | **完成**：曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量，实机四例 42 检查通过 | [EVIDENCE](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md) |
 | H06 / FEAT-039 | **完成（保留侧几何子项）**：保留侧真实形心/bbox/世界方向，实机 41 检查通过；trim 标签下游引用 `-4` 仍开放 | [EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md) |
 | H03 / FEAT-039 | **反证完成，门禁保持**：INCOMPLETE 骨架路线仍 4 面 0 quilt，`quilt_merge` 不解除 | [EVIDENCE](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md) |
+| H09 / FEAT-039 | **完成（替代路线）**：R8 半圆曲面旋转→球面 quilt 804.2477 mm²、trim 球冠 201.0619 mm²、2 mm thicken 404.2183 mm³、solidify 2144.6606 mm³，22 项实机检查通过；任意非平面 fill 仍拒绝、planar fill 未改 | [EVIDENCE](../validation/feat039-h09-surface-revolve-2026-11-07/EVIDENCE.md) |
 | H11 / DEV-072/074 | **完成**：0.17.3–0.18.2 的 tag/main/Release/四附件/body 本机独立核对 | [POSTCHECK](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md) |
 | H13 / DEV-066 | **完成**：剩余 17 处 Git 读取迁入 `source_provenance.local_provenance`，缺 Git 时明确降级 | 本页 H13 行、[DEV-074 卡](../work-items/DEV-074.md) |
-| H05 / H07 / H08 / H09 / H10 / H12 | **未完成**，保留在下表 | — |
+| H05 / H07 / H08 / H10 / H12 | **未完成**，保留在下表 | — |
 
 ## 验证结果
 
@@ -39,7 +40,7 @@
 | H06 / FEAT-039 | trim 特征标签下游引用 visit -4 **未修**；保留侧 centroid/bbox/世界方向已于 2026-11-07 实机补齐。 | 已交付：`surface_measure.h::quilt_region_geometry`（面片面积加权质心/bbox/法向）+ `surface_trim` 新字段与 `*_status`；基准面/quilt 工具 × one/two 四组形心分居工具两侧（±17.5/−2.5 mm）、保存重载 true、失败用例回滚且 revision 1→1。证据见 [EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)。仍待：trim 特征标签下游引用 `-4` 修复、跨计划标签复用、非平面/非 mm/多面 quilt 实机矩阵、Creo 9/10。 |
 | H07 / FEAT-039 | 独立 quilt offset、弯曲源实测偏置距离/0.3壁厚未实现。现有 surface_offset 是偏置壁。 | 分开设计 offset wall 与 quilt offset；测真实结果quilt及曲面距离，mm/in/混合/未知单位矩阵；未知保持null，不能用体积/面积估算冒充局部厚度。 |
 | H08 / FEAT-055 | 曲面边圆角、曲率梳/斑马纹、跨边G1偏差尚无接口。 | 各自登记最小契约，取得曲面边选择/几何结果或分析图、方向/曲率数值及保存重载证据。实体 round 不等于曲面 fillet。 |
-| H09 / FEAT-039 | 任意非平面 fill 未支持。 | 先交付明确替代：旋转球面用于中心R8场景；任意闭合边界的非平面填充需新原生路线，单独验收，不放宽现有 planar fill。 |
+| H09 / FEAT-039 | **替代路线已交付（Creo 12.4.0.0 实机 2026-11-07）**。勘察确认 `FillOp` 只有 `sketch`，原生 `generic_fill` 只写 `PRO_FEAT_DATUM_SURF`+`PRO_FLAT`+`PRO_E_SEC_USE_SKETCH`，**任意非平面闭合边界 fill 没有输入通道**，因此未放宽 planar fill、未新增 fill 变体。中心 R8 场景改走已有曲面旋转：半圆子午弧 + 构造中心线，`revolve{mode="surface",angle=360}`；新增驱动 `tools/test_surface_revolve.py`（离线 12 项 / 实机 22 项）与 `tests/unit/test_surface_revolve_contract.py`（14 项）。实机 run `20261107-235346-03398b` 全通过：quilt 74、特征 49 type 942/ACTIVE、面积 804.247719319002 mm²（4πR² 差 1.5e-11）、`closed=true`、无实体、保存重载 true；x=4 trim 得球冠 201.06192982974773 mm²（另一侧 603.1857894892481）；球冠 2 mm 对称 thicken 404.21825476170756 mm³（精确球壳 406.3126 −0.52%、面积×t 402.1239 +0.52%，容差 2% 运行前固定）；闭合球面 solidify 2144.6605848506724 mm³。非平面 fill 计划带 `boundary` 经公开 `creo_execute_plan` 返回 `isError=true`、无 job_id。证据 [EVIDENCE](../validation/feat039-h09-surface-revolve-2026-11-07/EVIDENCE.md)。 | 仍不可用：任意非平面闭合边界 fill（需新原生路线，单独验收，不得放宽 planar fill）；Creo 9/10、非 mm、部分角度球带、显式外部/倾斜基准轴未测；0.3 mm 壁厚整链归 H10。后续若要 fill 本体，先证 `ProTrim.h` 之外的边界混合树或 `Probbl.h` 闭环路线，并保持 planar fill 契约不动。 |
 | H10 / FEAT-039 | 多quilt实体化/加厚、开口面与0.3壁厚整链验收未完成。 | H02/H03/H04完成后再跑完整五爪任务；验证闭合、无缝/重叠、质量/厚度、开口面、保存重载与后续编辑。 |
 | H11 / DEV-072/074 | **已完成（2026-11-07 本机只读核对）**。对 `v0.17.3`、`v0.17.4`、`v0.18.0`、`v0.18.1`、`v0.18.2` 执行 `tools/check_release_assets.py --tag` 与 `gh api` 核对：5 个附注标签均指向 main 合并提交、Release 非草稿、四附件齐全，20 个文件本地 SHA256 = sidecar = API digest。证据 [POSTCHECK](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md)。仍开放：`v0.17.3` body 缺附件 SHA256 与独立环境段的**历史瑕疵**需用户决定补记方式；API asset-ID 作为「browser_download_url 失败」回退的**触发路径**未做故障注入，只证明端点可用。 | 后续：按用户决定在后续版本勘误或台账备注 v0.17.3 body 历史瑕疵；回退触发需隔离环境另验，不在本批做故障注入。 |
 | H12 / BUG-115、BUG-109、DEV-074 | BUG-115原生根因和Creo10精确失败形态未知；新诊断/回执/预览依据尚无本轮MCP实机、保存重载与新WorkBuddy证据。 | 先确认健康会话，重编译后用MCP复验新字段及原始失败样本；默认保护保持。若按release收窄或新增opt-out，先补原生证据及独立设计。真实断流/原生并发/保存失败不得以单元mock记通过。 |
