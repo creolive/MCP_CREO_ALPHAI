@@ -326,6 +326,17 @@ class SeedPackagerAllowlistTests(unittest.TestCase):
         for path in release_integrity.seed_library_files(ROOT):
             self.assertIn(path.relative_to(ROOT).as_posix(), packaged)
 
+    def test_source_package_includes_native_test_sources_only(self):
+        packaged = {path.relative_to(ROOT).as_posix() for path in package.source_files()}
+        fixtures = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "tests/native").rglob("*")
+            if path.is_file() and path.suffix in {".cpp", ".h", ".hpp"}
+        }
+        self.assertIn("tests/native/test_axis_geometry.cpp", fixtures)
+        self.assertIn("tests/native/test_surface_measure_guard.cpp", fixtures)
+        self.assertEqual({name for name in packaged if name.startswith("tests/native/")}, fixtures)
+
     def test_seeds_module_exposes_the_trusted_digest_entry_point(self):
         self.assertEqual(
             seeds.expected_archive_sha256(), release_integrity.trusted_seed_archive_digest(ROOT)

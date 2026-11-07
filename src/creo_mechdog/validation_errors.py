@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 _MAX_ERRORS = 8
-_MAX_MESSAGE = 400
+_MAX_MESSAGE = 600
 
 
 class OperationValidationError(ValidationError):
@@ -69,7 +69,9 @@ def operation_validation_error(
     """
     lines = [
         {
-            "type": PydanticCustomError(item["type"], "{message}", {"message": item["msg"]}),
+            "type": PydanticCustomError(
+                item["type"], "{message}", {**item.get("ctx", {}), "message": item["msg"]}
+            ),
             "loc": item["loc"],
             "input": item.get("input"),
         }
