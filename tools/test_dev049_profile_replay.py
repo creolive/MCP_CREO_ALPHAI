@@ -29,9 +29,7 @@ import asyncio
 import hashlib
 import json
 import math
-import os
 import platform
-import subprocess
 import sys
 import time
 import uuid
@@ -571,22 +569,12 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
+    from creo_mechdog.git_evidence import git_facts, source_paths
     from version import VERSION
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    facts = git_facts(ROOT)
     names.update(
         ("tools/test_dev049_profile_replay.py", "tests/unit/test_dev049_profile_replay.py")
     )
@@ -596,9 +584,11 @@ def local_provenance() -> dict:
     }
     return {
         "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
         "source_sha256": hashes,
         "source_fingerprint": hashlib.sha256(
             json.dumps(hashes, sort_keys=True).encode()

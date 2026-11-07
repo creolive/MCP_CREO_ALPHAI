@@ -14,9 +14,7 @@ import hashlib
 import itertools
 import json
 import math
-import os
 import platform
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -177,30 +175,24 @@ def require_manual_start(config_file: Path) -> None:
 
 def local_provenance() -> dict:
     """Record source evidence without recording config, license or session IDs."""
+    from creo_mechdog.git_evidence import git_facts, source_paths
     from version import VERSION
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    facts = git_facts(ROOT)
     names.update(
-        (
+        name
+        for name in (
             "native/axis_geometry.h",
             "tests/native/test_axis_geometry.cpp",
             "tests/unit/test_t05_geometry.py",
             "tools/test_axis_geometry.py",
             "tools/test_t05_native.py",
         )
+        # The public source archive ships no C++ test tree; record only what this
+        # distribution actually contains instead of failing on an absent file.
+        if (ROOT / name).is_file()
     )
     hashes = {
         name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
@@ -208,9 +200,11 @@ def local_provenance() -> dict:
     }
     return {
         "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
         "source_sha256": hashes,
         "source_fingerprint": hashlib.sha256(
             json.dumps(hashes, sort_keys=True).encode()
