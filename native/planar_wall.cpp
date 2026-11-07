@@ -769,14 +769,19 @@ static void generic_resize_sheetmetal_planar_wall(const J &op) {
         double offset = on_u ? map_u.offset : map_v.offset;
         double current = 0;
         CK(ProSecdimValueGet(section, it.value().get<int>(), &current));
-        double expected = fabs(slope * (on_u ? recorded_u : recorded_v) + offset);
+        double recorded_coordinate = slope * (on_u ? recorded_u : recorded_v) + offset;
+        double resized_coordinate = slope * (on_u ? resized_u : resized_v) + offset;
+        double expected = fabs(recorded_coordinate);
         double tolerance = std::max(1e-6, fabs(expected) * 1e-6);
         if (fabs(current - expected) > tolerance)
             throw std::runtime_error("The driving sketch dimension " + name + " is " +
                                      std::to_string(current) + " mm instead of the recorded " +
                                      std::to_string(expected) + " mm; the wall stayed untouched");
-        writes.push_back(
-            {it.value().get<int>(), fabs(slope * (on_u ? resized_u : resized_v) + offset)});
+        log("PLANAR_WALL_RESIZE_DIMENSION name=%s id=%d recorded_signed_mm=%.9f "
+            "target_signed_mm=%.9f current_mm=%.9f target_magnitude_mm=%.9f\n",
+            name.c_str(), it.value().get<int>(), recorded_coordinate, resized_coordinate, current,
+            fabs(resized_coordinate));
+        writes.push_back({it.value().get<int>(), fabs(resized_coordinate)});
     }
     if (writes.empty())
         throw std::runtime_error("The driving sketch carries no readable coordinate dimensions; "

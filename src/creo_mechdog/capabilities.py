@@ -527,7 +527,11 @@ def families() -> dict:
         },
         "surface_solid": {
             "enabled": True,
-            "scope": "planar fill, thicken and solidify",
+            "scope": (
+                "surface-mode extrude and revolve (including partial angles), planar fill, "
+                "thicken and solidify; surface sweep and axis pattern on surface features "
+                "are available within their existing operation contracts"
+            ),
             "native_test": "20 x 10 fill, symmetric thickness 2 to 3; plane cut of a cube",
             "limits": (
                 "closed-quilt solidification is published (measured volume plus rollback "
@@ -555,7 +559,9 @@ def families() -> dict:
                 "quilt merge stays gated (UNAVAILABLE_OPERATIONS); no multi-section loft, "
                 "no boundary blend and no surface loft tool; surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
-                "quilt; it can add solid volume, and target_quilt_id names the source quilt"
+                "quilt; it can add solid volume, and target_quilt_id names the source quilt; "
+                "trimmed quilt feature-label reuse and curved-quilt offset measurement "
+                "have no published geometric guarantee"
             ),
         },
         "boolean_bodies": {

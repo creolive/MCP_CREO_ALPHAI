@@ -592,6 +592,18 @@ class CreoStartup:
                 stale=not value.get("connected") or age is None or age > READY_FRESHNESS_SECONDS,
                 coordinator_running=running,
             )
+            # ready/connected describe the stored observation for compatibility;
+            # a read-only status call cannot establish a current connection.
+            value["connection_verification"] = (
+                "unverified_stale_snapshot" if value["stale"] else "recent_snapshot"
+            )
+            value["current_connected"] = None if value["stale"] else value.get("connected")
+            if value["stale"] and value.get("connected"):
+                value["message"] = (
+                    "Startup snapshot expired; current connection is unverified. "
+                    "state/connected describe the last verification only. "
+                    "Use creo_session_status for an explicit current check."
+                )
             if self._phase_deadline is not None:
                 value["phase_deadline_at"] = _deadline_at(self._phase_deadline)
             value.setdefault("retry_id", self._retry_id)

@@ -33,9 +33,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import platform
-import subprocess
 import sys
 import time
 import unittest
@@ -453,44 +450,12 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    from version import VERSION
+    """Collect source evidence even when running from an extracted release."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    return collect(
+        ROOT, ("tools/test_sheetmetal_flange.py", "tests/unit/test_sheetmetal_flange.py")
     )
-    names.update(("tools/test_sheetmetal_flange.py", "tests/unit/test_sheetmetal_flange.py"))
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
 
 
 def write_offline_report(output: Path, run_id: str, results: dict) -> dict:

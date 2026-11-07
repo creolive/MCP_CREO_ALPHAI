@@ -10,13 +10,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
-import hashlib
 import itertools
 import json
 import math
-import os
-import platform
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -176,53 +172,19 @@ def require_manual_start(config_file: Path) -> None:
 
 
 def local_provenance() -> dict:
-    """Record source evidence without recording config, license or session IDs."""
-    from version import VERSION
+    """Collect source evidence even when running from an extracted release."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
-    names.update(
+    return collect(
+        ROOT,
         (
             "native/axis_geometry.h",
             "tests/native/test_axis_geometry.cpp",
             "tests/unit/test_t05_geometry.py",
             "tools/test_axis_geometry.py",
             "tools/test_t05_native.py",
-        )
+        ),
     )
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
 
 
 class Acceptance:

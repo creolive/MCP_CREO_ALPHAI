@@ -6,8 +6,8 @@ phase name covered regeneration, inspection, assertions, backup, erase,
 reload, comparison and preview, so "still working" and "hung" looked the same
 until the 600 s budget expired.
 
-This module only reads the tail of ``native.log`` and never touches the
-worker. Sub-stages are emitted by ``native/generic.cpp`` as::
+This module reads bounded head and tail windows of ``native.log`` and never
+touches the worker. Sub-stages are emitted by ``native/generic.cpp`` as::
 
     STAGE name=verify_model_save elapsed_ms=41 since_start_ms=1200 ts=1700000000123
 
@@ -24,8 +24,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-#: Only the tail is read; polling must not scale with log size.
+#: Bounded windows keep polling cost independent of log size.
 TAIL_BYTES = 8192
+HEAD_BYTES = 4096
 #: Hard bound on parsed lines even if a log line is extremely long.
 MAX_SCAN_LINES = 200
 
@@ -46,6 +47,7 @@ def _empty() -> dict[str, Any]:
         "since_start_ms": None,
         "idle_seconds": None,
         "stages_seen": 0,
+        "connect_timing": {},
         "reason": None,
     }
 
@@ -77,10 +79,43 @@ def _read_tail(path: Path, tail_bytes: int) -> tuple[bytes | None, int | None, s
     try:
         with path.open("rb") as handle:
             start = max(0, size - tail_bytes)
-            handle.seek(start)
-            return handle.read(), size, None
+            handle.seek(max(0, start - 1))
+            chunk = handle.read(tail_bytes + (1 if start else 0))
+            if start:
+                previous, chunk = chunk[:1], chunk[1:]
+                if previous not in (b"\n", b"\r"):
+                    newline = chunk.find(b"\n")
+                    chunk = chunk[newline + 1 :] if newline >= 0 else b""
+            return chunk, size, None
     except OSError as exc:  # pragma: no cover - platform dependent
         return None, size, f"native_log_unreadable:{type(exc).__name__}"
+
+
+def _connect_timing(path: Path) -> dict[str, dict[str, int | None]]:
+    """Read only complete connect markers in the log head, independently of the tail."""
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(HEAD_BYTES)
+    except OSError:  # pragma: no cover - platform dependent
+        return {}
+    result: dict[str, dict[str, int | None]] = {}
+    head_text = raw.decode("utf-8", errors="replace")
+    head_lines = head_text.splitlines()
+    if head_text and not head_text.endswith(("\n", "\r")):
+        head_lines = head_lines[:-1]
+    for line in head_lines:
+        staged = _STAGE.match(line)
+        if not staged:
+            continue
+        fields = dict(_FIELD.findall(staged.group(1)))
+        name = fields.get("name")
+        if name in ("connect", "connected"):
+            result[name] = {
+                "elapsed_ms": _integer(fields.get("elapsed_ms")),
+                "since_start_ms": _integer(fields.get("since_start_ms")),
+                "ts": _integer(fields.get("ts")),
+            }
+    return result
 
 
 def _lines(raw: bytes) -> list[str]:
@@ -106,12 +141,14 @@ def stall_report(
     """
     report = _empty()
     report["tail_bytes"] = tail_bytes
-    raw, size, error = _read_tail(Path(directory) / "native.log", tail_bytes)
+    log_path = Path(directory) / "native.log"
+    raw, size, error = _read_tail(log_path, tail_bytes)
     report["log_bytes"] = size
     if error:
         report["reason"] = error
         return report
     report["readable"] = True
+    report["connect_timing"] = _connect_timing(log_path)
     if size is not None:
         report["truncated"] = size > tail_bytes
 
@@ -122,7 +159,11 @@ def stall_report(
     for line in _lines(raw or b""):
         phase = _PHASE.match(line)
         if phase:
-            stage = phase.group(1).strip() or stage
+            next_stage = phase.group(1).strip()
+            if next_stage and next_stage != stage:
+                stage = next_stage
+                sub_stage = None
+                timing = {}
             continue
         staged = _STAGE.match(line)
         if not staged:
@@ -138,7 +179,13 @@ def stall_report(
     report["sub_stage"] = sub_stage
     report["stages_seen"] = seen
     if sub_stage is None:
-        report["reason"] = "no_phase_lines" if stage is None else "no_stage_timing"
+        report["reason"] = (
+            "no_phase_lines"
+            if stage is None
+            else "no_current_stage_timing"
+            if report["connect_timing"]
+            else "no_stage_timing"
+        )
         return report
 
     elapsed = _integer(timing.get("elapsed_ms"))

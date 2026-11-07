@@ -2763,11 +2763,10 @@ async def creo_quilt_merge(
     """Join two quilts into one surface merge.
 
     Both sides must be explicit quilt references ({kind:'quilt',id:...} or
-    {kind:'quilt_feature',label:...}) and must be distinct. The result reports
-    result_quilt_id, the measured merged area and the real closure status; no
-    tolerance and no gap measurement are offered in this release.
-    This release is registered but gated: the join still needs a live acceptance
-    run, so submissions are refused before a native job is queued.
+    {kind:'quilt_feature',label:...}) and must be distinct. This operation is
+    gated: submissions are refused before a native job is queued. Its draft
+    result fields (result_quilt_id, merged area and closure status) are not
+    available to callers. No tolerance or gap measurement is published.
     """
     return await invoke(
         general.submit,

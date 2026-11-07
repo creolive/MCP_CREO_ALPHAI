@@ -73,10 +73,26 @@ def _download_api(tag: str, directory: Path, repo: str, version: str) -> None:
         ):
             raise RuntimeError(f"unsafe download address for {name}: {url!r}")
         request = Request(url, headers={"User-Agent": "MCP_CREO_MechDog-release-check"})
-        with (
-            urlopen(request, timeout=TIMEOUT_SECONDS) as response,
-            (directory / name).open("wb") as output,
-        ):
+        try:
+            response = urlopen(request, timeout=TIMEOUT_SECONDS)
+        except (OSError, http.client.HTTPException) as browser_error:
+            asset_id = found[name].get("id")
+            if type(asset_id) is not int or asset_id <= 0:
+                raise RuntimeError(
+                    f"browser download failed for {name}: {browser_error}; "
+                    "release asset has no valid API id"
+                ) from None
+            response = urlopen(
+                Request(
+                    f"https://api.github.com/repos/{repo}/releases/assets/{asset_id}",
+                    headers={
+                        "Accept": "application/octet-stream",
+                        "User-Agent": "MCP_CREO_MechDog-release-check",
+                    },
+                ),
+                timeout=TIMEOUT_SECONDS,
+            )
+        with response, (directory / name).open("wb") as output:
             shutil.copyfileobj(response, output)
     _check(directory, version)
 

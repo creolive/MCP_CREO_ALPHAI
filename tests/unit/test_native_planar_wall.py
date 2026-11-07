@@ -232,6 +232,40 @@ class SignedEnvelopeTest(unittest.TestCase):
 
 
 class ResizeProjectionTest(unittest.TestCase):
+    def test_effective_gauge_checks_requested_value_in_both_contexts(self):
+        receipt = {
+            "status": "verified",
+            "source": "geometry_normal_span",
+            "value_mm": 2.0,
+            "reason": None,
+            "context": "current_plan",
+        }
+        projection = pwall.result_projection(
+            create_result(
+                op=pwall.PLANAR_WALL_RESIZE_OP,
+                feature_id_before=49,
+                thickness_loaded_mm=1.0,
+                thickness_validation=receipt,
+                thickness_loaded_validation={**receipt, "context": "saved_loaded"},
+            )
+        )
+        self.assertFalse(projection["thickness_verified_effective"])
+        self.assertFalse(projection["thickness_loaded_verified_effective"])
+        self.assertFalse(projection["verified"])
+        receipt["value_mm"] = 1.0
+        projection = pwall.result_projection(
+            create_result(
+                op=pwall.PLANAR_WALL_RESIZE_OP,
+                feature_id_before=49,
+                thickness_loaded_mm=1.0,
+                thickness_validation=receipt,
+                thickness_loaded_validation={**receipt, "context": "saved_loaded"},
+            )
+        )
+        self.assertTrue(projection["thickness_verified_effective"])
+        self.assertTrue(projection["thickness_loaded_verified_effective"])
+        self.assertTrue(projection["verified"], projection["problems"])
+
     def test_resize_keeps_identity_and_reports_shift(self):
         result = create_result(
             op=pwall.PLANAR_WALL_RESIZE_OP,
@@ -254,6 +288,20 @@ class ResizeProjectionTest(unittest.TestCase):
         rebuilt = dict(result, feature_id=57)
         projection = pwall.result_projection(rebuilt)
         self.assertFalse(projection["feature_id_unchanged"])
+        self.assertFalse(projection["verified"])
+
+    def test_missing_native_ids_and_loaded_receipt_remain_unknown(self):
+        result = create_result(op=pwall.PLANAR_WALL_RESIZE_OP)
+        result.pop("feature_id", None)
+        result.pop("feature_id_before", None)
+        result.pop("thickness_loaded_validation", None)
+        projection = pwall.result_projection(result)
+        self.assertIsNone(projection["feature_id_unchanged"])
+        self.assertIsNone(projection["thickness_loaded_validation"])
+        self.assertIsNone(projection["thickness_loaded_api_scope"])
+        self.assertIsNone(projection["thickness_loaded_api_reason"])
+        self.assertIsNone(projection["thickness_loaded_fallback_source"])
+        self.assertIsNone(projection["thickness_loaded_verified_effective"])
         self.assertFalse(projection["verified"])
 
 
@@ -646,7 +694,7 @@ class OriginTest(unittest.TestCase):
         source = NATIVE_WALL.read_text(encoding="utf-8")
         self.assertIn("ProSectionLocationGet(section, loc)", source)
         self.assertIn("corner_u[4][2]", source)
-        self.assertIn("fabs(slope * (on_u ? resized_u : resized_v) + offset)", source)
+        self.assertIn("fabs(resized_coordinate)", source)
         self.assertIn("is not part of the recorded rectangle", source)
 
 

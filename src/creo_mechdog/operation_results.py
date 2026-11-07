@@ -346,6 +346,7 @@ PROTECTED_OPERATION_KEYS = (
 #: ``failed_operation`` block is failure evidence too (FEAT-012/FEAT-008).
 FAILED_EVIDENCE_KEYS = (
     "feature_errors",
+    "edge_geometry_diagnostic",
     "failed_stage",
     "failed_toolkit_call",
     "failed_operation",

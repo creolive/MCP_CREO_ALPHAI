@@ -18,9 +18,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
-import platform
-import subprocess
 import sys
 import time
 import unittest
@@ -457,44 +454,10 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    from version import VERSION
+    """Record source evidence from a checkout or an extracted source release."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
-    names.update(("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
+    return collect(ROOT, ("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
 
 
 def write_offline_report(output: Path, run_id: str, results: dict) -> dict:

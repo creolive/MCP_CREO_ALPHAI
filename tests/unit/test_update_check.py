@@ -375,6 +375,8 @@ class UpdateCacheTests(unittest.IsolatedAsyncioTestCase):
                     "checked_at",
                     "last_success_at",
                     "from_cache",
+                    "in_flight",
+                    "last_completed_status",
                     "stale",
                     "network_timeout_seconds",
                     "cache_age_seconds",

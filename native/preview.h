@@ -55,6 +55,7 @@ struct PreviewDatumOptionOutcome {
 struct PreviewStepOutcome {
     std::wstring path;
     bool skipped_no_geometry = false;
+    nlohmann::json empty_geometry_basis = nullptr;
     int window = -1;
     int display_code = 0;
     int window_get_code = 0;
@@ -105,6 +106,7 @@ struct PreviewStepOutcome {
 struct PreviewGeometryProbe {
     bool renderable = false;
     bool unknown = false;
+    int non_datum_feature_count = 0;
 };
 
 static ProError preview_geometry_feature(ProFeature *feature, ProError status, ProAppData data) {
@@ -126,22 +128,28 @@ static ProError preview_geometry_feature(ProFeature *feature, ProError status, P
         return PRO_TK_NO_ERROR;
     }
     if (type != PRO_FEAT_CSYS && type != PRO_FEAT_DATUM && type != PRO_FEAT_DATUM_AXIS &&
-        type != PRO_FEAT_DATUM_POINT)
+        type != PRO_FEAT_DATUM_POINT) {
         probe->renderable = true;
+        probe->non_datum_feature_count++;
+    }
     return PRO_TK_NO_ERROR;
 }
 
-static bool preview_has_no_geometry(ProMdl model) {
+static bool preview_has_no_geometry(ProMdl model, nlohmann::json &basis) {
     ProMdlType kind;
     if (ProMdlTypeGet(model, &kind) != PRO_TK_NO_ERROR ||
         (kind != PRO_MDL_PART && kind != PRO_MDL_ASSEMBLY))
         return false;
     PreviewGeometryProbe probe;
     ProError code = ProSolidFeatVisit((ProSolid)model, preview_geometry_feature, nullptr, &probe);
+    const bool visit_complete = code == PRO_TK_NO_ERROR || code == PRO_TK_E_NOT_FOUND;
+    basis = {{"feature_visit_code", code},
+             {"non_datum_feature_count", (probe.unknown || !visit_complete)
+                                             ? nlohmann::json(nullptr)
+                                             : nlohmann::json(probe.non_datum_feature_count)}};
     // The SDK also returns NOT_FOUND when a solid has no features at all.
-    return geometry_diagnostics::preview_skip(
-        kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY, probe.renderable,
-        (code == PRO_TK_NO_ERROR || code == PRO_TK_E_NOT_FOUND) && !probe.unknown);
+    return geometry_diagnostics::preview_skip(kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY,
+                                              probe.renderable, visit_complete && !probe.unknown);
 }
 
 static std::string preview_utf8(const std::wstring &value) {
@@ -438,7 +446,7 @@ static void capture_preview_steps(ProMdl model, const std::wstring &file, bool a
                                   double width_inches, double height_inches, ProRasterType type,
                                   PreviewStepOutcome &outcome) {
     outcome.path = file;
-    if (preview_has_no_geometry(model)) {
+    if (preview_has_no_geometry(model, outcome.empty_geometry_basis)) {
         outcome.skipped_no_geometry = true;
         outcome.raster_code = PRO_TK_GENERAL_ERROR; // no raster call was made
         return;
@@ -557,6 +565,7 @@ static nlohmann::json preview_outcome_json(const PreviewStepOutcome &outcome) {
                                                    : "failed"},
             {"path", outcome.path.empty() ? nlohmann::json(nullptr)
                                           : nlohmann::json(preview_utf8(outcome.path))},
+            {"empty_geometry_basis", outcome.empty_geometry_basis},
             {"bytes", outcome.file_bytes},
             {"file_check", file_check},
             {"window", outcome.window},

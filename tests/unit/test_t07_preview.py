@@ -190,17 +190,21 @@ class NativeSharedStep(unittest.TestCase):
             "PRO_MDL_PART",
             "PRO_TK_E_NOT_FOUND",
             "geometry_diagnostics::preview_skip(",
-            "kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY, probe.renderable,",
+            "kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY,",
+            "probe.renderable,",
             "&& !probe.unknown",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, probe)
         self.assertNotIn("volume", probe.lower())
+        self.assertIn('"feature_visit_code", code', probe)
+        self.assertIn('"non_datum_feature_count"', probe)
+        self.assertIn("probe.unknown || !visit_complete", probe)
         capture = region(
             shared, "static void capture_preview_steps", "static PreviewStepOutcome capture_preview"
         )
         self.assertLess(
-            capture.index("preview_has_no_geometry(model)"),
+            capture.index("preview_has_no_geometry(model, outcome.empty_geometry_basis)"),
             capture.index("bind_model_window(model, outcome)"),
         )
 

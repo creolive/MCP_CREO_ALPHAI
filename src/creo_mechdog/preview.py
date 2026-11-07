@@ -132,6 +132,9 @@ def normalize_preview(
     file_bytes = native.get("bytes") if isinstance(native, dict) else None
     if not isinstance(file_bytes, int):
         file_bytes = size
+    if skipped:
+        path = None
+        file_bytes = None
     raw_check = native.get("file_check") if isinstance(native, dict) else None
     file_check = (
         {key: raw_check[key] for key in FILE_CHECK_KEYS if key in raw_check}
@@ -142,6 +145,12 @@ def normalize_preview(
     datum_display = (
         {key: raw_datums[key] for key in DATUM_DISPLAY_KEYS if key in raw_datums}
         if isinstance(raw_datums, dict)
+        else None
+    )
+    raw_empty = native.get("empty_geometry_basis") if isinstance(native, dict) else None
+    empty_geometry_basis = (
+        {key: raw_empty.get(key) for key in ("feature_visit_code", "non_datum_feature_count")}
+        if isinstance(raw_empty, dict)
         else None
     )
 
@@ -181,6 +190,7 @@ def normalize_preview(
         "failed_code": failed_code if isinstance(failed_code, int) else None,
         "file_check": file_check,
         "datum_display": datum_display,
+        "empty_geometry_basis": empty_geometry_basis,
         "verification_error": stat_error,
     }
     for key in (

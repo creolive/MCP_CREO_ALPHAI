@@ -78,6 +78,69 @@ class NativeStageReport(unittest.TestCase):
         self.assertTrue(report["truncated"])
         self.assertEqual(report["sub_stage"], "verify_model_reload")
 
+    def test_connect_timing_survives_long_failed_log_without_claiming_current_idle(self):
+        self.write(
+            f"STAGE name=connect elapsed_ms=64 since_start_ms=64 ts={BASE_MS}\n"
+            f"STAGE name=connected elapsed_ms=4723 since_start_ms=4787 ts={BASE_MS + 4723}\n"
+            + "diagnostic filler\n" * 600
+            + "PHASE=result_delivery_complete\n"
+        )
+        report = stall_report(self.directory, now=at(100))
+        self.assertEqual(report["stage"], "result_delivery_complete")
+        self.assertIsNone(report["sub_stage"])
+        self.assertIsNone(report["idle_seconds"])
+        self.assertEqual(report["connect_timing"]["connected"]["elapsed_ms"], 4723)
+        self.assertEqual(report["reason"], "no_current_stage_timing")
+
+    def test_head_connect_does_not_override_later_tail_stage(self):
+        self.write(
+            f"STAGE name=connect elapsed_ms=1 since_start_ms=1 ts={BASE_MS}\n"
+            + "diagnostic filler\n" * 600
+            + "PHASE=verify_model\n"
+            + f"STAGE name=verify_model_save elapsed_ms=7 since_start_ms=9000 ts={BASE_MS + 9000}\n"
+        )
+        report = stall_report(self.directory, now=at(10))
+        self.assertEqual(report["sub_stage"], "verify_model_save")
+        self.assertEqual(report["idle_seconds"], 1.0)
+        self.assertEqual(report["connect_timing"]["connect"]["elapsed_ms"], 1)
+
+    def test_later_phase_clears_earlier_substage(self):
+        self.write(
+            "PHASE=connect\n"
+            + f"STAGE name=connected elapsed_ms=4 since_start_ms=5 ts={BASE_MS}\n"
+            + "PHASE=rollback_to_saved_checkpoint\n"
+        )
+        report = stall_report(self.directory, now=at(10))
+        self.assertEqual(report["stage"], "rollback_to_saved_checkpoint")
+        self.assertIsNone(report["sub_stage"])
+        self.assertIsNone(report["idle_seconds"])
+        self.assertEqual(report["connect_timing"]["connected"]["elapsed_ms"], 4)
+
+    def test_same_phase_repeated_does_not_clear_substage(self):
+        self.write(
+            "PHASE=verify_model\n"
+            + f"STAGE name=verify_model_save elapsed_ms=4 since_start_ms=5 ts={BASE_MS}\n"
+            + "PHASE=verify_model\n"
+        )
+        report = stall_report(self.directory, now=at(10))
+        self.assertEqual(report["sub_stage"], "verify_model_save")
+
+    def test_head_boundary_discards_partial_connect_marker(self):
+        marker = f"STAGE name=connected elapsed_ms=4 since_start_ms=5 ts={BASE_MS}"
+        self.write("x" * (4096 - len(marker) + 5) + marker + "\nPHASE=failed\n" + "x\n" * 5000)
+        report = stall_report(self.directory, now=at(10))
+        self.assertEqual(report["connect_timing"], {})
+
+    def test_tail_start_discards_partial_marker(self):
+        marker = f"STAGE name=verify_model_save elapsed_ms=4 since_start_ms=5 ts={BASE_MS}\n"
+        self.write("PHASE=verify_model\n" + "x" * 300 + marker + "x\n" * 5000)
+        # Force the read window to begin exactly at the marker's S, while the
+        # preceding byte belongs to the unfinished diagnostic line.
+        raw = (self.directory / "native.log").read_bytes()
+        start = raw.index(b"STAGE name=verify_model_save")
+        report = stall_report(self.directory, tail_bytes=len(raw) - start, now=at(10))
+        self.assertIsNone(report["sub_stage"])
+
     def test_partial_trailing_line_is_ignored(self):
         self.write(
             "PHASE=verify_model\n"

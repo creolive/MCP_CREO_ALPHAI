@@ -325,3 +325,7 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 ## 2026-11-07 离线接续（未发布）
 
 DEV-071补齐aliases-only的miter_cuts/adjacent_bend_ends_allowed到公开操作回执：新收尾及历史受控sidecar只读投影，compact/full/sections同源。回执保留dict，缺字段不伪造成功。原生切角语义不变。 见[DEV-071](DEV-071.md)与[三件反馈映射](../validation/feedback-0.16.0-2026-11-07/MAPPING.md)。
+
+## 2026-11-07 DEV-074 反馈对照（离线）
+
+0.17.4 四份外部 Creo 10 报告与当前代码已逐项对照。已有正证据、此次离线增量和未完成边界见 [MAPPING](../validation/feedback-0.17.4-2026-11-07/MAPPING.md) 与 [接手清单](../development/DEV-074-HANDOFF.md)。本轮未连接 Creo；不以离线编译/单元测试关闭原生几何或保存重载验收，不改变历史证据结论。
