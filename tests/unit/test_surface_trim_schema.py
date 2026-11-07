@@ -117,6 +117,66 @@ class SurfaceTrimSchemaTests(unittest.TestCase):
                 ]
             )
 
+    def test_rejects_all_new_same_plan_fill_trim_thicken_chain(self):
+        # BUG-115 (live 2026-11-06, 3/3): when the trim's own target quilt is
+        # created in the same plan, thicken fails with
+        # ProFeatureGeomitemVisit(PRO_QUILT) -4 before the chain regenerates. The
+        # plan is refused before a job exists and names the executable split.
+        with self.assertRaisesRegex(ValueError, "BUG-115"):
+            validate_operations(
+                [
+                    {"op": "surface_fill", "label": "base_fill", "sketch": "sk"},
+                    trim_operation(target={"kind": "quilt_feature", "label": "base_fill"}),
+                    {
+                        "op": "thicken",
+                        "label": "wall",
+                        "reference": {"kind": "quilt_feature", "label": "trim_main"},
+                        "thickness": 2.0,
+                    },
+                ]
+            )
+
+    def test_allows_trim_of_an_older_quilt_then_thicken_in_one_plan(self):
+        # The proven working projected_dependency route: the trim target already
+        # exists, so only the trim and the thicken are new in this plan.
+        validated = validate_operations(
+            [
+                trim_operation(target={"kind": "quilt", "id": 12}),
+                {
+                    "op": "thicken",
+                    "label": "wall",
+                    "reference": {"kind": "quilt_feature", "label": "trim_main"},
+                    "thickness": 2.0,
+                },
+            ]
+        )
+        self.assertEqual([op["op"] for op in validated], ["surface_trim", "thicken"])
+
+    def test_same_plan_trim_guard_does_not_block_other_producers(self):
+        # A fill created in the same plan and an explicit quilt id stay accepted.
+        validated = validate_operations(
+            [
+                {
+                    "op": "surface_fill",
+                    "label": "base_fill",
+                    "sketch": "sk",
+                },
+                {
+                    "op": "thicken",
+                    "label": "wall",
+                    "reference": {"kind": "quilt_feature", "label": "base_fill"},
+                    "thickness": 2.0,
+                },
+                {
+                    "op": "thicken",
+                    "label": "wall_by_id",
+                    "reference": {"kind": "quilt", "id": 12},
+                    "thickness": 2.0,
+                },
+            ]
+        )
+        self.assertEqual([op["op"] for op in validated], ["surface_fill", "thicken", "thicken"])
+
     def test_surface_trim_is_published_after_live_evidence(self):
         # 2026-11-04 live (Creo 12.4.0.0): both keep_side values built, saved and
         # reloaded. The retained side is the tool plane's +normal side for "one"

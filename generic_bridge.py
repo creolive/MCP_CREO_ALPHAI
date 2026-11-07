@@ -237,7 +237,16 @@ def submit(
                     "Provide expected_revision from creo_inspect_model to prevent stale edits"
                 )
             if expected_revision is not None and expected_revision != model["revision"]:
-                raise ValueError(f"Stale revision: current model revision is {model['revision']}")
+                # FEAT-005: name both sides and the model so the caller can tell
+                # which version it lost without a second inspect. The request is
+                # still refused before any job exists.
+                raise ValueError(
+                    "Stale revision: "
+                    f"model_id={model_id} "
+                    f"current_revision={model['revision']} "
+                    f"expected_revision={expected_revision}; "
+                    "no job was created"
+                )
             if not readonly:
                 from creo_mechdog.reconciliation import validate_baseline
 

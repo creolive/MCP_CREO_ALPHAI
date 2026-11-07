@@ -422,7 +422,11 @@ class RegistryJobs(RegistryFixture, unittest.TestCase):
         with patch.object(bridge.subprocess, "run", side_effect=self.worker(created)):
             bridge.run_job(created["job_id"])
         mid = created["model_id"]
-        with self.assertRaisesRegex(ValueError, "Stale revision"):
+        with self.assertRaisesRegex(
+            ValueError,
+            rf"Stale revision: model_id={mid} current_revision=1 "
+            r"expected_revision=0; no job was created",
+        ):
             self.submit(model_id=mid, expected_revision=0)
         for readonly, success, rollback, missing, expected_status in (
             (False, True, False, False, "succeeded"),
