@@ -1,0 +1,493 @@
+{
+  "generated_at": "2026-11-08T00:50:25",
+  "cases": {
+    "C1": {
+      "case": "C1_quilt_surface_round",
+      "build": "succeeded",
+      "before": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 4,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62
+            ],
+            "area_mm2": 1200.0,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      },
+      "surface_ids": [
+        68,
+        66,
+        64,
+        62
+      ],
+      "pair": [
+        68,
+        66
+      ],
+      "round": {
+        "submitted": {
+          "job_id": "d567f5d8933b4fb8a716f952773b94a9",
+          "message": "Poll creo_get_job with this job_id; do not resubmit the operation"
+        },
+        "job_status": "succeeded",
+        "message": "General feature plan completed",
+        "operation": {
+          "effect_status": "committed",
+          "execution_status": "succeeded",
+          "index": 0,
+          "label": "h08_quilt_round_0",
+          "material_delta_mm3": null,
+          "material_measurement": {
+            "after_query_code": 0,
+            "before_query_code": 0,
+            "status": "not_applicable"
+          },
+          "op": "round",
+          "reference_application": {
+            "applied_set_count": 1,
+            "query_code": 0,
+            "requested_set_count": 1,
+            "source": "feature_tree"
+          },
+          "size": 3.0,
+          "succeeded": true,
+          "volume_after_mm3": null,
+          "volume_before_mm3": null
+        },
+        "saved_verified": true
+      },
+      "after": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 5,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62,
+              79
+            ],
+            "area_mm2": 1187.1238898038469,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                -3.552713678800501e-15
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      }
+    },
+    "C2": {
+      "case": "C2_quilt_surface_round",
+      "build": "succeeded",
+      "before": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 4,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62
+            ],
+            "area_mm2": 1200.0,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      },
+      "surface_ids": [
+        68,
+        66,
+        64,
+        62
+      ],
+      "pair": [
+        66,
+        64
+      ],
+      "round": {
+        "submitted": {
+          "job_id": "03cfba97ec4a4e099e7fcfb1871d079d",
+          "message": "Poll creo_get_job with this job_id; do not resubmit the operation"
+        },
+        "job_status": "succeeded",
+        "message": "General feature plan completed",
+        "operation": {
+          "effect_status": "committed",
+          "execution_status": "succeeded",
+          "index": 0,
+          "label": "h08_quilt_round_1",
+          "material_delta_mm3": null,
+          "material_measurement": {
+            "after_query_code": 0,
+            "before_query_code": 0,
+            "status": "not_applicable"
+          },
+          "op": "round",
+          "reference_application": {
+            "applied_set_count": 1,
+            "query_code": 0,
+            "requested_set_count": 1,
+            "source": "feature_tree"
+          },
+          "size": 3.0,
+          "succeeded": true,
+          "volume_after_mm3": null,
+          "volume_before_mm3": null
+        },
+        "saved_verified": true
+      },
+      "after": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 5,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62,
+              79
+            ],
+            "area_mm2": 1187.1238898038469,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      }
+    },
+    "C5": {
+      "case": "C5_quilt_non_adjacent_pair",
+      "build": "succeeded",
+      "before": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 4,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62
+            ],
+            "area_mm2": 1200.0,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      },
+      "surface_ids": [
+        68,
+        66,
+        64,
+        62
+      ],
+      "pair": [
+        68,
+        64
+      ],
+      "round": {
+        "submitted": {
+          "job_id": "495d56bdf364490bba9443065ea2d52e",
+          "message": "Poll creo_get_job with this job_id; do not resubmit the operation"
+        },
+        "job_status": "failed",
+        "message": "Regeneration produced a failed, suppressed or incomplete feature",
+        "operation": {
+          "effect_status": "rolled_back",
+          "execution_status": "failed",
+          "index": 0,
+          "label": "h08_quilt_round_0",
+          "material_delta_mm3": null,
+          "material_measurement": {
+            "after_query_code": null,
+            "before_query_code": 0,
+            "status": "unknown"
+          },
+          "op": "round",
+          "succeeded": false,
+          "volume_after_mm3": null,
+          "volume_before_mm3": 0.0
+        },
+        "saved_verified": false
+      },
+      "after": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 70,
+            "face_count": 4,
+            "surface_ids": [
+              68,
+              66,
+              64,
+              62
+            ],
+            "area_mm2": 1200.0,
+            "closed": false,
+            "bbox_mm": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "edge_count": 0
+      }
+    },
+    "C0": {
+      "case": "C0_solid_edge_round_control",
+      "build": "succeeded",
+      "edges_total": 12,
+      "edges_with_two_faces": 12,
+      "before": {
+        "quilt_count": 0,
+        "quilts": [],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": 52,
+            "surface_count": 6,
+            "bbox": [
+              [
+                -3.766705551177478e-49,
+                0.0,
+                0.0
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "surface_count": 6,
+        "edge_count": 12
+      },
+      "edge": {
+        "adjacent_surfaces": [
+          53,
+          63
+        ],
+        "end": [
+          40.0,
+          1.882820214045141e-31,
+          0.0
+        ],
+        "id": 54,
+        "start": [
+          -3.766705551177478e-49,
+          1.882820214045141e-31,
+          0.0
+        ],
+        "type": 2
+      },
+      "round": {
+        "submitted": {
+          "job_id": "621d9573d5e64540a43138f04e308733",
+          "message": "Poll creo_get_job with this job_id; do not resubmit the operation"
+        },
+        "job_status": "succeeded",
+        "message": "General feature plan completed",
+        "operation": {
+          "effect_status": "committed",
+          "execution_status": "succeeded",
+          "index": 0,
+          "label": "h08_solid_round",
+          "material_delta_mm3": -77.25666699319936,
+          "material_measurement": {
+            "after_query_code": 0,
+            "before_query_code": 0,
+            "status": "measured"
+          },
+          "op": "round",
+          "reference_application": {
+            "applied_set_count": 1,
+            "query_code": 0,
+            "requested_set_count": 1,
+            "source": "feature_tree"
+          },
+          "size": 3.0,
+          "succeeded": true,
+          "volume_after_mm3": 7922.7433330068,
+          "volume_before_mm3": 7999.999999999999
+        },
+        "saved_verified": true
+      },
+      "after": {
+        "quilt_count": 0,
+        "quilts": [],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": 52,
+            "surface_count": 7,
+            "bbox": [
+              [
+                -3.766705551177478e-49,
+                -4.182225176879826e-21,
+                -4.182225177068108e-21
+              ],
+              [
+                40.0,
+                20.0,
+                10.0
+              ]
+            ]
+          }
+        ],
+        "surface_count": 7,
+        "edge_count": 15
+      }
+    }
+  },
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available"
+  },
+  "jobs": [
+    "08e1345b254b4e6c86c0add55583b7df",
+    "d567f5d8933b4fb8a716f952773b94a9",
+    "27b7f03d29ba40c08299c121f3dd88a1",
+    "03cfba97ec4a4e099e7fcfb1871d079d",
+    "2d0633289fd344649505cfb94d9dccdc",
+    "495d56bdf364490bba9443065ea2d52e",
+    "db7bc6b2cc124a5c8035190c2ba1dd2a",
+    "621d9573d5e64540a43138f04e308733"
+  ]
+}

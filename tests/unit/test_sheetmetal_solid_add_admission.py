@@ -57,6 +57,11 @@ class SolidAddOnSheetmetalTest(unittest.TestCase):
         self.assertIn("new_body=true", problem)
         self.assertIn("boss_add", problem)
         self.assertIn("ProFeatureWithoptionsCreate", problem)
+        # FEAT-014 H05 (Creo 12.4.0.0, 2026-11-07): the new_body escape hatch is a
+        # separate body, not attached material - union into the sheetmetal body
+        # returns -1 and the reverse union consumes the sheetmetal body.
+        self.assertIn("union", problem)
+        self.assertIn("Creo 10 is untested", problem)
 
     def test_cut_surface_thin_and_new_body_are_not_blocked(self) -> None:
         for operation in (

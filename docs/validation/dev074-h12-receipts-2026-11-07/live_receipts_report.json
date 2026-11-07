@@ -1,0 +1,2899 @@
+{
+  "run_id": "20261108T002653_283",
+  "mode": "live",
+  "started_at": "2026-11-07T16:26:53.283540+00:00",
+  "calls": [
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:26:53.412570+00:00"
+    },
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:26:55.420665+00:00"
+    },
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:26:57.436502+00:00"
+    },
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:26:59.485848+00:00"
+    },
+    {
+      "tool": "creo_session_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:04.401910+00:00"
+    },
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:04.406000+00:00"
+    },
+    {
+      "tool": "creo_startup_status",
+      "arguments": {},
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:36.457088+00:00"
+    },
+    {
+      "tool": "creo_new_part",
+      "arguments": {
+        "model_name": "h12_empty_part_56463"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:36.552830+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:36.559858+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:38.565103+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:40.578844+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:42.597270+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:27:44.614962+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:44.651903+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:44.678774+00:00"
+    },
+    {
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "operations": [
+          {
+            "op": "sketch",
+            "label": "h12_chain_profile",
+            "plane": "XY",
+            "entities": [
+              {
+                "type": "rectangle",
+                "name": "rect",
+                "min": [
+                  0.0,
+                  0.0
+                ],
+                "max": [
+                  40.0,
+                  20.0
+                ]
+              }
+            ]
+          },
+          {
+            "op": "surface_fill",
+            "label": "h12_chain_base",
+            "sketch": "h12_chain_profile"
+          },
+          {
+            "op": "datum_plane",
+            "label": "h12_chain_cut",
+            "reference": {
+              "kind": "datum_plane",
+              "axis": "x",
+              "offset": 0
+            },
+            "offset": 5.0
+          },
+          {
+            "op": "surface_trim",
+            "label": "h12_chain_trim",
+            "target": {
+              "kind": "quilt_feature",
+              "label": "h12_chain_base"
+            },
+            "tool": {
+              "kind": "datum_plane",
+              "label": "h12_chain_cut"
+            },
+            "keep_side": "one"
+          },
+          {
+            "op": "thicken",
+            "label": "h12_chain_solid",
+            "reference": {
+              "kind": "quilt_feature",
+              "label": "h12_chain_trim"
+            },
+            "thickness": 2.0,
+            "side": "symmetric"
+          }
+        ],
+        "model_id": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+        "expected_revision": 1
+      },
+      "is_error": true,
+      "status": null,
+      "at": "2026-11-07T16:27:44.682939+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:44.709715+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:27:44.745973+00:00"
+    },
+    {
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "operations": [
+          {
+            "op": "sketch",
+            "label": "h12_fill_profile",
+            "plane": "XY",
+            "entities": [
+              {
+                "type": "rectangle",
+                "name": "rect",
+                "min": [
+                  0.0,
+                  0.0
+                ],
+                "max": [
+                  60.0,
+                  40.0
+                ]
+              }
+            ]
+          },
+          {
+            "op": "surface_fill",
+            "label": "h12_fill_base",
+            "sketch": "h12_fill_profile"
+          },
+          {
+            "op": "thicken",
+            "label": "h12_fill_solid",
+            "reference": {
+              "kind": "quilt_feature",
+              "label": "h12_fill_base"
+            },
+            "thickness": 2.0,
+            "side": "symmetric"
+          }
+        ],
+        "model_id": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+        "expected_revision": 1,
+        "assertions": {
+          "require_solid": true
+        }
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:44.815942+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:44.823090+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:46.832935+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:48.838363+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:50.858458+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:52.865255+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:27:54.879024+00:00"
+    },
+    {
+      "tool": "creo_new_assembly",
+      "arguments": {
+        "model_name": "h12_empty_asm_74886"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:54.966111+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:27:54.973070+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:56.984017+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:27:58.995869+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:01.006260+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:28:03.018221+00:00"
+    },
+    {
+      "tool": "creo_new_sheetmetal",
+      "arguments": {
+        "model_name": "h12_sheet_83034",
+        "template": "native_planar"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:03.113710+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4f4a89dd00f48c8b4cf07a551194fd7",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:03.119872+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4f4a89dd00f48c8b4cf07a551194fd7",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:05.133531+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4f4a89dd00f48c8b4cf07a551194fd7",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:07.142562+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4f4a89dd00f48c8b4cf07a551194fd7",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:09.150427+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "e4f4a89dd00f48c8b4cf07a551194fd7",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:28:11.156493+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:28:11.191759+00:00"
+    },
+    {
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "operations": [
+          {
+            "op": "sheetmetal_planar_wall",
+            "label": "h12_wall",
+            "plane": "XY",
+            "length": 100.0,
+            "width": 60.0,
+            "thickness": 1.0,
+            "direction": "positive",
+            "origin": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "model_id": "9903555ab21c403893ee516b2bcda0cf",
+        "expected_revision": 1
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:11.263923+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:11.272969+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:13.289040+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:15.308793+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:17.314949+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:19.336030+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:28:21.357711+00:00"
+    },
+    {
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "operations": [
+          {
+            "op": "resize_sheetmetal_planar_wall",
+            "feature": "h12_wall",
+            "length": 120.0,
+            "width": 80.0
+          }
+        ],
+        "model_id": "9903555ab21c403893ee516b2bcda0cf",
+        "expected_revision": 2
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:21.447188+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:21.456403+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:23.476108+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:25.486642+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:27.496334+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:28:29.517003+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "succeeded",
+      "at": "2026-11-07T16:28:29.522063+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:28:29.567724+00:00"
+    },
+    {
+      "tool": "creo_execute_plan",
+      "arguments": {
+        "operations": [
+          {
+            "op": "resize_sheetmetal_planar_wall",
+            "feature": "h12_wall",
+            "length": 0.001,
+            "width": 20.0
+          }
+        ],
+        "model_id": "9903555ab21c403893ee516b2bcda0cf",
+        "expected_revision": 3
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:29.633799+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "641490319ba1495c98e9d9cb89d55685",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:29.641792+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "641490319ba1495c98e9d9cb89d55685",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:31.656377+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "641490319ba1495c98e9d9cb89d55685",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:33.663536+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "641490319ba1495c98e9d9cb89d55685",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:35.682955+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "641490319ba1495c98e9d9cb89d55685",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "failed",
+      "at": "2026-11-07T16:28:37.701218+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:28:37.737029+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:28:37.766101+00:00"
+    },
+    {
+      "tool": "creo_sheetmetal_flange",
+      "arguments": {
+        "model_id": "9903555ab21c403893ee516b2bcda0cf",
+        "expected_revision": 3,
+        "label": "h12_flange_bad_edge",
+        "edge": {
+          "kind": "edge_geometry",
+          "endpoints_mm": [
+            [
+              1000.0,
+              1000.0,
+              1000.0
+            ],
+            [
+              1001.0,
+              1001.0,
+              1001.0
+            ]
+          ],
+          "tolerance_mm": 1e-06
+        },
+        "height": 10.0
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:37.842925+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "queued",
+      "at": "2026-11-07T16:28:37.851196+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:39.860128+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:41.871734+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "running",
+      "at": "2026-11-07T16:28:43.882651+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "failed",
+      "at": "2026-11-07T16:28:45.896764+00:00"
+    },
+    {
+      "tool": "creo_get_job",
+      "arguments": {
+        "job_id": "712c6ffbc4204957950341c2248e4f66",
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": "failed",
+      "at": "2026-11-07T16:28:45.903071+00:00"
+    },
+    {
+      "tool": "creo_list_models",
+      "arguments": {
+        "limit": 50,
+        "detail": "compact"
+      },
+      "is_error": false,
+      "status": null,
+      "at": "2026-11-07T16:28:45.934246+00:00"
+    }
+  ],
+  "cases": {
+    "startup_snapshot": {
+      "first": {
+        "launch_reserved": false,
+        "launch_attempt": 50,
+        "auto_start_enabled": false,
+        "selected_session_configured": false,
+        "coordination_error": null,
+        "launch_state_known": true,
+        "automatic_launch_allowed": false,
+        "state": "ready",
+        "phase": "ready",
+        "connected": true,
+        "message": "Toolkit connection verified",
+        "retry_allowed": false,
+        "retry_id": "1af87a7f7622",
+        "started_at": "2026-11-07T16:26:53.163844+00:00",
+        "deadline_at": null,
+        "phase_deadline_at": null,
+        "failure_code": null,
+        "terminal_reason": null,
+        "retry_blocked_by": null,
+        "budget_scope": "total",
+        "phase_budget_scope": "phase",
+        "next_allowed_retry_at": null,
+        "next_allowed_retry_reason": "No retry is needed while state=ready; readiness is never rechecked automatically.",
+        "updated_at": "2026-11-07T16:27:04.398904+00:00",
+        "coordinator_pid": 6908,
+        "native": {
+          "connected": true,
+          "connection_state": "connected",
+          "toolkit_code": 0,
+          "current_model": "",
+          "current_model_code": -8,
+          "name_read_code": 0,
+          "model_type": -1,
+          "release_numeric": 44,
+          "disconnect_code": 0,
+          "feature_creation_license": "requires_actual_modeling_test",
+          "worker_exit_code": 0
+        },
+        "verified_at": "2026-11-07T16:27:04.398904+00:00",
+        "snapshot": true,
+        "verification_age_seconds": 0.005982,
+        "stale": false,
+        "coordinator_running": false,
+        "connection_verification": "recent_snapshot",
+        "current_connected": true,
+        "remaining_budget_seconds": null,
+        "phase_remaining_budget_seconds": null,
+        "budget_active": false,
+        "update": {
+          "status": "up_to_date",
+          "current_version": "0.18.3",
+          "latest_version": "0.18.3",
+          "is_prerelease": false,
+          "release_url": "https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.18.3",
+          "download_url": "https://github.com/wudahua/MCP_CREO_MechDog/releases/download/v0.18.3/MCP_CREO_MechDog-0.18.3-source.zip",
+          "checked_at": "2026-11-07T16:26:56.440753+00:00",
+          "last_success_at": "2026-11-07T16:26:56.440753+00:00",
+          "message": "当前版本已是最高可比较的公开版本。",
+          "error": null,
+          "in_flight": false,
+          "last_completed_status": "up_to_date",
+          "network_timeout_seconds": 5.0,
+          "cache_age_seconds": 7.953000000001339,
+          "retry_after_at": null,
+          "from_cache": true,
+          "stale": false
+        },
+        "session_health": {
+          "status": "no_failure_observed",
+          "reason": "recent_verified_save",
+          "evaluated_at": "2026-11-07T16:27:04.404886+00:00",
+          "observed_at": "2026-11-07T16:26:59.129768+00:00",
+          "evidence_age_seconds": 5,
+          "freshness_window_seconds": 600,
+          "path": "local_evidence",
+          "path_note": "This default health path reads persisted job/probe evidence only: no Toolkit connection, no channel lock, no process or window probe. A current connection requires the separate explicit creo_session_status call.",
+          "session": {
+            "identity": "16223614089663199941",
+            "identity_source": "recorded",
+            "identity_observed_at": "2026-11-07T16:25:33.102946+00:00",
+            "identity_age_seconds": 91,
+            "identity_stale": false,
+            "changed": true,
+            "sessions_observed": 2
+          },
+          "facts": {
+            "last_connection": {
+              "outcome": "connected",
+              "at": "2026-11-07T16:26:59.129768+00:00",
+              "age_seconds": 5,
+              "stale": false,
+              "source": "toolkit_probe",
+              "job_id": null,
+              "model_id": null,
+              "connection_state": "connected",
+              "toolkit_code": 0,
+              "worker_exit_code": 0,
+              "session_source": "attributed"
+            },
+            "last_save": {
+              "outcome": "not_attempted",
+              "at": "2026-11-07T16:25:33.102946+00:00",
+              "age_seconds": 91,
+              "stale": false,
+              "source": "recorded_job",
+              "job_id": "1e5a4de4411a4480b06387d8cde30bf1",
+              "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+              "job_status": "failed",
+              "job_kind": "generic",
+              "saved_file_reloaded_and_verified": false,
+              "failed_stage": "execute_sheetmetal_flange",
+              "failed_toolkit_call": null,
+              "session_source": "recorded",
+              "current_session": true
+            },
+            "historic_saves": [
+              {
+                "outcome": "not_attempted",
+                "at": "2026-11-07T16:25:25.202310+00:00",
+                "age_seconds": 99,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "9ad83fb478854c97ba6ad8302a996ccb",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "failed",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": false,
+                "failed_stage": "execute_resize_sheetmetal_planar_wall",
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:25:17.611760+00:00",
+                "age_seconds": 106,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "d5cf40b2e58246d8a56705a74687cd52",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:25:08.881502+00:00",
+                "age_seconds": 115,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "8dc27a50f0a84d9083a173d2b5a71325",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:24:57.759447+00:00",
+                "age_seconds": 126,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "bc4a31526ef04c17a0f3e63f6506bcee",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:24:49.535989+00:00",
+                "age_seconds": 134,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "2adb9faee7784164b3ec141e01dec1ce",
+                "model_id": "d2284ea699394deea1b3eeb468ea761d",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              }
+            ],
+            "recent_saves": {
+              "succeeded": 6,
+              "failed": 0,
+              "unknown": 0,
+              "not_attempted": 2
+            },
+            "worker": {
+              "available": true,
+              "path": "build/creo_worker.exe",
+              "updated_at": "2026-11-07T14:00:42.609774+00:00",
+              "age_seconds": 8781,
+              "causality": "suspected_only",
+              "note": "A rebuild or worker replacement that coincides with a session failure is only suspected; this file time cannot prove the failure cause."
+            },
+            "channel": {
+              "busy": false,
+              "owner": null,
+              "source": "owner_record"
+            }
+          },
+          "damage_signals": [],
+          "historic_damage_signals": [
+            {
+              "kind": "unknown_outcome_protection",
+              "at": "2026-11-07T13:47:07.562402+00:00",
+              "age_seconds": 9596,
+              "stale": true,
+              "source": "attributed",
+              "job_id": "9b64c0fb330b49a285200d286934bc06",
+              "model_id": "35576f451b504977a5cb8ebe863d71d6",
+              "job_status": "unknown_outcome",
+              "failed_stage": null,
+              "failed_toolkit_call": null,
+              "session_source": "attributed",
+              "current_session": false
+            }
+          ],
+          "next_steps": [
+            {
+              "step": "keep-evidence",
+              "action": "Keep the job record until the saved model is verified",
+              "detail": "Poll the accepted job; saved_file_reloaded_and_verified is the proof of a save, not the job status alone."
+            },
+            {
+              "step": "verify-next-save",
+              "action": "Treat the next save as unproven",
+              "detail": "A successful connection or an earlier save never proves the next Backup succeeds. This label only reports that no save failure was recorded for the observed session in the last 10 minutes."
+            },
+            {
+              "step": "recover",
+              "action": "If a job is unconfirmed, follow its recorded recovery evidence",
+              "tool": "creo_get_job",
+              "detail": "Read status, failure_phase and recovery first, then inspect the model with creo_reconcile_model. Do not replay an unknown_outcome job."
+            },
+            {
+              "step": "escalate",
+              "action": "If a save now fails, stop and preserve the scene",
+              "detail": "Do not retry, delay or switch save paths; record the job, native log and evidence for BUG-078, then use the recovery inspection."
+            }
+          ],
+          "caveats": [
+            "This summary is built from already recorded execution results; it opens no Toolkit connection and runs no probe.",
+            "Absence of a recorded failure is not a health guarantee and never authorizes clearing an unknown protection.",
+            "A worker rebuild or replacement that coincides with a session failure is only a suspected correlation; the worker file time proves neither the cause nor the ordering.",
+            "A verified save or a successful connection does not prove that the next save or Backup will succeed."
+          ],
+          "evidence": {
+            "jobs_scanned": 113,
+            "jobs_unreadable": 0,
+            "jobs_skipped": 0,
+            "sources": [
+              "jobs/*/job.json",
+              "build/toolkit_health.json"
+            ],
+            "problems": []
+          },
+          "read_only": true,
+          "toolkit_connections": 0,
+          "guarantee": "evidence_only"
+        }
+      },
+      "after_freshness_window": {
+        "launch_reserved": false,
+        "launch_attempt": 50,
+        "auto_start_enabled": false,
+        "selected_session_configured": false,
+        "coordination_error": null,
+        "launch_state_known": true,
+        "automatic_launch_allowed": false,
+        "state": "ready",
+        "phase": "ready",
+        "connected": true,
+        "message": "Startup snapshot expired; current connection is unverified. state/connected describe the last verification only. Use creo_session_status for an explicit current check.",
+        "retry_allowed": false,
+        "retry_id": "1af87a7f7622",
+        "started_at": "2026-11-07T16:26:53.163844+00:00",
+        "deadline_at": null,
+        "phase_deadline_at": null,
+        "failure_code": null,
+        "terminal_reason": null,
+        "retry_blocked_by": null,
+        "budget_scope": "total",
+        "phase_budget_scope": "phase",
+        "next_allowed_retry_at": null,
+        "next_allowed_retry_reason": "No retry is needed while state=ready; readiness is never rechecked automatically.",
+        "updated_at": "2026-11-07T16:27:04.398904+00:00",
+        "coordinator_pid": 6908,
+        "native": {
+          "connected": true,
+          "connection_state": "connected",
+          "toolkit_code": 0,
+          "current_model": "",
+          "current_model_code": -8,
+          "name_read_code": 0,
+          "model_type": -1,
+          "release_numeric": 44,
+          "disconnect_code": 0,
+          "feature_creation_license": "requires_actual_modeling_test",
+          "worker_exit_code": 0
+        },
+        "verified_at": "2026-11-07T16:27:04.398904+00:00",
+        "snapshot": true,
+        "verification_age_seconds": 32.020241,
+        "stale": true,
+        "coordinator_running": false,
+        "connection_verification": "unverified_stale_snapshot",
+        "current_connected": null,
+        "remaining_budget_seconds": null,
+        "phase_remaining_budget_seconds": null,
+        "budget_active": false,
+        "update": {
+          "status": "up_to_date",
+          "current_version": "0.18.3",
+          "latest_version": "0.18.3",
+          "is_prerelease": false,
+          "release_url": "https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.18.3",
+          "download_url": "https://github.com/wudahua/MCP_CREO_MechDog/releases/download/v0.18.3/MCP_CREO_MechDog-0.18.3-source.zip",
+          "checked_at": "2026-11-07T16:26:56.440753+00:00",
+          "last_success_at": "2026-11-07T16:26:56.440753+00:00",
+          "message": "当前版本已是最高可比较的公开版本。",
+          "error": null,
+          "in_flight": false,
+          "last_completed_status": "up_to_date",
+          "network_timeout_seconds": 5.0,
+          "cache_age_seconds": 39.96899999999732,
+          "retry_after_at": null,
+          "from_cache": true,
+          "stale": false
+        },
+        "session_health": {
+          "status": "no_failure_observed",
+          "reason": "recent_verified_save",
+          "evaluated_at": "2026-11-07T16:27:36.419145+00:00",
+          "observed_at": "2026-11-07T16:27:04.396400+00:00",
+          "evidence_age_seconds": 32,
+          "freshness_window_seconds": 600,
+          "path": "local_evidence",
+          "path_note": "This default health path reads persisted job/probe evidence only: no Toolkit connection, no channel lock, no process or window probe. A current connection requires the separate explicit creo_session_status call.",
+          "session": {
+            "identity": "16223614089663199941",
+            "identity_source": "recorded",
+            "identity_observed_at": "2026-11-07T16:25:33.102946+00:00",
+            "identity_age_seconds": 123,
+            "identity_stale": false,
+            "changed": true,
+            "sessions_observed": 2
+          },
+          "facts": {
+            "last_connection": {
+              "outcome": "connected",
+              "at": "2026-11-07T16:27:04.396400+00:00",
+              "age_seconds": 32,
+              "stale": false,
+              "source": "toolkit_probe",
+              "job_id": null,
+              "model_id": null,
+              "connection_state": "connected",
+              "toolkit_code": 0,
+              "worker_exit_code": 0,
+              "session_source": "attributed"
+            },
+            "last_save": {
+              "outcome": "not_attempted",
+              "at": "2026-11-07T16:25:33.102946+00:00",
+              "age_seconds": 123,
+              "stale": false,
+              "source": "recorded_job",
+              "job_id": "1e5a4de4411a4480b06387d8cde30bf1",
+              "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+              "job_status": "failed",
+              "job_kind": "generic",
+              "saved_file_reloaded_and_verified": false,
+              "failed_stage": "execute_sheetmetal_flange",
+              "failed_toolkit_call": null,
+              "session_source": "recorded",
+              "current_session": true
+            },
+            "historic_saves": [
+              {
+                "outcome": "not_attempted",
+                "at": "2026-11-07T16:25:25.202310+00:00",
+                "age_seconds": 131,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "9ad83fb478854c97ba6ad8302a996ccb",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "failed",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": false,
+                "failed_stage": "execute_resize_sheetmetal_planar_wall",
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:25:17.611760+00:00",
+                "age_seconds": 138,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "d5cf40b2e58246d8a56705a74687cd52",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:25:08.881502+00:00",
+                "age_seconds": 147,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "8dc27a50f0a84d9083a173d2b5a71325",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:24:57.759447+00:00",
+                "age_seconds": 158,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "bc4a31526ef04c17a0f3e63f6506bcee",
+                "model_id": "6167320c44f740f492a3c1d985e7ffdc",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              },
+              {
+                "outcome": "succeeded",
+                "at": "2026-11-07T16:24:49.535989+00:00",
+                "age_seconds": 166,
+                "stale": false,
+                "source": "recorded_job",
+                "job_id": "2adb9faee7784164b3ec141e01dec1ce",
+                "model_id": "d2284ea699394deea1b3eeb468ea761d",
+                "job_status": "succeeded",
+                "job_kind": "generic",
+                "saved_file_reloaded_and_verified": true,
+                "failed_stage": null,
+                "failed_toolkit_call": null,
+                "session_source": "recorded",
+                "current_session": true
+              }
+            ],
+            "recent_saves": {
+              "succeeded": 6,
+              "failed": 0,
+              "unknown": 0,
+              "not_attempted": 2
+            },
+            "worker": {
+              "available": true,
+              "path": "build/creo_worker.exe",
+              "updated_at": "2026-11-07T14:00:42.609774+00:00",
+              "age_seconds": 8813,
+              "causality": "suspected_only",
+              "note": "A rebuild or worker replacement that coincides with a session failure is only suspected; this file time cannot prove the failure cause."
+            },
+            "channel": {
+              "busy": false,
+              "owner": null,
+              "source": "owner_record"
+            }
+          },
+          "damage_signals": [],
+          "historic_damage_signals": [
+            {
+              "kind": "unknown_outcome_protection",
+              "at": "2026-11-07T13:47:07.562402+00:00",
+              "age_seconds": 9628,
+              "stale": true,
+              "source": "attributed",
+              "job_id": "9b64c0fb330b49a285200d286934bc06",
+              "model_id": "35576f451b504977a5cb8ebe863d71d6",
+              "job_status": "unknown_outcome",
+              "failed_stage": null,
+              "failed_toolkit_call": null,
+              "session_source": "attributed",
+              "current_session": false
+            }
+          ],
+          "next_steps": [
+            {
+              "step": "keep-evidence",
+              "action": "Keep the job record until the saved model is verified",
+              "detail": "Poll the accepted job; saved_file_reloaded_and_verified is the proof of a save, not the job status alone."
+            },
+            {
+              "step": "verify-next-save",
+              "action": "Treat the next save as unproven",
+              "detail": "A successful connection or an earlier save never proves the next Backup succeeds. This label only reports that no save failure was recorded for the observed session in the last 10 minutes."
+            },
+            {
+              "step": "recover",
+              "action": "If a job is unconfirmed, follow its recorded recovery evidence",
+              "tool": "creo_get_job",
+              "detail": "Read status, failure_phase and recovery first, then inspect the model with creo_reconcile_model. Do not replay an unknown_outcome job."
+            },
+            {
+              "step": "escalate",
+              "action": "If a save now fails, stop and preserve the scene",
+              "detail": "Do not retry, delay or switch save paths; record the job, native log and evidence for BUG-078, then use the recovery inspection."
+            }
+          ],
+          "caveats": [
+            "This summary is built from already recorded execution results; it opens no Toolkit connection and runs no probe.",
+            "Absence of a recorded failure is not a health guarantee and never authorizes clearing an unknown protection.",
+            "A worker rebuild or replacement that coincides with a session failure is only a suspected correlation; the worker file time proves neither the cause nor the ordering.",
+            "A verified save or a successful connection does not prove that the next save or Backup will succeed."
+          ],
+          "evidence": {
+            "jobs_scanned": 113,
+            "jobs_unreadable": 0,
+            "jobs_skipped": 0,
+            "sources": [
+              "jobs/*/job.json",
+              "build/toolkit_health.json"
+            ],
+            "problems": []
+          },
+          "read_only": true,
+          "toolkit_connections": 0,
+          "guarantee": "evidence_only"
+        }
+      }
+    },
+    "preview_empty_part": {
+      "model_id": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+      "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+      "preview": {
+        "status": "skipped_no_geometry",
+        "path": null,
+        "bytes": null,
+        "file_verified": false,
+        "source": "native",
+        "codes": {
+          "display": null,
+          "window_get": null,
+          "window_model_get": null,
+          "current_set": null,
+          "current_get": null,
+          "activate": null,
+          "view_matrix_set": null,
+          "view_matrix_get": null,
+          "refit": null,
+          "refresh": null,
+          "repaint": null,
+          "raster": null
+        },
+        "failed_step": null,
+        "failed_code": null,
+        "file_check": null,
+        "datum_display": {
+          "model_type": "unknown",
+          "type_query_code": 0,
+          "applicable": false,
+          "attempted": false,
+          "hide_status": "not_attempted",
+          "restore_status": "not_attempted",
+          "options": [],
+          "config_file_written": false
+        },
+        "empty_geometry_basis": {
+          "feature_visit_code": 0,
+          "non_datum_feature_count": 0
+        },
+        "verification_error": null,
+        "window": -1,
+        "window_matches_model": false,
+        "current_window_matches": false,
+        "view_matrix_matches": false
+      }
+    },
+    "bug115_refusal": {
+      "is_error": true,
+      "has_job_id": false,
+      "message": "Error executing tool creo_execute_plan: operations[4].reference: thicken names quilt_feature 'h12_chain_trim' from operations[3], whose own target quilt 'h12_chain_base' is created in operations[1] of the same plan; Creo returns ProFeatureGeomitemVisit(PRO_QUILT) -4 before the fresh trim chain regenerates (BUG-115). Submit fill/trim first, then submit thicken in a second plan referencing the existing quilt feature, or pass an explicit {kind:'quilt',id:N} read back from creo_inspect_model.",
+      "model_baseline": {
+        "before": {
+          "model_id": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+          "model_name": "h12_empty_part_56463",
+          "model_type": "part",
+          "status": "ready",
+          "revision": 1,
+          "created_at": "2026-11-07T16:27:36.465849+00:00",
+          "updated_at": "2026-11-07T16:27:42.877100+00:00",
+          "pending_job": null,
+          "part_sha256": "5d9df3ddf2f35b6b353f079afe0f1b681dcf1f6ae45e9cebf88e7d8bd73c6df8",
+          "last_job": "a2a8a1a185d945f2b2545bd100802b35",
+          "part_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\models\\0f2c7e6ce46145ebb54a73d2d6dc7b45\\output\\h12_empty_part_56463.prt.2",
+          "inspection": {
+            "healthy": true,
+            "has_solid": false,
+            "units": "mm",
+            "units_query_code": 0,
+            "length_unit": {
+              "name": "mm",
+              "query_code": 0,
+              "scale_query_codes": {
+                "conversion": 0,
+                "mm_unit": 0,
+                "unit": 0
+              },
+              "scale_to_mm": 1.0,
+              "scale_to_mm_known": true
+            },
+            "center_of_gravity": null,
+            "model_type": "part",
+            "volume_mm3": null,
+            "volume_query_code": null,
+            "inspection_source": "saved_reloaded",
+            "inspection_available": true,
+            "counts": {
+              "features": 4,
+              "surfaces": 0,
+              "edges": 0,
+              "quilts": 0,
+              "bodies": 1,
+              "components": null
+            },
+            "body_counts": {
+              "objects": 1,
+              "records": 1,
+              "active": 0,
+              "with_material": 0,
+              "without_material": 1,
+              "counts_meaning": {
+                "bodies": "body_objects",
+                "with_material": "active_bodies_with_surfaces"
+              }
+            }
+          },
+          "snapshot": {
+            "source": "saved_verified",
+            "revision": 1,
+            "at": "2026-11-07T16:27:42.877100+00:00",
+            "live_state_verified": false,
+            "mutation_pending": false
+          },
+          "detail_available": true,
+          "adopted": false,
+          "source_kind": "created",
+          "feature_state": {
+            "tombstone_count": 0,
+            "suppressed_count": 0,
+            "tombstones": {},
+            "suppressed": {},
+            "entries_truncated": false
+          }
+        },
+        "after": {
+          "model_id": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+          "model_name": "h12_empty_part_56463",
+          "model_type": "part",
+          "status": "ready",
+          "revision": 1,
+          "created_at": "2026-11-07T16:27:36.465849+00:00",
+          "updated_at": "2026-11-07T16:27:42.877100+00:00",
+          "pending_job": null,
+          "part_sha256": "5d9df3ddf2f35b6b353f079afe0f1b681dcf1f6ae45e9cebf88e7d8bd73c6df8",
+          "last_job": "a2a8a1a185d945f2b2545bd100802b35",
+          "part_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\models\\0f2c7e6ce46145ebb54a73d2d6dc7b45\\output\\h12_empty_part_56463.prt.2",
+          "inspection": {
+            "healthy": true,
+            "has_solid": false,
+            "units": "mm",
+            "units_query_code": 0,
+            "length_unit": {
+              "name": "mm",
+              "query_code": 0,
+              "scale_query_codes": {
+                "conversion": 0,
+                "mm_unit": 0,
+                "unit": 0
+              },
+              "scale_to_mm": 1.0,
+              "scale_to_mm_known": true
+            },
+            "center_of_gravity": null,
+            "model_type": "part",
+            "volume_mm3": null,
+            "volume_query_code": null,
+            "inspection_source": "saved_reloaded",
+            "inspection_available": true,
+            "counts": {
+              "features": 4,
+              "surfaces": 0,
+              "edges": 0,
+              "quilts": 0,
+              "bodies": 1,
+              "components": null
+            },
+            "body_counts": {
+              "objects": 1,
+              "records": 1,
+              "active": 0,
+              "with_material": 0,
+              "without_material": 1,
+              "counts_meaning": {
+                "bodies": "body_objects",
+                "with_material": "active_bodies_with_surfaces"
+              }
+            }
+          },
+          "snapshot": {
+            "source": "saved_verified",
+            "revision": 1,
+            "at": "2026-11-07T16:27:42.877100+00:00",
+            "live_state_verified": false,
+            "mutation_pending": false
+          },
+          "detail_available": true,
+          "adopted": false,
+          "source_kind": "created",
+          "feature_state": {
+            "tombstone_count": 0,
+            "suppressed_count": 0,
+            "tombstones": {},
+            "suppressed": {},
+            "entries_truncated": false
+          }
+        }
+      }
+    },
+    "bug115_allowed_fill_thicken": {
+      "job_id": "e4d3a39f8ba244c38bd28e7e281ce686",
+      "status": "succeeded",
+      "revision": 2,
+      "saved_file_reloaded_and_verified": true,
+      "volume_mm3": 4800.0,
+      "has_solid": null,
+      "message": "General feature plan completed"
+    },
+    "preview_empty_assembly": {
+      "model_id": "f7f0c21bc95646388452c63c9af64c8e",
+      "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+      "preview": {
+        "status": "skipped_no_geometry",
+        "path": null,
+        "bytes": null,
+        "file_verified": false,
+        "source": "native",
+        "codes": {
+          "display": null,
+          "window_get": null,
+          "window_model_get": null,
+          "current_set": null,
+          "current_get": null,
+          "activate": null,
+          "view_matrix_set": null,
+          "view_matrix_get": null,
+          "refit": null,
+          "refresh": null,
+          "repaint": null,
+          "raster": null
+        },
+        "failed_step": null,
+        "failed_code": null,
+        "file_check": null,
+        "datum_display": {
+          "model_type": "unknown",
+          "type_query_code": 0,
+          "applicable": false,
+          "attempted": false,
+          "hide_status": "not_attempted",
+          "restore_status": "not_attempted",
+          "options": [],
+          "config_file_written": false
+        },
+        "empty_geometry_basis": {
+          "feature_visit_code": 0,
+          "non_datum_feature_count": 0
+        },
+        "verification_error": null,
+        "window": -1,
+        "window_matches_model": false,
+        "current_window_matches": false,
+        "view_matrix_matches": false
+      }
+    },
+    "planar_wall_create": {
+      "job_id": "db391407c7674053bb1280ba7a8a0a3d",
+      "status": "succeeded",
+      "revision": 2,
+      "saved_file_reloaded_and_verified": true,
+      "planar_wall": {
+        "op": "sheetmetal_planar_wall",
+        "feature": "h12_wall",
+        "feature_id": 49,
+        "sketch": "h12_wall_sk",
+        "length": 100.0,
+        "width": 60.0,
+        "thickness": 1.0,
+        "direction": "positive",
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "square": false,
+        "dimension_count": 5,
+        "volume_mm3": 6000.0,
+        "frame": {
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "origin": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "u_axis": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "v_axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "envelope": {
+          "n": {
+            "max": 1.0,
+            "min": 0.0
+          },
+          "u": {
+            "max": 100.0,
+            "min": 0.0
+          },
+          "v": {
+            "max": 60.0,
+            "min": 0.0
+          }
+        },
+        "sheetmetal_body": true,
+        "thickness_source": "parameter",
+        "thickness_measured_mm": 1.0,
+        "thickness_verified": true,
+        "thickness_body_code": 0,
+        "thickness_geometry_span_mm": null,
+        "wall_created_this_job": true,
+        "body_linked": true,
+        "thickness_validation": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "current_plan"
+        },
+        "thickness_api_scope": "body_api_readback_only",
+        "thickness_api_reason": null,
+        "thickness_fallback_source": null,
+        "thickness_verified_effective": true,
+        "problems": [],
+        "verified": true
+      },
+      "message": "General feature plan completed"
+    },
+    "resize_success": {
+      "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+      "status": "succeeded",
+      "revision": 3,
+      "saved_file_reloaded_and_verified": true,
+      "planar_wall": {
+        "op": "resize_sheetmetal_planar_wall",
+        "feature": "h12_wall",
+        "feature_id": 49,
+        "sketch": "h12_wall_sk",
+        "length": 120.0,
+        "width": 80.0,
+        "thickness": 1.0,
+        "direction": "positive",
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "square": false,
+        "dimension_count": 5,
+        "volume_mm3": 9600.0,
+        "frame": {
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "origin": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "u_axis": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "v_axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "envelope": {
+          "n": {
+            "max": 1.0,
+            "min": 0.0
+          },
+          "u": {
+            "max": 120.0,
+            "min": 0.0
+          },
+          "v": {
+            "max": 80.0,
+            "min": 0.0
+          }
+        },
+        "sheetmetal_body": true,
+        "thickness_source": "parameter",
+        "thickness_measured_mm": 1.0,
+        "thickness_verified": true,
+        "thickness_body_code": 0,
+        "thickness_geometry_span_mm": null,
+        "wall_created_this_job": false,
+        "body_linked": true,
+        "thickness_validation": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "current_plan"
+        },
+        "thickness_api_scope": "body_api_readback_only",
+        "thickness_api_reason": null,
+        "thickness_fallback_source": null,
+        "thickness_verified_effective": true,
+        "feature_id_before": 49,
+        "feature_id_unchanged": true,
+        "thickness_loaded_mm": 1.0,
+        "thickness_loaded_validation": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "saved_loaded"
+        },
+        "thickness_loaded_api_scope": "body_api_readback_only",
+        "thickness_loaded_api_reason": null,
+        "thickness_loaded_fallback_source": null,
+        "thickness_loaded_verified_effective": true,
+        "problems": [],
+        "verified": true
+      },
+      "compact_planar_wall": {
+        "op": "resize_sheetmetal_planar_wall",
+        "feature": "h12_wall",
+        "feature_id": 49,
+        "sketch": "h12_wall_sk",
+        "length": 120.0,
+        "width": 80.0,
+        "thickness": 1.0,
+        "direction": "positive",
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "square": false,
+        "dimension_count": 5,
+        "volume_mm3": 9600.0,
+        "frame": {
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "origin": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "u_axis": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "v_axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "envelope": {
+          "n": {
+            "max": 1.0,
+            "min": 0.0
+          },
+          "u": {
+            "max": 120.0,
+            "min": 0.0
+          },
+          "v": {
+            "max": 80.0,
+            "min": 0.0
+          }
+        },
+        "sheetmetal_body": true,
+        "thickness_source": "parameter",
+        "thickness_measured_mm": 1.0,
+        "thickness_verified": true,
+        "thickness_body_code": 0,
+        "thickness_geometry_span_mm": null,
+        "wall_created_this_job": false,
+        "body_linked": true,
+        "thickness_validation": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "current_plan"
+        },
+        "thickness_api_scope": "body_api_readback_only",
+        "thickness_api_reason": null,
+        "thickness_fallback_source": null,
+        "thickness_verified_effective": true,
+        "feature_id_before": 49,
+        "feature_id_unchanged": true,
+        "thickness_loaded_mm": 1.0,
+        "thickness_loaded_validation": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "saved_loaded"
+        },
+        "thickness_loaded_api_scope": "body_api_readback_only",
+        "thickness_loaded_api_reason": null,
+        "thickness_loaded_fallback_source": null,
+        "thickness_loaded_verified_effective": true,
+        "problems": [],
+        "verified": true
+      }
+    },
+    "resize_failure_attempts": {
+      "attempts": [
+        {
+          "request": {
+            "length": 0.001,
+            "width": 20.0
+          },
+          "job_id": "641490319ba1495c98e9d9cb89d55685",
+          "status": "failed",
+          "message": "Regeneration produced a failed, suppressed or incomplete feature",
+          "planar_wall": {
+            "op": "resize_sheetmetal_planar_wall",
+            "feature": null,
+            "feature_id": null,
+            "sketch": null,
+            "length": null,
+            "width": null,
+            "thickness": null,
+            "direction": null,
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "square": false,
+            "dimension_count": null,
+            "volume_mm3": null,
+            "frame": null,
+            "envelope": null,
+            "sheetmetal_body": null,
+            "thickness_source": null,
+            "thickness_measured_mm": null,
+            "thickness_verified": null,
+            "thickness_body_code": null,
+            "thickness_geometry_span_mm": null,
+            "wall_created_this_job": null,
+            "body_linked": null,
+            "thickness_verified_effective": null,
+            "feature_id_before": null,
+            "feature_id_unchanged": null,
+            "thickness_loaded_mm": null,
+            "thickness_loaded_validation": null,
+            "thickness_loaded_api_scope": null,
+            "thickness_loaded_api_reason": null,
+            "thickness_loaded_fallback_source": null,
+            "thickness_loaded_verified_effective": null,
+            "problems": [
+              "the native result carries no feature id",
+              "the rectangle is not fully dimensioned (None < 4 point dimensions)",
+              "the native result carries no usable direction (None)",
+              "the result does not report the wall as a sheetmetal body",
+              "the native result reports no usable length, width, thickness for the rectangle, so its size, gauge and envelope cannot be judged"
+            ],
+            "verified": false
+          },
+          "rollback_succeeded": true,
+          "rollback_status": "succeeded",
+          "revision": null
+        }
+      ]
+    },
+    "edge_mismatch": {
+      "job_id": "712c6ffbc4204957950341c2248e4f66",
+      "status": "failed",
+      "message": "sheetmetal_flange edge_geometry endpoints [1000.000000, 1000.000000, 1000.000000] and [1001.000000, 1001.000000, 1001.000000] matched none of the 12 straight model edges (tolerance_mm=0.000001); nearest straight edges (diagnostic only; endpoint errors use the best undirected one-to-one request pairing): id=96 endpoints_mm=[120, 80, 0],[120, 80, 1] endpoint_errors_mm=[1618.88850759, 1620.00061728]; id=87 endpoints_mm=[120, 3.70491170044e-31, 1],[120, 80, 1] endpoint_errors_mm=[1665.05285201, 1620.00061728]; id=60 endpoints_mm=[120, 3.70491170044e-31, 0],[120, 80, 0] endpoint_errors_mm=[1665.65302509, 1620.61809196]; id=93 endpoints_mm=[120, 0, 0],[120, 0, 1] endpoint_errors_mm=[1665.65302509, 1666.78192935]; id=89 endpoints_mm=[120, 80, 1],[0, 80, 1] endpoint_errors_mm=[1620.00061728, 1686.53520568]; edge ids and geometry change when the model rebuilds, so re-read creo_inspect_model edges[].start/end and pass current coordinates",
+      "edge_geometry_diagnostic": {
+        "candidate_limit": 5,
+        "nearest_edges": [
+          {
+            "endpoint_errors_mm": [
+              1618.888507587845,
+              1620.000617283833
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                80.0,
+                0.0
+              ],
+              [
+                120.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 96
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.0528520140133,
+              1620.000617283833
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                3.7049117004373016e-31,
+                1.0
+              ],
+              [
+                120.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 87
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.6530250925612,
+              1620.6180919636804
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                3.7049117004373016e-31,
+                0.0
+              ],
+              [
+                120.0,
+                80.0,
+                0.0
+              ]
+            ],
+            "id": 60
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.6530250925612,
+              1666.7819293476875
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                0.0,
+                0.0
+              ],
+              [
+                120.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "id": 93
+          },
+          {
+            "endpoint_errors_mm": [
+              1620.000617283833,
+              1686.5352056805693
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                80.0,
+                1.0
+              ],
+              [
+                0.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 89
+          }
+        ],
+        "straight_edge_count": 12,
+        "tolerance_mm": 1e-06
+      },
+      "compact_edge_geometry_diagnostic": {
+        "candidate_limit": 5,
+        "nearest_edges": [
+          {
+            "endpoint_errors_mm": [
+              1618.888507587845,
+              1620.000617283833
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                80.0,
+                0.0
+              ],
+              [
+                120.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 96
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.0528520140133,
+              1620.000617283833
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                3.7049117004373016e-31,
+                1.0
+              ],
+              [
+                120.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 87
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.6530250925612,
+              1620.6180919636804
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                3.7049117004373016e-31,
+                0.0
+              ],
+              [
+                120.0,
+                80.0,
+                0.0
+              ]
+            ],
+            "id": 60
+          },
+          {
+            "endpoint_errors_mm": [
+              1665.6530250925612,
+              1666.7819293476875
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                0.0,
+                0.0
+              ],
+              [
+                120.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "id": 93
+          },
+          {
+            "endpoint_errors_mm": [
+              1620.000617283833,
+              1686.5352056805693
+            ],
+            "endpoints_mm": [
+              [
+                120.0,
+                80.0,
+                1.0
+              ],
+              [
+                0.0,
+                80.0,
+                1.0
+              ]
+            ],
+            "id": 89
+          }
+        ],
+        "straight_edge_count": 12,
+        "tolerance_mm": 1e-06
+      },
+      "failed_operation_index": 0,
+      "failed_stage": "execute_sheetmetal_flange",
+      "failed_toolkit_call": null,
+      "rollback_succeeded": true,
+      "rollback_status": "succeeded",
+      "revision_before": 3,
+      "revision_after": 3
+    }
+  },
+  "checks": [
+    {
+      "name": "startup:ready_when_fresh",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "startup:stale_after_window",
+      "ok": true,
+      "detail": true
+    },
+    {
+      "name": "startup:stale_declares_unverified",
+      "ok": true,
+      "detail": {
+        "connection_verification": "unverified_stale_snapshot",
+        "current_connected": null,
+        "state": "ready",
+        "connected": true
+      }
+    },
+    {
+      "name": "empty_part:created",
+      "ok": true,
+      "detail": "General feature plan completed"
+    },
+    {
+      "name": "preview_empty_part:status_skipped",
+      "ok": true,
+      "detail": {
+        "status": "skipped_no_geometry",
+        "path": null,
+        "bytes": null,
+        "file_verified": false,
+        "source": "native",
+        "codes": {
+          "display": null,
+          "window_get": null,
+          "window_model_get": null,
+          "current_set": null,
+          "current_get": null,
+          "activate": null,
+          "view_matrix_set": null,
+          "view_matrix_get": null,
+          "refit": null,
+          "refresh": null,
+          "repaint": null,
+          "raster": null
+        },
+        "failed_step": null,
+        "failed_code": null,
+        "file_check": null,
+        "datum_display": {
+          "model_type": "unknown",
+          "type_query_code": 0,
+          "applicable": false,
+          "attempted": false,
+          "hide_status": "not_attempted",
+          "restore_status": "not_attempted",
+          "options": [],
+          "config_file_written": false
+        },
+        "empty_geometry_basis": {
+          "feature_visit_code": 0,
+          "non_datum_feature_count": 0
+        },
+        "verification_error": null,
+        "window": -1,
+        "window_matches_model": false,
+        "current_window_matches": false,
+        "view_matrix_matches": false
+      }
+    },
+    {
+      "name": "preview_empty_part:basis_present",
+      "ok": true,
+      "detail": {
+        "feature_visit_code": 0,
+        "non_datum_feature_count": 0
+      }
+    },
+    {
+      "name": "preview_empty_part:basis_counts_empty",
+      "ok": true,
+      "detail": {
+        "feature_visit_code": 0,
+        "non_datum_feature_count": 0
+      }
+    },
+    {
+      "name": "preview_empty_part:no_bytes_or_step",
+      "ok": true,
+      "detail": {
+        "bytes": null,
+        "failed_step": null,
+        "file_verified": false,
+        "path": null,
+        "failed_code": null
+      }
+    },
+    {
+      "name": "preview_empty_part:no_raster_codes",
+      "ok": true,
+      "detail": {
+        "display": null,
+        "window_get": null,
+        "window_model_get": null,
+        "current_set": null,
+        "current_get": null,
+        "activate": null,
+        "view_matrix_set": null,
+        "view_matrix_get": null,
+        "refit": null,
+        "refresh": null,
+        "repaint": null,
+        "raster": null
+      }
+    },
+    {
+      "name": "bug115:refused",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "bug115:no_job_id",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "bug115:names_bug",
+      "ok": true,
+      "detail": "Error executing tool creo_execute_plan: operations[4].reference: thicken names quilt_feature 'h12_chain_trim' from operations[3], whose own target quilt 'h12_chain_base' is created in operations[1] of the same plan; Creo returns ProFeatureGeomitemVisit(PRO_QUILT) -4 before the fresh trim chain regenerates (BUG-115). Submit fill/trim first, then submit thicken in a second plan referencing the exist"
+    },
+    {
+      "name": "bug115:alternative_present",
+      "ok": true,
+      "detail": "Error executing tool creo_execute_plan: operations[4].reference: thicken names quilt_feature 'h12_chain_trim' from operations[3], whose own target quilt 'h12_chain_base' is created in operations[1] of the same plan; Creo returns ProFeatureGeomitemVisit(PRO_QUILT) -4 before the fresh trim chain regenerates (BUG-115). Submit fill/trim first, then submit thicken in a second plan referencing the existing quilt feature, or pass an explicit {kind:'quilt',id:N} read back from creo_inspect_model."
+    },
+    {
+      "name": "bug115:no_model_side_effect",
+      "ok": true,
+      "detail": {
+        "before_revision": 1,
+        "after_revision": 1
+      }
+    },
+    {
+      "name": "bug115:allowed_combination_succeeds",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed",
+        "saved": true
+      }
+    },
+    {
+      "name": "bug115:allowed_volume",
+      "ok": true,
+      "detail": 4800.0
+    },
+    {
+      "name": "empty_assembly:created",
+      "ok": true,
+      "detail": "General feature plan completed"
+    },
+    {
+      "name": "preview_empty_assembly:status_skipped",
+      "ok": true,
+      "detail": {
+        "status": "skipped_no_geometry",
+        "path": null,
+        "bytes": null,
+        "file_verified": false,
+        "source": "native",
+        "codes": {
+          "display": null,
+          "window_get": null,
+          "window_model_get": null,
+          "current_set": null,
+          "current_get": null,
+          "activate": null,
+          "view_matrix_set": null,
+          "view_matrix_get": null,
+          "refit": null,
+          "refresh": null,
+          "repaint": null,
+          "raster": null
+        },
+        "failed_step": null,
+        "failed_code": null,
+        "file_check": null,
+        "datum_display": {
+          "model_type": "unknown",
+          "type_query_code": 0,
+          "applicable": false,
+          "attempted": false,
+          "hide_status": "not_attempted",
+          "restore_status": "not_attempted",
+          "options": [],
+          "config_file_written": false
+        },
+        "empty_geometry_basis": {
+          "feature_visit_code": 0,
+          "non_datum_feature_count": 0
+        },
+        "verification_error": null,
+        "window": -1,
+        "window_matches_model": false,
+        "current_window_matches": false,
+        "view_matrix_matches": false
+      }
+    },
+    {
+      "name": "preview_empty_assembly:basis_present",
+      "ok": true,
+      "detail": {
+        "feature_visit_code": 0,
+        "non_datum_feature_count": 0
+      }
+    },
+    {
+      "name": "preview_empty_assembly:basis_counts_empty",
+      "ok": true,
+      "detail": {
+        "feature_visit_code": 0,
+        "non_datum_feature_count": 0
+      }
+    },
+    {
+      "name": "preview_empty_assembly:no_bytes_or_step",
+      "ok": true,
+      "detail": {
+        "bytes": null,
+        "failed_step": null,
+        "file_verified": false,
+        "path": null,
+        "failed_code": null
+      }
+    },
+    {
+      "name": "preview_empty_assembly:no_raster_codes",
+      "ok": true,
+      "detail": {
+        "display": null,
+        "window_get": null,
+        "window_model_get": null,
+        "current_set": null,
+        "current_get": null,
+        "activate": null,
+        "view_matrix_set": null,
+        "view_matrix_get": null,
+        "refit": null,
+        "refresh": null,
+        "repaint": null,
+        "raster": null
+      }
+    },
+    {
+      "name": "sheetmetal:created",
+      "ok": true,
+      "detail": "General feature plan completed"
+    },
+    {
+      "name": "wall:create_succeeds",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "problems": []
+      }
+    },
+    {
+      "name": "wall:create_current_plan_context",
+      "ok": true,
+      "detail": {
+        "status": "verified",
+        "source": "api",
+        "value_mm": 1.0,
+        "reason": null,
+        "context": "current_plan"
+      }
+    },
+    {
+      "name": "wall:create_effective_true",
+      "ok": true,
+      "detail": {
+        "thickness_verified_effective": true,
+        "thickness_api_scope": "body_api_readback_only",
+        "thickness_api_reason": null,
+        "thickness_fallback_source": null
+      }
+    },
+    {
+      "name": "resize:succeeds",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "problems": []
+      }
+    },
+    {
+      "name": "resize:feature_identity",
+      "ok": true,
+      "detail": {
+        "feature_id": 49,
+        "feature_id_before": 49,
+        "feature_id_unchanged": true
+      }
+    },
+    {
+      "name": "resize:two_contexts",
+      "ok": true,
+      "detail": {
+        "current": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "current_plan"
+        },
+        "loaded": {
+          "status": "verified",
+          "source": "api",
+          "value_mm": 1.0,
+          "reason": null,
+          "context": "saved_loaded"
+        }
+      }
+    },
+    {
+      "name": "resize:volume",
+      "ok": true,
+      "detail": 9600.0
+    },
+    {
+      "name": "resize:compact_keeps_block",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "body_linked",
+          "dimension_count",
+          "direction",
+          "envelope",
+          "feature",
+          "feature_id",
+          "feature_id_before",
+          "feature_id_unchanged",
+          "frame",
+          "length",
+          "op",
+          "origin",
+          "problems",
+          "sheetmetal_body",
+          "sketch",
+          "square",
+          "thickness",
+          "thickness_api_reason",
+          "thickness_api_scope",
+          "thickness_body_code",
+          "thickness_fallback_source",
+          "thickness_geometry_span_mm",
+          "thickness_loaded_api_reason",
+          "thickness_loaded_api_scope",
+          "thickness_loaded_fallback_source",
+          "thickness_loaded_mm",
+          "thickness_loaded_validation",
+          "thickness_loaded_verified_effective",
+          "thickness_measured_mm",
+          "thickness_source",
+          "thickness_validation",
+          "thickness_verified",
+          "thickness_verified_effective",
+          "verified",
+          "volume_mm3",
+          "wall_created_this_job",
+          "width"
+        ],
+        "problems": []
+      }
+    },
+    {
+      "name": "resize:saved_reloaded",
+      "ok": true,
+      "detail": true
+    },
+    {
+      "name": "resize_failure:reproduced",
+      "ok": true,
+      "detail": {
+        "status": "failed",
+        "message": "Regeneration produced a failed, suppressed or incomplete feature",
+        "planar_wall": {
+          "op": "resize_sheetmetal_planar_wall",
+          "feature": null,
+          "feature_id": null,
+          "sketch": null,
+          "length": null,
+          "width": null,
+          "thickness": null,
+          "direction": null,
+          "origin": [
+            0.0,
+            0.0
+          ],
+          "square": false,
+          "dimension_count": null,
+          "volume_mm3": null,
+          "frame": null,
+          "envelope": null,
+          "sheetmetal_body": null,
+          "thickness_source": null,
+          "thickness_measured_mm": null,
+          "thickness_verified": null,
+          "thickness_body_code": null,
+          "thickness_geometry_span_mm": null,
+          "wall_created_this_job": null,
+          "body_linked": null,
+          "thickness_verified_effective": null,
+          "feature_id_before": null,
+          "feature_id_unchanged": null,
+          "thickness_loaded_mm": null,
+          "thickness_loaded_validation": null,
+          "thickness_loaded_api_scope": null,
+          "thickness_loaded_api_reason": null,
+          "thickness_loaded_fallback_source": null,
+          "thickness_loaded_verified_effective": null,
+          "problems": [
+            "the native result carries no feature id",
+            "the rectangle is not fully dimensioned (None < 4 point dimensions)",
+            "the native result carries no usable direction (None)",
+            "the result does not report the wall as a sheetmetal body",
+            "the native result reports no usable length, width, thickness for the rectangle, so its size, gauge and envelope cannot be judged"
+          ],
+          "verified": false
+        }
+      }
+    },
+    {
+      "name": "resize_failure:no_contradiction",
+      "ok": true,
+      "detail": {
+        "feature_id": null,
+        "feature_id_before": null,
+        "feature_id_unchanged": null,
+        "thickness_loaded_mm": null,
+        "thickness_loaded_validation": null,
+        "thickness_loaded_api_scope": null,
+        "thickness_loaded_api_reason": null,
+        "thickness_loaded_fallback_source": null,
+        "thickness_loaded_verified_effective": null,
+        "verified": false,
+        "problems": [
+          "the native result carries no feature id",
+          "the rectangle is not fully dimensioned (None < 4 point dimensions)",
+          "the native result carries no usable direction (None)",
+          "the result does not report the wall as a sheetmetal body",
+          "the native result reports no usable length, width, thickness for the rectangle, so its size, gauge and envelope cannot be judged"
+        ]
+      }
+    },
+    {
+      "name": "edge:fails",
+      "ok": true,
+      "detail": "sheetmetal_flange edge_geometry endpoints [1000.000000, 1000.000000, 1000.000000] and [1001.000000, 1001.000000, 1001.000000] matched none of the 12 straight model edges (tolerance_mm=0.000001); nearest straight edges (diagnostic only; endpoint errors use the best undirected one-to-one request pairing): id=96 endpoints_mm=[120, 80, 0],[120, 80, 1] endpoint_errors_mm=[1618.88850759, 1620.00061728]; id=87 endpoints_mm=[120, 3.70491170044e-31, 1],[120, 80, 1] endpoint_errors_mm=[1665.05285201, 1620.00061728]; id=60 endpoints_mm=[120, 3.70491170044e-31, 0],[120, 80, 0] endpoint_errors_mm=[1665.65302509, 1620.61809196]; id=93 endpoints_mm=[120, 0, 0],[120, 0, 1] endpoint_errors_mm=[1665.65302509, 1666.78192935]; id=89 endpoints_mm=[120, 80, 1],[0, 80, 1] endpoint_errors_mm=[1620.00061728, 1686.53520568]; edge ids and geometry change when the model rebuilds, so re-read creo_inspect_model edges[].start/end and pass current coordinates"
+    },
+    {
+      "name": "edge:diagnostic_shape",
+      "ok": true,
+      "detail": {
+        "count": 5,
+        "candidate_limit": 5,
+        "straight_edge_count": 12,
+        "tolerance_mm": 1e-06
+      }
+    },
+    {
+      "name": "edge:compact_keeps_diagnostic",
+      "ok": true,
+      "detail": {
+        "compact": {
+          "candidate_limit": 5,
+          "nearest_edges": [
+            {
+              "endpoint_errors_mm": [
+                1618.888507587845,
+                1620.000617283833
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  80.0,
+                  0.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 96
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.0528520140133,
+                1620.000617283833
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  3.7049117004373016e-31,
+                  1.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 87
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.6530250925612,
+                1620.6180919636804
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  3.7049117004373016e-31,
+                  0.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  0.0
+                ]
+              ],
+              "id": 60
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.6530250925612,
+                1666.7819293476875
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  120.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "id": 93
+            },
+            {
+              "endpoint_errors_mm": [
+                1620.000617283833,
+                1686.5352056805693
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 89
+            }
+          ],
+          "straight_edge_count": 12,
+          "tolerance_mm": 1e-06
+        },
+        "full": {
+          "candidate_limit": 5,
+          "nearest_edges": [
+            {
+              "endpoint_errors_mm": [
+                1618.888507587845,
+                1620.000617283833
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  80.0,
+                  0.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 96
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.0528520140133,
+                1620.000617283833
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  3.7049117004373016e-31,
+                  1.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 87
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.6530250925612,
+                1620.6180919636804
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  3.7049117004373016e-31,
+                  0.0
+                ],
+                [
+                  120.0,
+                  80.0,
+                  0.0
+                ]
+              ],
+              "id": 60
+            },
+            {
+              "endpoint_errors_mm": [
+                1665.6530250925612,
+                1666.7819293476875
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  120.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "id": 93
+            },
+            {
+              "endpoint_errors_mm": [
+                1620.000617283833,
+                1686.5352056805693
+              ],
+              "endpoints_mm": [
+                [
+                  120.0,
+                  80.0,
+                  1.0
+                ],
+                [
+                  0.0,
+                  80.0,
+                  1.0
+                ]
+              ],
+              "id": 89
+            }
+          ],
+          "straight_edge_count": 12,
+          "tolerance_mm": 1e-06
+        }
+      }
+    },
+    {
+      "name": "edge:rollback_keeps_revision",
+      "ok": true,
+      "detail": {
+        "before": 3,
+        "after": 3,
+        "rollback_succeeded": true,
+        "rollback_status": "succeeded"
+      }
+    }
+  ],
+  "jobs": [
+    "a2a8a1a185d945f2b2545bd100802b35",
+    "e4d3a39f8ba244c38bd28e7e281ce686",
+    "32efcfd555dc4ca7bad2a2cfcefb68ba",
+    "e4f4a89dd00f48c8b4cf07a551194fd7",
+    "db391407c7674053bb1280ba7a8a0a3d",
+    "149d8ae7cdc84dc080c987dcb94dfb01",
+    "641490319ba1495c98e9d9cb89d55685",
+    "712c6ffbc4204957950341c2248e4f66"
+  ],
+  "models": {
+    "empty_part": "0f2c7e6ce46145ebb54a73d2d6dc7b45",
+    "empty_assembly": "f7f0c21bc95646388452c63c9af64c8e",
+    "sheetmetal": "9903555ab21c403893ee516b2bcda0cf"
+  },
+  "stopped": null,
+  "session": {
+    "connected": true,
+    "mode": "explicit_live",
+    "server_version": "0.18.3",
+    "session_health_status": null
+  },
+  "startup": {
+    "state": "ready",
+    "connected": true,
+    "verified_at": "2026-11-07T16:26:59.132305+00:00",
+    "stale": false
+  }
+}

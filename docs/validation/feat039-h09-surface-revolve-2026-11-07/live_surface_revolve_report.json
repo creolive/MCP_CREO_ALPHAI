@@ -1,0 +1,268 @@
+{
+  "mode": "live",
+  "passed": true,
+  "native_surface_revolve": "verified",
+  "oracles": {
+    "sphere_area_mm2": 804.247719318987,
+    "cap_area_mm2": 201.06192982974676,
+    "rest_area_mm2": 603.1857894892403,
+    "cap_shell_volume_mm3": 406.31264986427993,
+    "sphere_volume_mm3": 2144.660584850632
+  },
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "message": "Toolkit connection verified; modeling is available"
+      }
+    },
+    {
+      "check": "revolve_published",
+      "ok": true
+    },
+    {
+      "check": "nonplanar_fill_refused_before_job",
+      "ok": true,
+      "detail": {
+        "isError": true,
+        "payload": "{'raw': \"Error executing tool creo_execute_plan: 2 validation errors for creo_execute_planArguments\\noperations.0.surface_fill.sketch\\n  Field required [type=missing, input_value={'op': 'surface_fill', 'l...nd': 'quilt', 'id': 12}}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\\noperations.0.surface_fill.boundary\\n  Extra inputs are not permitted [t"
+      }
+    },
+    {
+      "check": "revolve_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "sphere_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "revolve_feature_is_datum_surface",
+      "ok": true,
+      "detail": {
+        "type": 942,
+        "type_name": "other"
+      }
+    },
+    {
+      "check": "revolve_feature_active",
+      "ok": true
+    },
+    {
+      "check": "exactly_one_quilt",
+      "ok": true,
+      "detail": {
+        "count": 1,
+        "quilts": [
+          {
+            "area_mm2": 804.247719319002,
+            "area_status": {
+              "available": true,
+              "query_code": 0,
+              "reason": null,
+              "scale_to_mm_known": true,
+              "unit_name": "mm"
+            },
+            "bbox_mm": [
+              [
+                -8.0,
+                -8.0,
+                -8.0
+              ],
+              [
+                8.0,
+                8.0,
+                8.0
+              ]
+            ],
+            "bbox_status": {
+              "available": true,
+              "query_code": 0,
+              "reason": null,
+              "scale_to_mm_known": true,
+              "unit_name": "mm"
+            },
+            "closed": true,
+            "closed_status": {
+              "available": true,
+              "query_code": 0,
+              "reason": null,
+              "scale_to_mm_known": true,
+              "unit_name": "mm"
+            },
+            "face_count": 2,
+            "feature_ids": [
+              49
+            ],
+            "quilt_id": 74,
+            "surface_ids": [
+              68,
+              58
+            ],
+            "surfaces_visit_code": 0
+          }
+        ]
+      }
+    },
+    {
+      "check": "sphere_area_matches_4pir2",
+      "ok": true,
+      "detail": {
+        "area_mm2": 804.247719319002,
+        "oracle_mm2": 804.247719318987,
+        "delta_mm2": 1.5006662579253316e-11
+      }
+    },
+    {
+      "check": "sphere_quilt_is_closed",
+      "ok": true,
+      "detail": true
+    },
+    {
+      "check": "no_solid_created",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "has_geometry": null,
+            "id": -5778,
+            "material": false,
+            "state": 3,
+            "state_name": "no_geometry"
+          }
+        ]
+      }
+    },
+    {
+      "check": "trim_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "trim_keeps_one_analytic_region",
+      "ok": true,
+      "detail": {
+        "area_after_mm2": 201.06192982974773,
+        "cap_oracle_mm2": 201.06192982974676,
+        "rest_oracle_mm2": 603.1857894892403
+      }
+    },
+    {
+      "check": "trim_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "kept_quilt_queryable",
+      "ok": true,
+      "detail": {
+        "areas": [
+          201.06192982974773
+        ]
+      }
+    },
+    {
+      "check": "thicken_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_volume_matches_spherical_shell",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 404.21825476170756,
+        "shell_oracle_mm3": 406.31264986427993,
+        "area_times_thickness_mm3": 402.12385965949545,
+        "relative_tolerance": 0.02
+      }
+    },
+    {
+      "check": "thicken_saved_and_reloaded",
+      "ok": true
+    },
+    {
+      "check": "other_side_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "two_sides_sum_to_sphere_area",
+      "ok": true,
+      "detail": {
+        "one": 201.06192982974773,
+        "two": 603.1857894892481,
+        "sphere_oracle_mm2": 804.247719318987
+      }
+    },
+    {
+      "check": "solidify_job_succeeded",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "solidify_volume_matches_4_3_pi_r3",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 2144.6605848506724,
+        "oracle_mm3": 2144.660584850632,
+        "relative_tolerance": 0.02
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "job_id": "a2f0728c9fe64fee85184092aebae918",
+      "status": "succeeded",
+      "model_id": "f91d6ae17822401baf9bfe67349a41c7",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "98d2c06424274ee499c95347cff1c10b",
+      "status": "succeeded",
+      "model_id": "f91d6ae17822401baf9bfe67349a41c7",
+      "revision": 2,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "6a1319b229f44ecf98c1ec11e51dabf5",
+      "status": "succeeded",
+      "model_id": "f91d6ae17822401baf9bfe67349a41c7",
+      "revision": 3,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "2615afb025964e9bb1a71ddfd6e09615",
+      "status": "succeeded",
+      "model_id": "90e359a392a344848b4a42146131c601",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "4703a3909b1c4d0bb1ed445628cb38ad",
+      "status": "succeeded",
+      "model_id": "5aa1cf5f82e642d6b7741bebfd3217a3",
+      "revision": 1,
+      "message": "General feature plan completed"
+    }
+  ],
+  "run_id": "20261107-235346-03398b",
+  "report_path": "E:\\Projects\\MCP_CREO_MechDog-d074\\build\\surface_revolve\\20261107-235346-03398b\\report.json"
+}
