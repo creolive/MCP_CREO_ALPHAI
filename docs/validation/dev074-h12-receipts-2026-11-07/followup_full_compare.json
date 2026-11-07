@@ -1,0 +1,220 @@
+{
+  "run_id": "20261108T002653_283",
+  "followup": "read-only detail=full comparison",
+  "resize_planar_wall": {
+    "job_id": "149d8ae7cdc84dc080c987dcb94dfb01",
+    "full_status": "succeeded",
+    "equal_to_compact": true,
+    "key_count": 37,
+    "full_block": {
+      "op": "resize_sheetmetal_planar_wall",
+      "feature": "h12_wall",
+      "feature_id": 49,
+      "sketch": "h12_wall_sk",
+      "length": 120.0,
+      "width": 80.0,
+      "thickness": 1.0,
+      "direction": "positive",
+      "origin": [
+        0.0,
+        0.0
+      ],
+      "square": false,
+      "dimension_count": 5,
+      "volume_mm3": 9600.0,
+      "frame": {
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u_axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "v_axis": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "envelope": {
+        "n": {
+          "max": 1.0,
+          "min": 0.0
+        },
+        "u": {
+          "max": 120.0,
+          "min": 0.0
+        },
+        "v": {
+          "max": 80.0,
+          "min": 0.0
+        }
+      },
+      "sheetmetal_body": true,
+      "thickness_source": "parameter",
+      "thickness_measured_mm": 1.0,
+      "thickness_verified": true,
+      "thickness_body_code": 0,
+      "thickness_geometry_span_mm": null,
+      "wall_created_this_job": false,
+      "body_linked": true,
+      "thickness_validation": {
+        "status": "verified",
+        "source": "api",
+        "value_mm": 1.0,
+        "reason": null,
+        "context": "current_plan"
+      },
+      "thickness_api_scope": "body_api_readback_only",
+      "thickness_api_reason": null,
+      "thickness_fallback_source": null,
+      "thickness_verified_effective": true,
+      "feature_id_before": 49,
+      "feature_id_unchanged": true,
+      "thickness_loaded_mm": 1.0,
+      "thickness_loaded_validation": {
+        "status": "verified",
+        "source": "api",
+        "value_mm": 1.0,
+        "reason": null,
+        "context": "saved_loaded"
+      },
+      "thickness_loaded_api_scope": "body_api_readback_only",
+      "thickness_loaded_api_reason": null,
+      "thickness_loaded_fallback_source": null,
+      "thickness_loaded_verified_effective": true,
+      "problems": [],
+      "verified": true
+    }
+  },
+  "edge_geometry_diagnostic": {
+    "job_id": "712c6ffbc4204957950341c2248e4f66",
+    "full_status": "failed",
+    "equal_to_compact": true,
+    "key_count": 4,
+    "full_block": {
+      "candidate_limit": 5,
+      "nearest_edges": [
+        {
+          "endpoint_errors_mm": [
+            1618.888507587845,
+            1620.000617283833
+          ],
+          "endpoints_mm": [
+            [
+              120.0,
+              80.0,
+              0.0
+            ],
+            [
+              120.0,
+              80.0,
+              1.0
+            ]
+          ],
+          "id": 96
+        },
+        {
+          "endpoint_errors_mm": [
+            1665.0528520140133,
+            1620.000617283833
+          ],
+          "endpoints_mm": [
+            [
+              120.0,
+              3.7049117004373016e-31,
+              1.0
+            ],
+            [
+              120.0,
+              80.0,
+              1.0
+            ]
+          ],
+          "id": 87
+        },
+        {
+          "endpoint_errors_mm": [
+            1665.6530250925612,
+            1620.6180919636804
+          ],
+          "endpoints_mm": [
+            [
+              120.0,
+              3.7049117004373016e-31,
+              0.0
+            ],
+            [
+              120.0,
+              80.0,
+              0.0
+            ]
+          ],
+          "id": 60
+        },
+        {
+          "endpoint_errors_mm": [
+            1665.6530250925612,
+            1666.7819293476875
+          ],
+          "endpoints_mm": [
+            [
+              120.0,
+              0.0,
+              0.0
+            ],
+            [
+              120.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "id": 93
+        },
+        {
+          "endpoint_errors_mm": [
+            1620.000617283833,
+            1686.5352056805693
+          ],
+          "endpoints_mm": [
+            [
+              120.0,
+              80.0,
+              1.0
+            ],
+            [
+              0.0,
+              80.0,
+              1.0
+            ]
+          ],
+          "id": 89
+        }
+      ],
+      "straight_edge_count": 12,
+      "tolerance_mm": 1e-06
+    }
+  },
+  "empty_part": {
+    "job_id": "a2a8a1a185d945f2b2545bd100802b35",
+    "status": "succeeded",
+    "revision": 1,
+    "saved_file_reloaded_and_verified": true,
+    "preview_status": "skipped_no_geometry"
+  },
+  "empty_assembly": {
+    "job_id": "32efcfd555dc4ca7bad2a2cfcefb68ba",
+    "status": "succeeded",
+    "revision": 1,
+    "saved_file_reloaded_and_verified": true,
+    "preview_status": "skipped_no_geometry"
+  }
+}
