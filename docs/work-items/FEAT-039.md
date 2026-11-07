@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持（H03 曲面合并已于 2026-11-07 按 INCOMPLETE 骨架路线实机反证，见文末 H03 段）；**H07 独立 quilt 偏置已于 2026-11-08 实机反证（3 条候选树 −1/−2/−1，`surface_offset` 仍是偏置壁），门禁保持**，见文末 H07 段；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
+> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持（H03 曲面合并已于 2026-11-07 按 INCOMPLETE 骨架路线实机反证，见文末 H03 段）；**H07 独立 quilt 偏置已于 2026-11-08 实机反证（3 条候选树 −1/−2/−1，`surface_offset` 仍是偏置壁），门禁保持**，见文末 H07 段；**H10 多 quilt 组整链已于 2026-11-07 实机交付（46/46，见文末 H10 段）：单片可加厚成闭合薄板，整组实体化仍等 merge**；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
 
 日期：2026-10-18。类型：功能。优先级：P1。状态：所列子项已交付，余项开放。**0.13.0 已交付**：S02 曲面修剪、S04 投影曲线、S05 曲面扫掠（开放/加盖/实体化）、S06 实体化判据、S07 法向偏置（`creo_surface_offset`）、S08 完整链路、S09 模块化、W01 端点焊接本体；**0.14.0 已交付**（2026-11-06 发布）：W05 `extrude_depth` 回执与 W06 只读预览/失败回滚。**0.15.0 已交付**（2026-11-06）：R05 矩阵/失败上下文、R07 曲面引用契约与 R09 折边文案。**0.18.3 已交付**（2026-11-07）：H04 曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量（新增只读公开工具 `creo_measure_surface_group`）与 H06 `surface_trim` 保留侧真实形心/bbox/世界方向，见 [H04 证据](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md)与 [H06 证据](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)。**仍 gated / 未排期**：S03 缝合——H03 已按 INCOMPLETE 骨架路线实机反证，仍 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，见 [H03 证据](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)；独立 quilt offset、任意非平面填充（无原生闭环输入通道；中心 R8 场景的旋转球面替代路线见文末 H09 段，fill 本体仍不开放）、多截面/边界混合及 `surface_trim` 的 `offset_mm`/`offset_side` 新语义未排期。S10 的发布交付见 0.13.0 发布记录。公开工具 102→104（含本卡 `creo_measure_surface_group` 与 FEAT-009 `creo_surface_loft`）。目标版本：0.13.0 / 0.14.0 / 0.15.0 / 0.18.3（均已交付子项）；余下曲面项未排期。
 
@@ -684,4 +684,39 @@ quilt”。证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.
 [h07_quilt_offset_probe.json](../validation/dev074-h07-h08-2026-11-08/h07_quilt_offset_probe.json)
 （SHA256 `D3FD6F57…3F2EF1E5`）。**未覆盖**：非 mm 单位、弯曲源 quilt 的带厚读数、
 `surface_trim` 的 `offset_mm` 实机重放、Creo 9/10。
+
+## 2026-11-07 H10 交付：多 quilt 组整链（实机；整组实体化仍等 merge）
+
+H10 的缺口是“多 quilt 实体化/加厚、开口面与 0.3 壁厚整链”。本轮用现有公开能力构造三片独立 quilt：
+两张互相垂直的 40×20 `surface_loft`（`loft_a` 平面 y=0、`loft_b` 平面 x=40，共享竖边）加一张 40×40
+`surface_fill`（`floor`，z=0，两条边与两片 loft 底边重合）。逐片 id/面积/开放性、组级四态、逐片加厚、
+整体实体化拒绝路径、保存重载与再编辑均取得了实机读数。
+
+- **逐片读数**：quilt 61/88 各 **800.0 mm²**、quilt 136 **1600.0 mm²**，三片 `closed=false`、各 1 面、
+  合计 3200 mm²；构建作业 `saved_file_reloaded_and_verified=true`。
+- **组级测量**（`creo_measure_surface_group`，`tolerance_mm=0.01`、`gap_search_mm=1.0`）：
+  `state=closed`、`boundary_edges=12`、`open_edges=6`、`joined_edges=6`、`gap_max≈0`、
+  `overlap detected=false`、`boundary_closed=false`、单位 mm；只读测量 revision 1→1。
+  `closed` 只表示三条成员缝在容差内接合，外边界仍开放。
+- **单片加厚**：0.3 mm（`loft_a`，job `c831e45a…`）体积 0→**239.99999999999994 mm³**，
+  body bbox 法向跨距 **0.3 mm**、6 面、保存重载 true；2 mm（组 B 同一片，job `e125502f…`）
+  体积 **1599.9999999999995 mm³**、跨距 **2.0 mm**、6 面、保存重载 true。板厚来自 `bodies[].bbox`
+  实测，不是请求回显。**加厚不消耗 quilt**：id/面积不变，被加厚成员 `closed` 由 false 变 true。
+- **整体实体化/加厚**：`solidify`/`thicken` 的 `reference` 传 3 片数组时均在**受理前**被 schema 拒绝
+  （`isError=true`、无 job_id）；`quilt_merge` 仍在门禁内（`no native job was queued`）；单片开放
+  `solidify` 在原生入口失败并回滚（`ProQuiltVolumeEval=-18, quilt_is_open`，revision 2→2）。
+- **保存重载后再编辑**：重载后三片 id/面积不变；对仍是开放的两片（`loft_b`+`floor`）再测组得
+  `open_edges=6`/`boundary_edges=8`/`joined_edges=2`；把已加厚成员重新放进组会被拒绝
+  （`contour_edge_visit_failed`，无 job_id）。同模型再 `thicken` 另一片 2 mm 成功并保存重载：
+  体积 240→**1836.9999999999982 mm³**（naive 1840，差值 3 mm³ 为共享竖边处 1×0.15×20 mm 重叠），
+  最终 1 个 active body、10 面，说明内核把两次加厚并为一个实体且重叠只计一次。
+
+**可行边界**：merge 关闭时可做到“多片独立构建 + 组级缝隙检查 + 逐片加厚成闭合薄板 + 多板并入同一
+body”；**不能**做到“整组一次实体化/得到一张闭合 quilt”，因为多片引用被入口拒绝、`quilt_merge` 仍
+gated、开放成员无法 `solidify`，且已加厚成员不能回到组级测量。因此五爪瓶底不能声称本轮已可整体实体化。
+证据：[EVIDENCE](../validation/feat039-h10-multi-quilt-2026-11-07/EVIDENCE.md)、
+[live_multi_quilt_report.json](../validation/feat039-h10-multi-quilt-2026-11-07/live_multi_quilt_report.json)
+（SHA256 `95E23A7F…2D8238E9`，46/46）。**未覆盖**：Creo 9/10、非 mm、非平面/弯曲成员组、
+0.3 mm 整瓶全链、五爪阵列与瓶底收口（仍依赖 merge）、WorkBuddy。
+
 

@@ -1,0 +1,839 @@
+{
+  "mode": "live",
+  "passed": true,
+  "native_multi_quilt_group": "verified",
+  "jobs": [
+    "30696732150b4f90b8d10537977f2e80",
+    "b4808ce35ef4427b9ab7c324325cb67d",
+    "c831e45aa0cd4741bb913d310e1d52e5",
+    "d0fdabe2bc204440b3cc5f506add0d0f",
+    "a1601d624c074581820729aed0ea42ea",
+    "96f36d7a09774efab01986f3016abfe6",
+    "588cc529c2ff47a596dda3b6da362f8d",
+    "e125502f20924a24ab5cd02ba7618c2f"
+  ],
+  "evidence": {
+    "per_quilt": {
+      "floor": {
+        "quilt_id": 136,
+        "area_mm2": 1600.0,
+        "closed": false,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            40.0,
+            40.0,
+            0.0
+          ]
+        ]
+      },
+      "loft_a": {
+        "quilt_id": 61,
+        "area_mm2": 800.0,
+        "closed": false,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            0.0,
+            -2.3397078925552144e-61,
+            0.0
+          ],
+          [
+            40.0,
+            0.0,
+            20.0
+          ]
+        ]
+      },
+      "loft_b": {
+        "quilt_id": 88,
+        "area_mm2": 800.0,
+        "closed": false,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            40.0,
+            0.0,
+            0.0
+          ],
+          [
+            40.0,
+            40.0,
+            20.0
+          ]
+        ]
+      }
+    },
+    "group_measure": {
+      "job_id": "b4808ce35ef4427b9ab7c324325cb67d",
+      "revision": 1,
+      "unit_name": "mm",
+      "tolerance_mm": 0.01,
+      "gap_search_mm": 1.0,
+      "state": "closed",
+      "state_reason": null,
+      "open_edges": 6,
+      "boundary_edges": 12,
+      "joined_edges": 6,
+      "joined_pairs": null,
+      "boundary_closed": false,
+      "gap_max_mm": 2.465190328815662e-31,
+      "overlap_detected": false,
+      "overlap_area_mm2": 0.0
+    },
+    "group_routes": {
+      "solidify_reference_list": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: 1 validation error for creo_execute_planArguments\noperations.0.solidify.reference\n  Input should be a valid dictionary [type=dict_type, input_value=[{'kind': 'quilt', 'id': ...d': 'quilt', 'id': 136}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/dict_type"
+      },
+      "thicken_reference_list": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: 1 validation error for creo_execute_planArguments\noperations.0.thicken.reference\n  Input should be a valid dictionary [type=dict_type, input_value=[{'kind': 'quilt', 'id': ...d': 'quilt', 'id': 136}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/dict_type"
+      },
+      "quilt_merge": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: Not available in the 0.18.3 release; no native job was queued. quilt_merge: the surface merge is not published: on this machine the documented ProMerge.h array tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy flat tree is rejected with -1, an explicit quilt side and a forced full regenerate change nothing, so the joined area and closure cannot be measured or handed to thicken"
+      }
+    },
+    "thicken_0_3": {
+      "job_id": "c831e45aa0cd4741bb913d310e1d52e5",
+      "status": "succeeded",
+      "volume_before_mm3": 0.0,
+      "volume_after_mm3": 239.99999999999994,
+      "saved": true,
+      "message": "General feature plan completed",
+      "body": {
+        "bbox": [
+          [
+            0.0,
+            -0.15,
+            0.0
+          ],
+          [
+            40.0,
+            0.15,
+            20.0
+          ]
+        ],
+        "surface_count": 6,
+        "thickness_span_y_mm": 0.3
+      }
+    },
+    "after_first_thicken": {
+      "floor": {
+        "quilt_id": 136,
+        "area_mm2": 1600.0,
+        "closed": false,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            40.0,
+            40.0,
+            0.0
+          ]
+        ]
+      },
+      "loft_a": {
+        "quilt_id": 61,
+        "area_mm2": 800.0,
+        "closed": true,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            0.0,
+            -2.3397078925552144e-61,
+            0.0
+          ],
+          [
+            40.0,
+            0.0,
+            20.0
+          ]
+        ]
+      },
+      "loft_b": {
+        "quilt_id": 88,
+        "area_mm2": 800.0,
+        "closed": false,
+        "face_count": 1,
+        "bbox_mm": [
+          [
+            40.0,
+            0.0,
+            0.0
+          ],
+          [
+            40.0,
+            40.0,
+            20.0
+          ]
+        ]
+      }
+    },
+    "group_with_thickened_member": {
+      "is_error": true,
+      "job_id": null,
+      "message": "Error executing tool creo_measure_surface_group: surface_group_measure could not visit the group boundary: contour_edge_visit_failed"
+    },
+    "group_after_first_thicken": {
+      "job_id": "d0fdabe2bc204440b3cc5f506add0d0f",
+      "revision": 2,
+      "unit_name": "mm",
+      "tolerance_mm": 0.01,
+      "gap_search_mm": 1.0,
+      "state": "closed",
+      "state_reason": null,
+      "open_edges": 6,
+      "boundary_edges": 8,
+      "joined_edges": 2,
+      "joined_pairs": null,
+      "boundary_closed": false,
+      "gap_max_mm": 0.0,
+      "overlap_detected": false,
+      "overlap_area_mm2": 0.0
+    },
+    "single_open_solidify": {
+      "job_id": "a1601d624c074581820729aed0ea42ea",
+      "status": "failed",
+      "rollback_succeeded": true,
+      "message": "solidify requires a closed quilt; the referenced quilt is open (ProQuiltVolumeEval=-18, quilt_is_open)"
+    },
+    "subsequent_thicken": {
+      "job_id": "96f36d7a09774efab01986f3016abfe6",
+      "status": "succeeded",
+      "volume_before_mm3": 239.99999999999994,
+      "volume_after_mm3": 1836.9999999999982,
+      "naive_sum_mm3": 1840.0,
+      "expected_with_corner_overlap_mm3": 1837.0,
+      "saved": true,
+      "message": "General feature plan completed"
+    },
+    "final_state": {
+      "revision": 3,
+      "quilts": {
+        "floor": {
+          "quilt_id": 136,
+          "area_mm2": 1600.0,
+          "closed": false,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              40.0,
+              40.0,
+              0.0
+            ]
+          ]
+        },
+        "loft_a": {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "closed": true,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              0.0,
+              -2.3397078925552144e-61,
+              0.0
+            ],
+            [
+              40.0,
+              0.0,
+              20.0
+            ]
+          ]
+        },
+        "loft_b": {
+          "quilt_id": 88,
+          "area_mm2": 800.0,
+          "closed": true,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              40.0,
+              0.0,
+              0.0
+            ],
+            [
+              40.0,
+              40.0,
+              20.0
+            ]
+          ]
+        }
+      },
+      "body": {
+        "bbox": [
+          [
+            0.0,
+            -0.15,
+            0.0
+          ],
+          [
+            41.0,
+            40.0,
+            20.0
+          ]
+        ],
+        "surface_count": 10
+      }
+    },
+    "thicken_2_0": {
+      "job_id": "e125502f20924a24ab5cd02ba7618c2f",
+      "status": "succeeded",
+      "volume_after_mm3": 1599.9999999999995,
+      "saved": true,
+      "thickness_span_y_mm": 2.0,
+      "surface_count": 6
+    }
+  },
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready"
+      }
+    },
+    {
+      "check": "surface_loft_published",
+      "ok": true
+    },
+    {
+      "check": "surface_trim_published",
+      "ok": true
+    },
+    {
+      "check": "thicken_published",
+      "ok": true
+    },
+    {
+      "check": "solidify_published",
+      "ok": true
+    },
+    {
+      "check": "surface_group_measure_published",
+      "ok": true
+    },
+    {
+      "check": "quilt_merge_gated",
+      "ok": true
+    },
+    {
+      "check": "group_built",
+      "ok": true,
+      "detail": {
+        "job_id": "30696732150b4f90b8d10537977f2e80",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "three_quilts_present",
+      "ok": true,
+      "detail": {
+        "areas_mm2": [
+          800.0,
+          800.0,
+          1600.0
+        ]
+      }
+    },
+    {
+      "check": "areas_800_800_1600",
+      "ok": true,
+      "detail": {
+        "floor": {
+          "quilt_id": 136,
+          "area_mm2": 1600.0,
+          "closed": false,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              40.0,
+              40.0,
+              0.0
+            ]
+          ]
+        },
+        "loft_a": {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "closed": false,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              0.0,
+              -2.3397078925552144e-61,
+              0.0
+            ],
+            [
+              40.0,
+              0.0,
+              20.0
+            ]
+          ]
+        },
+        "loft_b": {
+          "quilt_id": 88,
+          "area_mm2": 800.0,
+          "closed": false,
+          "face_count": 1,
+          "bbox_mm": [
+            [
+              40.0,
+              0.0,
+              0.0
+            ],
+            [
+              40.0,
+              40.0,
+              20.0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "check": "every_member_quilt_is_open",
+      "ok": true,
+      "detail": {
+        "loft_a": false,
+        "loft_b": false
+      }
+    },
+    {
+      "check": "sum_area_is_3200",
+      "ok": true
+    },
+    {
+      "check": "group_measure_finished",
+      "ok": true,
+      "detail": {
+        "state": "closed",
+        "reason": null
+      }
+    },
+    {
+      "check": "group_state_is_closed",
+      "ok": true,
+      "detail": {
+        "job_id": "b4808ce35ef4427b9ab7c324325cb67d",
+        "revision": 1,
+        "unit_name": "mm",
+        "tolerance_mm": 0.01,
+        "gap_search_mm": 1.0,
+        "state": "closed",
+        "state_reason": null,
+        "open_edges": 6,
+        "boundary_edges": 12,
+        "joined_edges": 6,
+        "joined_pairs": null,
+        "boundary_closed": false,
+        "gap_max_mm": 2.465190328815662e-31,
+        "overlap_detected": false,
+        "overlap_area_mm2": 0.0
+      }
+    },
+    {
+      "check": "group_open_edges_6",
+      "ok": true,
+      "detail": {
+        "open_edges": 6
+      }
+    },
+    {
+      "check": "group_gap_within_tolerance",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": 2.465190328815662e-31
+      }
+    },
+    {
+      "check": "group_has_no_overlap",
+      "ok": true,
+      "detail": {
+        "job_id": "b4808ce35ef4427b9ab7c324325cb67d",
+        "revision": 1,
+        "unit_name": "mm",
+        "tolerance_mm": 0.01,
+        "gap_search_mm": 1.0,
+        "state": "closed",
+        "state_reason": null,
+        "open_edges": 6,
+        "boundary_edges": 12,
+        "joined_edges": 6,
+        "joined_pairs": null,
+        "boundary_closed": false,
+        "gap_max_mm": 2.465190328815662e-31,
+        "overlap_detected": false,
+        "overlap_area_mm2": 0.0
+      }
+    },
+    {
+      "check": "group_boundary_is_open_sheet",
+      "ok": true
+    },
+    {
+      "check": "group_measure_is_mm",
+      "ok": true
+    },
+    {
+      "check": "group_measure_kept_revision",
+      "ok": true
+    },
+    {
+      "check": "solidify_reference_list_refused_before_job",
+      "ok": true,
+      "detail": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: 1 validation error for creo_execute_planArguments\noperations.0.solidify.reference\n  Input should be a valid dictionary [type=dict_type, input_value=[{'kind': 'quilt', 'id': ...d': 'quilt', 'id': 136}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/dict_type"
+      }
+    },
+    {
+      "check": "thicken_reference_list_refused_before_job",
+      "ok": true,
+      "detail": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: 1 validation error for creo_execute_planArguments\noperations.0.thicken.reference\n  Input should be a valid dictionary [type=dict_type, input_value=[{'kind': 'quilt', 'id': ...d': 'quilt', 'id': 136}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/dict_type"
+      }
+    },
+    {
+      "check": "quilt_merge_refused_before_job",
+      "ok": true,
+      "detail": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_execute_plan: Not available in the 0.18.3 release; no native job was queued. quilt_merge: the surface merge is not published: on this machine the documented ProMerge.h array tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy flat tree is rejected with -1, an explicit quilt side and a forced full regenerate change nothing, so the joined area and closure cannot be measured or handed to thicken"
+      }
+    },
+    {
+      "check": "refusals_kept_revision",
+      "ok": true,
+      "detail": {
+        "before": 1,
+        "after": 1
+      }
+    },
+    {
+      "check": "thicken_0_3_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "c831e45aa0cd4741bb913d310e1d52e5",
+        "status": "succeeded",
+        "volume_before_mm3": 0.0,
+        "volume_after_mm3": 239.99999999999994,
+        "saved": true,
+        "message": "General feature plan completed",
+        "body": {
+          "bbox": [
+            [
+              0.0,
+              -0.15,
+              0.0
+            ],
+            [
+              40.0,
+              0.15,
+              20.0
+            ]
+          ],
+          "surface_count": 6,
+          "thickness_span_y_mm": 0.3
+        }
+      }
+    },
+    {
+      "check": "thicken_0_3_volume_240",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 239.99999999999994,
+        "expected": 240.0
+      }
+    },
+    {
+      "check": "thicken_0_3_one_body",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "bbox": [
+              [
+                0.0,
+                -0.15,
+                0.0
+              ],
+              [
+                40.0,
+                0.15,
+                20.0
+              ]
+            ],
+            "bbox_query_code": 0,
+            "has_geometry": true,
+            "id": -5778,
+            "material": true,
+            "state": 4,
+            "state_name": "active",
+            "surface_count": 6
+          }
+        ]
+      }
+    },
+    {
+      "check": "thicken_0_3_thickness_readback",
+      "ok": true,
+      "detail": {
+        "thickness_span_y_mm": 0.3,
+        "bbox": [
+          [
+            0.0,
+            -0.15,
+            0.0
+          ],
+          [
+            40.0,
+            0.15,
+            20.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "thicken_0_3_is_a_closed_slab",
+      "ok": true,
+      "detail": {
+        "surface_count": 6
+      }
+    },
+    {
+      "check": "thicken_keeps_every_quilt_id_and_area",
+      "ok": true,
+      "detail": {
+        "remaining": [
+          "floor",
+          "loft_a",
+          "loft_b"
+        ]
+      }
+    },
+    {
+      "check": "thickened_member_reports_closed",
+      "ok": true,
+      "detail": {
+        "loft_a_closed": true,
+        "loft_b_closed": false
+      }
+    },
+    {
+      "check": "group_with_thickened_member_is_refused",
+      "ok": true,
+      "detail": {
+        "is_error": true,
+        "job_id": null,
+        "message": "Error executing tool creo_measure_surface_group: surface_group_measure could not visit the group boundary: contour_edge_visit_failed"
+      }
+    },
+    {
+      "check": "reloaded_open_members_keep_their_seams",
+      "ok": true,
+      "detail": {
+        "job_id": "d0fdabe2bc204440b3cc5f506add0d0f",
+        "revision": 2,
+        "unit_name": "mm",
+        "tolerance_mm": 0.01,
+        "gap_search_mm": 1.0,
+        "state": "closed",
+        "state_reason": null,
+        "open_edges": 6,
+        "boundary_edges": 8,
+        "joined_edges": 2,
+        "joined_pairs": null,
+        "boundary_closed": false,
+        "gap_max_mm": 0.0,
+        "overlap_detected": false,
+        "overlap_area_mm2": 0.0
+      }
+    },
+    {
+      "check": "open_member_solidify_refused_by_native",
+      "ok": true,
+      "detail": {
+        "job_id": "a1601d624c074581820729aed0ea42ea",
+        "status": "failed",
+        "rollback_succeeded": true,
+        "message": "solidify requires a closed quilt; the referenced quilt is open (ProQuiltVolumeEval=-18, quilt_is_open)"
+      }
+    },
+    {
+      "check": "open_member_solidify_rolled_back",
+      "ok": true,
+      "detail": {
+        "rollback_succeeded": true
+      }
+    },
+    {
+      "check": "open_member_solidify_kept_revision",
+      "ok": true,
+      "detail": {
+        "before": 2,
+        "after": 2
+      }
+    },
+    {
+      "check": "subsequent_thicken_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "96f36d7a09774efab01986f3016abfe6",
+        "status": "succeeded",
+        "volume_before_mm3": 239.99999999999994,
+        "volume_after_mm3": 1836.9999999999982,
+        "naive_sum_mm3": 1840.0,
+        "expected_with_corner_overlap_mm3": 1837.0,
+        "saved": true,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "subsequent_thicken_volume_is_the_union",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 1836.9999999999982,
+        "expected_with_corner_overlap_mm3": 1837.0,
+        "naive_sum_mm3": 1840.0
+      }
+    },
+    {
+      "check": "quilt_identity_survives_both_thickens",
+      "ok": true,
+      "detail": {
+        "remaining": [
+          "floor",
+          "loft_a",
+          "loft_b"
+        ]
+      }
+    },
+    {
+      "check": "both_thickened_members_report_closed",
+      "ok": true,
+      "detail": {
+        "loft_a": true,
+        "loft_b": true,
+        "floor": false
+      }
+    },
+    {
+      "check": "both_sheets_share_one_body",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "bbox": [
+              [
+                0.0,
+                -0.15,
+                0.0
+              ],
+              [
+                41.0,
+                40.0,
+                20.0
+              ]
+            ],
+            "bbox_query_code": 0,
+            "has_geometry": true,
+            "id": -5778,
+            "material": true,
+            "state": 4,
+            "state_name": "active",
+            "surface_count": 10
+          }
+        ]
+      }
+    },
+    {
+      "check": "group_built_2",
+      "ok": true,
+      "detail": {
+        "job_id": "588cc529c2ff47a596dda3b6da362f8d",
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_2_0_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "e125502f20924a24ab5cd02ba7618c2f",
+        "status": "succeeded",
+        "volume_after_mm3": 1599.9999999999995,
+        "saved": true,
+        "thickness_span_y_mm": 2.0,
+        "surface_count": 6
+      }
+    },
+    {
+      "check": "thicken_2_0_volume_1600",
+      "ok": true,
+      "detail": {
+        "job_id": "e125502f20924a24ab5cd02ba7618c2f",
+        "status": "succeeded",
+        "volume_after_mm3": 1599.9999999999995,
+        "saved": true,
+        "thickness_span_y_mm": 2.0,
+        "surface_count": 6
+      }
+    },
+    {
+      "check": "thicken_2_0_thickness_readback",
+      "ok": true,
+      "detail": {
+        "thickness_span_y_mm": 2.0,
+        "bbox": [
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            40.0,
+            1.0,
+            20.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "thicken_2_0_is_a_closed_slab",
+      "ok": true,
+      "detail": {
+        "surface_count": 6
+      }
+    }
+  ],
+  "run_id": "20261108-011157-8a32d4",
+  "report_path": "E:\\Projects\\MCP_CREO_MechDog-d074\\build\\multi_quilt_group\\20261108-011157-8a32d4\\report.json"
+}
