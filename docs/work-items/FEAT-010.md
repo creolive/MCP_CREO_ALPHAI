@@ -55,3 +55,7 @@
 ## 2026-11-07 离线接续（未发布）
 
 DEV-071公开solver.requested/used/selection_reason及各阶段实际返回码，失败保持部分结果，不把初次Solve=-1误判最终失败。默认容差与显式geometry_tolerance_mm硬门不变。原生诊断源码已编写，尚未SDK构建/Creo实机；53mm线弧形变与frame求解根因仍开放。 见[DEV-071](DEV-071.md)与[三件反馈映射](../validation/feedback-0.16.0-2026-11-07/MAPPING.md)。
+
+## 2026-11-07 实机（0.17.3，Creo 12.4.0.0）
+
+`tools/test_sketch_geometry_deviation.py --live --confirm-session-usable` 只生成 `live_execution=prepared_only`（报告 `build/sketch_geometry_deviation/810fa794/report.json`），不建模，故不能作为本项实机证据。改用 `tools/test_dev048_plane_frame.py --live --confirm-session-usable`：右基准面 `u_axis=+Z`/`-Z` 两例通过（体积 800 mm³、COG `2,-10,5` / `2,10,-5`、保存重载 `true`），平行 `u_axis` 拒绝已验证；`plane_frame_matrix=passed`、`native_acceptance=partial`（`build/dev048_t04_plane_frame.json`，SHA256 `9f9b7360378fc4b288c9710b2149a287923fe9bda48256c97f954f9ed09d5e48`）。仍待：其余基准方向、外部 Creo 10、倾斜面与编辑/重载保真。条目保持进行中。
