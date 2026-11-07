@@ -209,3 +209,7 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 测试：`tests/unit/test_native_planar_wall.py` 44 项（新增 origin/envelope/投影/server/native 断言 8 项 + resize 映射 1 项）、`test_t02_operation_results` 18 项；`bridge.py build` 退出 0。离线探针 10/10。
 
 未验证：Creo 9/10 实机；显式平面字典与非零 `origin` 组合（schema 明确拒绝）；WorkBuddy 黑盒；斜置/非轴对齐 frame 的 resize（原生会以“截面轴与记录 frame 不对齐”拒绝，未取实机证据）。本轮已随 0.17.0 合入 `main` 并发布。
+
+## 2026-11-07 R03 矩阵实机复跑（本机 Creo 12.4.0.0）
+
+`tools/test_adoption_planar_wall.py --live --confirm-session-usable` → `build/planar_wall/20261107T023240Z/adoption_live.json`（SHA256 `cfcadd73…010b`），77 项检查 0 失败、`passed=true`，覆盖 100×60×1、185×232×1、同计划 `current_plan` 与保存重载。
