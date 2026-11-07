@@ -2,6 +2,12 @@
 
 > **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
 
+## 2026-11-07：0.17.1 反馈离线增量（DEV-072）
+
+多道相邻折边会改变后续附着边的实际端点：`edge_geometry` 可跨 ID 重排，但不代表端点不变。若前道折边缩短了后道边，按“提交一段 → 等终态 → `creo_inspect_model` 重读 `edges[].start/end` → 带当前 revision 提交下一段”的工作流执行。容差用于毫米坐标误差，不能用大容差吞掉毫米级让位或让歧义边自动选中；新失配诊断提供最多五条最近候选及端点误差，仍严格唯一匹配，不自动吸附。
+
+同段第二/三层四边共享角部、`miter_cuts` 的实际切角量和 `end_trim_mm` 的实际去料均未由本批验证；后者历史结果仍为 `trim_ignored`，不能用于保证四边闭合。本轮原生诊断及空装配预览代码不连接 Creo、不重编共享执行器，见 [DEV-072](DEV-072.md)。
+
 ## 2026-11-06：R10 计划内 `edge_geometry` 选边（实机）
 
 `sheetmetal_flange.edge` 现在有两种形态，二者都不得再包 `edge`/`reference`：

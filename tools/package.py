@@ -58,6 +58,7 @@ def source_files():
         "tests/native/test_adoption_source.cpp",
         "tests/native/test_constraint_names.cpp",
         "tests/native/test_constraint_compare.cpp",
+        "tests/native/test_dev072_geometry.cpp",
     )
     files = [ROOT / name for name in names]
     for directory, extensions in {

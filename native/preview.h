@@ -10,6 +10,7 @@
 // with its raw return code so a failed capture can be reported beside a model
 // save that did succeed (preview failure is not a modeling failure).
 #pragma once
+#include "geometry_diagnostics.h"
 #include "third_party/json.hpp"
 #include <ProMdl.h>
 #include <ProFeature.h>
@@ -98,7 +99,7 @@ struct PreviewStepOutcome {
 };
 
 // A zero solid volume is not an empty preview: sketches and surfaces are
-// visible too. Only an inspected part with no active feature beyond datum
+// visible too. Only an inspected part or assembly with no active feature beyond datum
 // planes/axes/points and coordinate systems is safe to skip. Query failures
 // leave the answer unknown and preserve the original capture path.
 struct PreviewGeometryProbe {
@@ -132,13 +133,15 @@ static ProError preview_geometry_feature(ProFeature *feature, ProError status, P
 
 static bool preview_has_no_geometry(ProMdl model) {
     ProMdlType kind;
-    if (ProMdlTypeGet(model, &kind) != PRO_TK_NO_ERROR || kind != PRO_MDL_PART)
+    if (ProMdlTypeGet(model, &kind) != PRO_TK_NO_ERROR ||
+        (kind != PRO_MDL_PART && kind != PRO_MDL_ASSEMBLY))
         return false;
     PreviewGeometryProbe probe;
     ProError code = ProSolidFeatVisit((ProSolid)model, preview_geometry_feature, nullptr, &probe);
     // The SDK also returns NOT_FOUND when a solid has no features at all.
-    return (code == PRO_TK_NO_ERROR || code == PRO_TK_E_NOT_FOUND) && !probe.unknown &&
-           !probe.renderable;
+    return geometry_diagnostics::preview_skip(
+        kind == PRO_MDL_PART, kind == PRO_MDL_ASSEMBLY, probe.renderable,
+        (code == PRO_TK_NO_ERROR || code == PRO_TK_E_NOT_FOUND) && !probe.unknown);
 }
 
 static std::string preview_utf8(const std::wstring &value) {

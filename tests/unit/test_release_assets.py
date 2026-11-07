@@ -3,6 +3,7 @@
 import contextlib
 import hashlib
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from creo_mechdog import release_integrity
+from creo_mechdog import release_download, release_integrity
 from tools import check_release_assets, package
 
 
@@ -203,26 +204,75 @@ class ReleaseAssetFallbackTests(unittest.TestCase):
         return code, output.getvalue(), error.getvalue()
 
     def test_missing_gh_suggests_the_dir_fallback(self):
-        with patch.object(
-            check_release_assets.subprocess,
-            "run",
-            side_effect=FileNotFoundError(2, "not found", "gh"),
+        with (
+            patch.object(
+                release_download.subprocess,
+                "run",
+                side_effect=FileNotFoundError(2, "not found", "gh"),
+            ),
+            patch.object(release_download, "urlopen", side_effect=OSError("API unavailable")),
         ):
             code, output, error = self.run_cli(["--tag", "v9.9.9"])
         self.assertNotEqual(code, 0)
-        self.assertIn("gh CLI is not available", error)
+        self.assertIn("gh release download failed", error)
+        self.assertIn("GitHub API fallback failed", error)
         self.assertIn("--dir", error)
         self.assertIn("v9.9.9", error)
         self.assertNotIn("local_verified", output)
 
     def test_failed_download_suggests_the_dir_fallback(self):
         failure = SimpleNamespace(returncode=1, stdout="", stderr="release not found")
-        with patch.object(check_release_assets.subprocess, "run", return_value=failure):
+        with (
+            patch.object(release_download.subprocess, "run", return_value=failure),
+            patch.object(release_download, "urlopen", side_effect=OSError("API unavailable")),
+        ):
             code, output, error = self.run_cli(["--tag", "v9.9.9"])
         self.assertNotEqual(code, 0)
         self.assertIn("gh release download failed for v9.9.9", error)
         self.assertIn("--dir", error)
         self.assertNotIn("local_verified", output)
+
+    def test_malformed_api_release_keeps_both_errors_and_dir_hint(self):
+        for payload in ([], None, 7, "invalid"):
+            with self.subTest(payload=payload):
+                with (
+                    patch.object(
+                        release_download.subprocess,
+                        "run",
+                        side_effect=FileNotFoundError("gh"),
+                    ),
+                    patch.object(
+                        release_download,
+                        "urlopen",
+                        return_value=io.BytesIO(json.dumps(payload).encode()),
+                    ),
+                ):
+                    code, output, error = self.run_cli(["--tag", "v9.9.9"])
+                self.assertEqual(code, 2)
+                self.assertIn("gh release download failed", error)
+                self.assertIn(
+                    "GitHub API fallback failed: GitHub API returned an invalid release object",
+                    error,
+                )
+                self.assertIn("--dir", error)
+                self.assertNotIn("local_verified", output)
+
+    def test_copy_permission_error_reports_dir_hint(self):
+        with (
+            patch.object(
+                release_download.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0, stderr="", stdout=""),
+            ),
+            patch.object(release_download, "_check"),
+            patch.object(
+                release_download.shutil, "copy2", side_effect=PermissionError("read only")
+            ),
+        ):
+            code, _, error = self.run_cli(["--tag", "v9.9.9"])
+        self.assertEqual(code, 2)
+        self.assertIn("read only", error)
+        self.assertIn("--dir", error)
 
 
 class SourcePackageAssetGateTests(unittest.TestCase):

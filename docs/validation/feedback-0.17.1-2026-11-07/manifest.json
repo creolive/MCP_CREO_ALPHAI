@@ -1,0 +1,39 @@
+{
+  "work_item": "DEV-072",
+  "archived_on": "2026-11-07",
+  "source_directory": "C:\\Users\\Administrator\\Downloads\\0.17.1",
+  "reported_server_version": "0.17.1",
+  "review_source_commit": "e3ad431444b3b5c62ca3c80dea4db2b04da5e08e",
+  "review_source_version": "0.17.2",
+  "evidence_scope": "External MCP and Creo10 offline reports are distinct; this batch has no Creo/Toolkit connection or worker build",
+  "file_count": 3,
+  "files": [
+    {
+      "filename": "2026-11-07_CREO_0.17.1_origin与几何选边已修好但板厚回执字段自相矛盾且端点坐标随折边漂移.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.17.1\\2026-11-07_CREO_0.17.1_origin与几何选边已修好但板厚回执字段自相矛盾且端点坐标随折边漂移.md",
+      "archived_path": "originals/2026-11-07_CREO_0.17.1_origin与几何选边已修好但板厚回执字段自相矛盾且端点坐标随折边漂移.md",
+      "bytes": 10975,
+      "sha256": "c6c5129eaaf9bf72b8a768f7a3cba75bf8c369308b387959a2cd6c1f6fca03eb",
+      "source_sha256": "c6c5129eaaf9bf72b8a768f7a3cba75bf8c369308b387959a2cd6c1f6fca03eb",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-07_CREO_0.17.1_钣金箱体可建但增料封堵致百叶凸台铰链无法一体成形.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.17.1\\2026-11-07_CREO_0.17.1_钣金箱体可建但增料封堵致百叶凸台铰链无法一体成形.md",
+      "archived_path": "originals/2026-11-07_CREO_0.17.1_钣金箱体可建但增料封堵致百叶凸台铰链无法一体成形.md",
+      "bytes": 12503,
+      "sha256": "1739fa4f59cbd41b5093728a511a8e408fac31d2fc4f4621ffd0e5a1da055004",
+      "source_sha256": "1739fa4f59cbd41b5093728a511a8e408fac31d2fc4f4621ffd0e5a1da055004",
+      "hash_verified": true
+    },
+    {
+      "filename": "2026-11-07CREO10.0.0.0-0.17.1-台账三行仍未回填与发布记录停在准备发布及附件替换无留痕.md",
+      "source_path": "C:\\Users\\Administrator\\Downloads\\0.17.1\\2026-11-07CREO10.0.0.0-0.17.1-台账三行仍未回填与发布记录停在准备发布及附件替换无留痕.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.17.1-台账三行仍未回填与发布记录停在准备发布及附件替换无留痕.md",
+      "bytes": 15687,
+      "sha256": "61296d156354cb0d6ed7da2e5225862669191a89a8a3523c1c437ffd3c63a455",
+      "source_sha256": "61296d156354cb0d6ed7da2e5225862669191a89a8a3523c1c437ffd3c63a455",
+      "hash_verified": true
+    }
+  ]
+}

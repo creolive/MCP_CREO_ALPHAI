@@ -944,6 +944,63 @@ class GaugeReceiptTest(unittest.TestCase):
         # the body API had answered.
         self.assertIsNone(projection["thickness_measured_mm"])
         self.assertFalse(projection["thickness_verified"])
+        self.assertEqual(projection["thickness_api_scope"], "body_api_readback_only")
+        self.assertEqual(projection["thickness_api_reason"], "thickness_api_unavailable")
+        self.assertEqual(projection["thickness_fallback_source"], "geometry_normal_span")
+
+    def test_api_failure_has_no_geometry_fallback(self):
+        projection = pwall.result_projection(
+            create_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_body_code=-2,
+                thickness_validation=validation_block(
+                    status="unavailable",
+                    source="api",
+                    value_mm=None,
+                    reason="thickness_api_query_failed",
+                ),
+            )
+        )
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_api_reason"], "thickness_api_query_failed")
+        self.assertIsNone(projection["thickness_fallback_source"])
+
+    def test_malformed_receipt_does_not_claim_missing_api_or_fallback(self):
+        projection = pwall.result_projection(create_result(thickness_validation="bad"))
+        self.assertFalse(projection["verified"])
+        self.assertEqual(projection["thickness_api_reason"], "unknown")
+        self.assertIsNone(projection["thickness_fallback_source"])
+
+    def test_legacy_receipt_has_no_new_api_explanation(self):
+        projection = pwall.result_projection(create_result())
+        for field in ("thickness_api_scope", "thickness_api_reason", "thickness_fallback_source"):
+            self.assertNotIn(field, projection)
+
+    def test_resize_explains_loaded_geometry_fallback_separately(self):
+        projection = pwall.result_projection(
+            resized_result(
+                thickness_measured_mm=None,
+                thickness_verified=False,
+                thickness_loaded_mm=None,
+                thickness_body_code=-1,
+                thickness_geometry_span_mm=1.0,
+                thickness_validation=validation_block(source="geometry_normal_span"),
+                thickness_loaded_validation=validation_block(
+                    source="geometry_normal_span", context="saved_loaded"
+                ),
+            )
+        )
+        self.assertTrue(projection["verified"], projection["problems"])
+        self.assertIsNone(projection["thickness_loaded_mm"])
+        self.assertEqual(projection["thickness_loaded_api_scope"], "body_api_readback_only")
+        self.assertEqual(projection["thickness_loaded_api_reason"], "thickness_api_unavailable")
+        self.assertEqual(projection["thickness_loaded_fallback_source"], "geometry_normal_span")
+
+    def test_public_tool_descriptions_name_the_gauge_verdict(self):
+        source = SERVER.read_text(encoding="utf-8")
+        self.assertIn("thickness_validation is the", source)
+        self.assertIn("thickness_loaded_validation must verify", source)
 
     def test_geometry_span_mismatch_is_not_verified(self):
         projection = pwall.result_projection(

@@ -44,13 +44,17 @@ class DevelopmentValidation(unittest.TestCase):
                 validate_operations([{**op, **change}])
         with (
             patch("generic_bridge.bridge.toolkit_lock"),
+            patch("generic_bridge.bridge.admission_holder", return_value=None) as holder,
             patch("pathlib.Path.is_file", return_value=True),
             patch("generic_bridge.bridge.config", return_value={"creo_root": "C:/Creo"}),
             patch("pathlib.Path.mkdir") as mkdir,
+            patch("generic_bridge.subprocess.Popen") as start,
         ):
             with self.assertRaisesRegex(ValueError, "absolute path"):
                 submit([op])
+            holder.assert_called_once_with()
             mkdir.assert_not_called()
+            start.assert_not_called()
 
 
 if __name__ == "__main__":

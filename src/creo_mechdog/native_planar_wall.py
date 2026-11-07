@@ -416,6 +416,20 @@ def _validation_problems(label: str, block: dict[str, Any], thickness: float) ->
     return []
 
 
+def _api_explanation(block: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Explain the legacy body API fields without turning fallback into an API value."""
+    source = block["source"]
+    if source == "geometry_normal_span":
+        return "thickness_api_unavailable", source
+    if source == "missing_api":
+        return block["reason"], None
+    if source == "api":
+        return block["reason"] if block["status"] == "unavailable" else None, None
+    if str(block["reason"]).startswith("thickness_validation_"):
+        return "unknown", None
+    return "not_attempted", None
+
+
 def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     """Public view of a native planar wall result, with its own verdict.
 
@@ -464,6 +478,10 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
     validation = gauge_validation(result, "thickness_validation", PLAN_CONTEXT)
     if validation is not None:
         projection["thickness_validation"] = validation
+        projection["thickness_api_scope"] = "body_api_readback_only"
+        api_reason, fallback_source = _api_explanation(validation)
+        projection["thickness_api_reason"] = api_reason
+        projection["thickness_fallback_source"] = fallback_source
     loaded_validation = None
     if resize:
         projection["feature_id_before"] = result.get("feature_id_before")
@@ -484,6 +502,10 @@ def result_projection(result: dict[str, Any]) -> dict[str, Any]:
                     SAVED_CONTEXT, "thickness_validation_current_plan_without_create"
                 )
             projection["thickness_loaded_validation"] = loaded_validation
+            projection["thickness_loaded_api_scope"] = "body_api_readback_only"
+            api_reason, fallback_source = _api_explanation(loaded_validation)
+            projection["thickness_loaded_api_reason"] = api_reason
+            projection["thickness_loaded_fallback_source"] = fallback_source
     problems: list[str] = []
     if origin_problem:
         problems.append(origin_problem)
