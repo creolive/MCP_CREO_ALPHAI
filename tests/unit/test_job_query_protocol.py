@@ -192,6 +192,7 @@ def prepare_root(directory: Path) -> dict[str, str]:
         "failure": f"{3:032x}",
         "long_error": f"{4:032x}",
         "criteria": f"{5:032x}",
+        "miter": f"{6:032x}",
     }
     fixtures = {
         jobs["big"]: manifest(jobs["big"], 35),
@@ -200,8 +201,17 @@ def prepare_root(directory: Path) -> dict[str, str]:
         jobs["long_error"]: manifest(jobs["long_error"], 3, status="failed", message=LONG_ERROR),
         jobs["criteria"]: criteria_manifest(jobs["criteria"]),
     }
+    legacy_miter = manifest(jobs["miter"], 1)
+    legacy_miter["result"]["operations"][0].update(op="sheetmetal_flange", label="wall")
+    legacy_miter["result"]["aliases"] = {
+        "wall": {
+            "miter_cuts": {"add": 1, "requested": True, "width_mm": 1.0, "offset_mm": 1.0},
+            "adjacent_bend_ends_allowed": {"allowed_by_miter_cut": True, "edge_id": 266},
+        }
+    }
+    fixtures[jobs["miter"]] = legacy_miter
     # Pad the list to the 50-item query limit with small successful jobs.
-    for index in range(6, 53):
+    for index in range(7, 53):
         job_id = f"{index:032x}"
         fixtures[job_id] = manifest(job_id, 2)
     for job_id, value in fixtures.items():
@@ -286,6 +296,25 @@ class JobQueryProtocol(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["operations_total"], 35)
             self.assertFalse(result["operations_truncated"])
             self.assertNotIn("log_tail", json.dumps(result))
+
+    async def test_legacy_miter_aliases_reach_public_views(self):
+        async with self.client() as client:
+            for arguments in (
+                {"detail": "compact"},
+                {"detail": "compact", "sections": ["miter_cuts", "adjacent_bend_ends_allowed"]},
+                {"detail": "full"},
+                {"detail": "full", "section": "operations_result"},
+            ):
+                reply = await self.call(client, {"job_id": self.jobs["miter"], **arguments})
+                view = reply.structured_content
+                self.assertLessEqual(len(self.payload(reply)), RESPONSE_BUDGET)
+                records = (
+                    view["data"]["operations_result"]
+                    if "data" in view
+                    else view["result"]["operations"]
+                )
+                self.assertEqual(records[0]["miter_cuts"]["width_mm"], 1.0)
+                self.assertTrue(records[0]["adjacent_bend_ends_allowed"]["allowed_by_miter_cut"])
 
     async def test_thousand_operation_job_keeps_counts_and_bound(self):
         async with self.client() as client:

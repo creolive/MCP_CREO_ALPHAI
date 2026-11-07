@@ -267,6 +267,31 @@ def annotate_failed_operation(result: dict[str, Any], inputs: Any = None) -> dic
         else:
             pro_error, source = None, "unsupported"
     raw_message = native.get("message")
+    if isinstance(native.get("solver"), dict):
+        from creo_mechdog.geometry_deviation import normalize_solver_receipt
+
+        block["solver"] = normalize_solver_receipt(native["solver"])
+    # Feature status is a separate observation, never a raw ProError. Keep
+    # bounded pre-rollback ids/states already reported by the native health gate.
+    features = result.get("failed_features")
+    if isinstance(features, list) and features:
+        sample = []
+        for feature in features[:20]:
+            if not isinstance(feature, dict):
+                continue
+            sample.append(
+                {
+                    "id": _integer(feature.get("id")),
+                    "name": (_text(feature.get("name")) or "")[:128] or None,
+                    "type": _integer(feature.get("type")),
+                    "status": _integer(feature.get("status")),
+                }
+            )
+        block["failed_features"] = {
+            "total": len(features),
+            "sample": sample,
+            "truncated": len(features) > len(sample),
+        }
     if not isinstance(raw_message, str) or not raw_message:
         raw_message = result.get("message")
     message, truncated = bounded_message(raw_message)

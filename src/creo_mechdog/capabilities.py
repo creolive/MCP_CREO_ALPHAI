@@ -536,7 +536,7 @@ def families() -> dict:
                 "quilt merge stays gated (UNAVAILABLE_OPERATIONS); no multi-section loft, "
                 "no boundary blend and no surface loft tool; surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
-                "quilt or a solid thickness wall"
+                "quilt; it can add solid volume, and target_quilt_id names the source quilt"
             ),
         },
         "boolean_bodies": {
@@ -571,7 +571,9 @@ def families() -> dict:
             "limits": "one quilt, one explicit side - the receipt direction is the requested "
             "side and the z sign is not read back from the geometry; the documented "
             "normal-to-surface offset method; the result is the offset wall, not a standalone "
-            "offset quilt; a closed quilt is not required",
+            "offset quilt; it can add solid volume, and target_quilt_id names the source "
+            "quilt, not a new downstream quilt; a closed quilt is not required. Measured "
+            "distance is available only under offset_distance_status's planar/empty-model gate",
         },
         "sweep": {
             "enabled": True,

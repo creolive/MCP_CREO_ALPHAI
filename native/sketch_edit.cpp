@@ -467,6 +467,7 @@ static void generic_sketch_edit(const J &op) {
     trace_section_constraints(section, "after_rebuild");
     trace_section_entities(section, "after_rebuild");
     J solving_op = op;
+    last_sketch_solver_info = profile_dimensioning_choice(op);
     std::string mode = profile_dimensioning(op);
     if (mode == "autodim" && op.value("dimensioning", "auto") != "coordinates") {
         // BUG-079: autodim after an in-place rebuild can under-dimension the
@@ -508,6 +509,9 @@ static void generic_sketch_edit(const J &op) {
         }
     }
     solving_op["dimensioning"] = mode;
+    if (mode != last_sketch_solver_info["used"].get<std::string>())
+        last_sketch_solver_info["selection_reason"] = "edit_coordinate_upgrade";
+    last_sketch_solver_info["used"] = mode;
     // FEAT-010/BUG-049: resolve the deviation policy on the final mode (the
     // autodim upgrade above may have switched this edit to coordinates) and
     // snapshot the pre-solve section so the solved geometry is measured
@@ -669,6 +673,7 @@ static void generic_sketch_edit(const J &op) {
         weld_report["applied"] = true;
     }
     J sketch_result = {{"op", op["op"]},
+                       {"solver", sketch_solver_receipt(meta["solver"])},
                        {"endpoint_weld_native", weld_report},
                        {"sketch", label},
                        {"preserved_feature_id", f.id},

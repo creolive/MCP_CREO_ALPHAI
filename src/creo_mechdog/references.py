@@ -480,10 +480,12 @@ def reference_capabilities() -> dict[str, Any]:
                     ),
                 },
                 "result": (
-                    "the offset wall, measured as area times distance; it is neither a "
-                    "standalone offset quilt nor a solid thickness wall. creo_thicken / "
-                    "creo_solidify build a solid wall from a quilt, while this operator "
-                    "moves the quilt along its surface normal"
+                    "an offset wall that can add solid volume, not a standalone offset quilt. "
+                    "target_quilt_id identifies the source quilt, not a new downstream quilt. "
+                    "The distance is measured from volume/area only for a single planar source "
+                    "in an initially empty model; other cases return null with "
+                    "offset_distance_status. Use creo_thicken / creo_solidify for their "
+                    "separate quilt-to-solid operations"
                 ),
                 "requires": "one quilt reference; a closed quilt is not required",
                 "rejected": {
