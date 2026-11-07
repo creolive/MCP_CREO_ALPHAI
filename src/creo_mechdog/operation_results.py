@@ -578,6 +578,56 @@ def normalize_operations(
     return normalized
 
 
+ALIAS_RECEIPT_KEYS = {
+    "sheetmetal_flange": ("miter_cuts", "adjacent_bend_ends_allowed"),
+}
+
+
+def alias_receipts_needed(result: dict[str, Any]) -> bool:
+    """Whether executed operations lack a receipt that may exist in aliases."""
+    return (
+        any(
+            isinstance(op, dict)
+            and isinstance(op.get("op"), str)
+            and (
+                op.get("execution_status") == "succeeded"
+                or ("execution_status" not in op and op.get("succeeded") is True)
+            )
+            and isinstance(op.get("label"), str)
+            and any(key not in op for key in ALIAS_RECEIPT_KEYS.get(op.get("op"), ()))
+            for op in result.get("operations", [])
+        )
+        if isinstance(result.get("operations"), list)
+        else False
+    )
+
+
+def annotate_alias_receipts(result: dict[str, Any], aliases: Any = None) -> None:
+    """Copy actual per-feature evidence to its successful operation record.
+
+    Old executors put some receipts only in aliases. Do not infer them from
+    requests, borrow an alias for a failed step, or overwrite a native record.
+    The query path may supply verified sidecar aliases; this helper does no IO.
+    """
+    aliases = result.get("aliases") if aliases is None else aliases
+    if not isinstance(aliases, dict) or not isinstance(result.get("operations"), list):
+        return
+    for op in result["operations"]:
+        if not isinstance(op, dict):
+            continue
+        execution = op.get("execution_status")
+        if execution != "succeeded" and not (execution is None and op.get("succeeded") is True):
+            continue
+        label = op.get("label")
+        alias = aliases.get(label) if isinstance(label, str) else None
+        if not isinstance(alias, dict):
+            continue
+        kind = op.get("op")
+        for key in ALIAS_RECEIPT_KEYS.get(kind, ()) if isinstance(kind, str) else ():
+            if key not in op and isinstance(alias.get(key), dict):
+                op[key] = alias[key]
+
+
 def annotate_native_result(
     result: dict[str, Any],
     *,
@@ -613,6 +663,12 @@ def annotate_native_result(
         failed_index=failed_index if isinstance(failed_index, int) else None,
         cleanup_confirmed=cleanup_is_trusted(result, is_new_model=is_new_model),
     )
+    annotate_alias_receipts(result)
+    from creo_mechdog.geometry_deviation import normalize_solver_receipt
+
+    for operation in result["operations"]:
+        if "solver" in operation:
+            operation["solver"] = normalize_solver_receipt(operation["solver"])
     annotate_revolve_axis(result)
     annotate_extrude_depth(result)
     annotate_source_area_status(result)

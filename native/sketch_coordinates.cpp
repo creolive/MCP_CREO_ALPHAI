@@ -1,18 +1,21 @@
 // Complete coordinate dimensions for exact, fully supplied profile geometry.
 // Accepted native profiles include large polygons, axis-aligned/rotated arcs and circles.
-static std::string profile_dimensioning(const J &op) {
+static J profile_dimensioning_choice(const J &op) {
     std::string requested = op.value("dimensioning", "auto");
+    auto choice = [&](const std::string &used, const char *reason) -> J {
+        return {{"requested", requested}, {"used", used}, {"selection_reason", reason}};
+    };
     if (requested != "auto")
-        return requested;
+        return choice(requested, "explicit");
     if (!op.value("dimensions", J::array()).empty() || !op.value("constraints", J::array()).empty())
-        return "autodim";
+        return choice("autodim", "supplied_dimensions_or_constraints");
     double extent = 0;
     int count = 0;
     for (auto e : op.at("entities")) {
         std::string type = e.at("type");
         if (type != "line" && type != "centerline" && type != "rectangle" && type != "polyline" &&
             type != "circle" && type != "arc")
-            return "autodim";
+            return choice("autodim", "unsupported_coordinate_entity");
         count += type == "rectangle" ? 4
                  : type == "polyline"
                      ? (int)e["points"].size() - 1 + (e.value("closed", false) ? 1 : 0)
@@ -28,7 +31,14 @@ static std::string profile_dimensioning(const J &op) {
         if (e.contains("radius"))
             extent = std::max(extent, e["radius"].get<double>());
     }
-    return count >= 10 || extent > 1000 ? "coordinates" : "autodim";
+    if (count >= 10)
+        return choice("coordinates", "entity_count");
+    if (extent > 1000)
+        return choice("coordinates", "extent");
+    return choice("autodim", "small_profile");
+}
+static std::string profile_dimensioning(const J &op) {
+    return profile_dimensioning_choice(op).at("used").get<std::string>();
 }
 // BUG-108: the coordinate-system entity carries no position constraint of its
 // own, so a solve may translate it, and the whole profile with it. Pin it

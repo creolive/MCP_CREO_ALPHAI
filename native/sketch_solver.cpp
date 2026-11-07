@@ -1,4 +1,20 @@
 // Automatic solve diagnostics. Failed experimental conditioning/rigid paths are not exposed.
+// DEV-071: reset for every operation; preserve only actual attempted call codes
+// when a throw prevents the ordinary sketch result from being returned.
+static J last_sketch_solver_info = nullptr;
+static J sketch_solver_receipt(const J &info) {
+    J stages = info.value("stages", J::object());
+    return {{"requested", info.value("requested", J(nullptr))},
+            {"used", info.value("used", J(nullptr))},
+            {"selection_reason", info.value("selection_reason", J(nullptr))},
+            {"stages",
+             {{"initial_solve", stages.value("initial_solve", J(nullptr))},
+              {"retry_without_inference", stages.value("retry_without_inference", J(nullptr))},
+              {"autodimension", stages.value("autodimension", J(nullptr))},
+              {"section_regenerate", stages.value("section_regenerate", J(nullptr))}}},
+            {"completed", info.value("completed", false)},
+            {"recovered", info.value("recovered", false)}};
+}
 static void section_errors(ProWSecerror error, const char *phase) {
     int n = 0;
     ProSecerrorCount(&error, &n);
@@ -41,8 +57,18 @@ static J solve_profile(ProSection section, const J &op) {
               {"epsilon_mm", epsilon},
               {"weld_requested", weld_requested},
               {"epsilon_source", "mode_default"}};
+    if (last_sketch_solver_info.is_object()) {
+        info["requested"] = last_sketch_solver_info.value("requested", J(mode));
+        info["selection_reason"] = last_sketch_solver_info.value("selection_reason", J(nullptr));
+    }
+    info["stages"] = J::object();
+    info["completed"] = false;
+    info["recovered"] = false;
+    last_sketch_solver_info = info;
     try {
         ProError solved = ProSectionSolve(section, &error);
+        info["stages"]["initial_solve"] = solved;
+        last_sketch_solver_info = info;
         log("SKETCH_SOLVE=%d mode=%s\n", solved, mode.c_str());
         if (solved)
             section_errors(error, "solve");
@@ -73,12 +99,16 @@ static J solve_profile(ProSection section, const J &op) {
             if (ids)
                 ProArrayFree((ProArray *)&ids);
             solved = ProSectionSolve(section, &error);
+            info["stages"]["retry_without_inference"] = solved;
+            last_sketch_solver_info = info;
             log("SKETCH_SOLVE_WITHOUT_INFERENCE=%d\n", solved);
             if (solved)
                 section_errors(error, "coordinate_without_inference");
         }
         if (mode != "coordinates" || solved) {
             solved = ProSectionAutodim(section, &error);
+            info["stages"]["autodimension"] = solved;
+            last_sketch_solver_info = info;
             log("AutodimensionSketch=%d\n", solved);
             if (solved)
                 section_errors(error, "autodimension");
@@ -86,10 +116,15 @@ static J solve_profile(ProSection section, const J &op) {
         } else
             log("AutodimensionSketch=SKIPPED_COMPLETE_COORDINATE_DIMENSIONS\n");
         ProError regenerated = ProSectionRegenerate(section, &error);
+        info["stages"]["section_regenerate"] = regenerated;
+        last_sketch_solver_info = info;
         log("SectionRegenerate=%d mode=%s\n", regenerated, mode.c_str());
         if (regenerated)
             section_errors(error, "regenerate");
         check(regenerated, "RegenerateSolvedSketch");
+        info["completed"] = true;
+        info["recovered"] = info["stages"]["initial_solve"].get<int>() != PRO_TK_NO_ERROR;
+        last_sketch_solver_info = info;
     } catch (...) {
         ProSecerrorFree(&error);
         throw;

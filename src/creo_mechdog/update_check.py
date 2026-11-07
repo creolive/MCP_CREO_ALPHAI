@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import total_ordering
 from time import monotonic
 from typing import Any
@@ -149,11 +151,20 @@ def select_release(releases: list[dict[str, Any]], current: str) -> dict[str, An
     }
 
 
-async def fetch_releases() -> list[dict[str, Any]]:
-    """Fetch all pages within one five-second budget; never accept a partial list."""
+def _network_timeout_seconds() -> float:
+    """Read process configuration once, safely rejecting invalid budgets."""
+    try:
+        value = float(os.environ.get("MECHDOG_UPDATE_TIMEOUT_SECONDS", "5"))
+    except (ValueError, TypeError):
+        return NETWORK_SECONDS
+    return value if math.isfinite(value) and 1 <= value <= 30 else NETWORK_SECONDS
+
+
+async def fetch_releases(timeout_seconds: float = NETWORK_SECONDS) -> list[dict[str, Any]]:
+    """Fetch pages with a per-request timeout; checker enforces the total budget."""
     releases = []
     async with httpx2.AsyncClient(
-        timeout=NETWORK_SECONDS,
+        timeout=timeout_seconds,
         follow_redirects=False,
         headers={
             "Accept": "application/vnd.github+json",
@@ -193,6 +204,9 @@ class UpdateChecker:
 
     def __init__(self, current_version: str = VERSION):
         self.current_version = current_version
+        self.network_timeout_seconds = _network_timeout_seconds()
+        self._completed_at: float | None = None
+        self._retry_after_at: str | None = None
         self._result: dict[str, Any] = {
             "status": "not_checked",
             "current_version": current_version,
@@ -215,6 +229,11 @@ class UpdateChecker:
         if self._inflight is not None and not self._inflight.done():
             result["status"] = "checking"
             result["message"] = "正在检查更新；已有版本信息来自缓存。"
+        result["network_timeout_seconds"] = self.network_timeout_seconds
+        result["cache_age_seconds"] = (
+            None if self._completed_at is None else max(0.0, monotonic() - self._completed_at)
+        )
+        result["retry_after_at"] = self._retry_after_at
         result["from_cache"] = from_cache
         result["stale"] = bool(result["latest_version"]) and (
             monotonic() >= self._success_expires or result["error"] is not None
@@ -226,8 +245,7 @@ class UpdateChecker:
             await asyncio.shield(self._inflight)
             return self.snapshot(from_cache=False)
         valid = monotonic() < self._expires
-        # Even explicit refresh respects the failure cooldown to avoid retry storms.
-        if valid and (not force or self._result["status"] in ("failed", "unknown")):
+        if valid and not force:
             return self.snapshot()
         self._inflight = asyncio.create_task(self._refresh())
         await asyncio.shield(self._inflight)
@@ -235,19 +253,29 @@ class UpdateChecker:
 
     async def _refresh(self) -> None:
         try:
-            async with asyncio.timeout(NETWORK_SECONDS):
-                releases = await fetch_releases()
+            async with asyncio.timeout(self.network_timeout_seconds):
+                releases = await fetch_releases(self.network_timeout_seconds)
                 selected = select_release(releases, self.current_version)
         except asyncio.CancelledError:
             raise
         except (TimeoutError, httpx2.TimeoutException):
-            selected = {"status": "failed", "error": "GitHub 更新检查超过 5 秒网络预算。"}
+            selected = {
+                "status": "failed",
+                "error": f"GitHub 更新检查超过 {self.network_timeout_seconds:g} 秒网络预算。",
+            }
         except UpdateFailure as exc:
             selected = {"status": "failed", "error": str(exc)}
         except Exception:
             # Proxy addresses, local certificate paths and credentials must never escape.
             selected = {"status": "failed", "error": "GitHub 更新检查网络或响应处理失败。"}
-        now = datetime.now(timezone.utc).isoformat()
+        completed = datetime.now(timezone.utc)
+        now = completed.isoformat()
+        self._completed_at = monotonic()
+        self._retry_after_at = (
+            (completed + timedelta(seconds=RETRY_SECONDS)).isoformat()
+            if selected["status"] in ("failed", "unknown")
+            else None
+        )
         if selected["status"] == "failed":
             self._result.update(selected, checked_at=now)
             if self._result.get("latest_version"):
@@ -255,14 +283,14 @@ class UpdateChecker:
                 # data is stale cache only and must be read with status/error.
                 self._result["message"] = (
                     "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；"
-                    "15 分钟后可重试。latest_version 等字段仅为上次成功取得的过期缓存，"
+                    "普通检查 15 分钟后可重试；force=true 可立即重试。latest_version 等字段仅为上次成功取得的过期缓存，"
                     "须结合 status=failed、stale 与 error 使用。"
                 )
             else:
                 self._result["message"] = (
-                    "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；15 分钟后可重试。"
+                    "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；普通检查 15 分钟后可重试；force=true 可立即重试。"
                 )
-            self._expires = monotonic() + RETRY_SECONDS
+            self._expires = self._completed_at + RETRY_SECONDS
             return
         self._result.update(
             latest_version=None,
@@ -274,7 +302,9 @@ class UpdateChecker:
             last_success_at=None if selected["status"] == "unknown" else now,
         )
         self._result.update(selected)
-        self._expires = monotonic() + (
+        if selected["status"] == "unknown":
+            self._result["message"] += "普通检查 15 分钟后可重试；force=true 可立即重试。"
+        self._expires = self._completed_at + (
             RETRY_SECONDS if selected["status"] == "unknown" else CACHE_SECONDS
         )
         self._success_expires = self._expires

@@ -1446,6 +1446,17 @@ def _read_job(
     if not (directory / "job.json").exists():
         raise ValueError("Unknown job_id")
     manifest = read_json(directory / "job.json")
+    # DEV-071: older executors stored some receipts only in aliases. Resolve
+    # this job's own verified sidecar, never today's model or raw logs, so
+    # full/compact/pages expose the same historical evidence without writes.
+    result = manifest.get("result")
+    if isinstance(result, dict):
+        from creo_mechdog.operation_results import alias_receipts_needed, annotate_alias_receipts
+
+        if alias_receipts_needed(result):
+            from creo_mechdog.model_registry import aliases_of
+
+            annotate_alias_receipts(result, aliases_of(result))
     if manifest.get("kind") == "reconciliation":
         from creo_mechdog.reconciliation import resume_committed
 

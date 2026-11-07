@@ -336,9 +336,12 @@ async def creo_check_update(force: bool = False) -> dict[str, Any]:
     status (not_checked/checking/update_available/up_to_date/failed/unknown),
     current_version/latest_version/is_prerelease/release_url/download_url,
     checked_at/last_success_at/from_cache/stale/message/error. Times are UTC ISO 8601.
-    Uses a process-local 24-hour cache; force=true refreshes it, except during the
-    15-minute failure/unknown cooldown. Concurrent checks share one request. A fresh
-    check has a 5-second total network budget across all pages; other tools never wait
+    Uses a process-local 24-hour cache; force=true bypasses completed caches, including
+    failure/unknown results. Ordinary retries retain their 15-minute cooldown.
+    Concurrent checks share one request. A fresh check has one total network budget
+    across all pages: default 5 seconds, configurable through the startup environment
+    MECHDOG_UPDATE_TIMEOUT_SECONDS (finite 1..30). network_timeout_seconds,
+    cache_age_seconds and retry_after_at describe the actual budget and cache; other tools never wait
     for it. A failed check reports that latest version information was not obtained;
     it never means the installation is up to date, never blocks modeling, and may
     retain previous successful links only as cache marked with stale=true.
@@ -937,7 +940,7 @@ async def creo_update_sketch_geometry(
     geometry_tolerance_mm: float | None = None,
 ) -> dict[str, Any]:
     """Replace native sketch geometry in place, preserving sketch feature ID. Expanded entity names/types must match; centerline entities are supported for revolve sketches. Clears old named dimensions/constraints. Arc and ellipse editing are experimental and need local validation. On any valid sketch plane, "auto" and "autodim" edits of supported entity types use exact coordinate dimensions (solver info reports requested vs used); "autodim" alone stays on its native route, where a failed edit rolls back cleanly.
-    geometry_deviation reports the post-solve fidelity at both verification points (SectionRegenerate and CompleteFeature): unavailable values are null with a reason, never zero. Omitting geometry_tolerance_mm keeps the mode default (coordinates rejects above 1e-5 mm, autodim warns above 1e-3 mm); an explicit positive value enforces that cap and rejects unmeasurable geometry. sketch_shifted states the post-solve movement at the top level (detected, rigid, translation_mm, max_point_mm, bounded sample); geometry_tolerance_mm is an acceptance threshold, not a solve precision, so accepted_by_request=true means an explicit tolerance let a moved sketch through and the solve was not exact."""
+    geometry_deviation reports the post-solve fidelity at both verification points (SectionRegenerate and CompleteFeature): unavailable values are null with a reason, never zero. Omitting geometry_tolerance_mm keeps the mode default (coordinates rejects above 1e-5 mm, autodim warns above 1e-3 mm); an explicit positive value enforces that cap and rejects unmeasurable geometry. sketch_shifted states the post-solve movement at the top level (detected, rigid, translation_mm, max_point_mm, bounded sample); geometry_tolerance_mm is an acceptance threshold, not a solve precision, so accepted_by_request=true means an explicit tolerance let a moved sketch through and the solve was not exact. The solver receipt reports requested/used mode, selection_reason and individual solve/autodimension/regenerate codes; an initial solve error may recover, so use completed and the final operation outcome. Missing historical stages remain null."""
     return await invoke(
         general.submit,
         [
