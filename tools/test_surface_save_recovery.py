@@ -797,6 +797,42 @@ async def live_case(client, case: dict, jobs: list[str]) -> dict:
         ):
             plan = resolve_placeholders(plan, curves)
         state = await submit_plan(client, plan, jobs, model_id, revision)
+        if state.get("status") == "refused":
+            # BUG-115 guard: the all-new same-plan fill -> trim -> thicken chain
+            # is refused before a job exists, so no save/rollback evidence can be
+            # produced for this route. Record the expected refusal instead of a
+            # native failure and keep the executable split as the next action.
+            message = str(state.get("message") or "")
+            record["attempts"].append(
+                {
+                    "submit_index": index,
+                    "job_id": None,
+                    "status": "refused",
+                    "message": message[:300],
+                    "saved_verified": None,
+                    "result": {},
+                }
+            )
+            record["baseline_after"] = await model_snapshot(client, model_id)
+            if "BUG-115" in message:
+                record["verdict"] = {
+                    "model_status": "refused_expected",
+                    "reasons": [
+                        "BUG-115 guard: the all-new same-plan fill -> trim -> thicken "
+                        "chain is refused before a job exists"
+                    ],
+                }
+                record["recovery_action"] = {
+                    "tools": ["creo_execute_plan"],
+                    "automatic_retry": False,
+                    "note": "submit fill/trim first, then thicken in a second plan",
+                }
+            else:
+                record["verdict"] = {
+                    "model_status": "failed",
+                    "reasons": ["pre-submission refusal", message[:200]],
+                }
+            return record
         attempt = {
             "submit_index": index,
             "job_id": (jobs[-1] if jobs else None),
@@ -890,7 +926,7 @@ async def case_live(selected: list[dict]) -> dict:
             check(
                 f"{case['case_id']}:terminal",
                 all(
-                    attempt["status"] in ("succeeded", "failed", "unknown_outcome")
+                    attempt["status"] in ("succeeded", "failed", "unknown_outcome", "refused")
                     for attempt in record["attempts"]
                 ),
                 {"attempts": record["attempts"]},

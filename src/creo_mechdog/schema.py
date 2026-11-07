@@ -2010,6 +2010,51 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                     "through_points requires a single-point datum_points feature"
                 )
 
+    # BUG-115: a thicken that names the quilt_feature of a surface_trim fails on
+    # hardware 3/3 with ProFeatureGeomitemVisit(PRO_QUILT) = -4 when the trim's
+    # own target quilt is also created in that same plan: the fresh chain
+    # fill -> trim -> thicken has not regenerated yet when thicken visits it.
+    # The proven working projected_dependency route trims an older quilt, so the
+    # guard only refuses the all-new same-plan chain. Refuse before a job exists
+    # and give an executable alternative instead of relaying the raw -4.
+    quilt_producers = {
+        operation["label"]: index
+        for index, operation in enumerate(dumped)
+        if operation["op"] in ("surface_fill", "surface_trim")
+        and isinstance(operation.get("label"), str)
+    }
+    for index, operation in enumerate(dumped):
+        if operation["op"] != "thicken":
+            continue
+        reference = operation.get("reference") or {}
+        if not isinstance(reference, dict) or reference.get("kind") != "quilt_feature":
+            continue
+        label = reference.get("label")
+        trim_index = quilt_producers.get(label)
+        if trim_index is None or trim_index >= index:
+            continue
+        trim = dumped[trim_index]
+        if trim["op"] != "surface_trim":
+            continue
+        target = trim.get("target") or {}
+        target_label = target.get("label") if isinstance(target, dict) else None
+        target_index = quilt_producers.get(target_label)
+        if (
+            target.get("kind") != "quilt_feature"
+            or target_index is None
+            or target_index >= trim_index
+        ):
+            continue
+        raise ValueError(
+            f"operations[{index}].reference: thicken names quilt_feature '{label}' from "
+            f"operations[{trim_index}], whose own target quilt '{target_label}' is created in "
+            f"operations[{target_index}] of the same plan; Creo returns "
+            "ProFeatureGeomitemVisit(PRO_QUILT) -4 before the fresh trim chain regenerates "
+            "(BUG-115). Submit fill/trim first, then submit thicken in a second plan referencing "
+            "the existing quilt feature, or pass an explicit {kind:'quilt',id:N} read back from "
+            "creo_inspect_model."
+        )
+
     def references(x, path: str):
         if isinstance(x, list):
             for index, v in enumerate(x):
