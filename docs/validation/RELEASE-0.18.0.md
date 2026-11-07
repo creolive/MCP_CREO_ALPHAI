@@ -22,7 +22,7 @@
 | 只读质量属性 | `src/creo_mechdog/mass_properties.py`、`native/mass_properties.h`、`native/generic.cpp`、`server.py`、`src/creo_mechdog/capabilities.py`、`tools/probe_mass_properties.py`、`tools/test_adoption_mass_properties.py` | `creo_get_mass_properties`；材料密度优先、显式 what-if 兜底、缺密度返回 null；数值守卫 |
 | 事务日志底座 | `src/creo_mechdog/model_transaction.py`、`docs/development/ALPHAI-B01-SKELETON-CONTRACT.md` | 阶段与检查点契约、幂等；原生骨架未实现 |
 | 台账与发布文档 | `docs/BACKLOG.md`、`docs/DEVELOPMENT.md`、FEAT-035/057/059/063 工作卡、`README.md`、`version.py`、`seed_library/seed_manifest.json`、`docs/seed_package.json` | 状态回填、版本与工具数同步 |
-| 回归 | `tests/unit/test_product_rules.py`、`tests/unit/test_hole_standards.py`、`tests/unit/test_mass_properties.py`、`tests/unit/test_model_transaction.py`、`tests/unit/test_t01_capability_contracts.py` 等 | 工具数断言更新为 102；新增功能回归 |
+| 回归 | `tests/unit/test_product_rules.py`、`tests/unit/test_standard_holes.py`、`tests/unit/test_mass_properties.py`、`tests/unit/test_model_transaction.py`、`tests/unit/test_t01_capability_contracts.py` 等 | 工具数断言更新为 102；新增功能回归 |
 
 ## 3. 验收证据
 

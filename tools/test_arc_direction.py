@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import math
+import platform
 import sys
 import time
 import unittest
@@ -454,10 +455,36 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    """Record source evidence from a checkout or an extracted source release."""
-    from creo_mechdog.source_provenance import local_provenance as collect
+    from creo_mechdog.git_evidence import git_facts, source_paths
+    from version import VERSION
 
-    return collect(ROOT, ("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    facts = git_facts(ROOT)
+    names.update(("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
+    hashes = {
+        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        for name in sorted(names)
+    }
+    return {
+        "version": VERSION,
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
+        "source_sha256": hashes,
+        "source_fingerprint": hashlib.sha256(
+            json.dumps(hashes, sort_keys=True).encode()
+        ).hexdigest(),
+        "environment": {
+            "system": platform.system(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
+        "auto_start_creo": False,
+        "human_session_confirmation": True,
+    }
 
 
 def write_offline_report(output: Path, run_id: str, results: dict) -> dict:

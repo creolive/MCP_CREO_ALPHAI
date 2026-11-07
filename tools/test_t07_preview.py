@@ -36,6 +36,7 @@ import copy
 import hashlib
 import json
 import math
+import platform
 import shutil
 import sys
 import time
@@ -272,17 +273,47 @@ def require_manual_start(config_file: Path) -> None:
 
 
 def local_provenance() -> dict:
-    """Record source evidence from a checkout or an extracted source release."""
-    from creo_mechdog.source_provenance import local_provenance as collect
+    """Record source evidence without recording config, license or session IDs.
 
-    return collect(
-        ROOT,
-        (
-            "tools/test_t07_preview.py",
-            "tests/unit/test_t07_preview.py",
-            "src/creo_mechdog/preview.py",
-        ),
+    The official source archive ships no ``.git/`` metadata, so git is an
+    optional evidence source here: a missing repository or executable degrades
+    to a filesystem walk and the report says the git facts are unavailable.
+    """
+    from creo_mechdog.git_evidence import git_facts, source_paths
+    from version import VERSION
+
+    always = (
+        "tools/test_t07_preview.py",
+        "tests/unit/test_t07_preview.py",
+        "src/creo_mechdog/preview.py",
     )
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    names.update(always)
+    hashes = {
+        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        for name in sorted(names)
+    }
+    facts = git_facts(ROOT)
+    return {
+        "version": VERSION,
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
+        "source_sha256": hashes,
+        "source_fingerprint": hashlib.sha256(
+            json.dumps(hashes, sort_keys=True).encode()
+        ).hexdigest(),
+        "environment": {
+            "system": platform.system(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
+        "auto_start_creo": False,
+        "human_session_confirmation": True,
+    }
 
 
 class Acceptance:

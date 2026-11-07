@@ -13,6 +13,8 @@ never overwritten.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -816,6 +818,40 @@ class DriverCoverage(unittest.TestCase):
         output = self.root / "run-2" / "report.json"
         images = driver.resolve_images(output, "run-2")
         self.assertEqual(images, self.root / "run-2" / "images")
+
+    def test_provenance_degrades_when_git_is_unavailable(self):
+        # The official source archive has no .git/, and an installation machine
+        # may have no git at all; neither may turn the report into an error.
+        from creo_mechdog import git_evidence
+
+        missing = FileNotFoundError("git")
+        not_a_repository = subprocess.CalledProcessError(128, ["git", "ls-files"])
+        for error in (missing, not_a_repository):
+            with self.subTest(error=type(error).__name__):
+                with patch.object(git_evidence.subprocess, "run", side_effect=error):
+                    provenance = driver.local_provenance()
+                self.assertTrue(provenance["git_unavailable"])
+                self.assertEqual(provenance["provenance_mode"], "filesystem")
+                self.assertIsNone(provenance["dirty"])
+                self.assertEqual(provenance["commit"], "")
+                self.assertEqual(provenance["branch"], "")
+                self.assertIn("src/creo_mechdog/preview.py", provenance["source_sha256"])
+                self.assertIn("tools/test_t07_preview.py", provenance["source_sha256"])
+                self.assertEqual(
+                    provenance["source_fingerprint"],
+                    hashlib.sha256(
+                        json.dumps(provenance["source_sha256"], sort_keys=True).encode()
+                    ).hexdigest(),
+                )
+
+    def test_provenance_keeps_git_facts_in_a_checkout(self):
+        provenance = driver.local_provenance()
+        if provenance["git_unavailable"]:
+            self.skipTest("git unavailable; the degradation case covers this environment")
+        self.assertFalse(provenance["git_unavailable"])
+        self.assertEqual(provenance["provenance_mode"], "git")
+        self.assertTrue(provenance["commit"])
+        self.assertIn("src/creo_mechdog/preview.py", provenance["source_sha256"])
 
 
 class FakeToolResult:

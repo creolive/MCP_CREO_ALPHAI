@@ -8,8 +8,10 @@ the historical profile report. ``--live`` deliberately refuses in this phase.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import platform
 import sys
 import uuid
 from pathlib import Path
@@ -474,16 +476,32 @@ def validate_cases(cases: list[dict]) -> None:
 
 
 def provenance() -> dict:
-    """Collect evidence without requiring Git in an extracted release."""
-    from creo_mechdog.source_provenance import local_provenance as collect
+    from creo_mechdog.git_evidence import git_facts, source_paths
 
-    evidence = collect(
-        ROOT,
-        ("tests/unit/test_tilted_sketch_lifecycle.py", "tools/test_tilted_sketch_lifecycle.py"),
+    names, _mode = source_paths(ROOT)
+    names = set(names)
+    facts = git_facts(ROOT)
+    names.update(
+        {"tools/test_tilted_sketch_lifecycle.py", "tests/unit/test_tilted_sketch_lifecycle.py"}
     )
+    hashes = {
+        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        for name in sorted(names)
+    }
     return {
-        key: evidence[key]
-        for key in ("commit", "branch", "dirty", "source_fingerprint", "environment", "git_status")
+        "commit": facts["commit"],
+        "branch": facts["branch"],
+        "dirty": facts["dirty"],
+        "provenance_mode": facts["provenance_mode"],
+        "git_unavailable": facts["git_unavailable"],
+        "source_fingerprint": hashlib.sha256(
+            json.dumps(hashes, sort_keys=True).encode()
+        ).hexdigest(),
+        "environment": {
+            "system": platform.system(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
     }
 
 
