@@ -1,0 +1,659 @@
+{
+  "generated_at": "2026-11-08T00:53:26",
+  "routes": {
+    "B3_offset_srf_offset": {
+      "route": "B_offset_srf_offset",
+      "build_status": "succeeded",
+      "tree": {
+        "id": "PRO_E_FEATURE_TREE",
+        "children": [
+          {
+            "id": "PRO_E_FEATURE_TYPE",
+            "integer": "PRO_FEAT_DATUM_SURF"
+          },
+          {
+            "id": "PRO_E_STD_FEATURE_NAME",
+            "string": "h07_offs_tree_c"
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_SRF",
+            "reference": {
+              "kind": "surface",
+              "id": 55
+            }
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_OFFSET",
+            "double": 5.0
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_METHOD",
+            "integer": 1
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_TYPE",
+            "integer": 0
+          }
+        ]
+      },
+      "submitted": {
+        "job_id": "e6bca3ecdbbe47ddabf7b70caff1ba50",
+        "isError": null,
+        "message": "Poll creo_get_job with this job_id; do not resubmit the operation",
+        "status": "queued"
+      },
+      "build_job_id": "74bec559801e46ffbefe9347bc008320",
+      "job_id": "e6bca3ecdbbe47ddabf7b70caff1ba50",
+      "job_status": "failed",
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_feature_tree",
+      "operation": {
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "index": 0,
+        "label": "h07_offs_tree_c",
+        "op": "feature_tree",
+        "succeeded": false
+      },
+      "saved_verified": false,
+      "geometry": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 61,
+            "face_count": 1,
+            "surface_ids": [
+              55
+            ],
+            "area_mm2": 800.0,
+            "bbox_mm": [
+              [
+                0.0,
+                -5.167901434976496e-51,
+                0.0
+              ],
+              [
+                40.0,
+                -2.3283132112603027e-61,
+                20.0
+              ]
+            ],
+            "closed": false
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "has_solid_surfaces": 0
+      }
+    },
+    "A_positive": {
+      "route": "A_documented_thin_offset_tree",
+      "side": "positive",
+      "build": {
+        "status": "succeeded",
+        "message": "General feature plan completed",
+        "model_id": "4518c5d6e6744f8db56c43429d4d3ca1",
+        "revision": 1,
+        "geometry": {
+          "quilt_count": 1,
+          "quilts": [
+            {
+              "quilt_id": 61,
+              "face_count": 1,
+              "surface_ids": [
+                55
+              ],
+              "area_mm2": 800.0,
+              "bbox_mm": [
+                [
+                  0.0,
+                  -5.167901434976496e-51,
+                  0.0
+                ],
+                [
+                  40.0,
+                  -2.3283132112603027e-61,
+                  20.0
+                ]
+              ],
+              "closed": false
+            }
+          ],
+          "body_count": 1,
+          "bodies": [
+            {
+              "id": -5778,
+              "surface_count": null,
+              "bbox": null
+            }
+          ],
+          "surface_count": 0,
+          "has_solid_surfaces": 0
+        },
+        "quilt": {
+          "area_mm2": 800.0,
+          "area_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "bbox_mm": [
+            [
+              0.0,
+              -5.167901434976496e-51,
+              0.0
+            ],
+            [
+              40.0,
+              -2.3283132112603027e-61,
+              20.0
+            ]
+          ],
+          "bbox_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "closed": false,
+          "closed_status": {
+            "available": false,
+            "query_code": -18,
+            "reason": "quilt_is_open",
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "face_count": 1,
+          "feature_ids": [
+            54
+          ],
+          "quilt_id": 61,
+          "surface_ids": [
+            55
+          ],
+          "surfaces_visit_code": 0
+        }
+      },
+      "build_job_id": "1c7a186e9e5642f6b2f5c79467deab5c",
+      "job_id": "cfeb9eeba3e849ba9118f396997a6dd9",
+      "job_status": "succeeded",
+      "message": "General feature plan completed",
+      "operation": {
+        "direction": "positive",
+        "effect_status": "committed",
+        "execution_status": "succeeded",
+        "index": 0,
+        "label": "h07_wall_positive",
+        "measured_offset_distance_mm": 4.999999999999999,
+        "offset_distance_mm": 5.0,
+        "offset_distance_status": {
+          "available": true,
+          "source": "volume_over_source_area",
+          "query_code": null,
+          "reason": null
+        },
+        "offset_method": "normal_to_surface",
+        "op": "surface_offset",
+        "source_area_mm2": 800.0,
+        "source_area_status": {
+          "available": true,
+          "init_code": 0,
+          "query_code": 0,
+          "reason": null
+        },
+        "succeeded": true,
+        "target_quilt_id": 61,
+        "volume_after_mm3": 3999.9999999999995,
+        "volume_before_mm3": 0.0
+      },
+      "saved_verified": true,
+      "geometry": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 61,
+            "face_count": 6,
+            "surface_ids": [
+              55,
+              76,
+              78,
+              80,
+              81,
+              73
+            ],
+            "area_mm2": 2200.0,
+            "bbox_mm": [
+              [
+                0.0,
+                -5.167901434976496e-51,
+                0.0
+              ],
+              [
+                40.0,
+                5.0,
+                20.0
+              ]
+            ],
+            "closed": true
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 6,
+            "bbox": [
+              [
+                0.0,
+                -5.167901434976496e-51,
+                0.0
+              ],
+              [
+                40.0,
+                5.0,
+                20.0
+              ]
+            ]
+          }
+        ],
+        "surface_count": 6,
+        "has_solid_surfaces": 6
+      }
+    },
+    "A_negative": {
+      "route": "A_documented_thin_offset_tree",
+      "side": "negative",
+      "build": {
+        "status": "succeeded",
+        "message": "General feature plan completed",
+        "model_id": "adef84aa3920427b82a54f605591666d",
+        "revision": 1,
+        "geometry": {
+          "quilt_count": 1,
+          "quilts": [
+            {
+              "quilt_id": 61,
+              "face_count": 1,
+              "surface_ids": [
+                55
+              ],
+              "area_mm2": 800.0,
+              "bbox_mm": [
+                [
+                  0.0,
+                  -2.3397078925552144e-61,
+                  0.0
+                ],
+                [
+                  40.0,
+                  0.0,
+                  20.0
+                ]
+              ],
+              "closed": false
+            }
+          ],
+          "body_count": 1,
+          "bodies": [
+            {
+              "id": -5778,
+              "surface_count": null,
+              "bbox": null
+            }
+          ],
+          "surface_count": 0,
+          "has_solid_surfaces": 0
+        },
+        "quilt": {
+          "area_mm2": 800.0,
+          "area_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "bbox_mm": [
+            [
+              0.0,
+              -2.3397078925552144e-61,
+              0.0
+            ],
+            [
+              40.0,
+              0.0,
+              20.0
+            ]
+          ],
+          "bbox_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "closed": false,
+          "closed_status": {
+            "available": false,
+            "query_code": -18,
+            "reason": "quilt_is_open",
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "face_count": 1,
+          "feature_ids": [
+            54
+          ],
+          "quilt_id": 61,
+          "surface_ids": [
+            55
+          ],
+          "surfaces_visit_code": 0
+        }
+      },
+      "build_job_id": "e163726f92d74d73b575fe0df848cd14",
+      "job_id": "4bfcf866dede4d7b98e992b27a1bd8c9",
+      "job_status": "succeeded",
+      "message": "General feature plan completed",
+      "operation": {
+        "direction": "negative",
+        "effect_status": "committed",
+        "execution_status": "succeeded",
+        "index": 0,
+        "label": "h07_wall_negative",
+        "measured_offset_distance_mm": 4.999999999999999,
+        "offset_distance_mm": 5.0,
+        "offset_distance_status": {
+          "available": true,
+          "source": "volume_over_source_area",
+          "query_code": null,
+          "reason": null
+        },
+        "offset_method": "normal_to_surface",
+        "op": "surface_offset",
+        "source_area_mm2": 800.0,
+        "source_area_status": {
+          "available": true,
+          "init_code": 0,
+          "query_code": 0,
+          "reason": null
+        },
+        "succeeded": true,
+        "target_quilt_id": 61,
+        "volume_after_mm3": 3999.9999999999995,
+        "volume_before_mm3": 0.0
+      },
+      "saved_verified": true,
+      "geometry": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 61,
+            "face_count": 6,
+            "surface_ids": [
+              55,
+              76,
+              78,
+              80,
+              81,
+              73
+            ],
+            "area_mm2": 2200.0,
+            "bbox_mm": [
+              [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              [
+                40.0,
+                0.0,
+                20.0
+              ]
+            ],
+            "closed": true
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 6,
+            "bbox": [
+              [
+                0.0,
+                -5.0,
+                0.0
+              ],
+              [
+                40.0,
+                0.0,
+                20.0
+              ]
+            ]
+          }
+        ],
+        "surface_count": 6,
+        "has_solid_surfaces": 6
+      }
+    },
+    "B1_feat_offset_refquilt": {
+      "route": "B_feat_offset_refquilt",
+      "build_status": "succeeded",
+      "tree": {
+        "id": "PRO_E_FEATURE_TREE",
+        "children": [
+          {
+            "id": "PRO_E_FEATURE_TYPE",
+            "integer": "PRO_FEAT_OFFSET"
+          },
+          {
+            "id": "PRO_E_STD_FEATURE_NAME",
+            "string": "h07_offs_tree_a"
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_REFQUILT",
+            "reference": {
+              "kind": "quilt",
+              "id": 61
+            }
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_OFFSET",
+            "double": 5.0
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_METHOD",
+            "integer": 1
+          }
+        ]
+      },
+      "submitted": {
+        "job_id": "8c032aae04f54fc483c1df5282c0d0e4",
+        "isError": null,
+        "message": "Poll creo_get_job with this job_id; do not resubmit the operation",
+        "status": "queued"
+      },
+      "build_job_id": "34c0365b99f54601914b51e9fbce91cd",
+      "job_id": "8c032aae04f54fc483c1df5282c0d0e4",
+      "job_status": "failed",
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_feature_tree",
+      "operation": {
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "index": 0,
+        "label": "h07_offs_tree_a",
+        "op": "feature_tree",
+        "succeeded": false
+      },
+      "saved_verified": false,
+      "geometry": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 61,
+            "face_count": 1,
+            "surface_ids": [
+              55
+            ],
+            "area_mm2": 800.0,
+            "bbox_mm": [
+              [
+                0.0,
+                -2.3397078925552144e-61,
+                0.0
+              ],
+              [
+                40.0,
+                0.0,
+                20.0
+              ]
+            ],
+            "closed": false
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "has_solid_surfaces": 0
+      }
+    },
+    "B2_copy_surfs_offset": {
+      "route": "B_copy_surfs_offset",
+      "build_status": "succeeded",
+      "tree": {
+        "id": "PRO_E_FEATURE_TREE",
+        "children": [
+          {
+            "id": "PRO_E_FEATURE_TYPE",
+            "integer": "PRO_FEAT_DATUM_SURF"
+          },
+          {
+            "id": "PRO_E_FEATURE_FORM",
+            "integer": "PRO_COPY"
+          },
+          {
+            "id": "PRO_E_STD_FEATURE_NAME",
+            "string": "h07_offs_tree_b"
+          },
+          {
+            "id": "PRO_E_SRF_COPY_SRFS",
+            "references": [
+              {
+                "kind": "surface",
+                "id": 55
+              }
+            ]
+          },
+          {
+            "id": "PRO_E_SRF_OFFS_OFFSET",
+            "double": 5.0
+          }
+        ]
+      },
+      "submitted": {
+        "job_id": "7291710910eb4c8e93fffc2088c5fac2",
+        "isError": null,
+        "message": "Poll creo_get_job with this job_id; do not resubmit the operation",
+        "status": "queued"
+      },
+      "build_job_id": "aa384bb0037c44fb9aee90edbf8af8c8",
+      "job_id": "7291710910eb4c8e93fffc2088c5fac2",
+      "job_status": "failed",
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -2 during execute_feature_tree",
+      "operation": {
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "index": 0,
+        "label": "h07_offs_tree_b",
+        "op": "feature_tree",
+        "succeeded": false
+      },
+      "saved_verified": false,
+      "geometry": {
+        "quilt_count": 1,
+        "quilts": [
+          {
+            "quilt_id": 61,
+            "face_count": 1,
+            "surface_ids": [
+              55
+            ],
+            "area_mm2": 800.0,
+            "bbox_mm": [
+              [
+                0.0,
+                -5.167901434976496e-51,
+                0.0
+              ],
+              [
+                40.0,
+                -2.3283132112603027e-61,
+                20.0
+              ]
+            ],
+            "closed": false
+          }
+        ],
+        "body_count": 1,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": null,
+            "bbox": null
+          }
+        ],
+        "surface_count": 0,
+        "has_solid_surfaces": 0
+      }
+    }
+  },
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available"
+  },
+  "capabilities": {
+    "operations": 70,
+    "surface_offset": true
+  },
+  "jobs": [
+    "5c8e3978b2a54f4b94d3c7c121e56939",
+    "ab590a5c81fa480fb51ba59029028b81",
+    "60807f9f089d48b58e6b683bc3d040e3",
+    "345bd9734afa4ccd99f010df58fc964a",
+    "85f7215f91b14df2ab41672dedcbb777",
+    "4801189c2757470996d12cfb7d125fb1",
+    "37ac9b2b829c43e5ab3d8dbd841db6c8",
+    "e10d6a0686084d3da34c2cdff54f7a6e",
+    "8ca1acda06364c8b929524466fa0e411",
+    "f9e07140c0b84ccbbd2038931a6bbe45",
+    "1cb21dc5dff24af2ac9e8a1ca08fcd18",
+    "756bd6f8f50c42e2a93d5eb5df3485ac",
+    "1c7a186e9e5642f6b2f5c79467deab5c",
+    "cfeb9eeba3e849ba9118f396997a6dd9",
+    "e163726f92d74d73b575fe0df848cd14",
+    "4bfcf866dede4d7b98e992b27a1bd8c9",
+    "34c0365b99f54601914b51e9fbce91cd",
+    "8c032aae04f54fc483c1df5282c0d0e4",
+    "aa384bb0037c44fb9aee90edbf8af8c8",
+    "7291710910eb4c8e93fffc2088c5fac2",
+    "74bec559801e46ffbefe9347bc008320",
+    "e6bca3ecdbbe47ddabf7b70caff1ba50"
+  ]
+}

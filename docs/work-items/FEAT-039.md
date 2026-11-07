@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持（H03 曲面合并已于 2026-11-07 按 INCOMPLETE 骨架路线实机反证，见文末 H03 段）；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
+> **当前状态（2026-11-07，DEV-072 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面merge、多截面放样及trim偏置门禁仍保持（H03 曲面合并已于 2026-11-07 按 INCOMPLETE 骨架路线实机反证，见文末 H03 段）；**H07 独立 quilt 偏置已于 2026-11-08 实机反证（3 条候选树 −1/−2/−1，`surface_offset` 仍是偏置壁），门禁保持**，见文末 H07 段；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
 
 日期：2026-10-18。类型：功能。优先级：P1。状态：所列子项已交付，余项开放。**0.13.0 已交付**：S02 曲面修剪、S04 投影曲线、S05 曲面扫掠（开放/加盖/实体化）、S06 实体化判据、S07 法向偏置（`creo_surface_offset`）、S08 完整链路、S09 模块化、W01 端点焊接本体；**0.14.0 已交付**（2026-11-06 发布）：W05 `extrude_depth` 回执与 W06 只读预览/失败回滚。**0.15.0 已交付**（2026-11-06）：R05 矩阵/失败上下文、R07 曲面引用契约与 R09 折边文案。**0.18.3 已交付**（2026-11-07）：H04 曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量（新增只读公开工具 `creo_measure_surface_group`）与 H06 `surface_trim` 保留侧真实形心/bbox/世界方向，见 [H04 证据](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md)与 [H06 证据](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)。**仍 gated / 未排期**：S03 缝合——H03 已按 INCOMPLETE 骨架路线实机反证，仍 4 个 `PRO_SURFACE`、0 个 `PRO_QUILT`，见 [H03 证据](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)；独立 quilt offset、任意非平面填充（无原生闭环输入通道；中心 R8 场景的旋转球面替代路线见文末 H09 段，fill 本体仍不开放）、多截面/边界混合及 `surface_trim` 的 `offset_mm`/`offset_side` 新语义未排期。S10 的发布交付见 0.13.0 发布记录。公开工具 102→104（含本卡 `creo_measure_surface_group` 与 FEAT-009 `creo_surface_loft`）。目标版本：0.13.0 / 0.14.0 / 0.15.0 / 0.18.3（均已交付子项）；余下曲面项未排期。
 
@@ -653,4 +653,35 @@ ruff check/format 干净。
 [live_surface_revolve_report.json](../validation/feat039-h09-surface-revolve-2026-11-07/live_surface_revolve_report.json)
 （SHA256 `1AA72913…40BDCBD7`）。**未覆盖/仍不可用**：任意非平面闭合边界 fill（无原生路线，
 未排期）；Creo 9/10、非 mm 单位、部分角度球带、显式外部基准轴、倾斜轴；0.3 mm 壁厚整链归 H10。
+
+## 2026-11-08 H07 反证：独立 quilt 偏置仍不可用，`surface_offset` 确认是偏置壁（实机）
+
+缺口的准确表述是“对已有 quilt 做独立偏置、得到一张新的偏置 quilt”。本轮先明确当前公开语义，再用
+公开 MCP 工具分别测“已有文档树的单侧偏置”和三条独立偏置候选树。源 quilt 由 `surface_loft` 构造：
+两条 40 mm 直线截面相距 20 mm → quilt 61、1 面、800.0 mm²、开放、外框 `[[0,0,0],[40,0,20]]`。
+
+- **路线 A（`ProThicken.h` 文档化 thin 单侧，即公开 `surface_offset`）**：正侧 job
+  `cfeb9eeb…`、负侧 job `4bfcf866…` 均 succeeded，体积 0 → **3999.9999999999995 mm³**、
+  实测距离 **4.999999999999999 mm**、源面积 800.0 mm²、保存重载 true。结果没有任何新 quilt：
+  quilt 61 变成**闭合 6 面、2200 mm²** 的实体带边界（800 底 + 800 顶 + 600 四壁），实体外框正侧
+  `[[0,0,0],[40,5,20]]`、负侧 `[[0,−5,0],[40,0,20]]`——带宽恰为 5.0 mm 且方向可控，但它是
+  **厚度带**，不是偏置曲面。
+- **路线 B1** `PRO_FEAT_OFFSET` + `PRO_E_SRF_OFFS_REFQUILT` + `PRO_E_SRF_OFFS_OFFSET` +
+  `PRO_E_SRF_OFFS_METHOD=1`：`ProFeatureWithoptionsCreate=-1`，回滚，quilt 仍 1 面 / 800 mm²。
+- **路线 B2** `PRO_FEAT_DATUM_SURF` + `PRO_E_FEATURE_FORM=PRO_COPY` + `PRO_E_SRF_COPY_SRFS` +
+  `PRO_E_SRF_OFFS_OFFSET`：**−2**（元素加不进树）。
+- **路线 B3** `PRO_FEAT_DATUM_SURF` + `PRO_E_SRF_OFFS_SRF` + `PRO_E_SRF_OFFS_OFFSET` +
+  `PRO_E_SRF_OFFS_METHOD` + `PRO_E_SRF_OFFS_TYPE`：**−1**。
+
+三条候选各在独立新模型里重建同一张 800 mm² quilt（构建作业 `34c0365b…`/`aa384bb0…`/`74bec559…`
+全部 succeeded），失败来自树本身。SDK 侧复核一致：`ProQuilt.h`/`ProSurface.h`/`ProCopyGeom.h`
+没有偏置面创建 API，`ProSrfcopyOpts.h` 的五个 copy 类型不含 offset，`PRO_E_SRF_OFFS_*` 只在
+thicken 与 thin trim 树里作子元素成立。按“连续 3 次失败即停止”的约定未再试第 4 条。
+
+**结论**：独立 quilt 偏置不可用、门禁保持（不新增 `quilt_offset` 工具）；公开
+`creo_surface_offset` 的能力边界继续表述为“returns the offset wall, not a standalone offset
+quilt”。证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、
+[h07_quilt_offset_probe.json](../validation/dev074-h07-h08-2026-11-08/h07_quilt_offset_probe.json)
+（SHA256 `D3FD6F57…3F2EF1E5`）。**未覆盖**：非 mm 单位、弯曲源 quilt 的带厚读数、
+`surface_trim` 的 `offset_mm` 实机重放、Creo 9/10。
 
