@@ -113,8 +113,7 @@ static double group_point_segment_distance(const GroupPoint &point, const GroupP
         return group_point_distance(point, a);
     const double to_point[3] = {point.v[0] - a.v[0], point.v[1] - a.v[1], point.v[2] - a.v[2]};
     double parameter =
-        (to_point[0] * segment[0] + to_point[1] * segment[1] + to_point[2] * segment[2]) /
-        squared;
+        (to_point[0] * segment[0] + to_point[1] * segment[1] + to_point[2] * segment[2]) / squared;
     parameter = std::max(0.0, std::min(1.0, parameter));
     GroupPoint closest;
     for (int i = 0; i < 3; i++)
@@ -130,8 +129,8 @@ static double group_point_polyline_distance(const GroupPoint &point,
         return group_point_distance(point, polyline[0]);
     double best = std::numeric_limits<double>::infinity();
     for (size_t index = 1; index < polyline.size(); index++)
-        best = std::min(best, group_point_segment_distance(point, polyline[index - 1],
-                                                           polyline[index]));
+        best = std::min(best,
+                        group_point_segment_distance(point, polyline[index - 1], polyline[index]));
     return best;
 }
 
@@ -168,8 +167,8 @@ static void group_edge_chord(const std::vector<GroupPoint> &points, double direc
     double low = std::numeric_limits<double>::infinity();
     double high = -std::numeric_limits<double>::infinity();
     for (const auto &point : points) {
-        const double projection = point.v[0] * direction[0] + point.v[1] * direction[1] +
-                                  point.v[2] * direction[2];
+        const double projection =
+            point.v[0] * direction[0] + point.v[1] * direction[1] + point.v[2] * direction[2];
         low = std::min(low, projection);
         high = std::max(high, projection);
     }
@@ -201,14 +200,14 @@ static bool group_edges_are_parallel_candidates(const GroupBoundaryEdge &first,
     double low_b = std::numeric_limits<double>::infinity();
     double high_b = -std::numeric_limits<double>::infinity();
     for (const auto &point : first.points) {
-        const double projection = point.v[0] * direction_a[0] + point.v[1] * direction_a[1] +
-                                  point.v[2] * direction_a[2];
+        const double projection =
+            point.v[0] * direction_a[0] + point.v[1] * direction_a[1] + point.v[2] * direction_a[2];
         low_a = std::min(low_a, projection);
         high_a = std::max(high_a, projection);
     }
     for (const auto &point : second.points) {
-        const double projection = point.v[0] * direction_a[0] + point.v[1] * direction_a[1] +
-                                  point.v[2] * direction_a[2];
+        const double projection =
+            point.v[0] * direction_a[0] + point.v[1] * direction_a[1] + point.v[2] * direction_a[2];
         low_b = std::min(low_b, projection);
         high_b = std::max(high_b, projection);
     }
@@ -552,7 +551,7 @@ static void group_measure_boundaries(SurfaceGroupAccumulator &acc, double tolera
     // A failed face/contour visit makes the boundary incomplete: counts would
     // silently describe part of the group, so nothing is published then.
     out.edges_available = acc.visits_ok && acc.reason == nullptr && !acc.edges.empty();
-    out.edges_reason = acc.reason ? acc.reason
+    out.edges_reason = acc.reason          ? acc.reason
                        : acc.edges.empty() ? "group_has_no_boundary_edges"
                                            : nullptr;
     out.edges_code = acc.query_code;
@@ -808,8 +807,8 @@ static void group_state_decide(const SurfaceGroupMeasurement &measurement, doubl
         return;
     }
     out.state = "open";
-    out.state_reason = measurement.gap_available ? "no_member_seam_candidate"
-                                                 : "boundary_edges_unavailable";
+    out.state_reason =
+        measurement.gap_available ? "no_member_seam_candidate" : "boundary_edges_unavailable";
 }
 
 // Project the measurement into the §4.4.1 status shape. Every value carries its
@@ -870,8 +869,8 @@ static J surface_group_receipt(const std::vector<int> &quilt_ids, double toleran
         measurement.gap_available = false;
         measurement.gap_reason = "unit_scale_unknown";
         measurement.state = nullptr;
-        measurement.state_reason = measurement.edges_available ? "unit_scale_unknown"
-                                                               : measurement.edges_reason;
+        measurement.state_reason =
+            measurement.edges_available ? "unit_scale_unknown" : measurement.edges_reason;
     }
 
     MeasurementOutcome open_edges_outcome;
@@ -892,8 +891,7 @@ static J surface_group_receipt(const std::vector<int> &quilt_ids, double toleran
     gap_outcome.query_code = measurement.gap_code;
     gap_outcome.reason = !scaled ? "unit_scale_unknown" : measurement.gap_reason;
     gap_outcome.value = measurement.gap_max;
-    J gap_max_mm =
-        gap_outcome.available ? J(measurement.gap_max * scale.scale) : J(nullptr);
+    J gap_max_mm = gap_outcome.available ? J(measurement.gap_max * scale.scale) : J(nullptr);
     J gap_status = measurement_status_json(gap_outcome, units, scale);
     gap_status["tolerance_mm"] = tolerance_mm;
     gap_status["gap_search_mm"] = gap_search_mm;
@@ -914,9 +912,8 @@ static J surface_group_receipt(const std::vector<int> &quilt_ids, double toleran
                              ? J(measurement.overlap_area * scale.scale * scale.scale)
                              : J(nullptr);
     J overlap_status = measurement_status_json(overlap_outcome, units, scale);
-    overlap_status["method"] = measurement.overlap_available
-                                   ? J("face_tessellation_sample_containment")
-                                   : J(nullptr);
+    overlap_status["method"] =
+        measurement.overlap_available ? J("face_tessellation_sample_containment") : J(nullptr);
     overlap_status["tolerance_mm"] = tolerance_mm;
     overlap_status["face_pairs_tested"] =
         measurement.overlap_available ? J(measurement.face_pairs_tested) : J(nullptr);
@@ -967,30 +964,27 @@ static J surface_group_receipt(const std::vector<int> &quilt_ids, double toleran
     for (int quilt_id : resolved)
         resolved_ids.push_back(quilt_id);
 
-    J group = {{"quilt_ids", resolved_ids},
-               {"quilt_count", (int)resolved.size()},
-               {"face_count", measurement.face_count},
-               {"faces", faces},
-               {"boundary_edges",
-                measurement.edges_available ? J(measurement.boundary_edges) : J(nullptr)},
-               {"joined_edges",
-                measurement.edges_available ? J(measurement.joined_edges) : J(nullptr)},
-               {"open_edges",
-                measurement.edges_available ? J(measurement.open_edges) : J(nullptr)},
-               {"open_edges_status", open_edges_status},
-               {"gap_max_mm", gap_max_mm},
-               {"gap_max_status", gap_status},
-               {"overlap_area_mm2", overlap_area_mm2},
-               {"overlap_status", overlap_status},
-               {"overlap_pairs", measurement.overlap_pair_records},
-               {"state", measurement.state ? J(measurement.state) : J(nullptr)},
-               {"state_reason",
-                measurement.state_reason ? J(measurement.state_reason) : J(nullptr)},
-               {"boundary_closed", measurement.edges_available
-                                       ? J(measurement.open_edges == 0)
-                                       : J(nullptr)},
-               {"tolerance_mm", tolerance_mm},
-               {"gap_search_mm", gap_search_mm}};
+    J group = {
+        {"quilt_ids", resolved_ids},
+        {"quilt_count", (int)resolved.size()},
+        {"face_count", measurement.face_count},
+        {"faces", faces},
+        {"boundary_edges",
+         measurement.edges_available ? J(measurement.boundary_edges) : J(nullptr)},
+        {"joined_edges", measurement.edges_available ? J(measurement.joined_edges) : J(nullptr)},
+        {"open_edges", measurement.edges_available ? J(measurement.open_edges) : J(nullptr)},
+        {"open_edges_status", open_edges_status},
+        {"gap_max_mm", gap_max_mm},
+        {"gap_max_status", gap_status},
+        {"overlap_area_mm2", overlap_area_mm2},
+        {"overlap_status", overlap_status},
+        {"overlap_pairs", measurement.overlap_pair_records},
+        {"state", measurement.state ? J(measurement.state) : J(nullptr)},
+        {"state_reason", measurement.state_reason ? J(measurement.state_reason) : J(nullptr)},
+        {"boundary_closed",
+         measurement.edges_available ? J(measurement.open_edges == 0) : J(nullptr)},
+        {"tolerance_mm", tolerance_mm},
+        {"gap_search_mm", gap_search_mm}};
     return {{"unit_name", units.length.name[0] ? J(utf8(units.length.name)) : J(nullptr)},
             {"length_scale_to_mm", scaled ? J(scale.scale) : J(nullptr)},
             {"group", group}};

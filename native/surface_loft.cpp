@@ -124,7 +124,8 @@ static int surface_loft_curve(const J &reference, const char *role) {
     if (simple.size() != 1)
         throw std::runtime_error(std::string("surface_loft ") + role +
                                  " section must own exactly one non-composite curve; feature " +
-                                 std::to_string(id) + " owns " + std::to_string((int)simple.size()));
+                                 std::to_string(id) + " owns " +
+                                 std::to_string((int)simple.size()));
     return simple[0];
 }
 
@@ -179,13 +180,11 @@ static void generic_surface_loft(const J &op) {
     ProArrayFree((ProArray *)&options);
     ProSelectionFree(&solid_selection);
     details["create_code"] = (int)created;
-    details["create_element_errors"] = {
-        {"total", element_errors.error_number},
-        {"sample",
-         J::array({})}};
+    details["create_element_errors"] = {{"total", element_errors.error_number},
+                                        {"sample", J::array({})}};
     J create_sample = J::array();
-    for (int index = 0;
-         index < element_errors.error_number && index < FEATURE_ERROR_SAMPLE_LIMIT; index++)
+    for (int index = 0; index < element_errors.error_number && index < FEATURE_ERROR_SAMPLE_LIMIT;
+         index++)
         create_sample.push_back({{"element", element_errors.error_list[index].err_item_id},
                                  {"type", element_errors.error_list[index].err_item_type},
                                  {"error", element_errors.error_list[index].error}});
@@ -194,10 +193,10 @@ static void generic_surface_loft(const J &op) {
         last_feature_error_report =
             feature_error_report("ProFeatureWithoptionsCreate", created, "surface_loft_create");
         stage_operation_result(details);
-        throw std::runtime_error(
-            "surface_loft boundary blend create failed (code " + std::to_string((int)created) +
-            ", first_curve=" + std::to_string(first_curve) +
-            ", second_curve=" + std::to_string(second_curve) + ")");
+        throw std::runtime_error("surface_loft boundary blend create failed (code " +
+                                 std::to_string((int)created) +
+                                 ", first_curve=" + std::to_string(first_curve) +
+                                 ", second_curve=" + std::to_string(second_curve) + ")");
     }
     ProElementFree(&root);
 
@@ -269,8 +268,8 @@ static void generic_surface_loft(const J &op) {
     }
     details.update(area_fields_json(area, units, scale, "surface_area_mm2", "surface_area_status"));
     const char *closure = quilt_closed_is_open(closed) ? "open"
-                          : closed.available       ? "closed"
-                                                   : "unknown";
+                          : closed.available           ? "closed"
+                                                       : "unknown";
     details["quilt_closed_native"] = closure;
     details["closure"] = {{"available", closed.available},
                           {"query_code", (int)closed.query_code},
@@ -289,8 +288,8 @@ static void generic_surface_loft(const J &op) {
     if (status != PRO_FEAT_ACTIVE) {
         details["extracted_tree"] = tree_json;
         stage_operation_result(details);
-        last_feature_error_report = feature_error_report(
-            "ProFeatureStatusGet", (ProError)status, "surface_loft_regeneration");
+        last_feature_error_report = feature_error_report("ProFeatureStatusGet", (ProError)status,
+                                                         "surface_loft_regeneration");
         throw std::runtime_error(
             "surface_loft boundary blend regeneration failed (feature_status=" +
             std::to_string((int)status) + ", feature_id=" + std::to_string((int)feature.id) +
@@ -299,17 +298,15 @@ static void generic_surface_loft(const J &op) {
     }
     if (feature_type != PRO_FEAT_DATUM_SURF)
         throw std::runtime_error("surface_loft produced feature type " +
-                                 std::to_string((int)feature_type) +
-                                 " instead of a datum surface");
+                                 std::to_string((int)feature_type) + " instead of a datum surface");
     if (quilts.size() != 1)
-        throw std::runtime_error(
-            "surface_loft produced " + std::to_string((int)quilts.size()) +
-            " quilt geometry items (visit code " + std::to_string((int)quilt_visit) +
-            "); exactly one boundary-blend surface is required");
+        throw std::runtime_error("surface_loft produced " + std::to_string((int)quilts.size()) +
+                                 " quilt geometry items (visit code " +
+                                 std::to_string((int)quilt_visit) +
+                                 "); exactly one boundary-blend surface is required");
     if (!area.available)
         throw std::runtime_error(std::string("surface_loft surface is not measurable") +
-                                 (area.reason ? ": " : "") +
-                                 (area.reason ? area.reason : ""));
+                                 (area.reason ? ": " : "") + (area.reason ? area.reason : ""));
     if (details["has_solid"].get<bool>())
         throw std::runtime_error("surface_loft created solid material; a surface loft must not");
     if (!quilt_closed_is_open(closed))
@@ -317,6 +314,7 @@ static void generic_surface_loft(const J &op) {
             "surface_loft result must be an open quilt; ProQuiltVolumeEval reported " +
             std::string(closure) + " (code " + std::to_string((int)closed.query_code) + ")");
 
-    remember(op, feature, {{"quilt_id", quilt_id},
-                           {"section_curve_ids", J::array({first_curve, second_curve})}});
+    remember(
+        op, feature,
+        {{"quilt_id", quilt_id}, {"section_curve_ids", J::array({first_curve, second_curve})}});
 }
