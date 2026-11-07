@@ -21,7 +21,7 @@
 
 ## 门禁
 
-- 合并 0.17.3 后的组合源码全量单测 **2759 项，0 失败、0 错误**；`tools/dev_check.py` `success=true`（提交 `38b9c9f`、dirty=false、源码指纹 `b06caf3a…`），24 条 lint / 12 个未格式化文件均为存量基线。
+- 合并 0.17.3 后的组合源码全量单测 **2762 项，0 失败、0 错误**；`tools/dev_check.py` `success=true`（提交 `7390f4b`、dirty=false、源码指纹 `8fce4d00…`），24 条 lint / 12 个未格式化文件均为存量基线。
 - `python bridge.py build` 在本机 Windows x64 / Creo 12.4.0.0 匹配 Toolkit SDK 下编译通过（产物 `build/creo_worker.exe`）。
 - SDK 无关 C++ 测试（反向端点、误差、五条上限与稳定排序、空 part/assembly 与未知/有几何场景）通过。
 - 种子包确定性构建两次同摘要，已回填 `docs/seed_package.json`。
