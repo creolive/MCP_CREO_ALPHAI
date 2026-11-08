@@ -1,6 +1,6 @@
 # FEAT-039：纯曲面链路算子（trim / merge / boundary_blend / offset 与检测查询）
 
-> **当前状态（2026-11-07，DEV-074 0.18.4 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；**H10 多 quilt 组整链已实机交付，46/46**（见文末 H10 段，整组实体化仍需 merge）；**H07 独立 quilt 偏置已实机反证不可用，门禁保持**（见文末 H07 段）。余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面 merge 已于 2026-11-08 实机交付（`quilt_merge` / `creo_quilt_merge`，见文末 H03 交付段），多截面放样及 trim 偏置门禁仍保持（H07 独立偏置已于 2026-11-07/08 两轮实机反证，见文末 H07 段）；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
+> **当前状态（2026-11-07，DEV-074 0.18.4 对账）：** 0.13.0 / 0.14.0 / 0.15.0 所列子项已交付，R01 计量保护随 0.16.1 取得实机证据；**H04 曲面组级测量（open_edges/gap/overlap 四态）已于 2026-11-07 实机交付**（见文末 H04 段）；**H09 的替代路线「旋转球面」已实机交付**（见文末 H09 段，任意非平面 fill 仍不可用）；**H10 多 quilt 组整链已实机交付，46/46**（见文末 H10 段，整组实体化仍需 merge）；**2026-11-08 五爪整瓶整链实机交付**：链式 merge 7 次 → 闭合壳 **7858.298125 mm²** → 0.3/2 mm 加厚 → 实体圆角 → `solidify` **56799.995177 mm³**，63 项检查 0 失败（见文末 2026-11-08 H10 段）。**H07 独立 quilt 偏置已实机反证不可用，门禁保持**（见文末 H07 段）。余项未排期，整卡不关闭。下方0.15.0段中“四壁仍gated”为该版本时点；钣金四壁BLIND miter基础现已由[FEAT-014](FEAT-014.md)随0.16.0交付。曲面 merge 已于 2026-11-08 实机交付（`quilt_merge` / `creo_quilt_merge`，见文末 H03 交付段），多截面放样及 trim 偏置门禁仍保持（H07 独立偏置已于 2026-11-07/08 两轮实机反证，见文末 H07 段）；四壁成功不改变这些曲面边界。DEV-069剩余范围见[当前对账](../development/DEV069-MAIN-RECONCILIATION-2026-11-06.md)。
 
 日期：2026-10-18。类型：功能。优先级：P1。状态：所列子项已交付，余项开放。**0.13.0 已交付**：S02 曲面修剪、S04 投影曲线、S05 曲面扫掠（开放/加盖/实体化）、S06 实体化判据、S07 法向偏置（`creo_surface_offset`）、S08 完整链路、S09 模块化、W01 端点焊接本体；**0.14.0 已交付**（2026-11-06 发布）：W05 `extrude_depth` 回执与 W06 只读预览/失败回滚。**0.15.0 已交付**（2026-11-06）：R05 矩阵/失败上下文、R07 曲面引用契约与 R09 折边文案。**0.18.3 已交付**（2026-11-07）：H04 曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量（新增只读公开工具 `creo_measure_surface_group`）与 H06 `surface_trim` 保留侧真实形心/bbox/世界方向，见 [H04 证据](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md)与 [H06 证据](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md)。**0.18.4 已交付**（2026-11-07）：H09 旋转球面替代（R8 球面 804.247719319002 mm²、闭合、可修剪/加厚/实体化，不新增工具）、H10 多 quilt 组整链（46/46，逐片加厚，整组实体化仍等 merge）、H07 独立 quilt 偏置反证（不可用，门禁保持）。**仍 gated / 未排期**：独立 quilt offset（H07 两轮实机反证，见文末 H07 段）、任意非平面填充（H09 独立算子 `surface_boundary_fill` 已实机反证：平面闭合环 create/extract 成功但再生 `feature_status=6`、0 quilt，已恢复门禁并移出 MCP 面，见文末 H09 实机反证段；planar fill 未改）、多截面/边界混合及 `surface_trim` 的 `offset_mm`/`offset_side` 新语义未排期。**S03 缝合已实机交付（2026-11-08）**：`quilt_merge` / `creo_quilt_merge` 通过「目标 quilt 原地增长」判据产出可测量结果（400→800 mm²、2 mm 加厚成功），见文末 H03 交付段。S10 的发布交付见 0.13.0 发布记录。公开工具 102→104（含本卡 `creo_measure_surface_group` 与 FEAT-009 `creo_surface_loft`）；DEV-074/H08/H09 后为 106（含 `creo_surface_round` 与 `creo_measure_surface_curvature`，`creo_surface_boundary_fill` 门禁）；H03 交付后为 **107**。目标版本：0.13.0 / 0.14.0 / 0.15.0 / 0.18.3 / 0.18.4（均已交付子项）；余下曲面项未排期。
 
@@ -800,5 +800,40 @@ join 进**目标 quilt**：目标 400 → **800.0 mm²**、外框覆盖 40×20�
 - 证据：[EVIDENCE](../validation/dev074-h03h07-2026-11-08/EVIDENCE.md)、
   [前轮反证](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)。**未覆盖**：非 mm、弯曲源、
   面板命令路线（驻留选择回调未加载，未执行）、Creo 9/10。
+
+## 2026-11-08 H10 交付：五爪整瓶整链（实机，63 项检查 0 失败）
+
+本轮用已交付能力把“五爪整瓶”做成**完整闭合壳体**并跑通整链，不新增原生代码（`bridge.py
+build` 退出 0，公开工具仍 107）。几何：R20×40 圆筒（`extrude{mode=surface}`）+ 五个 72°
+直纹锥扇面（`surface_loft`，z=0 处 R20 圆弧 → z=−10 处 R8 圆弧）+ R8 瓶底 `surface_fill`
++ R20 瓶盖 `surface_fill`。
+
+- **链式合并首次成立**：7 次 `quilt_merge`（爪→爪 ×4、瓶底、筒身、瓶盖）全部
+  `result_quilt_source=retrimmed_target_quilt`、结果 quilt 恒为 60，面积
+  274.8102→549.6204→824.4305→1099.2407→1374.0509→1575.1128→6601.6611→**7858.298125230911**
+  mm²（与解析 7858.298125263036 差 3e−8），末步 `closed=true`、`face_count=6`、bbox z
+  −10…40；每步保存重载 true。同一几何在三个模型上重复构建，逐爪 id/面积与合并面积逐位一致。
+- **组级四态**：`state=closed`、`open_edges=0`、`boundary_edges=joined_edges=12`、
+  `boundary_closed=true`、`gap_max_mm=null`（`no_member_seam_candidate`，无开放边即无缝隙）；
+  `overlap` 为 null，原因 `overlap_sample_budget_exceeded`（query_code −1，6 面 7858 mm² 超出
+  采样预算）——**不能**据此声称组内无重叠。
+- **加厚**：0.3 mm → 2357.526186516854 mm³（面积×厚度 2357.4894，+0.016%）、body 12 面、
+  z 跨距 50.3；2 mm → 15727.484826184516 mm³（15716.5963，+0.069%）、12 面、z 跨距 52.0；
+  两次均保存重载 true、revision 13→14。0.3 mm 未自交。
+- **后续编辑**：加厚体顶缘边（id 356）圆角成功：0.3 壳 R0.1 → −0.2714 mm³、2 mm 壳 R0.5 →
+  −7.0414 mm³，保存重载 true、revision 15，重载后 body 14 面、跨距不变。
+- **实体化**：闭合 quilt（未加厚）`solidify` → **56799.99517675038 mm³**（解析
+  56799.99517690347，差 1.5e−7）、6 面、z −10…40，保存重载 true；**已加厚 quilt 再
+  `solidify` 返回 `ProFeatureWithoptionsCreate=-1` 并回滚**。
+- **新发现的边界**：同一 quilt 二次加厚（含 `new_body`）在再生成阶段失败并回滚（回执
+  `Regeneration produced a failed, suppressed or incomplete feature`，未给出具体 Toolkit 码，
+  体积/revision 不变）；加厚后 quilt 60 的记录被内核重关联（id 与 `closed=true` 保留，但
+  `area_mm2` 报 1099.2407106029616、`face_count=1`），整面壳只能从 body 读。
+- **仍缺**：真正的凹谷花瓣底（需多截面/边界混合或非平面填充）、独立 quilt 偏置（H07 保持）、
+  大组重叠判定、瓶口收口/变径；Creo 9/10、非 mm、WorkBuddy 未测。爪形是直纹锥扇面，
+  拼成的是一整个圆台，**不是**带凹谷的独立爪尖，不得按真实五瓣瓶底口径宣传。
+- 证据：[EVIDENCE](../validation/dev074-h10-five-claw-2026-11-08/EVIDENCE.md)、
+  [report.json](../validation/dev074-h10-five-claw-2026-11-08/report.json)（SHA256
+  `6CBC278E…4656DEC`，46 作业）。驱动：`tools/test_five_claw_bottle.py`。
 
 
