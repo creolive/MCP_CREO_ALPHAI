@@ -1,11 +1,13 @@
 """DEV-074/H09 surface_boundary_fill contract tests (offline only).
 
-These tests lock the Python admission surface, the published capability, the
+These tests lock the Python admission surface, the gated capability, the
 result projection and the native source-level route of the closed non-planar
 boundary fill. They never connect to Creo: the geometric closure/order rules
 live in the native executor (curve endpoint sampling) and are locked here by
 source, while the schema tests cover every request shape that must be refused
-before a job exists.
+before a job exists. The 2026-11-08 live probe refuted the route (create and
+extract succeed, regeneration leaves status 6 and no quilt), so the operation
+is registered but gated and its tool is absent from the MCP surface.
 """
 
 from __future__ import annotations
@@ -152,7 +154,7 @@ class BoundaryFillSchemaTests(unittest.TestCase):
 
 
 class BoundaryFillCapabilityTests(unittest.TestCase):
-    def test_operation_and_tool_are_published(self):
+    def test_operation_is_registered_but_gated(self):
         from creo_mechdog.capabilities import (
             REGISTERED_OPERATIONS,
             UNAVAILABLE_OPERATIONS,
@@ -160,30 +162,30 @@ class BoundaryFillCapabilityTests(unittest.TestCase):
         )
 
         self.assertIn("surface_boundary_fill", REGISTERED_OPERATIONS)
-        self.assertNotIn("surface_boundary_fill", UNAVAILABLE_OPERATIONS)
-        self.assertIn("creo_surface_boundary_fill", families()["surface_chain"]["tools"])
-        entry = families()["surface_boundary_fill"]
-        self.assertTrue(entry["enabled"])
-        self.assertEqual(entry["tool"], "creo_surface_boundary_fill")
-        self.assertIn("offline implemented", entry["limits"])
+        self.assertIn("surface_boundary_fill", UNAVAILABLE_OPERATIONS)
+        self.assertIn("feature_status=6", UNAVAILABLE_OPERATIONS["surface_boundary_fill"])
+        self.assertNotIn("creo_surface_boundary_fill", families()["surface_chain"]["tools"])
+        self.assertNotIn("surface_boundary_fill", families())
 
     def test_server_registers_the_tool(self):
         text = SERVER.read_text(encoding="utf-8")
         self.assertIn("async def creo_surface_boundary_fill(", text)
         self.assertIn('"surface_boundary_fill"', text)
 
-    def test_mcp_tool_count_is_updated(self):
+    def test_mcp_tool_count_excludes_the_gated_tool(self):
         import server
 
         tools = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
-        self.assertIn("creo_surface_boundary_fill", tools)
-        # 107 adds the read-only creo_measure_surface_curvature (DEV-074/H08).
-        self.assertEqual(len(tools), 107)
+        self.assertNotIn("creo_surface_boundary_fill", tools)
+        # 106 = 107 minus the gated creo_surface_boundary_fill; the read-only
+        # creo_measure_surface_curvature (DEV-074/H08) stays published.
+        self.assertEqual(len(tools), 106)
 
-    def test_require_available_admits_the_operation(self):
+    def test_require_available_refuses_the_gated_operation(self):
         from creo_mechdog.capabilities import require_available
 
-        require_available(self.validated())
+        with self.assertRaisesRegex(ValueError, "surface_boundary_fill"):
+            require_available(self.validated())
 
     def validated(self):
         from creo_mechdog.schema import validate_operations

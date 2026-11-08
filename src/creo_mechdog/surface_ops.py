@@ -328,6 +328,10 @@ class SurfaceBoundaryFillOp(StrictModel):
     side samples each curve's endpoints and refuses a chain whose consecutive
     curves do not meet, so this model only locks the request shape.
 
+    The route is registered but gated: the 2026-11-08 live probe created and
+    extracted this tree yet regeneration failed with feature_status=6 and no
+    quilt, so ``require_available`` refuses it before a job exists.
+
     ``boundary`` is deliberately one flat list: a hole, a second loop or a
     nested list has no field here and is refused before a job exists. At least
     three curves are required because the documented closed-blend flag is only

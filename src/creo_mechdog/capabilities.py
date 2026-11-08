@@ -111,6 +111,15 @@ UNAVAILABLE_OPERATIONS: dict[str, str] = {
         "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
         "change nothing, so the joined area and closure cannot be measured or handed to thicken"
     ),
+    "surface_boundary_fill": (
+        "the closed non-planar boundary fill is not published: on this machine the documented "
+        "Probbl.h closed-chain tree creates and extracts (ProFeatureWithoptionsCreate=0, "
+        "ProFeatureElemtreeExtract=0) but regeneration fails with feature_status=6 "
+        "(PRO_FEAT_INCOMPLETE) and produces no quilt (quilt visit -4, quilt_count=0, empty "
+        "element-error list); a planar 4-curve rectangle loop whose measured endpoint gap is "
+        "1.9e-31 mm reproduces it twice and rolls back, so the closed single-direction chain "
+        "does not yield a measurable filled surface"
+    ),
 }
 
 
@@ -550,7 +559,6 @@ def families() -> dict:
             "enabled": True,
             "tools": [
                 "creo_surface_loft",
-                "creo_surface_boundary_fill",
                 "creo_surface_trim",
                 "creo_project_curve",
                 "creo_surface_offset",
@@ -560,8 +568,7 @@ def families() -> dict:
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
-                "(straight interpolation, measured area and closure); fill one closed "
-                "non-planar boundary given as an ordered curve chain; trim one quilt "
+                "(straight interpolation, measured area and closure); trim one quilt "
                 "with another quilt, a datum-plane label or a curve geometry id; "
                 "project one curve geometry id onto one quilt along an explicit "
                 "direction reference; offset one quilt along its surface normal; "
@@ -576,10 +583,18 @@ def families() -> dict:
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
                 "project_curve: 40.000 mm and 25.133 mm measured projections, saved and "
                 "reloaded; surface_offset: 40x20 fill offset 5 mm on both sides, "
-                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance"
+                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance; "
+                "surface_round: 2026-11-08 live quilt 1200 mm2 R3 on adjacent faces "
+                "-> 5 faces / 1187.1238898038469 mm2, open, no solid, saved and reloaded, "
+                "with a non-adjacent pair failing regeneration and rolling back; "
+                "surface_curvature: 2026-11-08 live planar 0.0 1/mm, R8 sphere "
+                "0.125 1/mm / 8.0 mm, 90-degree G1 between adjacent planar walls, "
+                "revision unchanged"
             ),
             "limits": (
-                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); surface_loft is two "
+                "quilt merge and the closed non-planar boundary fill stay gated "
+                "(UNAVAILABLE_OPERATIONS; the fill's closed single-direction chain "
+                "regenerates to no quilt on hardware); surface_loft is two "
                 "single-curve sections with straight interpolation only (no smooth, closed, "
                 "continuity, multi-section or solid output); surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
@@ -594,17 +609,11 @@ def families() -> dict:
                 "surface_round is one constant radius on two member faces of one quilt "
                 "(no variable radius, edge chain, transitions or solid target) and the "
                 "kernel decides whether the two faces share an edge; "
-                "surface_boundary_fill is one closed chain of at least 3 ordered curve "
-                "geometry ids (no holes, second loops, open chains or solid output), its "
-                "closure/order is checked from sampled curve endpoints at a 0.01 mm "
-                "tolerance in a known length unit, and its native tree is offline "
-                "implemented without hardware acceptance; "
                 "creo_measure_surface_curvature is numeric only (principal curvature, "
                 "radius and direction per UV sample, plus the normal angle across a "
                 "shared edge); Creo Toolkit has no zebra-stripe or curvature-comb "
-                "visualization API, so no image is produced, samples outside the trimmed "
-                "face are counted rather than measured, and its native sampling is "
-                "offline implemented without hardware acceptance"
+                "visualization API, so no image is produced and samples outside the trimmed "
+                "face are counted rather than measured"
             ),
         },
         "boolean_bodies": {
@@ -658,26 +667,6 @@ def families() -> dict:
                 "being assumed"
             ),
         },
-        "surface_boundary_fill": {
-            "enabled": True,
-            "tool": "creo_surface_boundary_fill",
-            "scope": (
-                "one closed non-planar boundary, given as an ordered chain of at least three "
-                "curve geometry ids, filled by closing the Probbl.h boundary-blend tree across "
-                "its single direction; the receipt reports the result quilt, face count, area, "
-                "closure, boundary edge count and whether solid material appeared"
-            ),
-            "limits": (
-                "one loop only, no holes, second loops, nested lists or open chains; at least "
-                "three distinct curve geometry ids in chain order; consecutive curves must "
-                "share an endpoint within 0.01 mm in a known length unit (sampled from "
-                "ProCurveXyzdataEval, not from the request); a two-curve boundary belongs to "
-                "surface_loft; the planar sketch-based surface_fill operation is unchanged and "
-                "is not a fallback; the native tree is offline implemented and has no "
-                "hardware acceptance yet, so the result quilt and measured closure must be "
-                "confirmed on a real Creo session before relying on it"
-            ),
-        },
         "surface_round": {
             "enabled": True,
             "tool": "creo_surface_round",
@@ -713,10 +702,12 @@ def families() -> dict:
                 "and, for two faces sharing an edge, the normal angle across that edge"
             ),
             "native_test": (
-                "offline implemented on Creo 12.4.0.0 SDK; no hardware acceptance yet. The "
-                "2026-11-08 SDK re-check found ProSurfacePrincipalCrvtEval as the only "
-                "curvature query; ProSurfaceParamRangeGet does not exist in this SDK, so the "
-                "UV extents come from ProSurfaceDataGet"
+                "2026-11-08 Creo 12.4.0.0 live: a planar 40x20 surface_loft quilt measures "
+                "0.0 1/mm max absolute curvature with 144/144 samples inside the face and "
+                "min_curvature_radius_mm=null (reason zero_curvature); an R8 revolve sphere "
+                "measures 0.12500000000000003 1/mm and 7.999999999999998 mm; two adjacent "
+                "planar walls report g1_max_angle_deg=90.0 over 1 shared edge and 17 samples "
+                "with within_g1=false; revision stays unchanged (read-only)"
             ),
             "limits": (
                 "no zebra-stripe or curvature-comb image: Toolkit has no such API, and the "
@@ -727,8 +718,9 @@ def families() -> dict:
                 "unknown unit scale keeps 1/mm and mm values null; the G1 angle is the angle "
                 "between the two kernel normals as returned (an opposite-wound neighbour "
                 "would read near 180 degrees and must be confirmed live); the 0.5 degree "
-                "threshold only sets within_g1 and never replaces the measured angle; "
-                "offline implemented, hardware acceptance pending"
+                "threshold only sets within_g1 and never replaces the measured angle; only "
+                "the dedicated read-only tool keeps the revision unchanged - the generic "
+                "execute_plan entry is a write job and saves the model"
             ),
         },
         "sweep": {

@@ -504,49 +504,6 @@ def reference_capabilities() -> dict[str, Any]:
                     ),
                 },
             },
-            "creo_surface_boundary_fill": {
-                "boundary": [
-                    {"kind": "curve", "id": 44},
-                    {"kind": "curve", "id": 52},
-                    {"kind": "curve", "id": 58},
-                ],
-                "requires": (
-                    "one closed loop as at least three distinct curve geometry ids in chain "
-                    "order; every item is {kind:'curve',id:N} from creo_inspect_model, and "
-                    "consecutive curves (including the last and the first) must share an "
-                    "endpoint within 0.01 mm in a known length unit"
-                ),
-                "rejected": {
-                    "fewer_than_three_curves": (
-                        "a one- or two-curve boundary is refused before a job; a two-curve "
-                        "closed loop belongs to creo_surface_loft"
-                    ),
-                    "open_chain": (
-                        "an open chain is refused natively; close the loop first, or use "
-                        "creo_surface_loft for a surface between two sections"
-                    ),
-                    "holes_and_second_loops": (
-                        "boundary is one flat ordered list: holes, second loops and nested "
-                        "lists have no field"
-                    ),
-                    "non_curve_kinds": (
-                        "{kind:'quilt'}, {kind:'surface'}, {kind:'edge'}, {kind:'body'} and "
-                        "feature labels are not boundary curves; use the geometry id from "
-                        "creo_inspect_model (creo_project_curve can build a missing edge)"
-                    ),
-                    "duplicate_curve": "a repeated curve id is refused before a job",
-                    "planar_fill_fallback": (
-                        "creo_surface_fill keeps its planar sketch-only contract; it is not a "
-                        "fallback for this operation"
-                    ),
-                },
-                "result": (
-                    "one open datum-surface quilt; the receipt reports quilt_id, face_count, "
-                    "surface_area_mm2, quilt_closed_native, boundary_edges and has_solid, each "
-                    "with its own status. The route is offline implemented on Creo 12.4.0.0 "
-                    "and still requires hardware acceptance"
-                ),
-            },
             "creo_surface_round": {
                 "target": {"kind": "quilt", "id": 21},
                 "target_by_label": {"kind": "quilt_feature", "label": "fill_label"},

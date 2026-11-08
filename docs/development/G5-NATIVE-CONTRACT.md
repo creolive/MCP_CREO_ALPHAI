@@ -703,7 +703,7 @@ redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_Q
 结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
 [FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
 
-### 2.11 曲面边圆角 surface_round（DEV-074/H08 实机证据 + 离线实现）
+### 2.11 曲面边圆角 surface_round（DEV-074/H08，实机验收完成 2026-11-08）
 
 **SDK 依据（本机 Creo 12.4.0.0 头文件实读）**：`ProRound.h` 的 `PRO_FEAT_ROUND` 支持
 `ProRoundReferenceType = PRO_ROUND_REF_SURF_SURF(2)`，并在边集合条目下明文写明
@@ -724,7 +724,7 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、
 `h08_surface_round_probe.json`（SHA256 `D74FF061…FB6E64D5`）。
 
-**离线实现（2026-11-08，本轮）**：`native/surface_round.cpp` 的 `generic_surface_round`
+**实现与实机验收（2026-11-08）**：`native/surface_round.cpp` 的 `generic_surface_round`
 沿用上面实测的同一棵 `PRO_FEAT_ROUND` + `PRO_ROUND_REF_SURF_SURF` 树，只写
 `PRO_E_RNDCH_SHAPE_OPTIONS=PRO_ROUND_TYPE_CONSTANT`、`PRO_E_RNDCH_LEG1` 常量半径、
 `PRO_E_RNDCH_ATTACH_TYPE=PRO_ROUND_ATTACHED` 和空的 `PRO_E_RNDCH_TRANSITIONS`。
@@ -733,6 +733,17 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 `ProQuiltSurfaceVisit` 面数、`quilt_area_native` 面积和 `quilt_closed_native` 闭合，
 并以 `area_before/after` 判定“圆角没有去掉面积”为失败。**结果面积/面数全部来自原生测量，
 不使用请求值回填。** 失败由 job 级既有检查点回滚处理，没有新增回滚机制。
+
+实机（Creo 12.4.0.0，公开工具 `creo_surface_round`）：40×20 矩形草图拉伸曲面 quilt
+（quilt 70、4 面、1200 mm²）对排序后的相邻面对 (62,64) 施加 R3，作业
+`3dfc36030e4e42779f8fedf112a9d84a` 终态 succeeded，结果为 **5 面、1187.1238898038469 mm²**
+（与 1200−2×3×10+π/2×3×10 逐位一致）、`quilt_closed_native=open`、`has_solid=false`、
+`solid_surface_count=0`、`material_measurement=not_applicable`、feature 78 type 913，
+保存重载 `saved_file_reloaded_and_verified=true`，重载后 quilt 70 的面数与面积不变。
+随后对非相邻面对 (62,66) 提交，作业 `b9016b1c90c24f35bf6dfc207fca3ae1` 失败：
+`feature_status=6`、feature 114、元素错误列表 `total=0`，`effect_status=rolled_back`，
+revision 2→2，quilt 仍为 5 面 / 1187.1238898038469 mm²。证据
+[EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、`A_surface_round.json`。
 
 **最小契约（冻结）**：
 
@@ -752,12 +763,11 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 
 **未开放/未验证**：变半径、full/chordal、through-curve、自定义过渡、edge-chain、多组；
 圆角后继续 thicken/solidify 的链；非 mm 单位、弯曲或多 quilt 成员；Creo 9/10。
-本轮只完成离线实现、编译与单测，**实机未验证**（H08 的 C1/C2/C5 是契约探针证据，不是本实现
-的实机验收）。
+本次实机验收只覆盖一个 4 面开放 quilt 的相邻/非相邻面对与保存重载回滚。
 
 ---
 
-### 2.12 surface_boundary_fill：闭合链非平面填充（DEV-074/H09，离线实现）
+### 2.12 surface_boundary_fill：闭合链非平面填充（DEV-074/H09，实机反证，门禁保持）
 
 **问题**：`surface_fill` 只接受一个平面草图（§2.1 之外的 `PRO_FLAT` +
 `PRO_E_SEC_USE_SKETCH`），没有 3D 边界通道；H09 早前的结论是“任意非平面闭合边界填充不可用”。
@@ -805,16 +815,33 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 `surface_group`（含组级 `boundary_edges`）、`has_solid`/`solid_surface_count`。所有测量值都来自
 原生 quilt 查询，不使用请求值回填；失败由 job 级既有检查点回滚，没有新增回滚机制。
 
-**实机未验证（关键待确认点）**：
+**实机反证（2026-11-08，Creo 12.4.0.0）**：平面闭合环由同一个矩形草图的 4 条
+`PRO_CURVE`（id 45–48）构成，`ProCurveXyzdataEval` 实测相邻端点最大间隙
+**1.882820214045141e-31 mm**（远小于 0.01 mm 容差），链顺序与闭合校验通过。提交
+`creo_execute_plan` 后：
 
-- 内核是否把「单向、N 个 chain holder、`PRO_E_BBL_ADD_CLOSED=true`」解释为一张闭合填充面，
-  而不是 N 段单向放样或拒绝该树；
-- `PRO_E_BNBLN_DIR_CURVES` 的顺序与曲线方向是否被内核按提交顺序消费（本实现的端点检查只保证
-  几何上首尾相接，不控制内核的参数方向）；
-- 结果是否稳定为 1 个 `PRO_QUILT`、面积/闭合读数与边界边数是否与输入环一致；
-- 非 mm 单位（当前直接拒绝）、曲率/多条闭合链、Creo 9/10 未测。
+| 作业 | create_code | extract_code | 抽取树元素 | feature_status | quilt 访问 | quilt 数 | 元素错误 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `4f1705caaa2d4899bc97e38803644ba7` | 0 | 0 | 107 | **6** | **-4** | **0** | `total=0` |
+| `cd7b435ffa9041e383f8816e6ed9f6e7`（复现） | 0 | 0 | 107 | **6** | **-4** | **0** | `total=0` |
 
-### 2.13 surface_curvature：数值等价交付与限制（DEV-074/H08，离线实现）
+两次均 `effect_status=rolled_back`、`rollback_succeeded=true`、`saved_file_reloaded_and_verified=false`，
+模型 revision 不变。抽取树显示内核已把 `PRO_E_BBL_ADD_CLOSED` 保留为 1，并补齐
+`PRO_E_EXT_SURF_CUT_SOLID_TYPE=PRO_FEAT_DATUM_SURF` 与切向条件默认值；失败不是元素缺失，
+而是“单向 N 个 chain holder + 闭合”这棵树在再生阶段不产出任何 quilt。按验收优先级，
+平面环失败后**未提交非平面环**（不再用同一被否定的树重复试探）。
+
+**结论与门禁**：`surface_boundary_fill` 已加入 `UNAVAILABLE_OPERATIONS`，`server.py` 的既有钩子
+把 `creo_surface_boundary_fill` 从 MCP 工具面移除（公开工具 107→106），`require_available` 在受理前
+拒绝且不建 job。`native/surface_boundary_fill.cpp` 作为**被否定的候选路线**保留在仓库，文件头
+与契约均标注 GATED；planar `surface_fill` 未改动、不作为回退。证据
+[EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、`B_planar_fill_failure_job1.json`、
+`B_planar_fill_failure_job2.json`、`gate_probe.json`。
+
+**仍未成立**：任意非平面闭合边界填充需要一条能产出结果 quilt 的新树（例如先用手工
+Boundary Blend/Fill 参照件读回真实树，或改走多方向网格），不能继续在无参照的情况下猜元素。
+
+### 2.13 surface_curvature：数值等价交付与限制（DEV-074/H08，实机验收完成 2026-11-08）
 
 **问题**：外部需求中的「曲率梳 / 斑马纹」是可视化检查。2026-11-08 对本机 Creo 12.4.0.0 SDK
 逐头文件复核：**没有** `ProCurvature*`、zebra 或曲率梳 API；全 SDK 与曲率有关的只有
@@ -857,10 +884,24 @@ double* min, ProVector dirs[2])`（给定 UV 点返回最大/最小主曲率与�
 **明确不提供**：斑马纹、曲率梳或任何图像/截图输出；多面（>2）G1 链、G1/G2 连续性判定、
 自动修复、曲率极值搜索与曲面质量打分。
 
-**离线实现**：`native/surface_curvature.cpp` 的 `generic_surface_curvature`，只读
-（`generic_bridge.submit(readonly=True)`，原生不会 `ProSolidRegenerate`，revision 不变）。
-**实机未验证**：曲率数值、UV 范围的真实可用性、面内采样比例、G1 角度与 0.5° 阈值、
-非 mm 单位、Creo 9/10 均待实机。
+**实现与实机验收（2026-11-08）**：`native/surface_curvature.cpp` 的
+`generic_surface_curvature`，只读（`generic_bridge.submit(readonly=True)`，原生不会
+`ProSolidRegenerate`）。实机（Creo 12.4.0.0，公开只读工具 `creo_measure_surface_curvature`）：
+
+| 用例 | quilt / 面 | 作业 | 12×12 采样 | 结论 |
+| --- | --- | --- | --- | --- |
+| 平面 | `surface_loft` 800 mm²、1 面 | `584b0d9486694db383b4540fd9ede92c` | 144/144 面内、0 失败 | `max_abs_curvature_per_mm=0.0`；`min_curvature_radius_mm=null`（`zero_curvature`）；`outside_contour_count=0` |
+| R8 球面 | 半圆旋转 360°、quilt 74、2 面（取 1 面） | `5c79b4c0afc8423592d19416da0ec54f` | 144/144、0 失败 | 曲率 **0.12500000000000003 1/mm**、半径 **7.999999999999998 mm**（1/8=0.125、R=8） |
+| G1 | 4 面拉伸 quilt、相邻面 (62,64) | `a93e1248e6794984b60032c9d033d528` | 2 面 288 点 | 1 条共享边、17 点、0 失败、`g1_max_angle_deg=90.0`、`within_g1=false`（0.5° 阈值一致） |
+
+三次作业 `revision` 均为 1，与提交前相同：**只读工具不推进 revision**。注意：把同一
+`surface_curvature` 操作经通用 `creo_execute_plan` 提交会按写作业保存并推进 revision
+（本批验收驱动曾误用该入口得到 1→2）；只读语义由专用工具持有，通用计划入口不改变既有
+事务语义。证据 [EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、
+`C_surface_curvature.json`。
+
+**仍待**：非 mm 单位、裁剪面（`outside_contour_count>0`）与弯曲面混合、反向绕向邻面的 G1
+朝向、Creo 9/10。
 
 ---
 

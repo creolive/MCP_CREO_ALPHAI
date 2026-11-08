@@ -2856,8 +2856,10 @@ async def creo_surface_boundary_fill(
     quilt; the receipt reports quilt_id, face_count, surface_area_mm2,
     quilt_closed_native, boundary_edges and has_solid with their statuses.
     Holes, second loops and solid output are refused before a job exists, and
-    the planar sketch-based creo_surface_fill is unchanged. This route is
-    offline implemented on Creo 12.4.0.0 and still requires hardware acceptance.
+    the planar sketch-based creo_surface_fill is unchanged. On 2026-11-08 the
+    closed single-direction chain created and extracted but regenerated to no
+    quilt on Creo 12.4.0.0, so the operation stays in UNAVAILABLE_OPERATIONS and
+    this tool is removed from the MCP surface.
     """
     return await invoke(
         general.submit,

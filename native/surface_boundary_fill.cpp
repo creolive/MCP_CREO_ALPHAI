@@ -1,5 +1,13 @@
 // surface_boundary_fill.cpp — DEV-074/H09: fill one closed non-planar boundary.
 //
+// Status 2026-11-08: GATED. On Creo 12.4.0.0 the tree below creates and
+// extracts (ProFeatureWithoptionsCreate=0, ProFeatureElemtreeExtract=0) but the
+// redefine leaves feature_status=6 and the feature owns no quilt (quilt visit
+// -4, quilt_count=0, element-error list empty); a planar 4-curve rectangle loop
+// with a 1.9e-31 mm measured endpoint gap reproduces it. The operation is in
+// UNAVAILABLE_OPERATIONS and its tool is removed from the MCP surface; this
+// file is the falsified candidate route, not a published capability.
+//
 // Contract: docs/development/G5-NATIVE-CONTRACT.md §2.12 (offline rationale and
 // open questions), §4.4.2 (status-shaped measurements). The route reuses the
 // only documented boundary-blend tree on this SDK (Probbl.h, §2.1): the same

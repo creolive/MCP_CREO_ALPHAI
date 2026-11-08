@@ -1,0 +1,14 @@
+{
+  "probe": "surface_boundary_fill post-gate",
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available"
+  },
+  "tool_count": 106,
+  "surface_boundary_fill_published": false,
+  "submit": {
+    "is_error": true,
+    "raw": "Error executing tool creo_execute_plan: Not available in the 0.18.4 release; no native job was queued. surface_boundary_fill: the closed non-planar boundary fill is not published: on this machine the documented Probbl.h closed-chain tree creates and extracts (ProFeatureWithoptionsCreate=0, ProFeatureElemtreeExtract=0) but regeneration fails with feature_status=6 (PRO_FEAT_INCOMPLETE) and produces no quilt (quilt visit -4, quilt_count=0, empty element-error list); a planar 4-curve rectangle loop whose measured endpoint gap is 1.9e-31 mm reproduces it twice and rolls back, so the closed single-direction chain does not yield a measurable filled surface"
+  }
+}

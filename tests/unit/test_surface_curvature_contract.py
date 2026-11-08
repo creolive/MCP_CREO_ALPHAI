@@ -134,8 +134,8 @@ class SurfaceCurvatureRegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(properties["samples_per_direction"]["default"], 12)
         self.assertEqual(properties["faces"]["minItems"], 1)
         self.assertEqual(properties["faces"]["maxItems"], 2)
-        # 107 adds this tool to the 106 that carry creo_surface_boundary_fill.
-        self.assertEqual(len(tools), 107)
+        # 106 = 107 minus the gated creo_surface_boundary_fill (DEV-074/H09).
+        self.assertEqual(len(tools), 106)
 
     def test_capability_family_publishes_the_numeric_equivalence(self):
         self.assertIn("creo_measure_surface_curvature", families()["surface_chain"]["tools"])
