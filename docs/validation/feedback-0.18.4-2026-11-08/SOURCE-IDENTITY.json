@@ -1,0 +1,24 @@
+{
+  "source_commit": "95d52c95894e43ef0494fceeb8d1c3a58d2332d7",
+  "dirty": true,
+  "directory": "C:\\d076_e1a293",
+  "files_copied": 1590,
+  "code_files": 489,
+  "code_fingerprint": "33254791ad55214dbd865e53eced227e15c1e626cca474d20a95bd913272168b",
+  "fingerprint_algorithm": "sha256-path-lf-filehash-v1",
+  "git_available": false,
+  "pip_no_index": true,
+  "import_check": "C:\\d076_e1a293\\src\\creo_mechdog\\__init__.py",
+  "exit_code": 0,
+  "code_unchanged": true,
+  "native_build": {
+    "exit_code": 0,
+    "environment": "Windows x64 / Creo 12.4.0.0 SDK / MSVC C++17",
+    "worker_bytes": 13907968,
+    "worker_sha256": "4538e7b8250a95b86c43f466db0924c01fd6c6b0ffb94c788e41a90e53ac1459",
+    "toolkit_connection": false,
+    "source_commit": "8cb243468ecb0665152a5128f2fb5f37ecce0985",
+    "dirty": true,
+    "native_source_unchanged_at_final_test_commit": true
+  }
+}

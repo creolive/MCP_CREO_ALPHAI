@@ -1,0 +1,39 @@
+{
+  "version": "0.18.4",
+  "timestamp": 1794103711.7734666,
+  "tests_run": 2976,
+  "success": true,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 4,
+  "skipped_tests": [
+    {
+      "test": "test_generated_constants_only_include_present_headers (unit.test_gated_headers.LocalSdkContractTests.test_generated_constants_only_include_present_headers)",
+      "reason": "no local config.json"
+    },
+    {
+      "test": "test_local_sdk_present_and_missing_sets_are_disjoint (unit.test_gated_headers.LocalSdkContractTests.test_local_sdk_present_and_missing_sets_are_disjoint)",
+      "reason": "no local config.json"
+    },
+    {
+      "test": "test_missing_header_branch_compiles_and_refuses_the_operation (unit.test_optional_loft_header.OptionalLoftHeaderTests.test_missing_header_branch_compiles_and_refuses_the_operation)",
+      "reason": "local Windows compiler configuration not available"
+    },
+    {
+      "test": "test_provenance_keeps_git_facts_in_a_checkout (unit.test_t07_preview.DriverCoverage.test_provenance_keeps_git_facts_in_a_checkout)",
+      "reason": "git unavailable; the degradation case covers this environment"
+    }
+  ],
+  "duration_seconds": 436.42199999999957,
+  "source": {
+    "commit": null,
+    "branch": null,
+    "dirty": null,
+    "git_status": "unavailable",
+    "source_fingerprint": "476d241411da9629000145a88ce2612462be0d77c70c3fa42b894e8a78c7a76e",
+    "source_scope": "distributed_source",
+    "source_status": "complete",
+    "source_file_count": 471,
+    "source_errors": []
+  }
+}

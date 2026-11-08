@@ -1,10 +1,10 @@
 # DEV-075：离线结果与另一 AI 接手清单
 
-日期：2026-11-07。分支：`codex/DEV-075-feedback0181-offline`；起点：`828b1f2`，版本保持0.18.0。[工作卡](../work-items/DEV-075.md)、[逐项对照](../validation/feedback-0.18.1-2026-11-07/MAPPING.md)、[验证结果](DEV-075-ACCEPTANCE.md)。最终冻结分发2878项0失败/0错误、2项SDK跳过后本机另补通过；样式门禁通过，详见验收记录。本次未合main、未发布；若后续合main，必须另定未发布版本并在同一交付流程正式发布Release。
+历史快照（2026-11-07）。分支：`codex/DEV-075-feedback0181-offline`；起点：`828b1f2`，版本保持0.18.0。[工作卡](../work-items/DEV-075.md)、[逐项对照](../validation/feedback-0.18.1-2026-11-07/MAPPING.md)、[验证结果](DEV-075-ACCEPTANCE.md)。最终冻结分发2878项0失败/0错误、2项SDK跳过后本机另补通过；样式门禁通过，详见验收记录。本次未合main、未发布；若后续合main，必须另定未发布版本并在同一交付流程正式发布Release。
 
 ## 2026-11-08 DEV-076整合更新（优先于下方2026-11-07快照）
 
-当前分支已合并本地v0.18.4（04927a9），源码版本随基线为0.18.4；本分支新修复仍未发布。[三件逐项对照](../validation/feedback-0.18.4-2026-11-08/MAPPING.md)、[本轮验收](../validation/feedback-0.18.4-2026-11-08/ACCEPTANCE.md)、[发布勘误](RELEASE-ERRATA-2026-11-08.md)。下方原日期、2878测试与0.18.0起点属于当时快照，不作为最新验证。
+当前分支已合并本地v0.18.4（04927a9），源码版本随基线为0.18.4；本分支新修复仍未发布。最终受测95d52c9：工作区与无Git分发各2976项0失败/0错误；分发4跳过的SDK/仓库专属检查在工作区通过或由降级用例覆盖，样式和本机SDK编译通过。[三件逐项对照](../validation/feedback-0.18.4-2026-11-08/MAPPING.md)、[本轮验收](../validation/feedback-0.18.4-2026-11-08/ACCEPTANCE.md)、[发布勘误](RELEASE-ERRATA-2026-11-08.md)。下方原日期、2878测试与0.18.0起点属于当时快照，不作为最新验证。
 
 先复用合入的DEV-074已有证据：H01非零origin resize、两截面surface_loft、surface_group测量、trim保留侧、旋转曲面替代fill、多quilt逐片加厚、H12回执已有对应Creo12历史验收，本轮未重做。下方H01和H06的“尚未实现”范围按这些已交付子项缩小，详见[DEV-074-HANDOFF](DEV-074-HANDOFF.md)；独立quilt偏置、quilt_merge和钣金实体融合反证仍保持门禁，未合入另一分支未发布的surface_round。
 
