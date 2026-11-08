@@ -4393,8 +4393,7 @@ static void execute_operation_body(const J &op) {
     } else if (kind != "regenerate" && kind != "save")
         throw std::runtime_error("Operation is not implemented: " + kind);
     if (kind != "export" && kind != "dump_tree" && kind != "udf_inspect" &&
-        kind != "mass_properties" && kind != "surface_group_measure" &&
-        kind != "surface_curvature")
+        kind != "mass_properties" && kind != "surface_group_measure" && kind != "surface_curvature")
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
     J post_state = inspection();
     // One terminal record for this input. Branch details and the staged detail
