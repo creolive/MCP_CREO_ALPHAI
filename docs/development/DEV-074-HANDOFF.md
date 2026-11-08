@@ -26,6 +26,19 @@
 | H05 / FEAT-014 | **反证完成，门禁保持**（见下表） | — |
 | H10 / FEAT-039 | **完成（2026-11-07 实机 46/46）**：三片独立 quilt 的组级测量、逐片 0.3/2 mm 加厚、保存重载与再编辑；整组实体化仍等 merge | [EVIDENCE](../validation/feat039-h10-multi-quilt-2026-11-07/EVIDENCE.md)；**2026-11-08 五爪整瓶整链实机 63 项 0 失败**：7 次链式 merge → 闭合壳 **7858.298125 mm²**、0.3/2 mm 加厚、圆角、`solidify` **56799.995177 mm³**，见 [EVIDENCE](../validation/dev074-h10-five-claw-2026-11-08/EVIDENCE.md) |
 
+## 完成状态（2026-11-08，随 0.19.0 发布）
+
+| 编号 | 状态 | 证据 |
+| --- | --- | --- |
+| H03 / FEAT-039 | **完成**：`quilt_merge` 结果判据修复并解除门禁，`creo_quilt_merge` 公开；两片 400→800 mm²、保存重载、2 mm 加厚成功，不相邻负例 −1 回滚；公开工具 106→107 | [EVIDENCE](../validation/dev074-h03h07-2026-11-08/EVIDENCE.md) |
+| H08 / FEAT-055 | **完成**：`creo_surface_round`（相邻面 R3 → 5 面 1187.1238898038469 mm²、开放、无实体、保存重载）与只读 `creo_measure_surface_curvature`（平面 0、R8 球面 0.125 1/mm、G1 90°、revision 不变）公开并实机验收 | [EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md) |
+| H10 / FEAT-039（增补） | **完成**：五爪整瓶整链 46 作业、63 项检查 0 失败；闭合壳 7858.298125230911 mm²、0.3/2 mm 加厚、圆角与 solidify 56799.99517675038 mm³ | [EVIDENCE](../validation/dev074-h10-five-claw-2026-11-08/EVIDENCE.md) |
+| H05 成形类 / FEAT-014 | **不可用，门禁保持**：corner relief 三变体再生失败回滚、草图成形三变体 create=−1、无 Hem/Jog API、格栅 cut 未取证 | [EVIDENCE](../validation/dev074-forming-2026-11-08/EVIDENCE.md) |
+| H07 / FEAT-039 | **不可用，门禁保持**：`PRO_FEAT_FLX_OGF` 完整树 −1、INCOMPLETE 骨架 redefine −1；复制+平移为平移副本 | [EVIDENCE](../validation/dev074-h03h07-2026-11-08/EVIDENCE.md) |
+| H09 独立 fill | **不可用，门禁恢复**：平面闭合环 `feature_status=6`、0 quilt、整体回滚，工具移出公开面 | [EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md) |
+
+本批不新增队列或并发原语；未测 Creo 9/10、非 mm、WorkBuddy 黑盒与源码包解压单测。
+
 ## 验证结果
 
 仓库内 `tools/dev_check.py --work-item DEV-074` 已通过：2850项单测、0失败、0错误，风格24条lint/12个未格式化文件为既有基线，没有新增基线问题；`bridge.py build`退出0。最终源码在无`.git`、PATH无Git的独立分发目录全量2850项、0失败/0错误、2项SDK检查跳过；464个源码文件与工作树一致。完整来源、命令与审查限制见[验收记录](DEV-074-ACCEPTANCE.md)。上述轮次没有连接 Creo；所有新原生字段、非零原点 resize、真实附件下载、WorkBuddy、Creo 9/10/12 新实机结果均不能记为通过。**0.18.3 发布门槛另行实测**：工作树 2916 项、0 失败 0 错误（`dev_check` 源码指纹 `2aeceda9…`），源码包解压 2916 项、0 失败 0 错误、3 项 SDK 跳过，见[发布记录](../validation/RELEASE-0.18.3.md)。**H12 实机例外（2026-11-07，Creo 12.4.0.0）**：公开 MCP run `20261108T002653_283` 38 项检查 0 失败，见 [EVIDENCE](../validation/dev074-h12-receipts-2026-11-07/EVIDENCE.md)。**H10 实机例外（2026-11-07，Creo 12.4.0.0）**：`tools/test_multi_quilt_group.py --live` run `20261108-011157-8a32d4` 46 项检查 0 失败，见 [EVIDENCE](../validation/feat039-h10-multi-quilt-2026-11-07/EVIDENCE.md)。
