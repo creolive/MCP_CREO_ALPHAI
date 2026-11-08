@@ -35,6 +35,7 @@ Rules, in the order they are applied:
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Any
 
@@ -114,28 +115,10 @@ def _arc_consistent(first, second, tolerance: float) -> bool:
     return abs(first.sweep) > 0.0 and abs(second.sweep) > 0.0
 
 
-def prepare_endpoint_weld(
-    entities: list[dict[str, Any]],
-    *,
-    policy: str = "report",
-    max_move_mm: float | None = None,
-) -> dict[str, Any]:
-    """Describe which endpoint pairs may be welded; never move geometry.
-
-    The receipt is the frozen contract: policy, whether anything was applied,
-    the threshold and its source, the candidate and accepted pair counts, the
-    largest move the pairs would need, the failure reason and a bounded sample
-    of the pairs. ``requested_geometry`` is what the caller sent; the actual
-    geometry stays ``None`` until the native solver reports it.
-    """
-    if policy not in POLICIES:
-        raise ValueError(f"endpoint_policy must be one of {', '.join(POLICIES)}")
-    if max_move_mm is not None:
-        if not isinstance(max_move_mm, (int, float)) or isinstance(max_move_mm, bool):
-            raise ValueError("max_move_mm must be a number")
-        if not math.isfinite(float(max_move_mm)) or max_move_mm <= 0.0:
-            raise ValueError("max_move_mm must be a finite number greater than 0")
-
+def _plan(
+    entities: list[dict[str, Any]], max_move_mm: float | None
+) -> tuple[list, list[dict], list[dict], list[dict]]:
+    """The shared candidate/accepted/refused decision used by every entry."""
     curves, _names = _expand(entities)
     ends = _endpoints(curves)
     chain_of = _chains(curves, ends, EXACT_TOLERANCE_MM)
@@ -191,10 +174,106 @@ def prepare_endpoint_weld(
         used[key_a] = key_b
         used[key_b] = key_a
         accepted.append(candidate)
+    return curves, candidates, accepted, refused
+
+
+def _entity_named(entities: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
+    for entity in entities:
+        if entity.get("type") in ("line", "arc") and str(entity.get("name")) == name:
+            return entity
+    return None
+
+
+def _snap_entities(
+    entities: list[dict[str, Any]],
+    curves: list,
+    accepted: list[dict],
+) -> tuple[list[dict[str, Any]], list[dict], str | None]:
+    """Rewrite accepted line endpoints to one shared point.
+
+    Arcs never move: an arc endpoint is tied to its centre and radius, so the
+    line side of an arc/line pair is anchored to the arc endpoint. Two lines
+    meet at the midpoint. A pair involving an expanded rectangle/polyline
+    segment, or two arcs, is refused because the rewrite would change geometry
+    the request did not describe.
+    """
+    result = copy.deepcopy(entities)
+    applied: list[dict] = []
+    for pair in accepted:
+        first = curves[pair["curve_a"]]
+        second = curves[pair["curve_b"]]
+        entity_a = _entity_named(result, pair["entity_a"])
+        entity_b = _entity_named(result, pair["entity_b"])
+        if entity_a is None or entity_b is None:
+            return result, applied, "entity_not_snappable"
+        if first.kind == "arc" and second.kind == "arc":
+            return result, applied, "arc_pair_not_snappable"
+        point_a = first.start if pair["end_a"] == "start" else first.end
+        point_b = second.start if pair["end_b"] == "start" else second.end
+        if first.kind == "arc":
+            target, anchor = point_a, "a"
+        elif second.kind == "arc":
+            target, anchor = point_b, "b"
+        else:
+            target = ((point_a[0] + point_b[0]) / 2.0, (point_a[1] + point_b[1]) / 2.0)
+            anchor = "midpoint"
+        shift_a = _distance(point_a, target)
+        shift_b = _distance(point_b, target)
+        if first.kind != "arc":
+            entity_a[pair["end_a"]] = [target[0], target[1]]
+        if second.kind != "arc":
+            entity_b[pair["end_b"]] = [target[0], target[1]]
+        applied.append(
+            {
+                "entity_a": pair["entity_a"],
+                "entity_b": pair["entity_b"],
+                "end_a": pair["end_a"],
+                "end_b": pair["end_b"],
+                "gap_mm": pair["gap_mm"],
+                "anchor": anchor,
+                "shift_a_mm": shift_a,
+                "shift_b_mm": shift_b,
+                "point": [target[0], target[1]],
+            }
+        )
+    return result, applied, None
+
+
+def prepare_endpoint_weld(
+    entities: list[dict[str, Any]],
+    *,
+    policy: str = "report",
+    max_move_mm: float | None = None,
+    snap: bool = False,
+) -> dict[str, Any]:
+    """Describe which endpoint pairs may be welded.
+
+    With ``snap=False`` no geometry moves. With ``snap=True`` an accepted
+    line-line pair meets at the midpoint and a line-arc pair moves the line to
+    the arc endpoint; the rewritten copy is returned privately for submission
+    and the published receipt records every pair, gap and shift. In both cases
+    the native solver still owns its own coincidence check.
+
+    The receipt is the frozen contract: policy, whether anything was applied,
+    the threshold and its source, the candidate and accepted pair counts, the
+    largest move the pairs would need, the failure reason and a bounded sample
+    of the pairs. ``requested_geometry`` is what the caller sent; the actual
+    geometry stays ``None`` until the native solver reports it.
+    """
+    if policy not in POLICIES:
+        raise ValueError(f"endpoint_policy must be one of {', '.join(POLICIES)}")
+    if max_move_mm is not None:
+        if not isinstance(max_move_mm, (int, float)) or isinstance(max_move_mm, bool):
+            raise ValueError("max_move_mm must be a number")
+        if not math.isfinite(float(max_move_mm)) or max_move_mm <= 0.0:
+            raise ValueError("max_move_mm must be a finite number greater than 0")
+
+    curves, candidates, accepted, refused = _plan(entities, max_move_mm)
 
     receipt: dict[str, Any] = {
         "policy": policy,
         "applied": False,
+        "applied_by": None,
         "native_applied": False,
         "threshold_mm": CLUSTER_TOLERANCE_MM,
         "threshold_source": "closure_diagnostic_cluster",
@@ -236,6 +315,8 @@ def prepare_endpoint_weld(
             "curve_b": entry["curve_b"],
             "end_a": entry["end_a"],
             "end_b": entry["end_b"],
+            "entity_a": entry["entity_a"],
+            "entity_b": entry["entity_b"],
             "gap_mm": entry["gap_mm"],
             "required_move_mm": entry["required_move_mm"],
         }
@@ -250,6 +331,53 @@ def prepare_endpoint_weld(
         }
         for entry in refused[:SAMPLE_LIMIT]
     ]
+    # DEV-077/R01: an explicit snap request rewrites the caller's line
+    # endpoints before the payload leaves Python, so the receipt states that
+    # this time Python did move the geometry and names every pair, gap and
+    # shift. The native solver still owns its own coincidence work.
+    receipt["snap"] = {
+        "requested": bool(snap),
+        "applied": False,
+        "failure_reason": None,
+        "rule": None,
+        "max_shift_mm": None,
+        "residual_max_mm": None,
+        "pairs": [],
+    }
+    if snap:
+        if policy == "reject":
+            raise ValueError("snap_endpoints cannot be combined with endpoint_policy=reject")
+        if accepted:
+            snapped, applied_pairs, failure = _snap_entities(entities, curves, accepted)
+            if failure is not None:
+                receipt["snap"]["failure_reason"] = failure
+            else:
+                residual = _plan(snapped, max_move_mm)[2]
+                rules = sorted({entry["anchor"] for entry in applied_pairs})
+                receipt["snap"].update(
+                    {
+                        "applied": True,
+                        "rule": "+".join(rules),
+                        "pairs": applied_pairs[:SAMPLE_LIMIT],
+                        "max_shift_mm": max(
+                            max(entry["shift_a_mm"], entry["shift_b_mm"]) for entry in applied_pairs
+                        ),
+                        "residual_max_mm": (
+                            max(entry["gap_mm"] for entry in residual) if residual else 0.0
+                        ),
+                    }
+                )
+                receipt["applied"] = True
+                receipt["applied_by"] = "python_request_rewrite"
+                receipt["actual_geometry"] = {
+                    "entity_count": len(snapped),
+                    "max_endpoint_shift_mm": receipt["snap"]["max_shift_mm"],
+                }
+                receipt["note"] = (
+                    "Python rewrote the accepted line endpoints into one shared point before "
+                    "submission; the native solver still owns its own coincidence check"
+                )
+                receipt["_snapped_entities"] = snapped
     if policy == "reject" and accepted:
         receipt["failure_reason"] = "endpoint_pairs_present"
         receipt["would_reject"] = True
@@ -272,13 +400,22 @@ def prepare_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]
         if operation.get("op") not in SKETCH_OPS:
             continue
         policy = operation.get("endpoint_policy", "report")
-        if policy == "report":
+        snap = bool(operation.get("snap_endpoints"))
+        if policy == "report" and not snap:
             continue
         receipt = prepare_endpoint_weld(
             operation.get("entities", []),
             policy=policy,
             max_move_mm=operation.get("max_endpoint_move_mm"),
+            snap=snap,
         )
+        snapped = receipt.pop("_snapped_entities", None)
+        if snap:
+            # The rewrite replaces the request geometry; the receipt keeps the
+            # before/after evidence and is published with the job result.
+            if snapped is not None:
+                operation["entities"] = snapped
+            operation["snap_endpoint_receipt"] = receipt
         if policy == "weld":
             # The weld policy hands the native side the pairs to regularise.
             # Python still decides and still reports; the native side owns the
@@ -311,12 +448,20 @@ def annotate_result(result: dict[str, Any], operations: list[dict[str, Any]]) ->
         if operation.get("op") not in SKETCH_OPS:
             continue
         policy = operation.get("endpoint_policy", "report")
-        receipt = prepare_endpoint_weld(
-            operation.get("entities", []),
-            policy=policy,
-            max_move_mm=operation.get("max_endpoint_move_mm"),
-        )
-        if policy == "report" and receipt["accepted_pairs"] == 0:
+        stored = operation.get("snap_endpoint_receipt")
+        if isinstance(stored, dict):
+            receipt = stored
+        else:
+            receipt = prepare_endpoint_weld(
+                operation.get("entities", []),
+                policy=policy,
+                max_move_mm=operation.get("max_endpoint_move_mm"),
+            )
+        if (
+            policy == "report"
+            and receipt.get("accepted_pairs", 0) == 0
+            and not isinstance(stored, dict)
+        ):
             continue
         native_block = entry.get("endpoint_weld_native")
         receipt["native"] = native_block if isinstance(native_block, dict) else None

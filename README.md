@@ -1,8 +1,8 @@
-# MCP_CREO_MechDog 0.19.1
+# MCP_CREO_MechDog 0.19.2
 
-![version](https://img.shields.io/badge/version-0.19.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
+![version](https://img.shields.io/badge/version-0.19.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
 
-当前正式版 **0.19.1**（PATCH——DEV-076/DEV-077 反馈补漏：worker 构建身份驱动的 `surface_loft` 动态准入、overlap 预算/覆盖诊断、trim 结果句柄与连续 trim 实机、可配 `rotation_tolerance`、`creo_get_job` 长轮询 300 s、结构化 `known_limitations`/`plan_examples`；公开工具仍 107） · [版本说明](docs/RELEASE_NOTES_0.19.1.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
+当前正式版 **0.19.2**（PATCH——DEV-077 R01—R04 与 DEV-079 反馈批：草图可配闭合容差/端点吸附/几何偏差断言、mirror 特征引用、session_health stale 降级、quilt_merge 消耗回执；曲率默认摘要与 `include_samples`、surface_group 结构化失败回执、quilt_merge 描述同步；公开工具仍 107） · [版本说明](docs/RELEASE_NOTES_0.19.2.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
 
 > 让 AI 客户端通过 MCP，直接在 Creo Parametric 里创建**原生可编辑的参数化特征**——不是导出网格，也不是脚本模拟。
 
@@ -105,7 +105,7 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 | 确认哪些功能已实测 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
 | 种子库 / 换电脑换 Agent | [docs/SEED_LIBRARY.md](docs/SEED_LIBRARY.md)、[docs/MIGRATION.md](docs/MIGRATION.md) |
 | 直接混合的一次性回调 | [docs/CALLBACK_LIFECYCLE.md](docs/CALLBACK_LIFECYCLE.md) |
-| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.19.1 版本说明](docs/RELEASE_NOTES_0.19.1.md) |
+| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.19.2 版本说明](docs/RELEASE_NOTES_0.19.2.md) |
 | 参与开发 / 看台账 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)、[docs/BACKLOG.md](docs/BACKLOG.md) |
 
 ## 已知限制

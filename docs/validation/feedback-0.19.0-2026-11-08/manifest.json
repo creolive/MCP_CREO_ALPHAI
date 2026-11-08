@@ -1,0 +1,25 @@
+{
+  "work_item": "DEV-079",
+  "scope": "2026-11-08 0.19.0/0.19.1 Creo 10 feedback",
+  "source_directory": "C:\\Users\\Administrator\\Downloads\\0.19.0",
+  "files": [
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.19.0\\2026-11-08CREO10.0.0.0-0.19.0曲面闭环首次打通但放样连续四版被SDK屏蔽与曲率默认采样超限.md",
+      "archived_path": "originals/2026-11-08CREO10.0.0.0-0.19.0曲面闭环首次打通但放样连续四版被SDK屏蔽与曲率默认采样超限.md",
+      "bytes": 23308,
+      "sha256": "c7dcddf2392e56e7a01f94dda99ed52f6c3eb09c0aa7395950e1e6d12fe63860"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.19.0\\2026-11-08CREO10.0.0.0-0.19.0-Creo10SDK因Probblh硬包含连续三版编译阻断且新增跨文件依赖与发布记录仍准备态及源码包全量单测门禁自相矛盾.md",
+      "archived_path": "originals/2026-11-08CREO10.0.0.0-0.19.0-Creo10SDK因Probblh硬包含连续三版编译阻断且新增跨文件依赖与发布记录仍准备态及源码包全量单测门禁自相矛盾.md",
+      "bytes": 31809,
+      "sha256": "9e8f1daa81475c34aae6bf284231500d4e5933e24f71837831824b7c851b1008"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.19.0\\2026-11-08_CREO_0.19.1_曲面链Creo10实机通过但钣金成形仍缺位且多轮廓切除体积回执系统性少报.md",
+      "archived_path": "originals/2026-11-08_CREO_0.19.1_曲面链Creo10实机通过但钣金成形仍缺位且多轮廓切除体积回执系统性少报.md",
+      "bytes": 11502,
+      "sha256": "980780aceab29e12bc571b2f8432af1bb0a019902907e21c579fb8a3f5143690"
+    }
+  ]
+}

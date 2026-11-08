@@ -168,6 +168,98 @@ class EndpointWeldPairingTests(unittest.TestCase):
         self.assertIn("weldable endpoint pair", str(caught.exception))
 
 
+class EndpointSnapTests(unittest.TestCase):
+    def test_snap_rewrites_line_pair_and_reports_entity_gap_table(self):
+        entities = open_chain()
+        receipt = prepare_endpoint_weld(entities, snap=True)
+        self.assertTrue(receipt["applied"])
+        self.assertEqual(receipt["applied_by"], "python_request_rewrite")
+        self.assertTrue(receipt["snap"]["applied"])
+        self.assertEqual(receipt["snap"]["rule"], "midpoint")
+        (pair,) = receipt["snap"]["pairs"]
+        self.assertEqual({pair["entity_a"], pair["entity_b"]}, {"l1", "l4"})
+        self.assertAlmostEqual(pair["gap_mm"], GAP)
+        self.assertAlmostEqual(pair["shift_a_mm"], GAP / 2)
+        self.assertAlmostEqual(pair["shift_b_mm"], GAP / 2)
+        self.assertEqual(receipt["snap"]["residual_max_mm"], 0.0)
+        # The caller's list is untouched; the rewritten copy is private.
+        self.assertEqual(entities[3]["end"], [0.0, GAP])
+        snapped = receipt["_snapped_entities"]
+        self.assertEqual(snapped[3]["end"], [0.0, GAP / 2])
+        self.assertEqual(snapped[0]["start"], [0.0, GAP / 2])
+
+    def test_snap_anchors_the_line_to_an_arc_endpoint(self):
+        entities = [
+            {
+                "type": "arc",
+                "name": "a",
+                "center": [0.0, 0.0],
+                "radius": 10.0,
+                "start_angle": 0.0,
+                "end_angle": 90.0,
+            },
+            {"type": "line", "name": "l1", "start": [10.0, GAP], "end": [10.0, 10.0]},
+            {"type": "line", "name": "l2", "start": [10.0, 10.0], "end": [0.0, 10.0]},
+        ]
+        receipt = prepare_endpoint_weld(entities, snap=True)
+        self.assertTrue(receipt["snap"]["applied"])
+        self.assertEqual(receipt["snap"]["rule"], "a")
+        pair = next(item for item in receipt["snap"]["pairs"] if item["entity_b"] == "l1")
+        self.assertEqual(pair["entity_a"], "a")
+        self.assertEqual(pair["shift_a_mm"], 0.0)
+        self.assertAlmostEqual(pair["shift_b_mm"], GAP)
+        self.assertEqual(receipt["_snapped_entities"][1]["start"], [10.0, 0.0])
+
+    def test_snap_respects_the_move_bound_without_rewriting(self):
+        receipt = prepare_endpoint_weld(open_chain(), snap=True, max_move_mm=GAP / 4)
+        self.assertFalse(receipt["snap"]["applied"])
+        self.assertIsNone(receipt["snap"]["max_shift_mm"])
+        self.assertNotIn("_snapped_entities", receipt)
+
+    def test_snap_and_reject_cannot_be_combined(self):
+        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+            prepare_endpoint_weld(open_chain(), policy="reject", snap=True)
+
+    def test_prepare_operations_rewrites_and_publishes_the_receipt(self):
+        from creo_mechdog.endpoint_welding import annotate_result
+
+        operations = [
+            {"op": "sketch", "label": "s1", "entities": open_chain(), "snap_endpoints": True}
+        ]
+        prepare_operations(operations)
+        self.assertEqual(operations[0]["entities"][3]["end"], [0.0, GAP / 2])
+        self.assertTrue(operations[0]["snap_endpoint_receipt"]["snap"]["applied"])
+        result = {"operations": [{"op": "sketch", "index": 0}]}
+        annotate_result(result, operations)
+        published = result["operations"][0]["endpoint_weld"]
+        self.assertTrue(published["snap"]["applied"])
+        self.assertEqual(len(published["snap"]["pairs"]), 1)
+
+    def test_snap_endpoints_is_admitted_on_both_sketch_entries(self):
+        create = validate_operations(
+            [
+                {
+                    "op": "sketch",
+                    "label": "s1",
+                    "snap_endpoints": True,
+                    "entities": [{"type": "line", "name": "l1", "start": [0, 0], "end": [1, 0]}],
+                }
+            ]
+        )[0]
+        update = validate_operations(
+            [
+                {
+                    "op": "update_sketch_geometry",
+                    "sketch": "s1",
+                    "snap_endpoints": True,
+                    "entities": [{"type": "line", "name": "l1", "start": [0, 0], "end": [1, 0]}],
+                }
+            ]
+        )[0]
+        self.assertTrue(create["snap_endpoints"])
+        self.assertTrue(update["snap_endpoints"])
+
+
 class EndpointWeldContractTests(unittest.TestCase):
     def test_weld_create_and_update_share_policy(self):
         create = validate_operations(

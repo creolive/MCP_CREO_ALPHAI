@@ -15,16 +15,18 @@
 
 | R | 项目 | 0.19.0 后的当前事实 | 下一动作 / 验收判据 |
 | --- | --- | --- | --- |
-| R01（原 G01—G03） | 草图容差链、装配旋转矩阵、任意平面一等公民 | 0.19.1 已交付可选 `rotation_tolerance`（默认 1e-6，矩阵原值回显、不修复）；`closure_tolerance_mm` 仍内部常量、`coordinates` 超限仍直接失败、无偏差断言、无 `origin+normal+u_axis` 直接建面工具 | 先在 Creo 9 / 0.19.1 回归确认 F01 三步时间线；再落地可配草图容差/吸附回执/偏差断言，以及独立建面工具；判据见下方 G01—G03 行 |
-| R02（原 G04/G05/G08/G10） | 契约与体验：mirror 特征子树、装配质量属性替代工具提示、`execute_plan` 最小示例/分页、`get_job` 长轮询、`known_limitations`、loft callback 退化 | 0.19.1 已交付装配质量属性 `use_tool: creo_inspect_model` 提示、6 个 `plan_examples`、`get_job.wait_seconds` 0–300、12 条结构化 `known_limitations`；mirror 特征子树与无 callback 的 `creo_loft` 仍未实现 | 实现受支持镜像子集与回执、无 callback 两截面直纹实现；继续保持 32 KiB 分页预算与严格默认语义 |
-| R03（原 G06） | `session_health` 的 identity stale 与新鲜 connected 证据冲突 | `session_health.py` 仍 `unknown/session_identity_stale` | 先定安全策略（是否允许连接证据优先或 stale 降 warning），不得擅清 unknown 保护；三类样本状态与 caveats 需一致 |
-| R04（原 G07/G09 收敛） | 曲面剩余：`INTERSECT`、三片以上单次 `quilt_merge`、被消耗工具 quilt 的内核残留、`PRO_ROUND_REF_EDGE` quilt 边 id、变半径/full/过渡、圆角后 thicken/solidify、真实凹谷瓣底、非 mm 单位、Creo 9/10 复验、格栅 cut 与 BUG-046 矛盾定因 | 0.19.0 只验了两片 JOIN（目标 quilt 原地增长）、恒定半径圆角、数值曲率与 Creo 12.4 整链；RELEASE_NOTES_0.19.0.md 第 36—42 节已逐条声明未测 | 按 release 分别补实机证据；门禁文案与 capabilities 契约同步；不把 Creo 12.4 结论外推到 9/10。判据：两片以外合并语义可复现且无静默 no-op、圆角后实体化可保存重载、45/72° 等几何按任务书逐项吻合 |
+| R01（原 G01—G03） | 草图容差链、装配旋转矩阵、任意平面一等公民 | 0.19.1 已交付可选 `rotation_tolerance`；离线批已交付可选 `closure_tolerance_mm`、`snap_endpoints` 重写与 entity A/B/gap/位移回执、`assertions.max_geometry_deviation_mm`/`require_exact_solve`/`preserve_input_geometry`（原生扫描已测偏差）；`origin+normal+u_axis` 直接建面工具仍未实现 | 在 Creo 9 / 当前版本回归 F01 三步时间线；再实现独立建面工具；判据见下方 G01—G03 行 |
+| R02（原 G04/G05/G08/G10） | 契约与体验：mirror 特征子树、装配质量属性替代工具提示、`execute_plan` 最小示例/分页、`get_job` 长轮询、`known_limitations`、loft callback 退化 | 0.19.1 已交付装配质量属性提示、6 个 `plan_examples`、`get_job.wait_seconds` 0–300、12 条 `known_limitations`；离线批允许 `mirror.references` 的 `kind=feature` 并回执 `implementation`/`reference_kinds`/`feature_reference_count`；无 callback 的 `creo_loft` 仍未实现 | 实机验收 feature mirror 的受支持子集；实现无 callback 两截面直纹 loft 或可执行注册指引；保持 32 KiB 分页预算 |
+| R03（原 G06） | `session_health` 的 identity stale 与新鲜 connected 证据冲突 | 离线批已定策略并实现：新鲜 connected 把 stale identity 降为 warning（`identity_stale_downgraded`、`warnings`、caveat），状态仍按证据判定且不清 unknown 保护；当前会话内过期的 unknown/damage 进入 `historic_damage_signals` | 在真实 stale/connected 样本上复核状态与 caveats；不得放宽故障注入或清锁权限 |
+| R04（原 G07/G09 收敛） | 曲面剩余：`INTERSECT`、三片以上单次 `quilt_merge`、被消耗工具 quilt 的内核残留、`PRO_ROUND_REF_EDGE` quilt 边 id、变半径/full/过渡、圆角后 thicken/solidify、真实凹谷瓣底、非 mm 单位、Creo 9/10 复验、格栅 cut 与 BUG-046 矛盾定因 | 0.19.0 只验了两片 JOIN；离线批已回执 `consumed_quilt_ids` 与 `merged_surface_ids`，但 `inspect_model(quilts)` 仍未过滤内核残留，其余语义未动 | 按 release 分别补实机证据；实现/验证 quilt 过滤与三片以上语义；门禁文案与 capabilities 契约同步；不把 Creo 12.4 结论外推到 9/10 |
 | R05 | 已判定不可用（**结论项，不再开工**） | 钣金成形类、独立 `quilt_offset`、任意非平面闭合边界 `surface_fill` 在 Creo 12.4 有实机反证，0.19.0 保持门禁 | 仅维护错误文案/门禁与证据链接；换 release/SDK 或出现新原生证据时才重开工作卡，禁止把不可用结论写成能力 |
 | R06（原 G11 + 0.19.0 未测） | 实机与黑盒：Creo 9/10、WorkBuddy 公开 MCP、源码包解压全量单测、本分支新增改动的实机复验 | 0.19.1 已在 Creo 12.4 重编译并完成 H13 身份、H15 四态组、H16 连续 trim 实机；DEV-077 的质量属性诊断/stall 回退仍只有离线单测；Creo 9/10 与 WorkBuddy 未执行 | 补 Creo 9/10 与 WorkBuddy 公开 MCP；补源码包解压后全量单测；对 DEV-077 两项离线修复做适用实机复验。不得把编译/单测当实机通过 |
 | R07（原 G12 升级） | 0.19.0 发布后核对与台账回填 | **v0.19.0 / v0.19.1 / v0.18.2 / v0.18.3 / v0.18.4 已联网 `--tag` 重下重算并写入统一 POSTCHECK**；v0.19.0 的 10—12 节占位由勘误收口；v0.19.1 的 10—12 节已回填 | 仅剩 Release body 逐字比对与历史原件不回写；新版本继续按同法执行 |
-| R08（原 G13 + 新） | 本分支交付与登记 | **已合入 main 并发布 v0.19.1**（提交 `9dcf5ee`、标签 `v0.19.1`、四附件与两个 sidecar 已核对）；H13/H15/H16 登记在 DEV-076，R01/R02 部分登记在 DEV-077，未新增 ID | 后续新改动必须选未发布新版本；R01/R02 剩余、R03/R04/R06 见本表 |
+| R08（原 G13 + 新） | 本分支交付与登记 | **0.19.1 已合入 main 并发布**（提交 `9dcf5ee`、标签 `v0.19.1`）；R01—R04 离线批改动仍在工作树、未提交、未发布，`version.py` 仍为已发布的 0.19.1 | 后续合入必须选未发布新版本并按 RELEASING 同次发布；离线批需先完成全量单测与提交审查 |
 
 0.19.1 发布前离线验证：全量 3071 项单测 OK、Ruff/`dev_check --skip-unit` 通过、`git diff --check` 通过、台账计数门禁 168 一致；Creo 12.4 实机完成 H13 身份、H15 四态组与 H16 连续 trim。源码包解压后全量单测与 Creo 9/10/WorkBuddy 仍属 R06。
+
+2026-11-08 后续：下载目录 `0.19.0` 的三份 Creo 10 反馈由 [DEV-079](../work-items/DEV-079.md) 接管，逐项对照与 H01—H09 见 [0.19.0 MAPPING](../validation/feedback-0.19.0-2026-11-08/MAPPING.md)。R02 的曲面剩余与 R04/R06 的实机项与本清单重叠处，以 DEV-079 的 H 编号继续登记，不重复派工。
 
 ## 历史清单 G01—G13（0.19.0 合并前的基线，状态见上方 R01—R08）
 

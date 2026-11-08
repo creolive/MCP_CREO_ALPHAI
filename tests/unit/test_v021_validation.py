@@ -13,10 +13,12 @@ class AdvancedValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.valid(op)
 
-    def test_mirror_geometry_and_feature_rejection(self):
+    def test_mirror_geometry_and_feature_references(self):
         base = {"op": "mirror", "label": "copy", "plane": {"kind": "datum_plane", "axis": "x"}}
         self.assertEqual(self.valid(base)["references"], [])
-        self.invalid({**base, "references": [{"kind": "feature", "label": "solid"}]})
+        feature = self.valid({**base, "references": [{"kind": "feature", "label": "solid"}]})
+        self.assertEqual(feature["references"], [{"kind": "feature", "label": "solid"}])
+        self.invalid({**base, "references": [{"kind": "feature"}]})
         self.invalid({**base, "references": [{"kind": "part"}, {"kind": "curve", "id": 1}]})
 
     def test_invalid_new_reference_ids(self):

@@ -3,7 +3,32 @@
 import math
 import unittest
 
-from creo_mechdog.schema import validate_operations
+from creo_mechdog.schema import Assertions, validate_operations
+
+
+class FidelityAssertions(unittest.TestCase):
+    def test_fidelity_assertions_are_admitted_and_echoed(self):
+        admitted = Assertions.model_validate(
+            {
+                "max_geometry_deviation_mm": 0.001,
+                "require_exact_solve": True,
+                "preserve_input_geometry": True,
+            }
+        )
+        dumped = admitted.model_dump(exclude_none=True)
+        self.assertEqual(dumped["max_geometry_deviation_mm"], 0.001)
+        self.assertTrue(dumped["require_exact_solve"])
+        self.assertTrue(dumped["preserve_input_geometry"])
+
+    def test_deviation_bound_rejects_non_positive_and_non_numeric(self):
+        for bad in (0, -1, True, "0.001", float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                Assertions.model_validate({"max_geometry_deviation_mm": bad})
+        self.assertIsNone(
+            Assertions.model_validate({})
+            .model_dump(exclude_none=True)
+            .get("max_geometry_deviation_mm")
+        )
 
 
 class GeneralValidation(unittest.TestCase):

@@ -298,7 +298,18 @@ KNOWN_LIMITATIONS = (
         "release": "Creo 12.4",
         "evidence": "FEAT-039 H03 / 0.19.0 two-quilt JOIN",
         "configurable": False,
-        "effect": "only two-quilt JOIN is published; other modes are unverified",
+        "effect": "only two-quilt JOIN is published; other modes are unverified; the "
+        "receipt names consumed_quilt_ids and merged_surface_ids, but inspect_model "
+        "still enumerates any kernel residue of a consumed tool quilt",
+    },
+    {
+        "id": "cut_profile_area_basis",
+        "condition": "caller compares profile.material_area_mm2 with material_removed_mm3",
+        "release": "Creo 12.4 and external Creo 10 evidence",
+        "evidence": "2026-11-08 multi-contour arc cut feedback; profile.method=analytic-input",
+        "configurable": False,
+        "effect": "material_area_mm2 is the analytic input-sketch area, not a kernel section; "
+        "partly circular multi-contour cuts can differ by about 2% from the removed volume",
     },
     {
         "id": "surface_round_scope",
@@ -895,7 +906,10 @@ def families() -> dict:
             "limits": (
                 "quilt merge joins exactly two touching or intersecting quilts and reports "
                 "the target quilt it grew in place (result_quilt_source="
-                "retrimmed_target_quilt); the consumed tool quilt is no longer measurable, "
+                "retrimmed_target_quilt); consumed_quilt_ids names the inputs the JOIN "
+                "consumed and merged_surface_ids lists the feature's own surfaces, but "
+                "inspect_model still enumerates kernel residue of a consumed quilt rather "
+                "than filtering it; the consumed tool quilt is no longer measurable, "
                 "intersect, three or more participants, chained merges and closed shells are "
                 "not published; the closed non-planar boundary fill stays gated "
                 "(UNAVAILABLE_OPERATIONS; the former single-direction candidate "
@@ -930,7 +944,9 @@ def families() -> dict:
                 "radius and direction per UV sample, plus the normal angle across a "
                 "shared edge); Creo Toolkit has no zebra-stripe or curvature-comb "
                 "visualization API, so no image is produced and samples outside the trimmed "
-                "face are counted rather than measured"
+                "face are counted rather than measured; the per-sample rows are omitted from the "
+                "default tool response to stay within the MCP result budget (include_samples=true "
+                "returns every point, and the job record always keeps them)"
             ),
         },
         "boolean_bodies": {
@@ -951,7 +967,11 @@ def families() -> dict:
         "mirror": {
             "enabled": True,
             "native_test": "whole solid about a principal datum plane",
-            "limits": "whole-part/geometry references only; feature/subtree mirror is rejected",
+            "scope": "whole-part, geometry, or feature-label references; the receipt names the "
+            "native implementation path and the reference kinds",
+            "limits": "feature labels are passed as PRO_FEATURE mirror items, so only solid "
+            "features the release accepts can be mirrored; feature subtrees are not expanded "
+            "by Python and no geometry is synthesised",
         },
         "surface_offset": {
             "enabled": True,

@@ -183,15 +183,64 @@ class HealthStatusRules(HealthFixture):
         self.assertEqual(value["evidence_age_seconds"], 900)
         self.assertGreater(value["evidence_age_seconds"], value["freshness_window_seconds"])
 
-    def test_stale_identity_is_unknown(self):
+    def test_stale_identity_with_fresh_connection_is_downgraded(self):
         self.save_job("0" * 32, "session-a", 30)
         (self.root / "build" / "toolkit_health.json").write_text(
             json.dumps({"connected": True, "checked_at": self.at(10)}), encoding="utf-8"
         )
         with patch.object(session_health, "FRESHNESS_SECONDS", 20):
             value = self.snapshot()
+        # The identity is stale, but the fresh connected fact is real evidence:
+        # the stale label becomes a warning instead of swallowing the verdict.
         self.assertEqual(value["status"], "unknown")
-        self.assertIn(value["reason"], {"session_identity_stale", "evidence_expired"})
+        self.assertEqual(value["reason"], "no_recent_verified_save")
+        self.assertTrue(value["session"]["identity_stale"])
+        self.assertTrue(value["session"]["identity_stale_downgraded"])
+        self.assertEqual(len(value["warnings"]), 1)
+        self.assertIn("no unknown protection is cleared", value["warnings"][0])
+        self.assertIn(value["warnings"][0], value["caveats"])
+
+    def test_stale_identity_without_fresh_connection_stays_stale(self):
+        self.save_job("0" * 31 + "a", "session-a", 30)
+        (self.root / "build" / "toolkit_health.json").write_text(
+            json.dumps({"connected": False, "checked_at": self.at(10)}), encoding="utf-8"
+        )
+        with patch.object(session_health, "FRESHNESS_SECONDS", 20):
+            value = self.snapshot()
+        self.assertEqual((value["status"], value["reason"]), ("unknown", "session_identity_stale"))
+        self.assertTrue(value["session"]["identity_stale"])
+        self.assertFalse(value["session"]["identity_stale_downgraded"])
+        self.assertEqual(value["warnings"], [])
+
+    def test_downgrade_never_clears_an_unknown_protection(self):
+        self.write_job(
+            "0" * 31 + "b",
+            {
+                "kind": "generic",
+                "status": "unknown_outcome",
+                "readonly": False,
+                "model_id": "model_suspended",
+                "finished_at": self.at(30),
+                "result": {"connected": True, "session_fingerprint": "session-a"},
+            },
+        )
+        (self.root / "build" / "toolkit_health.json").write_text(
+            json.dumps({"connected": True, "checked_at": self.at(5)}), encoding="utf-8"
+        )
+        with patch.object(session_health, "FRESHNESS_SECONDS", 20):
+            value = self.snapshot()
+        self.assertEqual(value["status"], "unknown")
+        self.assertNotEqual(value["status"], "no_failure_observed")
+        self.assertTrue(value["session"]["identity_stale_downgraded"])
+        self.assertEqual(value["damage_signals"], [])
+        protection = [
+            signal
+            for signal in value["historic_damage_signals"]
+            if signal["kind"] == "unknown_outcome_protection"
+        ]
+        self.assertEqual(len(protection), 1)
+        self.assertIn("Do not resubmit", " ".join(step["detail"] for step in value["next_steps"]))
+        self.assertIn("never authorizes clearing", " ".join(value["caveats"]))
 
     def test_missing_session_identity_is_unknown(self):
         self.save_job("1" * 32, None, 30)

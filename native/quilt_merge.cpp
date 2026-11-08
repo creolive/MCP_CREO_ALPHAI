@@ -187,6 +187,15 @@ static void generic_quilt_merge(const J &op) {
     details["surface_item_ids"] = surface_ids;
     details["surface_visit_code"] = (int)surface_visit;
     details["inputs"] = {{"target_quilt_id", first_id}, {"tool_quilt_id", second_id}};
+    // DEV-077/R04: name which inputs the merge consumed instead of leaving the
+    // caller to infer it from a disappearing item. A JOIN always consumes the
+    // tool; the target is consumed unless the kernel grew it in place.
+    J consumed = J::array();
+    consumed.push_back(second_id);
+    if (result_id >= 0 && result_source && std::string(result_source) != "retrimmed_target_quilt")
+        consumed.push_back(first_id);
+    details["consumed_quilt_ids"] = consumed;
+    details["merged_surface_ids"] = surface_ids;
     stage_operation_result(details);
 
     if (status != PRO_FEAT_ACTIVE)

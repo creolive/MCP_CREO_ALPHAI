@@ -676,14 +676,27 @@ _CATEGORY_TEXT = {
 
 
 def validate_solid_profile(
-    entities: list[dict], dimensioning: str = "auto", operation: str = "extrude"
+    entities: list[dict],
+    dimensioning: str = "auto",
+    operation: str = "extrude",
+    tolerance: float = CLOSURE_TOLERANCE_MM,
 ) -> dict:
     """Reject a solid profile only when the supplied geometry proves it invalid.
 
     Unsupported entities (ellipse/spline) skip the verdict: their topology is
-    checked by the native solver, not guessed here.
+    checked by the native solver, not guessed here. ``tolerance`` is the
+    caller's analytic closure scale; the native epsilon and solve precision are
+    never changed by it.
     """
-    report = analyze_profile(entities)
+    if (
+        isinstance(tolerance, bool)
+        or not isinstance(tolerance, (int, float))
+        or not math.isfinite(tolerance)
+        or tolerance <= 0
+    ):
+        raise ValueError("closure_tolerance_mm must be a finite positive number of millimeters")
+    tolerance = float(tolerance)
+    report = analyze_profile(entities, tolerance)
     if report["analysis"] != "complete":
         return report
     fatal = ["open", "branched", "self_intersecting", "intersecting", "tangent", "zero_area"]

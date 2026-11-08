@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -22,6 +23,19 @@ from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
 MODELS = bridge.ROOT / "models"
+
+
+class SurfaceGroupMeasurementFailed(RuntimeError):
+    """Read-only group measurement failed; the payload keeps the job identity.
+
+    ``server.invoke`` publishes any exception whose text equals its JSON payload
+    as a structured MCP error, so the caller receives job_id/model_id/status and
+    the native reason instead of a bare message (2026-11-08 Creo 10 feedback).
+    """
+
+    def __init__(self, payload: dict):
+        self.payload = payload
+        super().__init__(json.dumps(payload, ensure_ascii=False))
 
 
 def model_path(model_id: str) -> Path:
@@ -153,7 +167,15 @@ def measure_surface_group(
         time.sleep(0.25)
     if record.get("status") != "succeeded":
         message = record.get("message") or f"Surface group measurement failed: job {job_id}"
-        raise RuntimeError(str(message))
+        raise SurfaceGroupMeasurementFailed(
+            operation_results.surface_group_failure_payload(
+                job_id,
+                model_id,
+                record.get("status"),
+                record.get("revision"),
+                str(message),
+            )
+        )
     for entry in (record.get("result") or {}).get("operations") or []:
         if isinstance(entry, dict) and entry.get("op") == "surface_group_measure":
             return {
@@ -167,7 +189,15 @@ def measure_surface_group(
                 "gap_search_mm": entry.get("gap_search_mm"),
                 "group": entry.get("group"),
             }
-    raise RuntimeError(f"Surface group measurement returned no reading: job {job_id}")
+    raise SurfaceGroupMeasurementFailed(
+        operation_results.surface_group_failure_payload(
+            job_id,
+            model_id,
+            record.get("status"),
+            record.get("revision"),
+            f"Surface group measurement returned no reading: job {job_id}",
+        )
+    )
 
 
 def measure_surface_curvature(
@@ -175,6 +205,7 @@ def measure_surface_curvature(
     target: dict,
     faces: list,
     samples_per_direction: int = 12,
+    include_samples: bool = False,
 ) -> dict:
     """DEV-074/H08: read the numerical curvature/G1 analysis synchronously.
 
@@ -183,6 +214,10 @@ def measure_surface_curvature(
     principal curvature and the seam normals; nothing here recomputes, rounds or
     defaults a value. There is no zebra-stripe or curvature-comb image API in
     Toolkit, so this receipt is the declared numeric equivalent.
+
+    Per-sample rows stay in the job record; the default response publishes the
+    summary and omits ``faces[].points`` so a 12x12 grid does not exceed the MCP
+    result budget. ``include_samples=True`` returns every point (2026-11-08).
     """
     operation: dict = {
         "op": "surface_curvature",
@@ -208,25 +243,28 @@ def measure_surface_curvature(
         raise RuntimeError(str(message))
     for entry in (record.get("result") or {}).get("operations") or []:
         if isinstance(entry, dict) and entry.get("op") == "surface_curvature":
-            return {
-                "job_id": job_id,
-                "model_id": model_id,
-                "revision": record.get("revision"),
-                "readonly": True,
-                "unit_name": entry.get("unit_name"),
-                "length_scale_to_mm": entry.get("length_scale_to_mm"),
-                "curvature_unit": entry.get("curvature_unit"),
-                "radius_unit": entry.get("radius_unit"),
-                "quilt_id": entry.get("quilt_id"),
-                "samples_per_direction": entry.get("samples_per_direction"),
-                "faces": entry.get("faces"),
-                "summary": entry.get("summary"),
-                "g1_max_angle_deg": entry.get("g1_max_angle_deg"),
-                "g1_status": entry.get("g1_status"),
-                "g1_threshold_deg": entry.get("g1_threshold_deg"),
-                "within_g1": entry.get("within_g1"),
-                "g1_points": entry.get("g1_points"),
-            }
+            return operation_results.surface_curvature_readout(
+                {
+                    "job_id": job_id,
+                    "model_id": model_id,
+                    "revision": record.get("revision"),
+                    "readonly": True,
+                    "unit_name": entry.get("unit_name"),
+                    "length_scale_to_mm": entry.get("length_scale_to_mm"),
+                    "curvature_unit": entry.get("curvature_unit"),
+                    "radius_unit": entry.get("radius_unit"),
+                    "quilt_id": entry.get("quilt_id"),
+                    "samples_per_direction": entry.get("samples_per_direction"),
+                    "faces": entry.get("faces"),
+                    "summary": entry.get("summary"),
+                    "g1_max_angle_deg": entry.get("g1_max_angle_deg"),
+                    "g1_status": entry.get("g1_status"),
+                    "g1_threshold_deg": entry.get("g1_threshold_deg"),
+                    "within_g1": entry.get("within_g1"),
+                    "g1_points": entry.get("g1_points"),
+                },
+                include_samples,
+            )
     raise RuntimeError(f"Surface curvature analysis returned no reading: job {job_id}")
 
 
@@ -296,6 +334,9 @@ def new_loft_part(
         raise ValueError("This workflow requires XY sketches with strictly increasing Z offsets")
     from creo_mechdog import airfoil
     from creo_mechdog.profile_checks import closed_profile
+    from creo_mechdog.profile_diagnostics import (
+        CLOSURE_TOLERANCE_MM as profile_CLOSURE_TOLERANCE_MM,
+    )
 
     for section in sections:
         entities = (
@@ -305,7 +346,10 @@ def new_loft_part(
         )
         if not (section.get("dimensions") or section.get("constraints")):
             try:
-                closed_profile(entities)
+                closed_profile(
+                    entities,
+                    tolerance=section.get("closure_tolerance_mm") or profile_CLOSURE_TOLERANCE_MM,
+                )
             except ValueError as error:
                 raise ValueError(f"Section {section['label']}: {error}") from error
     binding = LoftOp.model_validate(

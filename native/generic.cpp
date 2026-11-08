@@ -4154,7 +4154,7 @@ static void execute_operation_body(const J &op) {
     else if (kind == "dimension_pattern")
         generic_pattern(op);
     else if (kind == "mirror")
-        generic_mirror(op);
+        details = generic_mirror(op);
     else if (kind == "draft")
         details = generic_draft(op);
     else if (kind == "sweep")
@@ -4522,6 +4522,45 @@ static void verify_assertions(const J &state, const J &a) {
     }
     if (a.value("require_solid", false) && !state["has_solid"].get<bool>())
         throw std::runtime_error("Solid assertion failed");
+    // DEV-077/R01: plan-level fidelity gates. Every sketch result already
+    // carries its own geometry_deviation block, so the plan asserts over the
+    // measured population instead of inventing a second measurement.
+    const bool exact = a.value("require_exact_solve", false);
+    const bool preserve = a.value("preserve_input_geometry", false);
+    if (a.contains("max_geometry_deviation_mm") || exact || preserve) {
+        bool measured = false;
+        double worst = 0.0;
+        bool shifted = false;
+        for (const auto &entry : operation_results) {
+            if (!entry.contains("geometry_deviation") || !entry["geometry_deviation"].is_object())
+                continue;
+            const J &deviation = entry["geometry_deviation"];
+            if (!deviation.value("available", false))
+                continue;
+            measured = true;
+            if (deviation.contains("max_deviation_mm") && deviation["max_deviation_mm"].is_number())
+                worst = std::max(worst, deviation["max_deviation_mm"].get<double>());
+            if (deviation.contains("shift_detected") && deviation["shift_detected"].is_boolean() &&
+                deviation["shift_detected"].get<bool>())
+                shifted = true;
+        }
+        if (!measured)
+            throw std::runtime_error(
+                "Geometry deviation assertion failed: no measured sketch deviation");
+        if (a.contains("max_geometry_deviation_mm")) {
+            const double limit = a["max_geometry_deviation_mm"].get<double>();
+            if (worst > limit)
+                throw std::runtime_error("Geometry deviation assertion failed: max_deviation_mm " +
+                                         std::to_string(worst) + " exceeds " +
+                                         std::to_string(limit));
+        }
+        if (exact && (worst > 0.0 || shifted))
+            throw std::runtime_error(
+                "Exact solve assertion failed: the solver changed the input geometry");
+        if (preserve && shifted)
+            throw std::runtime_error(
+                "Input geometry assertion failed: the solver shifted the sketch");
+    }
 }
 static void verify_saved(const J &before, const J &after, bool feature_state_commit) {
     // A committed feature_state plan is the only case where the saved model may

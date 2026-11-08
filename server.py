@@ -1223,7 +1223,10 @@ async def creo_extrude(
     when omitted), effective_depth_type/effective_depth_mm read from the created feature tree,
     defaulted_fields and source/query_code. through_all never reports a fabricated blind depth.
     A cut that removes no material (disjoint sketch, wrong direction or already-removed region) fails and rolls back;
-    a successful cut reports material_removed_mm3 in its operation details."""
+    a successful cut reports material_removed_mm3 in its operation details. The profile block's
+    material_area_mm2 is the analytic input-sketch area (method=analytic-input), not a kernel-measured
+    removed section; compare it with material_removed_mm3 only as a sanity check, because a partly
+    circular multi-contour profile can differ by about 2% (2026-11-08 Creo 10 feedback)."""
     op = {
         "op": "extrude",
         "label": label,
@@ -2342,7 +2345,10 @@ async def creo_measure_surface_group(
     default) bounds which boundary-to-boundary distance still counts as a seam
     gap. Each value has its own status: an unmeasurable value is null with a
     reason, never 0. overlap_area_mm2 is an estimate from the kernel's face
-    tessellation, not a boolean intersection.
+    tessellation, not a boolean intersection. If the boundary cannot be visited
+    the call returns a structured isError payload carrying job_id, model_id,
+    status, group.state_reason (for example contour_edge_visit_failed) and a
+    re-read hint instead of a bare message.
     """
     return await invoke(
         general.measure_surface_group, model_id, references, tolerance_mm, gap_search_mm
@@ -2355,6 +2361,7 @@ async def creo_measure_surface_curvature(
     target: dict[str, Any],
     faces: Annotated[list[Any], Field(min_length=1, max_length=2)],
     samples_per_direction: int = 12,
+    include_samples: bool = False,
 ) -> dict[str, Any]:
     """Analyse principal curvature and G1 numerically (read-only).
 
@@ -2363,21 +2370,32 @@ async def creo_measure_surface_curvature(
     quilt ({kind:'quilt',id:N} or {kind:'quilt_feature',label:...}). faces names
     one or two member faces, each as {kind:'surface',id:N} or a zero-based member
     index; two faces add the shared-edge G1 analysis. samples_per_direction is
-    the UV raster density per direction (5..50, default 12).
+    the UV raster density per direction (5..50, default 12). A merged quilt can
+    be retrimmed to fewer faces, so read face_count from creo_inspect_model
+    before asking for a second member index.
 
     For every sample inside the trimmed face the receipt reports u/v, the
     maximum and minimum principal curvature (1/mm), their radii (mm) and
     principal directions. summary carries max_abs_curvature_per_mm and
-    min_curvature_radius_mm with sample/failure counts. With two faces,
-    g1_max_angle_deg is the maximum normal angle across the shared edge and
-    g1_points carries the per-sample angles; g1_threshold_deg is 0.5 and
-    within_g1 is only a marker, never a replacement for the measured angle.
-    Each value has its own status: a failed query is a null value with a reason,
-    never 0, and an unknown unit scale keeps 1/mm and mm values null. The query
-    changes nothing and does not advance the revision.
+    min_curvature_radius_mm with sample/failure counts. The per-sample rows are
+    omitted by default because a 12x12 grid exceeds the MCP result budget; the
+    response carries samples_included=false, omitted_sample_count and a note,
+    and include_samples=true returns every point. The full rows always remain in
+    the read-only job record. With two faces, g1_max_angle_deg is the maximum
+    normal angle across the shared edge and g1_points carries the per-sample
+    angles; g1_threshold_deg is 0.5 and within_g1 is only a marker, never a
+    replacement for the measured angle. Each value has its own status: a failed
+    query is a null value with a reason, never 0, and an unknown unit scale
+    keeps 1/mm and mm values null. The query changes nothing and does not
+    advance the revision.
     """
     return await invoke(
-        general.measure_surface_curvature, model_id, target, faces, samples_per_direction
+        general.measure_surface_curvature,
+        model_id,
+        target,
+        faces,
+        samples_per_direction,
+        include_samples,
     )
 
 
@@ -2946,13 +2964,22 @@ async def creo_quilt_merge(
     target: dict[str, Any],
     tool: dict[str, Any],
 ) -> dict[str, Any]:
-    """Join two quilts into one surface merge.
+    """Join two quilts into one surface merge (a real JOIN feature).
 
     Both sides must be explicit quilt references ({kind:'quilt',id:...} or
-    {kind:'quilt_feature',label:...}) and must be distinct. This operation is
-    gated: submissions are refused before a native job is queued. Its draft
-    result fields (result_quilt_id, merged area and closure status) are not
-    available to callers. No tolerance or gap measurement is published.
+    {kind:'quilt_feature',label:...}) and must be distinct. The native route
+    creates a two-quilt JOIN; a call with more than two quilts is refused. The
+    tool quilt is always consumed and the target is consumed unless the kernel
+    grew it in place, so the receipt reports consumed_quilt_ids and
+    merged_surface_ids next to result_quilt_id and result_quilt_source
+    ('retrimmed_target_quilt' when the target quilt was retrimmed in place).
+
+    input_area_mm2 is the sum of both input quilt areas before the join; it is
+    not the merged area, so compare it with area_mm2 rather than using it as the
+    result. area_mm2, input_area_mm2 and closed each carry their own status. A
+    feature that does not regenerate, a result with no owning quilt and an
+    unmeasurable result area fail and roll back instead of returning a partial
+    merge.
     """
     return await invoke(
         general.submit,

@@ -30,6 +30,61 @@ class SketchStability(unittest.TestCase):
                 generic_bridge.new_loft_part(None, None, sections)
             submit.assert_not_called()
 
+    def test_custom_closure_tolerance_is_the_only_used_scale(self):
+        entities = [
+            {"type": "line", "name": "a", "start": [0, 0], "end": [10, 0]},
+            {"type": "line", "name": "b", "start": [10, 0], "end": [10, 10]},
+            {"type": "line", "name": "c", "start": [10, 10], "end": [0, 10]},
+            {"type": "line", "name": "d", "start": [0, 10], "end": [0, 0.0005]},
+        ]
+        plan = [
+            {"op": "sketch", "label": "s", "entities": entities},
+            {"op": "extrude", "label": "e", "sketch": "s", "depth": 10},
+        ]
+        # The published default stays 1e-4 mm and still rejects this gap.
+        with self.assertRaisesRegex(ValueError, "open contour"):
+            validate_operations(plan)
+        admitted = validate_operations([{**plan[0], "closure_tolerance_mm": 0.001}, plan[1]])
+        self.assertEqual(admitted[0]["closure_tolerance_mm"], 0.001)
+        for invalid in (0, -1, True, "0.001", float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                validate_operations([{**plan[0], "closure_tolerance_mm": invalid}])
+
+    def test_update_sketch_geometry_accepts_the_same_closure_scale(self):
+        (validated,) = validate_operations(
+            [
+                {
+                    "op": "update_sketch_geometry",
+                    "sketch": "s",
+                    "closure_tolerance_mm": 0.002,
+                    "entities": [
+                        {"type": "line", "name": "a", "start": [0, 0], "end": [10, 0]},
+                        {"type": "line", "name": "b", "start": [10, 0], "end": [0, 0.001]},
+                    ],
+                }
+            ]
+        )
+        self.assertEqual(validated["closure_tolerance_mm"], 0.002)
+
+    def test_profile_receipt_echoes_the_requested_closure_scale(self):
+        from creo_mechdog.operation_results import annotate_profiles
+
+        plan = [
+            {
+                "op": "sketch",
+                "label": "s",
+                "closure_tolerance_mm": 0.01,
+                "entities": [
+                    {"type": "line", "name": "a", "start": [0, 0], "end": [10, 0]},
+                    {"type": "line", "name": "b", "start": [10, 0], "end": [0, 0.005]},
+                ],
+            },
+            {"op": "extrude", "label": "e", "sketch": "s", "depth": 10},
+        ]
+        result = {"operations": [{"op": "sketch", "label": "s"}]}
+        annotated = annotate_profiles(result, plan)
+        self.assertEqual(annotated["operations"][0]["profile"]["closure_tolerance_mm"], 0.01)
+
     def test_coordinate_mode_scope_and_mixed_dimensions_rejected_before_queue(self):
         sketch = dict(
             op="sketch",

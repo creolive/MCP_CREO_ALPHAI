@@ -20,7 +20,7 @@ from creo_mechdog import schema_base as _schema_base
 from creo_mechdog.flange_profile import FlangeProfile
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
 from creo_mechdog.hole_standards import resolve_standard_hole, tip_cone_height_mm
-from creo_mechdog.profile_diagnostics import validate_solid_profile
+from creo_mechdog.profile_diagnostics import CLOSURE_TOLERANCE_MM, validate_solid_profile
 from creo_mechdog.references import (
     PatternAxis,
     RevolveAxis,
@@ -344,9 +344,25 @@ class SketchOp(StrictModel):
     def _endpoint_move_is_finite_positive(cls, value):
         return validate_tolerance_mm(value)
 
+    # DEV-077/R01: rewrite accepted endpoint pairs to one shared point before
+    # submission (rectangles/polylines and two arcs are refused). The receipt
+    # publishes entity A/B, gap and shift for every snapped pair.
+    snap_endpoints: bool = False
+
     dimensions: list[SketchDimension] = []
     constraints: list[SketchConstraint] = []
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
+    # DEV-077/R01: the analytic contour preflight scale. Omitted keeps the
+    # published 1e-4 mm diagnostic; an explicit value is the only one used for
+    # closure, near-tolerance and open-end reporting. It never changes the
+    # native solver's own epsilon.
+    closure_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("closure_tolerance_mm", mode="before")
+    @classmethod
+    def _closure_tolerance_is_finite_positive(cls, value):
+        return _closure_tolerance(value)
+
     # FEAT-010/BUG-049: optional post-solve fidelity gate. Omitted keeps the
     # mode defaults (coordinates 1e-5 mm rejection, autodim 1e-3 mm warning);
     # an explicit value forces the threshold. bool/NaN/Inf/0/negative rejected.
@@ -440,6 +456,19 @@ class AirfoilUpdateOp(StrictModel):
         return self
 
 
+def _closure_tolerance(value: Any) -> Any:
+    if value is None:
+        return None
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) <= 0
+    ):
+        raise ValueError("closure_tolerance_mm must be a finite positive number of millimeters")
+    return float(value)
+
+
 class SketchGeometryOp(StrictModel):
     op: Literal["update_sketch_geometry"]
     sketch: Label
@@ -460,7 +489,18 @@ class SketchGeometryOp(StrictModel):
     def _endpoint_move_is_finite_positive(cls, value):
         return validate_tolerance_mm(value)
 
+    # Same rewrite contract as SketchOp; both entries share one definition.
+    snap_endpoints: bool = False
+
     dimensioning: Literal["auto", "autodim", "coordinates"] = "auto"
+    # Same analytic contour scale as SketchOp; both entries share one meaning.
+    closure_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
+
+    @field_validator("closure_tolerance_mm", mode="before")
+    @classmethod
+    def _closure_tolerance_is_finite_positive(cls, value):
+        return _closure_tolerance(value)
+
     # Same fidelity contract as SketchOp; both entries share one definition.
     geometry_tolerance_mm: Annotated[float, Field(gt=0)] | None = None
 
@@ -1017,14 +1057,21 @@ class MirrorOp(StrictModel):
             "csys",
             "point",
             "part",
+            "feature",
             "datum_feature",
             "datum_axis_feature",
             "datum_plane",
         }
         if any(r.get("kind") not in allowed for r in self.references):
             raise ValueError(
-                "Toolkit mirror supports geometry/part references, not feature-tree selections"
+                "Toolkit mirror accepts geometry, part, or feature-label references; "
+                "use kind=feature with a solid feature label to mirror a feature"
             )
+        for reference in self.references:
+            if reference.get("kind") != "feature":
+                continue
+            if not reference.get("label") and not isinstance(reference.get("id"), int):
+                raise ValueError("A feature mirror reference needs a label or an integer id")
         if any(r.get("kind") == "part" for r in self.references) and len(self.references) != 1:
             raise ValueError("Whole-part mirror cannot mix reference types")
         return self
@@ -1749,6 +1796,28 @@ class Assertions(StrictModel):
     require_solid: bool = False
     volume_mm3: float | None = Field(default=None, ge=0)
     volume_tolerance: float = Field(default=0.01, gt=0)
+    # DEV-077/R01: plan-level fidelity gates over the measured sketch
+    # ``geometry_deviation`` blocks. All three are checked after the last
+    # operation and before the save, and a failure rolls the job back.
+    max_geometry_deviation_mm: Annotated[float, Field(gt=0)] | None = None
+    require_exact_solve: bool = False
+    preserve_input_geometry: bool = False
+
+    @field_validator("max_geometry_deviation_mm", mode="before")
+    @classmethod
+    def _deviation_bound_is_finite_positive(cls, value):
+        if value is None:
+            return None
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) <= 0
+        ):
+            raise ValueError(
+                "max_geometry_deviation_mm must be a finite positive number of millimeters"
+            )
+        return float(value)
 
 
 class ExportOp(StrictModel):
@@ -2352,6 +2421,7 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                         source["entities"],
                         source.get("dimensioning", "auto"),
                         operation["op"],
+                        source.get("closure_tolerance_mm") or CLOSURE_TOLERANCE_MM,
                     )
                 except ValueError as error:
                     raise ValueError(f"operations[{index}]: {error}") from error

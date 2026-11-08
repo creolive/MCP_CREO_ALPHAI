@@ -751,11 +751,11 @@ def annotate_feature_state(result: dict[str, Any], inputs: list[dict[str, Any]])
     return result
 
 
-def _profile_summary(entities: list[dict[str, Any]]) -> dict[str, Any]:
-    from creo_mechdog.profile_diagnostics import analyze_profile
+def _profile_summary(entities: list[dict[str, Any]], tolerance: float | None) -> dict[str, Any]:
+    from creo_mechdog.profile_diagnostics import CLOSURE_TOLERANCE_MM, analyze_profile
     from creo_mechdog.weldability import weldability_from_report
 
-    report = analyze_profile(entities)
+    report = analyze_profile(entities, tolerance or CLOSURE_TOLERANCE_MM)
     near = report["categories"]["near_tolerance"]
     # BUG-049/N03: keep bounded endpoint-gap observability in the public
     # projection. The items list is already capped and truncated by the
@@ -763,6 +763,10 @@ def _profile_summary(entities: list[dict[str, Any]]) -> dict[str, Any]:
     # so a bounded sample never hides the population size.
     return {
         "source": "input",
+        # P-A (2026-11-08 Creo 10 feedback): this area comes from the supplied
+        # sketch entities, not from the kernel's removed section. The method
+        # label keeps a downstream volume check from treating it as native.
+        "method": report.get("method", "analytic-input"),
         "analysis": report["analysis"],
         "arc_geometry": report.get("arc_geometry", []),
         "entity_count": report["entity_count"],
@@ -829,7 +833,9 @@ def annotate_profiles(result: dict[str, Any], inputs: list[dict[str, Any]]) -> d
         if not isinstance(entities, list) or not entities:
             continue
         try:
-            operation["profile"] = _profile_summary(entities)
+            operation["profile"] = _profile_summary(
+                entities, source.get("closure_tolerance_mm") if source else None
+            )
         except (KeyError, TypeError, ValueError):
             # Diagnostics must never turn a delivered native result into a
             # failure; record that the input report is unavailable instead.
@@ -1694,3 +1700,79 @@ def annotate_geometry_deviation(result: dict[str, Any]) -> dict[str, Any]:
             operation.get("geometry_deviation")
         )
     return result
+
+
+SURFACE_CURVATURE_SAMPLE_NOTE = (
+    "Per-sample rows are omitted by default because a 12x12 grid exceeds the MCP "
+    "result budget; call again with include_samples=true to receive every point."
+)
+
+
+def surface_curvature_readout(receipt: dict[str, Any], include_samples: bool = False) -> dict:
+    """Publish the curvature summary; per-sample rows only on explicit request.
+
+    The native receipt is never rewritten: every value keeps its own status and
+    the aggregate ``summary``/G1 blocks stay. This projection drops
+    ``faces[].points`` and reports how many rows were omitted, so the default
+    read-only call stays inside the MCP response budget (2026-11-08 Creo 10
+    feedback: 144 samples produced 99,512 characters).
+    """
+    result = dict(receipt)
+    faces = receipt.get("faces")
+    omitted = 0
+    if isinstance(faces, list):
+        projected = []
+        for face in faces:
+            if not isinstance(face, dict):
+                projected.append(face)
+                continue
+            points = face.get("points")
+            count = len(points) if isinstance(points, list) else 0
+            trimmed = {key: value for key, value in face.items() if key != "points"}
+            if include_samples:
+                trimmed["points"] = points
+            else:
+                omitted += count
+                trimmed["points_omitted"] = count
+            projected.append(trimmed)
+        result["faces"] = projected
+    result["samples_included"] = include_samples
+    result["omitted_sample_count"] = 0 if include_samples else omitted
+    if not include_samples:
+        result["samples_note"] = SURFACE_CURVATURE_SAMPLE_NOTE
+    return result
+
+
+def surface_group_failure_payload(
+    job_id: str,
+    model_id: str,
+    status: Any,
+    revision: Any,
+    message: str,
+) -> dict[str, Any]:
+    """Structured failure receipt for a read-only surface-group measurement.
+
+    2026-11-08 Creo 10 feedback: a group whose boundary cannot be visited used
+    to surface as a bare tool error, so the caller lost the job identity and
+    could not distinguish it from an admission refusal. The payload keeps the
+    job id, the terminal status and the native reason, and names the re-read
+    workaround instead of guessing a group state.
+    """
+    text = str(message)
+    reason = (
+        "contour_edge_visit_failed" if "contour_edge_visit_failed" in text else "measurement_failed"
+    )
+    return {
+        "job_id": job_id,
+        "model_id": model_id,
+        "revision": revision,
+        "readonly": True,
+        "status": status if isinstance(status, str) else "unknown",
+        "group": {"state": None, "state_reason": reason},
+        "error": text,
+        "hint": (
+            "No group receipt was published. Re-read the quilt members with "
+            "creo_inspect_model(section='quilts') and retry with the quilt that "
+            "owns the measured boundary; this failure writes nothing and keeps no lock."
+        ),
+    }

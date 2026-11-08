@@ -530,7 +530,7 @@ def _next_steps(status: str, reason: str, busy: bool) -> list[dict]:
     ]
 
 
-def _caveats(status: str) -> list[str]:
+def _caveats(status: str, decision: dict) -> list[str]:
     shared = [
         "This summary is built from already recorded execution results; it opens no Toolkit "
         "connection and runs no probe.",
@@ -549,7 +549,18 @@ def _caveats(status: str) -> list[str]:
             "A damaged session can still answer connection probes; only the recorded save and "
             "reload facts are reported here."
         )
+    shared.extend(decision.get("warnings", []))
     return shared
+
+
+def _fresh_connect_evidence(records: list[dict], now: datetime) -> dict | None:
+    """A connection fact inside the freshness window that actually reached Creo."""
+    for record in records:
+        if record["kind"] != "connection" or record["outcome"] != "connected":
+            continue
+        if _age(record, now) <= FRESHNESS_SECONDS:
+            return record
+    return None
 
 
 def _evaluate(records: list[dict], stats: dict, now: datetime) -> dict:
@@ -561,16 +572,37 @@ def _evaluate(records: list[dict], stats: dict, now: datetime) -> dict:
     anchor = next((r for r in records if r["session_source"] == "recorded"), None)
     if anchor is None:
         return {"status": UNKNOWN, "reason": "session_identity_unknown"}
-    if _age(anchor, now) > FRESHNESS_SECONDS:
-        return {"status": UNKNOWN, "reason": "session_identity_stale"}
+    # DEV-077/R03: a stale identity is not by itself a connection failure. A
+    # fresh connected fact proves the session answered now, so the staleness is
+    # downgraded to a warning instead of replacing every other verdict. The
+    # identity is still stale, nothing is refreshed, and an unknown protection
+    # stays in force: this only changes which reason the evidence supports.
+    identity_stale = _age(anchor, now) > FRESHNESS_SECONDS
+    downgraded = False
+    if identity_stale:
+        if _fresh_connect_evidence(records, now) is None:
+            return {"status": UNKNOWN, "reason": "session_identity_stale"}
+        downgraded = True
     current = anchor["session"]
     scoped = [r for r in records if r["session"] == current and _age(r, now) <= FRESHNESS_SECONDS]
     damage = next((r for r in scoped if r["damage"]), None)
     if damage is not None:
-        return {"status": DAMAGE, "reason": damage["damage"]}
+        return _decision(DAMAGE, damage["damage"], downgraded)
     if any(r["kind"] == "save" and r["outcome"] == "succeeded" for r in scoped):
-        return {"status": OBSERVED, "reason": "recent_verified_save"}
-    return {"status": UNKNOWN, "reason": "no_recent_verified_save"}
+        return _decision(OBSERVED, "recent_verified_save", downgraded)
+    return _decision(UNKNOWN, "no_recent_verified_save", downgraded)
+
+
+def _decision(status: str, reason: str, downgraded: bool) -> dict:
+    decision = {"status": status, "reason": reason}
+    if downgraded:
+        decision["identity_stale_downgraded"] = True
+        decision["warnings"] = [
+            "the recorded session identity is older than the freshness window; the fresh "
+            "connected fact proves the session answered a probe, not that it is the same "
+            "session or that a save will succeed, and no unknown protection is cleared"
+        ]
+    return decision
 
 
 def snapshot(
@@ -600,7 +632,11 @@ def snapshot(
         if current is not None and r["session"] == current and _age(r, moment) <= FRESHNESS_SECONDS
     ]
     damage = [r for r in scoped if r["damage"]]
-    historic = [r for r in records if r["damage"] and r["session"] != current]
+    # A stale record from the current session is still evidence of a protection
+    # that has not been cleared; it belongs to the historic list, not nowhere.
+    historic = [
+        r for r in records if r["damage"] and (r["session"] != current or _stale(r, moment))
+    ]
     saves = [r for r in scoped if r["kind"] == "save"]
     newest_save = next((r for r in records if r["kind"] == "save"), None)
     all_saves = [r for r in records if r["kind"] == "save"]
@@ -626,9 +662,11 @@ def snapshot(
             "identity_observed_at": anchor["at"].isoformat() if anchor else None,
             "identity_age_seconds": int(_age(anchor, moment)) if anchor else None,
             "identity_stale": _stale(anchor, moment) if anchor else None,
+            "identity_stale_downgraded": decision.get("identity_stale_downgraded", False),
             "changed": len(sessions) > 1,
             "sessions_observed": len(sessions),
         },
+        "warnings": list(decision.get("warnings", [])),
         "facts": {
             "last_connection": _connection_fact(records, moment),
             "last_save": _save_fact(newest_save, moment, current)
@@ -646,10 +684,10 @@ def snapshot(
         },
         "damage_signals": [_damage_signal(r, moment, True) for r in damage[:DAMAGE_LIMIT]],
         "historic_damage_signals": [
-            _damage_signal(r, moment, False) for r in historic[:DAMAGE_LIMIT]
+            _damage_signal(r, moment, r["session"] == current) for r in historic[:DAMAGE_LIMIT]
         ],
         "next_steps": _next_steps(decision["status"], decision["reason"], channel["busy"]),
-        "caveats": _caveats(decision["status"]),
+        "caveats": _caveats(decision["status"], decision),
         "evidence": {
             "jobs_scanned": stats["jobs_scanned"],
             "jobs_unreadable": stats["jobs_unreadable"],

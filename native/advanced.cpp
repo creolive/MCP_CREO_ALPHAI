@@ -55,14 +55,26 @@ static void surface_collection(ProElement element, const J &refs) {
     CK(ProElementCollectionSet(element, coll));
     ProCollectionFree(&coll);
 }
-static void generic_mirror(const J &op) {
+static J generic_mirror(const J &op) {
     J refs = op.value("references", J::array());
     if (refs.empty())
         refs.push_back({{"kind", "part"}});
     bool whole = false;
-    for (auto r : refs)
-        if (r.at("kind") == "part")
+    int feature_references = 0;
+    J kinds = J::array();
+    for (auto r : refs) {
+        std::string kind = r.at("kind");
+        if (kind == "part")
             whole = true;
+        if (kind == "feature")
+            ++feature_references;
+        bool known = false;
+        for (const auto &seen : kinds)
+            if (seen == kind)
+                known = true;
+        if (!known)
+            kinds.push_back(kind);
+    }
     if (whole && refs.size() != 1)
         throw std::runtime_error("Whole-part mirror cannot be mixed with geometry selections");
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
@@ -79,6 +91,12 @@ static void generic_mirror(const J &op) {
     ProFeature f = create(root);
     ProElementFree(&root);
     remember(op, f);
+    // DEV-077/R02: publish which native path produced this feature. A feature
+    // label is a PRO_FEATURE mirror item, not a geometry selection that Python
+    // pretends to expand.
+    return J{{"implementation", whole ? "part_mirror" : "reference_mirror"},
+             {"reference_kinds", kinds},
+             {"feature_reference_count", feature_references}};
 }
 // FEAT-051: read the created draft's own element tree. Only what the tree
 // contains is reported; unreadable fields stay null with their raw query
