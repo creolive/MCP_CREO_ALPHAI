@@ -127,6 +127,8 @@
 | 曲线长度 | `ProCurveLengthEval(ProCurve, double*)` | `ProCurve.h:139` | 已核实 |
 | 曲线端点 | `ProCurveXyzdataEval(ProCurve, param, xyz, deriv1, deriv2)` 在 param=0/1 求值（复合曲线时 deriv 必须为 NULL） | `ProCurve.h:88-116` | 已核实 |
 | quilt 体积 | `ProQuiltVolumeEval`，**要求 quilt 闭合**，否则 `PRO_TK_INVALID_TYPE` | `ProQuilt.h:137-154` | 已核实（故体积不能代替面积） |
+| 主曲率 | `ProSurfacePrincipalCrvtEval(ProSurface, ProUvParam, double* max, double* min, ProVector dirs[2])` 是**唯一**曲率查询；无 `ProCurvature*`、zebra 或曲率梳 API | `ProSurface.h:586-610`、`ProAnalysis.h:10` | 已核实（DEV-074/H08，2026-11-08） |
+| 曲面 UV 范围 | 本机 SDK **无** `ProSurfaceParamRangeGet`；范围取 `ProSurfaceDataGet` → `ProSurfacedata.uv_min/uv_max` | `ProSurface.h:196`、`ProSurfacedata.h:197-215` | 已核实（**方案 API 名不存在**） |
 | 长度单位换算 | 本机已有 `native/inspection_units.h` 的 `InspectionLengthUnits`（主单位系 + 长度单位名）与 `native/assembly_units.h` 的 `length_scale_to_mm`（真实换算比例） | `native/inspection_units.h:8-30`、`native/assembly_units.h:21-56` | 已核实（**复用，不另写**） |
 | 面积单位换算 | SDK 无面积单位；面积是长度²，须用 `scale_to_mm²` | 同上（比例的平方） | 已核实（推导规则见 §4.4） |
 
@@ -473,7 +475,10 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 
 ### 2.9 join 的可测量并集：trim + thicken（S03 的替代路线，2026-11-05 实机）
 
-`quilt_merge` 本身仍然门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
+> **2026-11-08 更新**：`quilt_merge` 已按 §2.4 的 `result_quilt_source` 判据公开；本节的
+> 「trim + thicken + 布尔」仍是**要得到 body 并集**时的有效路线，不再作为 merge 不可用的替代。
+
+（2026-11-05 时点）`quilt_merge` 当时仍门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
 `PRO_SURFACE` 项而没有 `PRO_QUILT` 项（JOIN/INTSCT × 贴合/真相交四条路线加交叉复测都如此），
 模型 quilt 数保持 0，所以合并结果无法作为 quilt 交给下游。
 
@@ -689,7 +694,7 @@ PRO_E_FEATURE_TREE
 
 数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
 
-**2026-11-07 实测补充（H03，保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
+**2026-11-07 实测补充（H03，当轮保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
 redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交 join：
 `ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` 返回 **0**、
 `ProErrorlist.total=0`、`ProFeatureElemtreeExtract` 返回 **0**，抽取树 11 个元素，其中
@@ -697,9 +702,228 @@ redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交
 redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_QUILT`、
 4 个 `PRO_SURFACE`（132/134/136/138），与显式写 SIDE 的 HEAD 实现逐项相同。
 输入面积 800.0 mm² 可测，结果面积/闭合不可测；两次失败作业均清理新建模型
-（`terminal_effect.managed_model=no_effect`）。结论：本机数组树即使由内核补全也不产出
-结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
+（`terminal_effect.managed_model=no_effect`）。证据见
 [FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
+
+**2026-11-08 实测结论（H03，门禁已解除）**：**-4 不代表没有结果 quilt，而是结果不是本特征的
+`PRO_QUILT` 几何项**。本机内核把第二片 join 进**目标 quilt**（原地修改）：目标面积
+400 → **800.0 mm²**、外框覆盖 40×20，工具 quilt 变为不可测
+（`ProContourAreaEval=-4`）。因此结果解析按 `result_quilt_source` 分三级，全部来自实测：
+
+1. `feature_quilt_geomitem`：特征拥有恰好 1 个 `PRO_QUILT` 项（历史路径，仍优先）。
+2. `member_surface_quilt`：`ProSurfaceQuiltGet` + `ProQuiltIdGet` 在特征拥有的
+   `PRO_SURFACE` 项中找所属 quilt（`native/quilt_query.h::feature_member_surface_quilt`）。
+3. `retrimmed_target_quilt`：重新测量目标 quilt，只有面积**严格增长**
+   （`> 合并前 + 1e-6`）才认作结果；静默 no-op 面积不变，仍判失败并回滚。
+
+不得改用 `ProQuiltInit` 全 id 扫描找结果（曾使 worker 超时，`unknown_outcome`）。
+实机：job `8c1cd77b…` → `result_quilt_id=82`、`result_quilt_source=retrimmed_target_quilt`、
+`area_mm2=800.0`、`input_area_mm2=800.0`、`closed=false`、
+`saved_file_reloaded_and_verified=true`（revision 2）；同模型 2 mm `thicken` 成功，
+body bbox 法向跨距 2.0 mm。不相邻 2 mm 负例在 `ProFeatureWithoptionsCreate` 返回 **-1**
+并回滚（两片仍各 400 mm²，revision 1→1）。面级引用（`PRO_E_SRF_MRG_QUILT_REF` 指向
+`PRO_SURFACE`）不是可用路线：创建阶段直接 **-1**。
+证据：[H03/H07 证据](../validation/dev074-h03h07-2026-11-08/EVIDENCE.md)。
+
+### 2.11 曲面边圆角 surface_round（DEV-074/H08，实机验收完成 2026-11-08）
+
+**SDK 依据（本机 Creo 12.4.0.0 头文件实读）**：`ProRound.h` 的 `PRO_FEAT_ROUND` 支持
+`ProRoundReferenceType = PRO_ROUND_REF_SURF_SURF(2)`，并在边集合条目下明文写明
+“Mixed selection from different solid bodies and/or quilts is supported. Resulting
+geometry will be attached back to the same solid body or quilt where the referenced
+edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
+`PRO_ROUND_UNATTACHED(9)` / `PRO_ROUND_CAPPED_ENDS(15)`。
+
+**2026-11-08 实机（公开 MCP，DEV-074 H08）**：
+
+| 用例 | 选择 | 结果 |
+| --- | --- | --- |
+| C1 | 4 面开放 quilt 70（1200 mm²）、相邻面 (68,66)、R3 | quilt 70 → 5 面、**1187.1238898038469 mm²**、开放、0 实体面、`material_measurement=not_applicable`、保存重载 true |
+| C2 | 同一构造、相邻面 (66,64)、R3 | 同上 5 面、1187.1238898038469 mm² |
+| C5 | 同一 quilt、非相邻面 (68,64)、R3 | 再生失败（“Regeneration produced a failed, suppressed or incomplete feature”），整体回滚到 4 面 / 1200.0 mm² |
+
+解析 oracle（C1/C2 精确命中）：1200 − 2×3×10 + (π/2×3)×10 = 1187.1238898038469 mm²。
+证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、
+`h08_surface_round_probe.json`（SHA256 `D74FF061…FB6E64D5`）。
+
+**实现与实机验收（2026-11-08）**：`native/surface_round.cpp` 的 `generic_surface_round`
+沿用上面实测的同一棵 `PRO_FEAT_ROUND` + `PRO_ROUND_REF_SURF_SURF` 树，只写
+`PRO_E_RNDCH_SHAPE_OPTIONS=PRO_ROUND_TYPE_CONSTANT`、`PRO_E_RNDCH_LEG1` 常量半径、
+`PRO_E_RNDCH_ATTACH_TYPE=PRO_ROUND_ATTACHED` 和空的 `PRO_E_RNDCH_TRANSITIONS`。
+创建前先经 `resolve_quilt_reference` 解析一个 quilt，用 `ProQuiltSurfaceVisit` 枚举成员面，
+两个面 id 必须都在其中（实体面、别的 quilt 的面在此被拒）；创建后重测同一 quilt 的
+`ProQuiltSurfaceVisit` 面数、`quilt_area_native` 面积和 `quilt_closed_native` 闭合，
+并以 `area_before/after` 判定“圆角没有去掉面积”为失败。**结果面积/面数全部来自原生测量，
+不使用请求值回填。** 失败由 job 级既有检查点回滚处理，没有新增回滚机制。
+
+实机（Creo 12.4.0.0，公开工具 `creo_surface_round`）：40×20 矩形草图拉伸曲面 quilt
+（quilt 70、4 面、1200 mm²）对排序后的相邻面对 (62,64) 施加 R3，作业
+`3dfc36030e4e42779f8fedf112a9d84a` 终态 succeeded，结果为 **5 面、1187.1238898038469 mm²**
+（与 1200−2×3×10+π/2×3×10 逐位一致）、`quilt_closed_native=open`、`has_solid=false`、
+`solid_surface_count=0`、`material_measurement=not_applicable`、feature 78 type 913，
+保存重载 `saved_file_reloaded_and_verified=true`，重载后 quilt 70 的面数与面积不变。
+随后对非相邻面对 (62,66) 提交，作业 `b9016b1c90c24f35bf6dfc207fca3ae1` 失败：
+`feature_status=6`、feature 114、元素错误列表 `total=0`，`effect_status=rolled_back`，
+revision 2→2，quilt 仍为 5 面 / 1187.1238898038469 mm²。证据
+[EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、`A_surface_round.json`。
+
+**最小契约（冻结）**：
+
+| 项 | 公开 | 拒绝 |
+| --- | --- | --- |
+| target | 一个 quilt：`{kind:"quilt",id}` 或 `{kind:"quilt_feature",label}` | 实体面、body、datum_plane、`{kind:"quilt",label}` |
+| faces | `references` 恰一组，`{"surfaces":[{kind:"surface",id:N},{kind:"surface",id:M}]}`，两个不同成员面 | 0/1/3 面、重复面、edge/plane/body、face 上带 label 或额外键 |
+| 半径 | 一个常量 `radius > 0`（mm，有限实数） | 0、负数、inf/nan、布尔、字符串、变半径字段 |
+| 组数/过渡 | 单组 | 多组、`transitions`、full/chordal/through-curve |
+| 相邻性 | **由内核判定**：非相邻面对允许提交，再生失败并回滚 | 不提前猜测拓扑（H08 C5 已实测失败模式） |
+| edge-chain | 未开放 | `PRO_ROUND_REF_EDGE` 需要 quilt 边 id 通道；`creo_inspect_model` 的 `edges` 只枚举实体面（曲面 quilt 模型实测 0 条） |
+
+回执字段（§4.4.2 同款 `*_status`）：`quilt_id`、`face_ids`、`radius`、`feature_id`、
+`feature_status`、`feature_type`、`face_count_before`/`face_count` 及各 `*_status`、
+`area_before_mm2`/`area_mm2` 及 `*_status`、`closed_before`/`closed`/`closed_status`、
+`quilt_closed_native`、`has_solid`、`solid_surface_count`、`reference_application`。
+
+**未开放/未验证**：变半径、full/chordal、through-curve、自定义过渡、edge-chain、多组；
+圆角后继续 thicken/solidify 的链；非 mm 单位、弯曲或多 quilt 成员；Creo 9/10。
+本次实机验收只覆盖一个 4 面开放 quilt 的相邻/非相邻面对与保存重载回滚。
+
+---
+
+### 2.12 surface_boundary_fill：闭合链非平面填充（DEV-074/H09，实机反证，门禁保持）
+
+**问题**：`surface_fill` 只接受一个平面草图（§2.1 之外的 `PRO_FLAT` +
+`PRO_E_SEC_USE_SKETCH`），没有 3D 边界通道；H09 早前的结论是“任意非平面闭合边界填充不可用”。
+本节新增的是**独立算子**，planar `surface_fill` 的语义与门禁完全不变，二者不互相回退。
+
+**SDK 依据（本机 Creo 12.4.0.0 头文件实读）**：`Probbl.h` 的边界混合树是唯一有文档的方向；
+`PRO_E_BBL_ADD_CLOSED` 位于 `PRO_E_BNBLN_1DIR`/`_2DIR` 下，头文件写明“closes the surface in
+1st or 2nd direction … Value `PRO_B_TRUE` is workable if there are at least 3 curves”。
+因此闭合链至少 3 条曲线，2 条曲线的闭合边界属于 `surface_loft`（两截面直纹面）。
+
+**离线实现（2026-11-08，本轮）**：`native/surface_boundary_fill.cpp` 的
+`generic_surface_boundary_fill` 复用 §2.1 的裸骨架，流程与 `surface_loft` 相同：
+`ProFeatureWithoptionsCreate(PRO_FEAT_CR_INCOMPLETE_FEAT)` → `ProFeatureElemtreeExtract` →
+`ProFeatureWithoptionsRedefine` → ACTIVE。区别只有两点：
+
+1. 边界链的每条曲线各占一个 `PRO_E_STD_CHAIN_HOLDER`，按请求顺序写入
+   `PRO_E_BNBLN_DIR_CURVES`；
+2. 在 `PRO_E_BNBLN_1DIR` 下写 `PRO_E_BBL_ADD_CLOSED = PRO_B_TRUE`，由内核把单向混合闭合成
+   一张填充面。
+
+切向条件、`PRO_E_EXT_SURF_CUT_SOLID_TYPE` 等可选值仍由内核在抽取树中补齐，实现**不**在创建前猜写。
+
+**链校验（原生，创建前）**：对每条曲线用 `ProCurveXyzdataEval(0/1)` 取真实端点，按请求顺序检查
+相邻曲线（含最后一条与第一条）在 `0.01 mm` 容差内相接；相邻曲线可用任一端点匹配（公开引用语法
+不携带曲线方向），但不允许跳过中间曲线。重复 id、非曲线 id、未知长度单位在创建特征前拒绝。
+长度单位未知时无法判定 0.01 mm 容差与面积，直接拒绝并要求先设置模型单位，不猜测、不回退。
+
+**最小契约（离线冻结）**：
+
+| 项 | 公开 | 拒绝 |
+| --- | --- | --- |
+| 操作/工具 | `surface_boundary_fill` / `creo_surface_boundary_fill` | — |
+| 边界 | 一条闭合链，`boundary` 为有序曲线列表，长度 3–200 | 空、1–2 条、嵌套列表/多环、孔 |
+| 曲线引用 | `{kind:"curve",id:N}`，N 为非负 32 位整数 | quilt/face/edge/body、特征标签、带 `label`/`reverse`/额外键 |
+| 重复边 | 每条曲线只出现一次 | 重复 curve id |
+| 闭合/顺序 | 原生按真实端点检查（0.01 mm） | 开放链、乱序链（错误消息给出 `surface_loft`/`project_curve` 替代） |
+| 单位 | 已知长度单位（mm 推荐） | 单位未知（面积与容差都不可判定） |
+| 输出 | 一张开放 datum-surface quilt，不产实体 | 实体、多 quilt、闭合壳（原生检查，失败整体回滚） |
+
+**回执**：`boundary`、`boundary_curve_ids`、`boundary_edges`、`boundary_closed`、
+`chain_gap_max_mm`、`boundary_tolerance_mm`、`route`、`add_closed`、`create_code`/
+`create_element_errors`、`extract_code`、`feature_id`/`feature_status`/`feature_type`/
+`surface_type`、`quilt_id`/`quilt_ids`/`quilt_count`、`surface_area_mm2` 与
+`surface_area_status`、`quilt_closed_native`/`closure`、`face_count`/`face_count_status`、
+`surface_group`（含组级 `boundary_edges`）、`has_solid`/`solid_surface_count`。所有测量值都来自
+原生 quilt 查询，不使用请求值回填；失败由 job 级既有检查点回滚，没有新增回滚机制。
+
+**实机反证（2026-11-08，Creo 12.4.0.0）**：平面闭合环由同一个矩形草图的 4 条
+`PRO_CURVE`（id 45–48）构成，`ProCurveXyzdataEval` 实测相邻端点最大间隙
+**1.882820214045141e-31 mm**（远小于 0.01 mm 容差），链顺序与闭合校验通过。提交
+`creo_execute_plan` 后：
+
+| 作业 | create_code | extract_code | 抽取树元素 | feature_status | quilt 访问 | quilt 数 | 元素错误 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `4f1705caaa2d4899bc97e38803644ba7` | 0 | 0 | 107 | **6** | **-4** | **0** | `total=0` |
+| `cd7b435ffa9041e383f8816e6ed9f6e7`（复现） | 0 | 0 | 107 | **6** | **-4** | **0** | `total=0` |
+
+两次均 `effect_status=rolled_back`、`rollback_succeeded=true`、`saved_file_reloaded_and_verified=false`，
+模型 revision 不变。抽取树显示内核已把 `PRO_E_BBL_ADD_CLOSED` 保留为 1，并补齐
+`PRO_E_EXT_SURF_CUT_SOLID_TYPE=PRO_FEAT_DATUM_SURF` 与切向条件默认值；失败不是元素缺失，
+而是“单向 N 个 chain holder + 闭合”这棵树在再生阶段不产出任何 quilt。按验收优先级，
+平面环失败后**未提交非平面环**（不再用同一被否定的树重复试探）。
+
+**结论与门禁**：`surface_boundary_fill` 已加入 `UNAVAILABLE_OPERATIONS`，`server.py` 的既有钩子
+把 `creo_surface_boundary_fill` 从 MCP 工具面移除（公开工具 107→106），`require_available` 在受理前
+拒绝且不建 job。`native/surface_boundary_fill.cpp` 作为**被否定的候选路线**保留在仓库，文件头
+与契约均标注 GATED；planar `surface_fill` 未改动、不作为回退。证据
+[EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、`B_planar_fill_failure_job1.json`、
+`B_planar_fill_failure_job2.json`、`gate_probe.json`。
+
+**仍未成立**：任意非平面闭合边界填充需要一条能产出结果 quilt 的新树（例如先用手工
+Boundary Blend/Fill 参照件读回真实树，或改走多方向网格），不能继续在无参照的情况下猜元素。
+
+### 2.13 surface_curvature：数值等价交付与限制（DEV-074/H08，实机验收完成 2026-11-08）
+
+**问题**：外部需求中的「曲率梳 / 斑马纹」是可视化检查。2026-11-08 对本机 Creo 12.4.0.0 SDK
+逐头文件复核：**没有** `ProCurvature*`、zebra 或曲率梳 API；全 SDK 与曲率有关的只有
+`ProSurface.h:586` 的 `ProSurfacePrincipalCrvtEval(ProSurface, ProUvParam, double* max,
+double* min, ProVector dirs[2])`（给定 UV 点返回最大/最小主曲率与主方向）。`ProAnalysis.h`
+只提供 `PRO_ANALYSIS_CLASS_EXTERNAL(8)` 的外部自定义分析类注册，没有内置曲率/斑马/梳图类型。
+因此曲率梳/斑马纹不是门禁问题，而是**没有接口**；可交付的是**数值分析**（曲率梳的数据面），
+并明确**不提供可视化图像**。
+
+**SDK 参数域修正**：本机 SDK **不存在** `ProSurfaceParamRangeGet`。UV 范围取自内核自己的
+曲面数据 `ProSurfaceDataGet` → `ProSurfacedata.uv_min/uv_max`；范围缺失或退化（非有限、
+`u_max <= u_min`、`v_max <= v_min`）是失败并给 `surface_uv_range_unavailable`，不猜 0..1。
+每个 UV 采样点再用 `ProSurfaceUvpntVerify` 判断是否落在裁剪后的面内：面外点只计数
+（`outside_contour_count`），不参与曲率统计，也不填 0。
+
+**原生路线**：
+
+1. `resolve_quilt_reference` 解析一个 quilt；`ProQuiltSurfaceVisit` 取成员面（id + handle）。
+2. 请求的面（`{kind:"surface",id:N}` 或零基成员索引）必须在成员面内；否则创建 job 后失败并回滚
+   （只读 job 不产生特征，revision 不变）。
+3. 对每个请求面，按 `samples_per_direction`（5–50，默认 12）在 UV 范围上取**单元中心**栅格；
+   `ProSurfaceUvpntVerify == PRO_UV_INSIDE` 后调用 `ProSurfacePrincipalCrvtEval`。
+4. 每点回执 `u`/`v`、最大/最小主曲率（1/mm）、对应曲率半径（mm）与主方向（无量纲单位向量）。
+5. 汇总 `max_abs_curvature_per_mm`、`min_curvature_radius_mm`、`sample_count`、`failure_count`。
+6. 请求两个共享边成员面时：两侧面的轮廓边经 `ProSurfaceContourVisit` + `ProContourEdgeVisit`
+   收集，按 `ProEdgeIdGet`（无 id 时按 handle）求交；对每条共享边用 `ProEdgeXyzdataEval` 采样
+   17 点，每侧用 `ProSurfaceParamEval` + `ProSurfaceXyzdataEval` 取单位法向，回执
+   `g1_max_angle_deg` 与逐点 `angle_deg`。
+
+**单位与失败**：曲率为长度的倒数，`1/mm = curvature_native / scale_to_mm`；曲率半径
+`mm = radius_native * scale_to_mm`。长度单位尺度未知时所有 1/mm 与 mm 值为 `null` +
+`unit_scale_unknown`，方向与采样计数仍保留。某个采样点的曲率查询失败只增加 `failure_count`，
+不写 0；整面无任何面内采样点时该面 `available=false` 并给
+`no_curvature_samples_inside_face` 或 `principal_curvature_eval_failed`。
+
+**G1 限制**：`g1_max_angle_deg` 是两个内核法向（按 `ProSurfaceXyzdataEval` 返回值）之间的夹角，
+不做朝向折叠；如果相邻面绕向相反，读数会接近 180°，必须在实机确认。`g1_threshold_deg = 0.5`
+只用于 `within_g1` 标记，**不替代**实测角度；无共享边时为 `null` + `no_shared_edge`。
+
+**明确不提供**：斑马纹、曲率梳或任何图像/截图输出；多面（>2）G1 链、G1/G2 连续性判定、
+自动修复、曲率极值搜索与曲面质量打分。
+
+**实现与实机验收（2026-11-08）**：`native/surface_curvature.cpp` 的
+`generic_surface_curvature`，只读（`generic_bridge.submit(readonly=True)`，原生不会
+`ProSolidRegenerate`）。实机（Creo 12.4.0.0，公开只读工具 `creo_measure_surface_curvature`）：
+
+| 用例 | quilt / 面 | 作业 | 12×12 采样 | 结论 |
+| --- | --- | --- | --- | --- |
+| 平面 | `surface_loft` 800 mm²、1 面 | `584b0d9486694db383b4540fd9ede92c` | 144/144 面内、0 失败 | `max_abs_curvature_per_mm=0.0`；`min_curvature_radius_mm=null`（`zero_curvature`）；`outside_contour_count=0` |
+| R8 球面 | 半圆旋转 360°、quilt 74、2 面（取 1 面） | `5c79b4c0afc8423592d19416da0ec54f` | 144/144、0 失败 | 曲率 **0.12500000000000003 1/mm**、半径 **7.999999999999998 mm**（1/8=0.125、R=8） |
+| G1 | 4 面拉伸 quilt、相邻面 (62,64) | `a93e1248e6794984b60032c9d033d528` | 2 面 288 点 | 1 条共享边、17 点、0 失败、`g1_max_angle_deg=90.0`、`within_g1=false`（0.5° 阈值一致） |
+
+三次作业 `revision` 均为 1，与提交前相同：**只读工具不推进 revision**。注意：把同一
+`surface_curvature` 操作经通用 `creo_execute_plan` 提交会按写作业保存并推进 revision
+（本批验收驱动曾误用该入口得到 1→2）；只读语义由专用工具持有，通用计划入口不改变既有
+事务语义。证据 [EVIDENCE](../validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)、
+`C_surface_curvature.json`。
+
+**仍待**：非 mm 单位、裁剪面（`outside_contour_count>0`）与弯曲面混合、反向绕向邻面的 G1
+朝向、Creo 9/10。
 
 ---
 
@@ -745,13 +969,18 @@ redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_Q
 
 ### 3.4 quilt_merge
 
-| 项 | 首版公开 | 首版明确拒绝 |
+**状态（2026-11-08）：已公开**。`creo_quilt_merge` 在 MCP 面；`quilt_merge` 不在
+`UNAVAILABLE_OPERATIONS`。门禁解除依据是 §2.4 的 `result_quilt_source` 实机判据：
+结果可为特征自有 quilt、成员面所属 quilt，或**面积严格增长的目标 quilt**。
+
+| 项 | 已公开 | 明确拒绝 |
 | --- | --- | --- |
 | 参与者 | **恰好 2 个类型明确的 quilt** | 基准面、曲线、body、多个参与者 |
 | 合并方式 | 只做 join（`PRO_SRF_MRG_JOIN`） | intersect 变体 |
 | 容差 | 不提供 | 任何 `tolerance` 参数（未证明生效前不得接受） |
 | 间隙测量 | 不提供 | 任何间隙字段 |
 | 闭合 | 只报告真实探测结果（§4.4.1 结构） | 由面积或外框反推 `closed` |
+| 结果来源 | `result_quilt_source` 三态（§2.4），全部实测 | 猜 id、全 id 扫描、静默 no-op 报成功 |
 | 输出 | 一个结果 quilt（`result_quilt_id`，可供 `thicken` 消费） | — |
 
 `quilt_merge` **不是** `boolean_bodies` 的替代：实体布尔不在曲面链里，不能用它掩饰缝合失败。
@@ -877,6 +1106,24 @@ redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_Q
 | `kept_side` | `"one" \| "two" \| null` | 实际保留的一侧 |
 | `kept_side_basis` | `object` | 保留侧的判定依据，见 §4.5 |
 | `kept_quilt_id` | `int \| null` | 保留区域 quilt 几何 ID，供 `thicken` 消费 |
+
+**surface_round**
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `quilt_id` | `int` | 圆角所在 quilt 的几何 ID（结果留在同一 quilt） |
+| `face_ids` | `list[int]` | 请求的两个成员面（输入回显，不是测量值） |
+| `radius` | `float` | 常量半径（mm） |
+| `face_count_before` / `face_count` | `int \| null` | 圆角前/后 `ProQuiltSurfaceVisit` 的真实成员面数 |
+| `face_count_before_status` / `face_count_status` | `object` | §4.4.1 结构 |
+| `area_before_mm2` / `area_mm2` | `float \| null` | 圆角前/后的真实 quilt 面积（mm²） |
+| `area_before_status` / `area_status` | `object` | §4.4.1 结构 |
+| `closed_before` / `closed` | `bool \| null` | 只来自 `ProQuiltVolumeEval`：闭合 `true`、明确开放 `false`、探测失败 `null` |
+| `closed_status` | `object` | §4.4.1 结构 |
+| `quilt_closed_native` | `"open" \| "closed" \| "unknown"` | 同上探测的字符串形式 |
+| `has_solid` | `bool` | 圆角后模型是否仍有实体材料（原生 inspection） |
+| `solid_surface_count` | `int \| null` | 圆角后实体面数量；曲面 quilt 模型应为 0，不能替代 quilt 面数 |
+| `reference_application` | `object` | 创建特征的 `PRO_E_RNDCH_SET` 计数证据（`applied_set_count`/`query_code`） |
 
 **quilt_merge**
 
@@ -1010,6 +1257,50 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 **边界**：`gap_search_mm` 之外的间距不计入 `gap_max_mm`（仍按开放边计数）；重叠面积是网格采样
 估计而不是布尔求交；判定基于采样边界几何，不是内核缝/布尔特征。
 
+### 4.9 曲面曲率与 G1 分析字段（DEV-074/H08）
+
+**测量对象**：一个 quilt 的 1–2 个成员面（`creo_measure_surface_curvature`，只读作业）。
+成员面由 `ProQuiltSurfaceVisit` 枚举；请求用 `{kind:"surface",id:N}` 或零基成员索引。
+
+**方法**：见 §2.13。UV 范围来自 `ProSurfaceDataGet`（本机 SDK 无
+`ProSurfaceParamRangeGet`），采样点为单元中心并用 `ProSurfaceUvpntVerify` 过滤；曲率来自
+`ProSurfacePrincipalCrvtEval`；G1 法向来自共享边采样 + `ProSurfaceParamEval` +
+`ProSurfaceXyzdataEval`。不提供斑马纹/曲率梳图像。
+
+**冻结字段**（每个值独立 `*_status`，结构见 §4.4.1）：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `quilt_id` | `int` | 被分析的 quilt 几何 ID |
+| `samples_per_direction` | `int` | 每方向 UV 采样密度（5–50，请求值回显） |
+| `curvature_unit` / `radius_unit` | `"1/mm"` / `"mm"` | 曲率与半径单位 |
+| `faces[]` | `list[object]` | 每个请求面一个块 |
+| `faces[].surface_id` | `int \| null` | 面的几何 ID |
+| `faces[].uv_range_mm_surface_parameters` | `list[float] \| null` | `[u_min,u_max,v_min,v_max]`，曲面参数不是 mm |
+| `faces[].uv_range_status` | `object` | §4.4.1 结构 |
+| `faces[].status` | `object` | 该面采样状态；整面无面内采样点为 `available=false` + reason |
+| `faces[].sample_count` / `failure_count` / `outside_contour_count` | `int \| null` | 面内成功采样数 / 失败数 / 裁剪域外样本数 |
+| `faces[].max_abs_curvature_per_mm` / `_status` | `float \| null` / `object` | 该面最大绝对主曲率 |
+| `faces[].min_curvature_radius_mm` / `_status` | `float \| null` / `object` | 该面最小曲率半径；全零曲率时 null + `zero_curvature` |
+| `faces[].points[]` | `list[object]` | 面内成功采样的逐点记录 |
+| `points[].u` / `.v` | `float` | UV 参数 |
+| `points[].max_curvature_per_mm` / `.min_curvature_per_mm` | `float \| null` | 最大/最小主曲率（1/mm） |
+| `points[].max_radius_mm` / `.min_radius_mm` | `float \| null` | 对应曲率半径（mm）；该方向零曲率或单位未知时 null |
+| `points[].max_direction` / `.min_direction` | `list[float]` | 主方向单位向量（无量纲） |
+| `points[].status` | `object` | §4.4.1 结构（含 `curvature_unit`/`radius_unit`） |
+| `summary.max_abs_curvature_per_mm` / `_status` | `float \| null` / `object` | 全请求面汇总 |
+| `summary.min_curvature_radius_mm` / `_status` | `float \| null` / `object` | 全请求面汇总 |
+| `summary.sample_count` / `failure_count` / `face_count` | `int \| null` | 汇总计数 |
+| `g1_max_angle_deg` / `g1_status` | `float \| null` / `object` | 两个请求面的共享边最大法向夹角（deg）；无共享边时 null + `no_shared_edge` |
+| `g1_threshold_deg` | `0.5` | 仅用于 `within_g1` 标记 |
+| `within_g1` | `bool \| null` | `g1_max_angle_deg <= g1_threshold_deg`；不替代实测角度 |
+| `g1_status.shared_edge_count` / `.sample_count` / `.failure_count` | `int \| null` | 共享边数与采样计数 |
+| `g1_points[]` | `list[object]` | 逐点 `edge_id`、`edge_parameter`、`point_mm`、两侧 `first_uv`/`second_uv`、`angle_deg` |
+
+**规则**：单位尺度未知时 1/mm 与 mm 值为 null + `unit_scale_unknown`，方向与计数仍发布；
+查询失败只增加 `failure_count`，不得伪造 0；单面请求时 G1 块 `available=false` +
+`two_faces_required`；只读作业不写模型、不推进 revision。
+
 ---
 
 ## 5. 最小几何 oracle（三个 op 各一个）
@@ -1061,6 +1352,7 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 | `surface_loft` | `SurfaceLoftOp` | `op: Literal["surface_loft"]`、`label: Label`、`sections: list[str \| int]`（长度恰 2）、`interpolation: Literal["straight"] = "straight"` |
 | `project_curve` | `ProjectCurveOp` | `op: Literal["project_curve"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`source: dict[str, Any]`（curve 引用）、`direction_ref: dict[str, Any]`、`side: Literal["positive","negative"]` |
 | `surface_trim` | `SurfaceTrimOp` | `op: Literal["surface_trim"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`tool: dict[str, Any]`（quilt 或基准面）、`keep_side: Literal["one","two"]` |
+| `surface_round` | `SurfaceRoundOp`（`src/creo_mechdog/surface_ops.py`） | `op: Literal["surface_round"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`references: list[dict]`（恰 1 组 `{"surfaces":[面,面]}`）、`radius: Positive` |
 
 - 三者都加入既有 `Operation` 联合（`schema.py:1475`）。
 - 引用校验复用 `schema.py:1580-1607` 的 `references()` 递归校验；新增 kind 只允许 `quilt_feature` / `curve` / `datum_plane` / `datum_axis_feature` / `edge`。
@@ -1073,6 +1365,7 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 | `surface_loft` | `native/surface_loft.cpp`（或并入 `native/surfaces.cpp`） | `generic_surface_loft(const J &op)` |
 | `project_curve` | `native/project_curve.cpp` | `generic_project_curve(const J &op)` |
 | `surface_trim` | `native/surface_trim.cpp` | `generic_surface_trim(const J &op)` |
+| `surface_round` | `native/surface_round.cpp` | `generic_surface_round(const J &op)` |
 
 - 三者都在 `native/generic.cpp:2907` `execute_operation_body()` 的分发表里挂载（`else if (kind == "surface_loft")` 等），**只加分支，不改既有分支**。
 - 共享测量 helper 全部来自 `native/surface_measure.h`（§4.7）。

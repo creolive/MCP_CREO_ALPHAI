@@ -676,6 +676,7 @@ def annotate_native_result(
     annotate_offset_distance_status(result)
     annotate_kept_side_basis(result)
     annotate_surface_group(result)
+    annotate_surface_curvature(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
     if inputs is not None:
@@ -1396,12 +1397,142 @@ def annotate_surface_group(result: dict[str, Any]) -> dict[str, Any]:
                 group = normalize_surface_group(operation.get("group"))
                 if group is not None:
                     operation["group"] = group
-        elif operation.get("op") == "surface_loft":
+        elif operation.get("op") in ("surface_loft", "surface_boundary_fill"):
             block = operation.get("surface_group")
             if isinstance(block, dict) and "group" in block:
                 group = normalize_surface_group(block.get("group"))
                 if group is not None:
                     block["group"] = group
+    return result
+
+
+CURVATURE_VALUE_KEYS = (
+    "max_abs_curvature_per_mm",
+    "min_curvature_radius_mm",
+    "max_curvature_per_mm",
+    "min_curvature_per_mm",
+    "max_radius_mm",
+    "min_radius_mm",
+)
+
+
+def _status_is_available(status: Any) -> bool:
+    return isinstance(status, dict) and status.get("available") is True
+
+
+def _null_curvature_values(record: dict[str, Any]) -> dict[str, Any]:
+    for key in CURVATURE_VALUE_KEYS:
+        if key in record:
+            record[key] = None
+    return record
+
+
+def normalize_surface_curvature_face(face: Any) -> Any:
+    """Enforce §4.4.1 on one member face block; unknown keys pass through."""
+    if not isinstance(face, dict):
+        return face
+    cleaned = dict(face)
+    for key, status_key in (
+        ("max_abs_curvature_per_mm", "max_abs_curvature_status"),
+        ("min_curvature_radius_mm", "min_curvature_radius_status"),
+    ):
+        if key not in cleaned:
+            continue
+        available = _status_is_available(cleaned.get(status_key))
+        value = cleaned.get(key)
+        cleaned[key] = (
+            value
+            if available and isinstance(value, (int, float)) and not isinstance(value, bool)
+            else None
+        )
+    points = cleaned.get("points")
+    if isinstance(points, list):
+        projected = []
+        for point in points:
+            if not isinstance(point, dict):
+                projected.append(point)
+                continue
+            point_cleaned = dict(point)
+            if not _status_is_available(point_cleaned.get("status")):
+                _null_curvature_values(point_cleaned)
+            projected.append(point_cleaned)
+        cleaned["points"] = projected
+    return cleaned
+
+
+def normalize_surface_curvature(receipt: Any) -> dict[str, Any] | None:
+    """Normalize the native curvature/G1 receipt; no value is recomputed."""
+    if not isinstance(receipt, dict):
+        return None
+    cleaned = dict(receipt)
+    faces = cleaned.get("faces")
+    if isinstance(faces, list):
+        cleaned["faces"] = [normalize_surface_curvature_face(face) for face in faces]
+    summary = cleaned.get("summary")
+    if isinstance(summary, dict):
+        summary = dict(summary)
+        summary["max_abs_curvature_per_mm"] = (
+            summary.get("max_abs_curvature_per_mm")
+            if _status_is_available(summary.get("max_abs_curvature_status"))
+            and isinstance(summary.get("max_abs_curvature_per_mm"), (int, float))
+            and not isinstance(summary.get("max_abs_curvature_per_mm"), bool)
+            else None
+        )
+        summary["min_curvature_radius_mm"] = (
+            summary.get("min_curvature_radius_mm")
+            if _status_is_available(summary.get("min_curvature_radius_status"))
+            and isinstance(summary.get("min_curvature_radius_mm"), (int, float))
+            and not isinstance(summary.get("min_curvature_radius_mm"), bool)
+            else None
+        )
+        cleaned["summary"] = summary
+    angle = cleaned.get("g1_max_angle_deg")
+    threshold = cleaned.get("g1_threshold_deg")
+    if not _status_is_available(cleaned.get("g1_status")):
+        cleaned["g1_max_angle_deg"] = None
+        cleaned["within_g1"] = None
+    else:
+        cleaned["g1_max_angle_deg"] = (
+            angle if isinstance(angle, (int, float)) and not isinstance(angle, bool) else None
+        )
+        # The threshold only labels the measured angle; the angle itself is
+        # never replaced by the marker.
+        if (
+            cleaned["g1_max_angle_deg"] is not None
+            and isinstance(threshold, (int, float))
+            and not isinstance(threshold, bool)
+        ):
+            cleaned["within_g1"] = cleaned["g1_max_angle_deg"] <= threshold
+        else:
+            cleaned["within_g1"] = None
+    points = cleaned.get("g1_points")
+    if isinstance(points, list):
+        projected = []
+        for point in points:
+            if not isinstance(point, dict):
+                projected.append(point)
+                continue
+            point_cleaned = dict(point)
+            angle = point_cleaned.get("angle_deg")
+            point_cleaned["angle_deg"] = (
+                angle if isinstance(angle, (int, float)) and not isinstance(angle, bool) else None
+            )
+            projected.append(point_cleaned)
+        cleaned["g1_points"] = projected
+    return cleaned
+
+
+def annotate_surface_curvature(result: dict[str, Any]) -> dict[str, Any]:
+    """Project the curvature/G1 receipt before it is persisted."""
+    operations = result.get("operations")
+    if not isinstance(operations, list):
+        return result
+    for operation in operations:
+        if isinstance(operation, dict) and operation.get("op") == "surface_curvature":
+            cleaned = normalize_surface_curvature(operation)
+            if cleaned is not None:
+                operation.clear()
+                operation.update(cleaned)
     return result
 
 

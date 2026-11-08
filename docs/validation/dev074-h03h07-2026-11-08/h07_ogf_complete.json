@@ -1,0 +1,303 @@
+{
+  "case": "h07",
+  "checks": [],
+  "abort": null,
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available",
+    "release_numeric": null
+  },
+  "tool_count": 106,
+  "transforms_published": true,
+  "source_build": {
+    "job_id": "c2a3cc4fef9a4876a6e83b711e581df5",
+    "status": "succeeded",
+    "model_id": "5ab17ed89b72468f95a6b95ef613919b",
+    "revision": 1,
+    "message": "General feature plan completed"
+  },
+  "source_quilts": [
+    {
+      "area_mm2": 800.0,
+      "area_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "bbox_mm": [
+        [
+          0.0,
+          -5.167901434976496e-51,
+          0.0
+        ],
+        [
+          40.0,
+          -2.3283132112603027e-61,
+          20.0
+        ]
+      ],
+      "bbox_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "closed": false,
+      "closed_status": {
+        "available": false,
+        "query_code": -18,
+        "reason": "quilt_is_open",
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "face_count": 1,
+      "feature_ids": [
+        54
+      ],
+      "quilt_id": 61,
+      "surface_ids": [
+        55
+      ],
+      "surfaces_visit_code": 0
+    }
+  ],
+  "source_area_mm2": 800.0,
+  "variants": {
+    "V1_ogf_surface_set": {
+      "job_id": "3965680dd3944974af259bd4a9af7c09",
+      "status": "failed",
+      "model_id": "5ab17ed89b72468f95a6b95ef613919b",
+      "revision": null,
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_feature_tree",
+      "operations": [
+        {
+          "op": "feature_tree",
+          "index": 0,
+          "label": "v1_ogf_surface_set",
+          "succeeded": false,
+          "execution_status": "failed",
+          "effect_status": "rolled_back"
+        }
+      ],
+      "saved_verified": false,
+      "quilts": [
+        {
+          "area_mm2": 800.0,
+          "area_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "bbox_mm": [
+            [
+              0.0,
+              -5.167901434976496e-51,
+              0.0
+            ],
+            [
+              40.0,
+              -2.3283132112603027e-61,
+              20.0
+            ]
+          ],
+          "bbox_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "closed": false,
+          "closed_status": {
+            "available": false,
+            "query_code": -18,
+            "reason": "quilt_is_open",
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "face_count": 1,
+          "feature_ids": [
+            54
+          ],
+          "quilt_id": 61,
+          "surface_ids": [
+            55
+          ],
+          "surfaces_visit_code": 0
+        }
+      ],
+      "new_features": [],
+      "quilt_count": 1
+    },
+    "V2_ogf_quilt_ref": {
+      "job_id": "c2c2de6b44804be4b11efa7926a6c30e",
+      "status": "failed",
+      "model_id": "5ab17ed89b72468f95a6b95ef613919b",
+      "revision": null,
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_feature_tree",
+      "operations": [
+        {
+          "op": "feature_tree",
+          "index": 0,
+          "label": "v2_ogf_quilt_ref",
+          "succeeded": false,
+          "execution_status": "failed",
+          "effect_status": "rolled_back"
+        }
+      ],
+      "saved_verified": false,
+      "quilts": [
+        {
+          "area_mm2": 800.0,
+          "area_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "bbox_mm": [
+            [
+              0.0,
+              -5.167901434976496e-51,
+              0.0
+            ],
+            [
+              40.0,
+              -2.3283132112603027e-61,
+              20.0
+            ]
+          ],
+          "bbox_status": {
+            "available": true,
+            "query_code": 0,
+            "reason": null,
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "closed": false,
+          "closed_status": {
+            "available": false,
+            "query_code": -18,
+            "reason": "quilt_is_open",
+            "scale_to_mm_known": true,
+            "unit_name": "mm"
+          },
+          "face_count": 1,
+          "feature_ids": [
+            54
+          ],
+          "quilt_id": 61,
+          "surface_ids": [
+            55
+          ],
+          "surfaces_visit_code": 0
+        }
+      ],
+      "new_features": [],
+      "quilt_count": 1
+    }
+  },
+  "final_snapshot": {
+    "model_id": "5ab17ed89b72468f95a6b95ef613919b",
+    "model_name": "ai_part_5ab17ed89b72",
+    "model_type": "part",
+    "status": "ready",
+    "revision": 1,
+    "created_at": "2026-11-08T03:17:46.433513+00:00",
+    "updated_at": "2026-11-08T03:17:56.854919+00:00",
+    "pending_job": null,
+    "part_sha256": "7bc6ab5a416460f22b6713e302060738d451d0b4aad169cc4616468bc16acc7c",
+    "last_job": "c2c2de6b44804be4b11efa7926a6c30e",
+    "part_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\models\\5ab17ed89b72468f95a6b95ef613919b\\output\\ai_part_5ab17ed89b72.prt.2",
+    "inspection": {
+      "healthy": true,
+      "has_solid": false,
+      "units": "mm",
+      "units_query_code": 0,
+      "length_unit": {
+        "name": "mm",
+        "query_code": 0,
+        "scale_query_codes": {
+          "conversion": 0,
+          "mm_unit": 0,
+          "unit": 0
+        },
+        "scale_to_mm": 1.0,
+        "scale_to_mm_known": true
+      },
+      "center_of_gravity": null,
+      "model_type": "part",
+      "volume_mm3": null,
+      "volume_query_code": null,
+      "inspection_source": "saved_reloaded",
+      "inspection_available": true,
+      "counts": {
+        "features": 10,
+        "surfaces": 0,
+        "edges": 0,
+        "quilts": 1,
+        "bodies": 1,
+        "components": null
+      },
+      "body_counts": {
+        "objects": 1,
+        "records": 1,
+        "active": 0,
+        "with_material": 0,
+        "without_material": 1,
+        "counts_meaning": {
+          "bodies": "body_objects",
+          "with_material": "active_bodies_with_surfaces"
+        }
+      }
+    },
+    "snapshot": {
+      "source": "saved_verified",
+      "revision": 1,
+      "at": "2026-11-08T03:17:56.854919+00:00",
+      "live_state_verified": false,
+      "mutation_pending": false
+    },
+    "detail_available": true,
+    "adopted": false,
+    "source_kind": "created",
+    "feature_state": {
+      "tombstone_count": 0,
+      "suppressed_count": 0,
+      "tombstones": {},
+      "suppressed": {},
+      "entries_truncated": false
+    },
+    "detail": "compact",
+    "sections_available": [
+      "features",
+      "dimensions",
+      "surfaces",
+      "edges",
+      "quilts",
+      "bodies",
+      "datum_planes",
+      "datum_axes",
+      "parameters",
+      "aliases",
+      "components",
+      "feature_geometry",
+      "sketch_dimensions",
+      "sheets",
+      "views",
+      "notes",
+      "tables",
+      "models",
+      "shown_dimensions",
+      "metadata"
+    ],
+    "complete": true
+  }
+}

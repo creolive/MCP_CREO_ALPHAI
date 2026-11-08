@@ -197,6 +197,26 @@ static ProError quilt_membership_cb(ProFeature *f, ProError status, ProAppData d
     return PRO_TK_NO_ERROR;
 }
 
+// The owning quilt of a feature that owns surfaces but no quilt geomitem (the
+// surface merge shape). Returns PRO_TK_E_NOT_FOUND when no owned surface is
+// part of a quilt, so callers can report "no result quilt" instead of a code.
+static ProError feature_member_surface_quilt(ProSolid solid, const J &surface_ids, int &quilt_id) {
+    for (auto item : surface_ids) {
+        ProSurface surface = nullptr;
+        if (ProSurfaceInit((ProMdl)solid, item["id"].get<int>(), &surface))
+            continue;
+        ProQuilt quilt = nullptr;
+        if (ProSurfaceQuiltGet(solid, surface, &quilt))
+            continue;
+        int id = -1;
+        if (ProQuiltIdGet(quilt, &id))
+            continue;
+        quilt_id = id;
+        return PRO_TK_NO_ERROR;
+    }
+    return PRO_TK_E_NOT_FOUND;
+}
+
 // Every quilt in the part, with real membership, face and measurement data.
 // Assemblies never call this; the inspection result carries null there.
 static J collect_model_quilts(ProSolid solid, const InspectionLengthUnits &units,

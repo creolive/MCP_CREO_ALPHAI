@@ -1,0 +1,203 @@
+{
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available"
+  },
+  "adjacent": {
+    "gap_mm": 0.0,
+    "build": {
+      "job_id": "e64e01a114d54715b8ab2f223652d3d6",
+      "status": "succeeded",
+      "model_id": "2b913e09d2184891b3bb397137d86796",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    "quilts_before": [
+      {
+        "quilt_id": 82,
+        "area_mm2": 400.0
+      },
+      {
+        "quilt_id": 127,
+        "area_mm2": 400.0
+      }
+    ],
+    "merge": {
+      "job_id": "823f79cc2100458ca511261f396017e6",
+      "status": "succeeded",
+      "revision": 2,
+      "message": "General feature plan completed"
+    },
+    "quilts_after_merge": [
+      {
+        "quilt_id": 82,
+        "area_mm2": 800.0,
+        "closed": false
+      },
+      {
+        "quilt_id": 127,
+        "area_mm2": null,
+        "closed": true
+      }
+    ],
+    "thicken": {
+      "job_id": "1449c18b68ef46199bdf24bd165a92ef",
+      "status": "succeeded",
+      "revision": 3,
+      "message": "General feature plan completed"
+    },
+    "bodies": [
+      {
+        "id": -5778,
+        "surface_count": 6,
+        "bbox": [
+          [
+            -1.4022910344649615e-48,
+            -1.4061743352768018e-80,
+            -1.0
+          ],
+          [
+            40.0,
+            20.0,
+            1.0
+          ]
+        ]
+      }
+    ]
+  },
+  "disjoint": {
+    "gap_mm": 2.0,
+    "build": {
+      "job_id": "67c91097ba7441d195e451e435194ca5",
+      "status": "succeeded",
+      "model_id": "6eb62fba8c854f1081ddf816bd6f2f53",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    "quilts_before": [
+      {
+        "quilt_id": 82,
+        "area_mm2": 400.0
+      },
+      {
+        "quilt_id": 127,
+        "area_mm2": 400.0
+      }
+    ],
+    "merge": {
+      "job_id": "2798b00c9aea4b7d9dba4a0bf4be1e0b",
+      "status": "failed",
+      "revision": null,
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_quilt_merge"
+    },
+    "quilts_after_merge": [
+      {
+        "quilt_id": 82,
+        "area_mm2": 400.0,
+        "closed": false
+      },
+      {
+        "quilt_id": 127,
+        "area_mm2": 400.0,
+        "closed": false
+      }
+    ],
+    "snapshot_after_failure": {
+      "model_id": "6eb62fba8c854f1081ddf816bd6f2f53",
+      "model_name": "ai_part_6eb62fba8c85",
+      "model_type": "part",
+      "status": "ready",
+      "revision": 1,
+      "created_at": "2026-11-08T03:27:31.404803+00:00",
+      "updated_at": "2026-11-08T03:27:41.384719+00:00",
+      "pending_job": null,
+      "part_sha256": "8317fdb74749e3a72a19d22ef4253673e953fb60cfe6266121f426366c7a41dc",
+      "last_job": "2798b00c9aea4b7d9dba4a0bf4be1e0b",
+      "part_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\models\\6eb62fba8c854f1081ddf816bd6f2f53\\output\\ai_part_6eb62fba8c85.prt.2",
+      "inspection": {
+        "healthy": true,
+        "has_solid": false,
+        "units": "mm",
+        "units_query_code": 0,
+        "length_unit": {
+          "name": "mm",
+          "query_code": 0,
+          "scale_query_codes": {
+            "conversion": 0,
+            "mm_unit": 0,
+            "unit": 0
+          },
+          "scale_to_mm": 1.0,
+          "scale_to_mm_known": true
+        },
+        "center_of_gravity": null,
+        "model_type": "part",
+        "volume_mm3": null,
+        "volume_query_code": null,
+        "inspection_source": "saved_reloaded",
+        "inspection_available": true,
+        "counts": {
+          "features": 12,
+          "surfaces": 0,
+          "edges": 0,
+          "quilts": 2,
+          "bodies": 1,
+          "components": null
+        },
+        "body_counts": {
+          "objects": 1,
+          "records": 1,
+          "active": 0,
+          "with_material": 0,
+          "without_material": 1,
+          "counts_meaning": {
+            "bodies": "body_objects",
+            "with_material": "active_bodies_with_surfaces"
+          }
+        }
+      },
+      "snapshot": {
+        "source": "saved_verified",
+        "revision": 1,
+        "at": "2026-11-08T03:27:41.384719+00:00",
+        "live_state_verified": false,
+        "mutation_pending": false
+      },
+      "detail_available": true,
+      "adopted": false,
+      "source_kind": "created",
+      "feature_state": {
+        "tombstone_count": 0,
+        "suppressed_count": 0,
+        "tombstones": {},
+        "suppressed": {},
+        "entries_truncated": false
+      },
+      "detail": "compact",
+      "sections_available": [
+        "features",
+        "dimensions",
+        "surfaces",
+        "edges",
+        "quilts",
+        "bodies",
+        "datum_planes",
+        "datum_axes",
+        "parameters",
+        "aliases",
+        "components",
+        "feature_geometry",
+        "sketch_dimensions",
+        "sheets",
+        "views",
+        "notes",
+        "tables",
+        "models",
+        "shown_dimensions",
+        "metadata"
+      ],
+      "complete": true
+    }
+  }
+}

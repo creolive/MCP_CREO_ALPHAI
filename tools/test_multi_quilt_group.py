@@ -19,12 +19,11 @@ What the live case measures:
    volume taken from the receipt and the wall thickness read back from the
    active body's bounding box;
 3. the multi-quilt solidify/thicken entries: schema-level refusal of a
-   reference list, the ``quilt_merge`` gate, and the native refusal of an open
-   single quilt;
+   reference list and the native refusal of an open single quilt;
 4. save/reload identity plus one further ``thicken`` on the same model.
 
-The merge operator stays gated: this driver never claims a single closed quilt
-or a watertight bottle bottom.
+``quilt_merge`` is published (2026-11-08) for two touching quilts; this driver
+still never claims a single closed quilt or a watertight bottle bottom.
 
 Usage (PowerShell, repo root):
   .venv\\Scripts\\python.exe tools\\test_multi_quilt_group.py
@@ -176,8 +175,8 @@ def case_offline() -> dict:
             check(f"group_measure_refuses_{name}", name == "duplicate")
 
     check("group_measure_registered", "surface_group_measure" in REGISTERED_OPERATIONS)
-    check("quilt_merge_gated", "quilt_merge" in UNAVAILABLE_OPERATIONS)
-    refused = False
+    check("quilt_merge_published", "quilt_merge" not in UNAVAILABLE_OPERATIONS)
+    admitted = True
     try:
         require_available(
             [
@@ -189,9 +188,9 @@ def case_offline() -> dict:
                 }
             ]
         )
-    except ValueError as error:
-        refused = "no native job was queued" in str(error)
-    check("merge_gate_refuses_before_job", refused)
+    except ValueError:
+        admitted = False
+    check("merge_admitted_before_job", admitted)
     check("surface_loft_published", "surface_loft" not in UNAVAILABLE_OPERATIONS)
     check("thicken_registered", "thicken" in REGISTERED_OPERATIONS)
 
@@ -416,7 +415,7 @@ async def case_live() -> dict:
         for operation in ("surface_loft", "surface_trim", "thicken", "solidify"):
             check(f"{operation}_published", operation in published)
         check("surface_group_measure_published", "surface_group_measure" in published)
-        check("quilt_merge_gated", "quilt_merge" not in published)
+        check("quilt_merge_published", "quilt_merge" in published)
 
         # --- Model A: build the three-quilt group -------------------------
         build = await submit(client, group_plan(), jobs)
@@ -509,12 +508,6 @@ async def case_live() -> dict:
                 "reference": references,
                 "thickness": THIN_MM,
                 "side": "symmetric",
-            },
-            "quilt_merge": {
-                "op": "quilt_merge",
-                "label": "group_merge",
-                "target": references[0],
-                "tool": references[1],
             },
         }.items():
             payload, is_error, text = await call_tool(
