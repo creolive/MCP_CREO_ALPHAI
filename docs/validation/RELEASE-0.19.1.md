@@ -36,10 +36,10 @@
 
 | 附件 | 字节 | SHA256 |
 | --- | ---: | --- |
-| `MCP_CREO_MechDog-0.19.1-source.zip` | 待打包 | 待打包 |
-| `MCP_CREO_MechDog-0.19.1-source.zip.sha256` | 待打包 | 待打包 |
-| `MCP_CREO_MechDog-0.19.1-seed-library.zip` | 待打包 | 待打包 |
-| `MCP_CREO_MechDog-0.19.1-seed-library.zip.sha256` | 待打包 | 待打包 |
+| `MCP_CREO_MechDog-0.19.1-source.zip` | 9 160 836 | `eb1644599cff11fb53450c3f02ee5625a71d9b194a6a6170bd515d55cb5b71ef` |
+| `MCP_CREO_MechDog-0.19.1-source.zip.sha256` | 101 | `e6b776917e8492b044659b8c97fbebaa9a4a94c3548376a4e148fc1ba1ca3442` |
+| `MCP_CREO_MechDog-0.19.1-seed-library.zip` | 493 442 | `a7d864271b2e188e1f2a51eeea2046d15cf8615b10fde9b87beb466e8350657f` |
+| `MCP_CREO_MechDog-0.19.1-seed-library.zip.sha256` | 107 | `16206fd52e2aa91f755bfc321beb02fa2403fd8049132d26d34f333befb161e2` |
 
 ## 6. 未测范围
 
@@ -50,12 +50,15 @@
 
 ## 10. 合入 main 的提交、版本标签及指向
 
-待发布后回填：合入提交 `____`；标签 `v0.19.1` 指向 `____`；Release 链接 `____`。
+- 合入提交：`9dcf5ee`（`main` 直接包含 DEV-077: deliver 0.19.1 feedback fixes；其父 `006e357` 已包含 v0.19.0 的 `86020e7`）。
+- 版本标签：附注标签 `v0.19.1`（标签对象 `e34075d3a7ec453bec29807329b6c4686bc54c1f`）→ 提交 `9dcf5ee`。
+- 发布链接：<https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.1>。
 
 ## 11. GitHub Release 链接与发布状态
 
-待发布后回填（草稿/已发布、Pre-release 标记）。
+- Release id `438114011`，非草稿、非 Pre-release；`created_at=2026-11-08T08:07:26Z`，`published_at=2026-11-08T08:07:49Z`，`target_commitish=main`。
 
 ## 12. 远端附件与 SHA256 核对结果
 
-待发布后执行 `python tools/check_release_assets.py --tag v0.19.1` 并回填：四个附件齐全、两个 sidecar 与对应 ZIP 摘要一致、Release body 含第 5 节 SHA256。
+- `python tools/check_release_assets.py --tag v0.19.1 --version 0.19.1` → exit 0：「v0.19.1: four assets downloaded and verified; both sidecars match」。
+- 四附件名、字节数和 API digest / 本地重算 / sidecar 一致；明细见第 5 节与统一 POSTCHECK 的 v0.19.1 段。核对时间 `2026-11-08T08:08:02Z` / `2026-11-08 16:08:02 +08:00`。未移动标签或覆盖附件。

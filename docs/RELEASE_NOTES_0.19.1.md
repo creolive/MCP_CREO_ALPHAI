@@ -41,4 +41,13 @@
 
 ## 附件
 
-发布时生成并上传四个附件（两个 ZIP 与两个 `.zip.sha256`）；文件名、字节数和 SHA256 在发布记录与统一 POSTCHECK 中逐项回填。
+发布时生成并上传以下四个附件（两个 ZIP 与两个 `.zip.sha256`）：
+
+| 附件 | 字节 | SHA256 |
+| --- | ---: | --- |
+| `MCP_CREO_MechDog-0.19.1-source.zip` | 9 160 836 | `eb1644599cff11fb53450c3f02ee5625a71d9b194a6a6170bd515d55cb5b71ef` |
+| `MCP_CREO_MechDog-0.19.1-source.zip.sha256` | 101 | `e6b776917e8492b044659b8c97fbebaa9a4a94c3548376a4e148fc1ba1ca3442` |
+| `MCP_CREO_MechDog-0.19.1-seed-library.zip` | 493 442 | `a7d864271b2e188e1f2a51eeea2046d15cf8615b10fde9b87beb466e8350657f` |
+| `MCP_CREO_MechDog-0.19.1-seed-library.zip.sha256` | 107 | `16206fd52e2aa91f755bfc321beb02fa2403fd8049132d26d34f333befb161e2` |
+
+源码包内含本说明与发布记录，归档生成时无法写入自身 ZIP 的摘要，包内副本保留回填前占位；工作树、Release body 与本表以上述最终值为准。

@@ -20,11 +20,11 @@
 | R03（原 G06） | `session_health` 的 identity stale 与新鲜 connected 证据冲突 | `session_health.py` 仍 `unknown/session_identity_stale` | 先定安全策略（是否允许连接证据优先或 stale 降 warning），不得擅清 unknown 保护；三类样本状态与 caveats 需一致 |
 | R04（原 G07/G09 收敛） | 曲面剩余：`INTERSECT`、三片以上单次 `quilt_merge`、被消耗工具 quilt 的内核残留、`PRO_ROUND_REF_EDGE` quilt 边 id、变半径/full/过渡、圆角后 thicken/solidify、真实凹谷瓣底、非 mm 单位、Creo 9/10 复验、格栅 cut 与 BUG-046 矛盾定因 | 0.19.0 只验了两片 JOIN（目标 quilt 原地增长）、恒定半径圆角、数值曲率与 Creo 12.4 整链；RELEASE_NOTES_0.19.0.md 第 36—42 节已逐条声明未测 | 按 release 分别补实机证据；门禁文案与 capabilities 契约同步；不把 Creo 12.4 结论外推到 9/10。判据：两片以外合并语义可复现且无静默 no-op、圆角后实体化可保存重载、45/72° 等几何按任务书逐项吻合 |
 | R05 | 已判定不可用（**结论项，不再开工**） | 钣金成形类、独立 `quilt_offset`、任意非平面闭合边界 `surface_fill` 在 Creo 12.4 有实机反证，0.19.0 保持门禁 | 仅维护错误文案/门禁与证据链接；换 release/SDK 或出现新原生证据时才重开工作卡，禁止把不可用结论写成能力 |
-| R06（原 G11 + 0.19.0 未测） | 实机与黑盒：Creo 9/10、WorkBuddy 公开 MCP、源码包解压全量单测、本分支新增改动的实机复验 | 0.19.0 只在 Creo 12.4 实机；本分支的 DEV-077 三项修复、另一 AI 的 H13 worker 条件可用性与 overlap 采样预算回执都只有离线单测；合并后 C++ 同时含双方改动，**本轮未重新编译** | 先按 BUG-001 恢复记录确认会话可操作并获授权；`bridge.py build` 重编译并重启 `MCP_CREO_MechDog_dev`；黑盒只用公开 MCP；补源码包解压后全量单测；记录版本、job/model/revision、原始回执、保存重载与回滚。不得把编译/单测当实机通过 |
-| R07（原 G12 升级） | 0.19.0 发布后核对与台账回填 | 本地已发布 tag `86020e7`，版本说明列出四附件 SHA256；但 `RELEASE-0.19.0.md` 第 10—12 节仍是「待主代理回填」占位，统一 POSTCHECK 无 v0.19.0 段，未见 `check_release_assets.py --tag v0.19.0` 的当轮结果 | 联网按精确 tag 运行核对，记录查询时间（UTC 与 +08:00）、tag 提交、Release 状态/body、四附件名/大小/API digest、下载后本地 SHA256 与两个 sidecar 比对；结果写 POSTCHECK 新段，占位用新记录/勘误收口而不回写历史原件；v0.18.2/0.18.3/0.18.4 也仍待精确 tag 重下重算 |
-| R08（原 G13 + 新） | 本分支交付与登记 | 已合并 0.19.0，但仍未合 main、未提交工作树改动、未发布；`version.py` 现为**已发布**的 0.19.0；另一 AI 的 H13/overlap 改动没有独立工作卡 ID 和实机证据 | 若将来合 main，必须选未发布新版本、同步版本入口/逐 ID 表/种子记录，生成两 ZIP + 两 sidecar 并逐个上传，发布后跑 `--tag` 核对回填 POSTCHECK；先决定 H13/overlap 是否登记固定 ID 与验收卡。不得复用 0.19.0 版本或覆盖已发布 tag/附件 |
+| R06（原 G11 + 0.19.0 未测） | 实机与黑盒：Creo 9/10、WorkBuddy 公开 MCP、源码包解压全量单测、本分支新增改动的实机复验 | 0.19.1 已在 Creo 12.4 重编译并完成 H13 身份、H15 四态组、H16 连续 trim 实机；DEV-077 的质量属性诊断/stall 回退仍只有离线单测；Creo 9/10 与 WorkBuddy 未执行 | 补 Creo 9/10 与 WorkBuddy 公开 MCP；补源码包解压后全量单测；对 DEV-077 两项离线修复做适用实机复验。不得把编译/单测当实机通过 |
+| R07（原 G12 升级） | 0.19.0 发布后核对与台账回填 | **v0.19.0 / v0.19.1 / v0.18.2 / v0.18.3 / v0.18.4 已联网 `--tag` 重下重算并写入统一 POSTCHECK**；v0.19.0 的 10—12 节占位由勘误收口；v0.19.1 的 10—12 节已回填 | 仅剩 Release body 逐字比对与历史原件不回写；新版本继续按同法执行 |
+| R08（原 G13 + 新） | 本分支交付与登记 | **已合入 main 并发布 v0.19.1**（提交 `9dcf5ee`、标签 `v0.19.1`、四附件与两个 sidecar 已核对）；H13/H15/H16 登记在 DEV-076，R01/R02 部分登记在 DEV-077，未新增 ID | 后续新改动必须选未发布新版本；R01/R02 剩余、R03/R04/R06 见本表 |
 
-合并后离线验证已通过：3065 项单测 OK、Ruff 通过、`git diff --check` 通过、台账计数门禁 168 一致；这些只证明源码层面兼容，不替代 R06 的实机与黑盒。
+0.19.1 发布前离线验证：全量 3071 项单测 OK、Ruff/`dev_check --skip-unit` 通过、`git diff --check` 通过、台账计数门禁 168 一致；Creo 12.4 实机完成 H13 身份、H15 四态组与 H16 连续 trim。源码包解压后全量单测与 Creo 9/10/WorkBuddy 仍属 R06。
 
 ## 历史清单 G01—G13（0.19.0 合并前的基线，状态见上方 R01—R08）
 

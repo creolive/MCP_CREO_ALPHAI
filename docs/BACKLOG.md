@@ -6,6 +6,8 @@
 
 2026-11-08：[DEV-077](work-items/DEV-077.md)对比下载目录0.18.2的四份反馈，归档原件、回填RELEASING逐ID表与POSTCHECK v0.18.2四附件数据、补台账计数门禁及两项离线诊断修复；新增本卡后当前表行为168。未完成项见[接手清单](development/DEV-077-HANDOFF.md)。同样未合main或发布。
 
+2026-11-08：DEV-076/DEV-077 的 0.19.1 子项已合入 main 并发布 [v0.19.1](validation/RELEASE-0.19.1.md)：worker 构建身份/`surface_loft` 动态准入、overlap 预算/覆盖诊断、trim 结果句柄与连续 trim、`rotation_tolerance`、`get_job` 300 s、`known_limitations`/`plan_examples`；公开工具仍 107。R01—R08 剩余项与未测范围见[DEV-077-HANDOFF](development/DEV-077-HANDOFF.md)。
+
 建立：2026-10-13；最近复核：2026-11-08（[DEV-074](work-items/DEV-074.md) 0.19.0 发布准备；本分支叠加 DEV-076/DEV-077）。本文件是唯一当前台账，按“开发入口 → 本表 ID → 工作卡当前摘要 → 相关源码”读取，历史证据按需打开。当前源码版本以 [version.py](../version.py) 为准；逐版交付记录见 [版本说明目录](../README.md) 与 `docs/validation/RELEASE-*.md`，不在本表重复回填。
 
 DEV-073 以 `1cf9d3f` 为基点整理台账，随后并入 0.18.0 发布提交（[RELEASE-0.18.0](validation/RELEASE-0.18.0.md)）。0.18.0 已发布的结论以该发布记录与远端 Release 核对为准。DEV-074 的 0.18.3 子项交付以 [0.18.3 发布记录](validation/RELEASE-0.18.3.md)为准，0.18.4 子项以 [0.18.4 发布记录](validation/RELEASE-0.18.4.md)为准，0.19.0 子项以 [0.19.0 发布记录](validation/RELEASE-0.19.0.md)为准；两版发布状态来源和空白字段勘误以[统一POSTCHECK](development/RELEASE-POSTCHECK-2026-11-07.md)及其所链新勘误为准。
