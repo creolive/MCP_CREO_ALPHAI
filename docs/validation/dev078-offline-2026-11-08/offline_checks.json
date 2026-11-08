@@ -1,0 +1,122 @@
+{
+  "work_item": "DEV-078",
+  "date": "2026-11-08",
+  "scope": "offline_only",
+  "environment": {
+    "os": "Windows x64",
+    "python": "3.12.14",
+    "toolkit_sdk": "Creo 12.4.0.0",
+    "creo_runtime": "not_queried"
+  },
+  "commands": {
+    "generate_constants": {
+      "command": ".venv/Scripts/python.exe tools/generate_constants.py",
+      "exit_code": 0,
+      "constant_count": 6563
+    },
+    "native_build": {
+      "command": ".venv/Scripts/python.exe bridge.py build",
+      "exit_code": 0,
+      "warnings": "Existing C4819 source-code-page warnings remain; no native runtime was exercised."
+    },
+    "development_check": {
+      "command": ".venv/Scripts/python.exe tools/dev_check.py --work-item DEV-078",
+      "exit_code": 0,
+      "report": {
+        "work_item": "DEV-078",
+        "version": "0.19.0",
+        "timestamp_utc": "2026-11-08T08:15:11.441669+00:00",
+        "environment": {
+          "os": "Windows",
+          "python": "3.12.14"
+        },
+        "source": {
+          "commit": "86020e71397137600f748b3433de2f9a75383b22",
+          "dirty": true,
+          "git_status": "available",
+          "checked_source_sha256": "b3b5adc6f717603c8d2baab3695616aca487a63d1b314c77cf7dedf6cc6f1076"
+        },
+        "native_validation": "not_run",
+        "unit_tests": "passed",
+        "unit_test_timeout_seconds": 900,
+        "success": true,
+        "style_summary": {
+          "lint_findings": 24,
+          "unformatted_files": 12,
+          "cpp_files_checked": 54,
+          "python_files_checked": 427
+        },
+        "tools": {
+          "ruff": "0.17.0",
+          "clang-format": "23.1.3"
+        },
+        "configuration": {
+          "pyproject.toml": "15dec4018951449070a4e5ceb5db782aaa3e0fb8c583c816f1edcf10745bfa2b",
+          ".clang-format": "b084ba4a767e8fede2f3d47e7dfb3ae120528cb76fceb113ce27e3dd7e0a77a0",
+          "requirements-dev.txt": "f325c41a3f7288bd4dfb08310276c9790b1ca5fcafc9bd68704559b64ec5decc"
+        }
+      }
+    },
+    "unit_tests": {
+      "version": "0.19.0",
+      "timestamp": 1794126098.3038583,
+      "tests_run": 3031,
+      "success": true,
+      "failures": 0,
+      "errors": 0
+    },
+    "runner_summary": "Ran 3031 tests in 380.848s\n\nOK"
+  },
+  "source": {
+    "base_commit": "86020e71397137600f748b3433de2f9a75383b22",
+    "dirty": true,
+    "fingerprint_algorithm": "sha256-normalized-lf",
+    "changed_source_fingerprints": {
+      "native/advanced.cpp": "b146f469cd7f30572ab599320f59d65c814a629534254aba5eefc918eb909f97",
+      "native/generic.cpp": "f3e40315e7ba3399d75b3406db4385c00a77c68cd49e69d2ccabbc9af8434c48",
+      "native/surface_boundary_fill.cpp": "b3b7d7ca6b8d39914099ec7656a90899b686c98eaeb72914c8162d5e9bdec836",
+      "server.py": "a8ed0a8464561ad2e8cd6c18fb8fbca3d8774ebd3faee36bc6cd3db792f3264e",
+      "src/creo_mechdog/capabilities.py": "a90afc0c9d1121b8571f8ecf01cca7355f86437f7d6a9955be6942e2720a4904",
+      "src/creo_mechdog/schema.py": "1e117bbe0d16d45be93597434001d3101ebffafd3322df4d83b54f15cdf70f37",
+      "src/creo_mechdog/surface_ops.py": "8f0404e88f8b6594333ed821c08fa62c3ff7b53745ba2ac22b00f771e1e2cdb8",
+      "tests/unit/test_surface_boundary_fill_contract.py": "63bb8b39ddeee8dd59a16aa77505727e59fdfd7e169ce6faf044f546a731f6aa",
+      "tools/test_flange_direction.py": "54558f65ebd5da72b55e9d7c527dd1ba89d37ecd5b96136d0c61cc5ae7b9f4be",
+      "native/flange_profile.h": "414636fd5f48fe1caab09fc4bc117f6c61e54083ea9d2f308b7bc1af4be9e4a8",
+      "native/sheetmetal_candidates.cpp": "6efccaeb88986fd51c1a7af45a2a598870908d3bbae142a28ecb7be70650505f",
+      "native/sheetmetal_target_guard.h": "72cb9b6758b1dab7655953368770bcbb95b59d067f6715e96334da69c787837d",
+      "native/surface_boundary_topology.h": "f6a80aa50de36b15c71bed00b732bd1c9db16299b265ef14db95977180fc9ea6",
+      "src/creo_mechdog/flange_profile.py": "38bbaadc0a024eb5e5912b171ef0b0469d5e2e83be24ff77f668571f060116d4",
+      "src/creo_mechdog/modeling_recipes.py": "7c2fe32883c8660c37b3044da28ef992386721cdae728e745b67db917c374c03",
+      "src/creo_mechdog/sheetmetal_candidates.py": "c8e1afc1eabe08c098fc6f6b53855aa9ea8c4f24ed404d6f4821f652be0b9b78",
+      "tests/native/test_flange_profile.cpp": "95d8a380058c6b22bd33549a162069c9867c4fc5df5e056da37f08b5ea6a6701",
+      "tests/unit/test_flange_profile.py": "f803e6da5c6a5631d8a6b52b3bfcf3cff8696ef63d452d7ada40be4b8d95f391",
+      "tests/unit/test_modeling_candidate_gates.py": "9a85b658cdac64d6e3c0509bea92bf660d2d582fd164f889a67ecfee5867021f",
+      "tests/unit/test_modeling_recipes.py": "b6972f79c3b70e1eed4532440415ba9fba0f1379a96195537742ce0b759080ea",
+      "tests/unit/test_sheetmetal_candidates.py": "4fcde9bf809925fcefe0795296511b77ee81079069ffe385467dd54a3cffffde",
+      "tools/test_modeling_alternatives.py": "887c3ef698fee3dbf067189de01ae3c85df79d055752779e988fef12a496d469"
+    },
+    "worker_sha256": "6d2324e68c84bed9fd6aa69d69f49f8439c8f027f0f8b197571033a5dda8bde5",
+    "constants_generated_from_local_sdk": true,
+    "constants_sha256": "4a09157cbc72340567cc291da0ac65aafc48d3e7184a5156261faf5b42cbc389",
+    "creo_or_toolkit_connection": "not_run"
+  },
+  "public_tools": 107,
+  "candidates_available": false,
+  "toolkit_or_creo_connection": "not_run",
+  "live_geometry": "not_run",
+  "reviews": "Task reviews and whole-branch review passed after fixes",
+  "initial_run": {
+    "tests_run": 3030,
+    "failures": 0,
+    "errors": 3,
+    "reason": "Old offline flange source probe required exact parameter name op; definition parser corrected, original direction assertions retained. Not used as final source validation."
+  },
+  "unverified": [
+    "all candidate kernel regeneration and geometry",
+    "source edit propagation, actual body gauge retention and form flatten/unflatten",
+    "save/reload and native rollback",
+    "standard Offset/PunchDie successful reference specimens and UDF files",
+    "N-sided fill and board-interior jog",
+    "Creo 9/10, non-mm runtime, WorkBuddy"
+  ]
+}

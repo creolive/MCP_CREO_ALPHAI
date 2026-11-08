@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal, Union
 from pydantic import (
     BeforeValidator,
     Field,
+    StrictBool,
     TypeAdapter,
     ValidationError,
     field_validator,
@@ -16,6 +17,7 @@ from pydantic import (
 )
 
 from creo_mechdog import schema_base as _schema_base
+from creo_mechdog.flange_profile import FlangeProfile
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
 from creo_mechdog.hole_standards import resolve_standard_hole, tip_cone_height_mm
 from creo_mechdog.profile_diagnostics import validate_solid_profile
@@ -30,6 +32,7 @@ from creo_mechdog.references import (
 from creo_mechdog.rotation_admission import ADMISSION_TOLERANCE, admission_status
 from creo_mechdog.schema_base import Label, Point2, Point3, Positive, StrictModel
 from creo_mechdog.sheetmetal import first_wall_section_problem
+from creo_mechdog.sheetmetal_candidates import SheetmetalCornerReliefOp, SheetmetalQuiltFormOp
 from creo_mechdog.surface_ops import (
     ProjectCurveOp,
     QuiltMergeOp,
@@ -1364,6 +1367,52 @@ class SheetmetalFlangeOp(StrictModel):
         }
 
 
+class SheetmetalFlangeProfileOp(StrictModel):
+    """DEV-078 gated multi-entity profile; no height/angle reinterpretation."""
+
+    op: Literal["sheetmetal_flange_profile"]
+    label: Label
+    edge: dict[str, Any]
+    profile: FlangeProfile
+    radius: Positive = 1
+    flip: StrictBool = False
+    y_factor: Annotated[float, Field(gt=0, le=1)] = 0.5
+    relief: FlangeRelief | None = None
+    miter_cuts: FlangeMiterCuts | None = None
+    end_trim_mm: Annotated[float, Field(gt=0, le=100000)] | None = None
+
+    @field_validator("edge", mode="before")
+    @classmethod
+    def current_edge(cls, value: Any) -> Any:
+        return SheetmetalFlangeOp.edge_is_a_current_reference(value)
+
+    @field_validator("radius", "y_factor", "end_trim_mm", mode="before")
+    @classmethod
+    def strict_dimensions(cls, value: Any) -> Any:
+        if value is not None and (
+            type(value) not in (int, float)
+            or not -100000 <= value <= 100000
+            or not math.isfinite(value)
+        ):
+            raise ValueError("profile flange dimensions require finite numbers, not bool or text")
+        return value
+
+    @field_validator("relief", "miter_cuts", mode="before")
+    @classmethod
+    def strict_nested_dimensions(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            for key in ("width", "depth", "offset"):
+                if key in value and (
+                    type(value[key]) not in (int, float)
+                    or not -100000 <= value[key] <= 100000
+                    or not math.isfinite(value[key])
+                ):
+                    raise ValueError(
+                        "profile flange relief/miter dimensions require finite numbers"
+                    )
+        return value
+
+
 class SheetmetalUnbendOp(StrictModel):
     op: Literal["sheetmetal_unbend", "sheetmetal_flat_pattern", "sheetmetal_bend_back"]
     label: Label
@@ -2018,6 +2067,9 @@ Operation = Annotated[
         SheetmetalPlanarWallOp,
         SheetmetalPlanarWallResizeOp,
         SheetmetalFlangeOp,
+        SheetmetalFlangeProfileOp,
+        SheetmetalCornerReliefOp,
+        SheetmetalQuiltFormOp,
         SheetmetalUnbendOp,
         AssembleOp,
         ComponentPlacementOp,

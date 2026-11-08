@@ -284,8 +284,8 @@ class ProjectCurveOp(StrictModel):
         return self
 
 
-BOUNDARY_FILL_MIN_CURVES = 3
-BOUNDARY_FILL_MAX_CURVES = 200
+BOUNDARY_FILL_MIN_CURVES = 4
+BOUNDARY_FILL_MAX_CURVES = 4
 
 
 def _boundary_fill_curve_problem(reference: Any, index: int) -> str | None:
@@ -319,29 +319,18 @@ def _boundary_fill_curve_problem(reference: Any, index: int) -> str | None:
 
 
 class SurfaceBoundaryFillOp(StrictModel):
-    """Closed non-planar boundary fill through the boundary-blend kernel route.
+    """Unavailable offline four-sided patch candidate.
 
-    DEV-074/H09: one closed boundary loop, given as an ordered list of curve
-    geometry ids. The native side writes the same ``Probbl.h`` skeleton
-    ``surface_loft`` uses, then closes the blend across its single direction
-    (``PRO_E_BBL_ADD_CLOSED``). Closure and order are geometric: the native
-    side samples each curve's endpoints and refuses a chain whose consecutive
-    curves do not meet, so this model only locks the request shape.
-
-    The route is registered but gated: the 2026-11-08 live probe created and
-    extracted this tree yet regeneration failed with feature_status=6 and no
-    quilt, so ``require_available`` refuses it before a job exists.
-
-    ``boundary`` is deliberately one flat list: a hole, a second loop or a
-    nested list has no field here and is refused before a job exists. At least
-    three curves are required because the documented closed-blend flag is only
-    workable with three or more curves; a two-curve closed loop is a
-    two-section surface and belongs to ``surface_loft``.
+    Four ordered perimeter curves form one closed loop. Opposite sides feed
+    two Boundary Blend directions, each with ADD_CLOSED=false. The closed
+    flag describes the perimeter, never cyclic blending of sections. Native
+    endpoint checks enforce closure and compatible parameter direction.
+    Arbitrary N-sided patches, holes and G1 constraints are unsupported.
     """
 
     op: Literal["surface_boundary_fill"]
     label: Label
-    boundary: Annotated[list[dict[str, Any]], Field(max_length=BOUNDARY_FILL_MAX_CURVES)]
+    boundary: Annotated[list[dict[str, Any]], Field()]
     closed: bool = True
 
     @model_validator(mode="after")
@@ -351,11 +340,10 @@ class SurfaceBoundaryFillOp(StrictModel):
                 "surface_boundary_fill only builds a closed boundary; an open chain cannot be "
                 "filled - use surface_loft for a surface between two sections"
             )
-        if len(self.boundary) < BOUNDARY_FILL_MIN_CURVES:
+        if len(self.boundary) != BOUNDARY_FILL_MIN_CURVES:
             raise ValueError(
-                "surface_boundary_fill needs at least 3 ordered boundary curves (the closed "
-                "blend flag is only workable from 3 curves); split the loop into 3 or more "
-                "curves, or use surface_loft for a two-curve boundary"
+                "surface_boundary_fill needs exactly 4 ordered perimeter curves; "
+                "use surface_loft for two sections"
             )
         ids: list[int] = []
         for index, reference in enumerate(self.boundary):

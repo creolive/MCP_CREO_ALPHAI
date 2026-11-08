@@ -3882,6 +3882,7 @@ static J read_inspection_ref(const J &ref);
 static J choice_inspection(const J &holder, const char *key);
 #include "appearance.h"
 #include "advanced.cpp"
+#include "sheetmetal_candidates.cpp"
 #include "surfaces.cpp"
 #include "surface_trim.cpp"
 #include "surface_group.cpp"
@@ -4198,8 +4199,12 @@ static void execute_operation_body(const J &op) {
         generic_sheetmetal_planar_wall(op);
     else if (kind == "resize_sheetmetal_planar_wall")
         generic_resize_sheetmetal_planar_wall(op);
-    else if (kind == "sheetmetal_flange")
+    else if (kind == "sheetmetal_flange" || kind == "sheetmetal_flange_profile")
         generic_sheetmetal_flange(op);
+    else if (kind == "sheetmetal_corner_relief")
+        generic_sheetmetal_corner_relief(op);
+    else if (kind == "sheetmetal_quilt_form")
+        generic_sheetmetal_quilt_form(op);
     else if (kind == "sheetmetal_unbend" || kind == "sheetmetal_flat_pattern" ||
              kind == "sheetmetal_bend_back")
         generic_sheetmetal_unbend(op);

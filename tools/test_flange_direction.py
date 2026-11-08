@@ -205,9 +205,14 @@ def pending_validation() -> dict:
 def native_section() -> dict:
     """The flange function body, so a regression is caught without Creo."""
     source = (ROOT / "native" / "advanced.cpp").read_text(encoding="utf-8")
-    start = source.find("static void generic_sheetmetal_flange(const J &op)")
-    if start < 0:
+    definition = re.search(
+        r"(?m)^\s*static\s+void\s+generic_sheetmetal_flange\s*"
+        r"\(\s*const\s+J\s*&\s*[A-Za-z_]\w*\s*\)\s*\{",
+        source,
+    )
+    if definition is None:
         raise SystemExit("generic_sheetmetal_flange is missing from native/advanced.cpp")
+    start = definition.start()
     end = source.find("\nstatic void fix_component", start)
     body = source[start:end]
     leg = re.search(r"double leg\[2\] = \{h \* sin\(a\), h \* cos\(a\)\};", body)
