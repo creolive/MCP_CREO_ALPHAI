@@ -15,8 +15,8 @@
 
 | R | 项目 | 0.19.0 后的当前事实 | 下一动作 / 验收判据 |
 | --- | --- | --- | --- |
-| R01（原 G01—G03） | 草图容差链、装配旋转矩阵、任意平面一等公民 | 0.19.0 未涉及：`closure_tolerance_mm` 仍内部常量、`coordinates` 超限仍直接失败、无偏差断言、1e-6 矩阵门槛仍硬编码、无 `origin+normal+u_axis` 直接建面工具 | 先在 Creo 9 / 0.19.0 回归确认 F01 三步时间线；再按「可配容差/吸附回执/显式回退或拒绝」「可配正交容差或 orthonormalize」「独立建面工具」逐项落地；判据见下方 G01—G03 行 |
-| R02（原 G04/G05/G08/G10） | 契约与体验：mirror 特征子树、装配质量属性替代工具提示、`execute_plan` 最小示例/分页、`get_job` 长轮询、`known_limitations`、loft callback 退化 | 0.19.0 未涉及；公开工具增至 107 但 compact 仍只有操作名，全仓无 `known_limitations` | 提供受支持镜像子集与回执、6—8 个 op 示例、提高轮询上限、结构化限制段（含 release/证据/是否可配）、无 callback 的两截面直纹实现；逐项保持 32 KiB 分页预算与严格默认语义 |
+| R01（原 G01—G03） | 草图容差链、装配旋转矩阵、任意平面一等公民 | 0.19.1 已交付可选 `rotation_tolerance`（默认 1e-6，矩阵原值回显、不修复）；`closure_tolerance_mm` 仍内部常量、`coordinates` 超限仍直接失败、无偏差断言、无 `origin+normal+u_axis` 直接建面工具 | 先在 Creo 9 / 0.19.1 回归确认 F01 三步时间线；再落地可配草图容差/吸附回执/偏差断言，以及独立建面工具；判据见下方 G01—G03 行 |
+| R02（原 G04/G05/G08/G10） | 契约与体验：mirror 特征子树、装配质量属性替代工具提示、`execute_plan` 最小示例/分页、`get_job` 长轮询、`known_limitations`、loft callback 退化 | 0.19.1 已交付装配质量属性 `use_tool: creo_inspect_model` 提示、6 个 `plan_examples`、`get_job.wait_seconds` 0–300、12 条结构化 `known_limitations`；mirror 特征子树与无 callback 的 `creo_loft` 仍未实现 | 实现受支持镜像子集与回执、无 callback 两截面直纹实现；继续保持 32 KiB 分页预算与严格默认语义 |
 | R03（原 G06） | `session_health` 的 identity stale 与新鲜 connected 证据冲突 | `session_health.py` 仍 `unknown/session_identity_stale` | 先定安全策略（是否允许连接证据优先或 stale 降 warning），不得擅清 unknown 保护；三类样本状态与 caveats 需一致 |
 | R04（原 G07/G09 收敛） | 曲面剩余：`INTERSECT`、三片以上单次 `quilt_merge`、被消耗工具 quilt 的内核残留、`PRO_ROUND_REF_EDGE` quilt 边 id、变半径/full/过渡、圆角后 thicken/solidify、真实凹谷瓣底、非 mm 单位、Creo 9/10 复验、格栅 cut 与 BUG-046 矛盾定因 | 0.19.0 只验了两片 JOIN（目标 quilt 原地增长）、恒定半径圆角、数值曲率与 Creo 12.4 整链；RELEASE_NOTES_0.19.0.md 第 36—42 节已逐条声明未测 | 按 release 分别补实机证据；门禁文案与 capabilities 契约同步；不把 Creo 12.4 结论外推到 9/10。判据：两片以外合并语义可复现且无静默 no-op、圆角后实体化可保存重载、45/72° 等几何按任务书逐项吻合 |
 | R05 | 已判定不可用（**结论项，不再开工**） | 钣金成形类、独立 `quilt_offset`、任意非平面闭合边界 `surface_fill` 在 Creo 12.4 有实机反证，0.19.0 保持门禁 | 仅维护错误文案/门禁与证据链接；换 release/SDK 或出现新原生证据时才重开工作卡，禁止把不可用结论写成能力 |
