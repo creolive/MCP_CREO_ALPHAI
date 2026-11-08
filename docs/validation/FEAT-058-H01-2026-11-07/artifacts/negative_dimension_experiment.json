@@ -1,0 +1,70 @@
+[
+  {
+    "case": "negative_side",
+    "value": -56.0,
+    "model_id": "b5510321521e46108b476823c69a8356",
+    "job_id": "c7ab8b36237245cfbe9f4930ca6d99a8",
+    "status": "succeeded",
+    "message": "General feature plan completed",
+    "bounds_mm": [
+      [
+        -92.5,
+        -116.0,
+        0.0
+      ],
+      [
+        92.5,
+        -56.0,
+        1.0
+      ]
+    ],
+    "volume_mm3": 11100.0,
+    "native": [
+      "PHASE=connect",
+      "PHASE=loaded_blend_validation",
+      "PHASE=execute_set_sketch_dimensions",
+      "PHASE=set_sketch_dimensions",
+      "PHASE=verify_model",
+      "PHASE=before_save_blend_validation",
+      "PHASE=save_and_reload",
+      "PHASE=after_reload_blend_validation",
+      "PHASE=display_preview",
+      "PHASE=disconnect",
+      "PHASE=result_delivery_complete"
+    ]
+  },
+  {
+    "case": "positive_side",
+    "value": 56.0,
+    "model_id": "1faefd03011d4a1caad611465049745c",
+    "job_id": "65902f263c41471281ed15a548f3bcb2",
+    "status": "succeeded",
+    "message": "General feature plan completed",
+    "bounds_mm": [
+      [
+        -92.5,
+        -116.0,
+        0.0
+      ],
+      [
+        92.5,
+        56.0,
+        1.0
+      ]
+    ],
+    "volume_mm3": 31819.999999999993,
+    "native": [
+      "PHASE=connect",
+      "PHASE=loaded_blend_validation",
+      "PHASE=execute_set_sketch_dimensions",
+      "PHASE=set_sketch_dimensions",
+      "PHASE=verify_model",
+      "PHASE=before_save_blend_validation",
+      "PHASE=save_and_reload",
+      "PHASE=after_reload_blend_validation",
+      "PHASE=display_preview",
+      "PHASE=disconnect",
+      "PHASE=result_delivery_complete"
+    ]
+  }
+]

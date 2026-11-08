@@ -272,10 +272,9 @@ def require_manual_start(config_file: Path) -> None:
 
 
 def local_provenance() -> dict:
-    """Record source evidence from a checkout or an extracted source release."""
     from creo_mechdog.source_provenance import local_provenance as collect
 
-    return collect(
+    evidence = collect(
         ROOT,
         (
             "tools/test_t07_preview.py",
@@ -283,6 +282,12 @@ def local_provenance() -> dict:
             "src/creo_mechdog/preview.py",
         ),
     )
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 class Acceptance:

@@ -454,10 +454,15 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    """Record source evidence from a checkout or an extracted source release."""
     from creo_mechdog.source_provenance import local_provenance as collect
 
-    return collect(ROOT, ("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
+    evidence = collect(ROOT, ("tools/test_arc_direction.py", "tests/unit/test_arc_direction.py"))
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 def write_offline_report(output: Path, run_id: str, results: dict) -> dict:

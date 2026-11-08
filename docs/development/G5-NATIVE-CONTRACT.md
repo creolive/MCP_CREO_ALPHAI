@@ -44,6 +44,19 @@
 - **修剪失败可诊断**：再生失败分支回写 `regeneration`（`feature_status`、`feature_id`、`target_quilt_id`、`tool_kind`、两侧枚举值、结果特征的 quilt 访问码），失败消息带同一组数值；`area_before/after`、`kept_quilt_*` 等测量字段在失败记录里保持可见。
 - **仍未验证**：修剪结果在保存重载后被 `thicken` 消费、质心判据（本机无 quilt 质心查询）、失败回滚的实机表现、`quilt_merge` 全套实机项。证据：`build/live_trim_report.json`、`build/surface_chain/20261104-094447-635200/report.json`（jobs `247f76de…`、`7ae993e6…`）。
 
+### 0.4 H06 保留侧测量回填（2026-11-07，DEV-074）
+
+- §4.5 的 `target_centroid`/`kept_centroid` 不再因为“`ProQuilt` 没有质心查询”而恒为 null：
+  `ProQuiltSurfaceVisit` 暴露成员面，`ProSurfaceTessellationGet`（`ProSurface.h:701`）返回**修剪后**面的三角网格，
+  据此可算面片面积加权质心、轴对齐 bbox 与绕向对齐的平均法向。实现唯一归属
+  `native/surface_measure.h` 的 `RegionGeometry`/`quilt_region_geometry`（§4.7 的扩展由集成人在 H06 收取）。
+- `surface_trim` 新增字段：`centroid_delta_mm`、`target_bbox_mm`/`kept_bbox_mm`、`target_direction`/`kept_direction`
+  及各自的 `*_status`。非平面区域 `target_direction`/`kept_direction` 为 null，`reason="region_not_planar"`；
+  单位比例未知时质心/bbox 保持 null（`scale_to_mm_known=false`），不填 0。
+- `tool_normal` 对平面 quilt 工具给出实测面法向，`tool_normal_source` 区分 `datum_plane_axis` 与
+  `tool_quilt_face_normal`；只有符号可锚定的基准面工具发布 `signed_offset_mm`，其余保持 null 并给原因。
+- §4.5 的“矛盾即失败”在 `tool_normal` 可锚定且两侧质心可读时生效；实测 `one`→正、`two`→负。
+
 ---
 
 ## 1. SDK 逐项核实结论表
@@ -172,6 +185,8 @@ PRO_E_FEATURE_TREE
 - `PRO_E_BNBLN_1DIR` 至少 2 条曲线。
 - 曲线以 chain holder + `PRO_E_STD_CURVE_COLLECTION_APPL` 表达；本机已有可复用的 `native/generic.cpp:2393` `curve_collection()`（`ProCrvcollectionAlloc` + `PRO_CURVCOLL_ADD_ONE_INSTR`）。
 - **首版不写** `PRO_E_BBL_ADD_CLOSED`、不写 `PRO_E_BNBLN_TAN_COND`（`TAN_COND_FREE` 无符号定义）。
+
+**2026-11-07 实测回填（H02）：** 上述裸骨架可以创建。流程为 `ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` → `ProFeatureElemtreeExtract` → `ProFeatureWithoptionsRedefine` → ACTIVE。内核在抽取树中自行补齐 `PRO_E_EXT_SURF_CUT_SOLID_TYPE=942` 与 `PRO_E_BNBLN_TAN_COND`（`TAN_COND_TYPE`=1,1,0,0、`TAN_FLD_TYPE`=-1,-1,0,0），所以实现**不需要也不得**在创建前写这些值。细节、job 与面积/闭合读数见 §9.4。`PRO_E_CTRL_PTS`/`PRO_E_BLEND_TYPE` 仍不需要。
 
 ### 2.2 project_curve：实测定论与实际实现树（S04 回填，2026-11-04）
 
@@ -454,6 +469,8 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 `surface_loft` 保持未开工，`loft` 的曲面模式仍由 `capabilities.require_available` 明确拒绝
 （"Direct Blend supports solid add into the default body only"）。
 
+**2026-11-07 更正：** §2.8 探的是 `PRO_E_BLEND_*` 系列（普通 Blend/无 `ProBlend.h` 文档），不能外推到 `Probbl.h` 的边界混合。按 §2.1 的 `Probbl.h` 树 + INCOMPLETE 创建/抽取/redefine 已于同日实机成功并交付 `surface_loft`（见 §9.4）；`PRO_E_BLEND_*` 的结论只说明那条族不可用。
+
 ### 2.9 join 的可测量并集：trim + thicken（S03 的替代路线，2026-11-05 实机）
 
 `quilt_merge` 本身仍然门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
@@ -474,6 +491,10 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 即：**重叠部分只算一次**，并集在曲面层（面积 1400 mm²）与实体层（体积 2800 mm³）都可测。
 这条路线满足"join 需求"，但它产出的是**一个合并后的实体**，不是**单一合并 quilt**；
 后者仍需要 Merge 特征的真实元素树（本机没有，缺口是参照树）。
+
+2026-11-07 复核：按 `surface_loft` 的 INCOMPLETE 骨架路线重试 join（create=0、extract=0、
+内核补全 SIDE/TYPE、redefine 后 ACTIVE）仍是 0 个 `PRO_QUILT`、4 个 `PRO_SURFACE`、quilt
+访问 -4（§2.4 补充与 H03 证据），因此 `quilt_merge` 门禁与本节替代路线结论均不变。
 
 ### 2.10 曲面链示例文件：可运行的分阶段计划（2026-11-05）
 
@@ -668,6 +689,18 @@ PRO_E_FEATURE_TREE
 
 数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
 
+**2026-11-07 实测补充（H03，保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
+redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交 join：
+`ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` 返回 **0**、
+`ProErrorlist.total=0`、`ProFeatureElemtreeExtract` 返回 **0**，抽取树 11 个元素，其中
+`PRO_E_SRF_MRG_QUILT_SIDE=1` 与 `PRO_E_SRF_MRG_TYPE=1`（JOIN）都是**内核自己补全**的；
+redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_QUILT`、
+4 个 `PRO_SURFACE`（132/134/136/138），与显式写 SIDE 的 HEAD 实现逐项相同。
+输入面积 800.0 mm² 可测，结果面积/闭合不可测；两次失败作业均清理新建模型
+（`terminal_effect.managed_model=no_effect`）。结论：本机数组树即使由内核补全也不产出
+结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
+[FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
+
 ---
 
 ## 3. 第一版能力边界（冻结）
@@ -685,6 +718,8 @@ PRO_E_FEATURE_TREE
 | 输出 | 曲面（datum surface），**不是实体** | `mode`/`new_body`（曲面放样不产实体） |
 
 `sections` 顺序 = 放样方向，**index 0 是起点截面**。实现必须把顺序原样写进 `PRO_E_BNBLN_DIR_CURVES` 数组，不排序、不去重（去重由 schema 拒绝重复引用解决）。
+
+**实现状态（2026-11-07）：** 本节边界已按原样交付为 `surface_loft` / `creo_surface_loft`，Creo 12.4 实机验收见 §9.4；上表"首版明确拒绝"的各参数在 schema 层直接拒绝，不走原生降级。
 
 ### 3.2 project_curve
 
@@ -886,7 +921,12 @@ PRO_E_FEATURE_TREE
 
 - `tool_normal`：修剪工具（quilt 或基准面）读出的**单位法向**（模型坐标）。
 - `target_centroid` / `kept_centroid`：被修剪 quilt 与保留区域各自的几何质心（模型坐标，mm）；读不出时为 `null`。
+  2026-11-07 起由 `ProQuiltSurfaceVisit` + `ProSurfaceTessellationGet` 的三角面片面积加权实测（§0.4），
+  不是外框中心；`centroid_delta_mm` 给出差值，`target_bbox_mm`/`kept_bbox_mm` 与
+  `target_direction`/`kept_direction` 提供同一次采样的包围盒与平面法向。
 - `signed_offset_mm` = `(kept_centroid − target_centroid) · tool_normal`，用于独立判断保留侧确实落在工具法向的一侧。
+  只有法向符号可锚定的工具（基准面）发布该值；quilt 工具的实测面法向朝向不保证与 `keep_side` 绑定，
+  因此其 `signed_offset_mm` 为 null 并给 `tool_normal_unavailable`，侧别由质心坐标证明。
 
 **一致性与失败规则**：
 
@@ -924,6 +964,51 @@ PRO_E_FEATURE_TREE
 - **维护人**：FEAT-009（surface_loft）实现者为首个维护人；FEAT-039（project_curve / surface_trim）实现者只**消费**，需要扩展时由集成人统一收取，**不得各自复制 helper**。
 - Python 侧不新建共享测量模块：字段投影复用既有 `src/creo_mechdog/operation_results.py` 的投影入口。
 - 既有 `native/inspection_units.h`（单位查询）与 `native/assembly_units.h`（比例换算）**只读复用，不改写**。
+
+### 4.8 曲面组级测量字段（FEAT-039/H04）
+
+**测量对象**：一组 quilt（`creo_measure_surface_group`，只读作业）或 `surface_loft` 自身产出的
+quilt（回执里的 `surface_group` 块）。组成员面 = 每个 quilt 经 `ProQuiltSurfaceVisit` 得到的全部面。
+
+**方法（全部来自真实拓扑/几何，不用面积或体积反推）**：
+
+- 每个面的轮廓用 `ProSurfaceContourVisit`，轮廓边用 `ProContourEdgeVisit`（`ProEdge`）；
+- 同一 `ProEdge` 被组内两个面引用 ⇒ 拓扑共享（内部缝），`topologically_shared_edges`；
+- 其余边界边两两比较采样折线（`ProEdgeTessellationGet`，点太少时改用
+  `ProEdgeXyzdataEval` 参数采样）：横向距离 ≤ `tolerance_mm` 且纵向重叠 ≥ 较短边 10% 记为
+  joined（一对一贪心配对）；介于 `tolerance_mm` 与 `gap_search_mm` 记为 gap；
+- 重叠面积：对每个面取内核三角网格（`ProSurfaceTessellationGet`）细分采样，用
+  `ProSurfaceParamEval` + `ProSurfaceXyzdataEval` + `ProSurfaceUvpntVerify` 判断采样点是否落在
+  另一面的裁剪域内；另计"埋入边界"（一条边界边落在另一面内部且离该面边界 > 容差），
+  使细于采样间距的重叠带也能被检出。
+
+**冻结字段**（每个值独立 `*_status`，结构见 §4.4.1；单位未知时 mm 值为 null）：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `open_edges` / `open_edges_status` | `int \| null` | 组内未被两张面共享（容差内）的边界边数 |
+| `boundary_edges` / `joined_edges` | `int \| null` | 边界边总数与已接合边数 |
+| `gap_max_mm` / `gap_max_status` | `float \| null` | 候选缝对的最大实测间距；无候选缝时为 null + `no_member_seam_candidate` |
+| `gap_max_status.tolerance_mm` / `.gap_search_mm` | `float` | 判定容差与搜索窗口（请求值回显） |
+| `gap_max_status.joined_pairs` / `.gap_pairs` / `.candidate_pairs` | `int \| null` | 配对计数 |
+| `gap_max_status.within_tolerance` | `bool \| null` | `gap_max_mm <= tolerance_mm` |
+| `overlap_area_mm2` / `overlap_status` | `float \| null` | 重叠面积**估计值**（来自面网格采样），失败给 reason，不填 0 |
+| `overlap_status.detected` | `bool \| null` | 面积估计 > 0 或存在埋入边界 |
+| `overlap_status.buried_boundary_edges` | `int \| null` | 埋入另一面内部的边界边数 |
+| `overlap_status.sample_resolution_mm2` | `float \| null` | 单采样点代表的面积（估计分辨率） |
+| `overlap_status.area_below_sample_resolution` | `bool \| null` | 检出重叠但面积估计为 0 时为 true，避免把 0 读成"无重叠" |
+| `state` / `state_reason` | `"closed" \| "open" \| "micro_gap" \| "overlap" \| null` | 成员缝四态；不可判定时为 null + 原因 |
+| `boundary_closed` | `bool \| null` | `open_edges == 0`：整组边界是否闭合壳体 |
+| `faces` / `quilt_ids` / `face_count` | `list` / `list[int]` / `int` | 参与的成员面与 quilt |
+
+**四态判据（冻结）**：检出重叠 ⇒ `overlap`；边界边不可访问 ⇒ `state=null`；存在采样失败 ⇒
+`state=null` + `boundary_edge_sampling_failed`；`open_edges == 0` ⇒ `closed`；
+`gap_max > tolerance` ⇒ `open`；有 joined 缝且 `max_joined_gap > 1e-6 mm` ⇒ `micro_gap`；其余有
+joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candidate`。`state` 描述**成员缝**，
+不是外壳闭合；外壳由 `boundary_closed` 单独表达（两块平面拼接的缝可以闭合而整体仍是开放片）。
+
+**边界**：`gap_search_mm` 之外的间距不计入 `gap_max_mm`（仍按开放边计数）；重叠面积是网格采样
+估计而不是布尔求交；判定基于采样边界几何，不是内核缝/布尔特征。
 
 ---
 
@@ -1169,3 +1254,30 @@ PRO_E_FEATURE_TREE
 
 证据：`build/live_solidify_probe.json`（两个用例的完整量测）与 `build/surface_chain/<run_id>/report.json`。
 解析期望值由**实测外框**推导（半径取 Y 向跨度的一半、高度取 X 向跨度），不写死常数，避免平面映射假设。
+
+### 9.4 2026-11-07 H02 实机：surface_loft 路线成立并交付
+
+环境：Creo 12.4.0.0 / Toolkit x86e_win64 / 本机匹配 SDK；分支 `codex/DEV-074-feedback0174-offline`（取证时 HEAD `c4948d3` + 本轮改动），`bridge.py build` 退出 0，指定驱动 `tools/test_surface_loft.py --live --confirm-session-usable`（22/22 检查通过）。
+
+**与 §9 P1 的差别：** P1 在创建前写入 `PRO_E_EXT_SURF_CUT_SOLID_TYPE` 与 `PRO_E_BNBLN_TAN_COND*` 的值，得到 status 6。H02 按 §2.1 只建裸骨架，用 `PRO_FEAT_CR_INCOMPLETE_FEAT` 创建、`ProFeatureElemtreeExtract` 取树、`ProFeatureWithoptionsRedefine` 再生，成功。抽取树（103 元素）显示内核自行补齐：
+
+| 元素 | 内核补齐值 |
+| --- | --- |
+| `PRO_E_EXT_SURF_CUT_SOLID_TYPE` | 942（`PRO_FEAT_DATUM_SURF`） |
+| `PRO_E_BNBLN_TAN_COND` | 4 个 `PRO_E_BNBLN_TNC_BNDRY`，`TAN_COND_TYPE`=1,1,0,0；`TAN_FLD_TYPE`=-1,-1,0,0 |
+| `PRO_E_BNBLN_CURVES/1DIR/DIR_CURVES` | 2 个 `PRO_E_STD_CHAIN_HOLDER`，各持 1 条曲线集合 |
+
+**验收读数（job / 模型）：**
+
+| 项 | 读数 |
+| --- | --- |
+| 放样 | `7a29b97ddb564a0e820c90f02b56921f`：`create_code=0`、`extract_code=0`、`feature_type=942`、`feature_status=0`、`quilt_count=1`、`quilt_id=61`、`surface_area_mm2=800.0`、`quilt_closed_native=open`（`ProQuiltVolumeEval=-18`）、`has_solid=false`、`saved_file_reloaded_and_verified=true` |
+| 保存重载查询 | 同一 quilt_id 61、`area_mm2=800.0` |
+| trim x=20 两侧 | `caf35a74...` 400.0 mm²（one）；`7ad3e820...` 400.0 mm²（two）；合计 800.0 |
+| thicken 2 mm | `286b88cb...`：`volume_after_mm3=1599.9999999999995` |
+
+**顺序约束（实测）：** 同一模型先 `thicken` 再 `surface_trim` 时，trim 的 `ProFeatureWithoptionsCreate` 返回 -1（job `ddf1f332...`）。加厚后的 quilt 不能再作为该 trim 的目标；验收顺序改为 trim 在 thicken 之前或使用独立模型。未继续排查该顺序问题，也未改动 trim/thicken 既有逻辑。
+
+**未验证：** ≥3 截面、smooth、闭合、相切/曲率连续性、非平行/扭转或圆弧截面、Creo 9/10 实机、字面 erase 后重载。
+
+证据：[FEAT-009-H02-2026-11-07](../validation/FEAT-009-H02-2026-11-07/SUMMARY.md)（含 `live_report.json` 与首跑含抽取树的 `first_run_loft_receipt.json`）。

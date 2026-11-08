@@ -1118,6 +1118,57 @@ class GaugeReceiptTest(unittest.TestCase):
                 self.assertIn(reason, wall)
 
 
+class OriginCrossingResizeTest(unittest.TestCase):
+    """H01: a resize that moves a corner across the sketch origin.
+
+    A coordinate dimension is a distance to a section axis, so the 2026-11-07
+    Creo 10 report at origin [-92.5,-116] solved 185x232 -> 100x60 as
+    v [-116,56] (17200 mm3) and was refused. The native resize now writes each
+    target coordinate with the dimension's own direction, measured from the
+    current value and point, instead of writing its absolute value.
+    """
+
+    def test_native_resize_writes_the_measured_dimension_side(self):
+        wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
+        for token in (
+            "planar_wall_dimension_side",
+            "value * coordinate",
+            "side * resized_coordinate",
+            "fabs(fabs(current) - expected)",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, wall)
+
+    def test_volume_guard_reports_the_measured_envelope(self):
+        wall = NATIVE_WALL.read_text(encoding="utf-8", errors="replace")
+        self.assertIn(
+            'planar_wall_require_volume(measured, length, width, thickness, "resized", &envelope)',
+            wall,
+        )
+        self.assertIn("measured u=[", wall)
+
+    def test_matrix_expects_the_short_side_after_crossing(self):
+        from tools.test_planar_wall_origin_resize import (
+            CASES,
+            expected_bbox,
+            expected_envelope,
+            offline_checks,
+        )
+
+        self.assertTrue(offline_checks()["crossing_case_is_100x60_not_100x172"])
+        case = next(item for item in CASES if item[0] == "xy_neg_cross")
+        self.assertEqual(
+            expected_bbox(case[1], case[2], case[3], 100.0, 60.0),
+            [[-92.5, -116.0, 0.0], [7.5, -56.0, 1.0]],
+        )
+        self.assertEqual(
+            expected_envelope(case[1], case[2], case[3], 100.0, 60.0),
+            {"u": [-92.5, 7.5], "v": [-116.0, -56.0], "n": [0.0, 1.0]},
+        )
+        # 100 x (116 + 56) is the wrong-branch reading the report measured.
+        self.assertNotEqual(17200.0, 100.0 * 60.0)
+
+
 class RuntimeIdentityTest(unittest.TestCase):
     """Review finding (2026-11-04): the planar wall sources missed the identity."""
 

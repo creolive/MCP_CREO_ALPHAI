@@ -543,10 +543,21 @@ def merge_reports(reports: list[dict]) -> dict:
 
 
 def local_provenance() -> dict:
-    """Collect source evidence even when running from an extracted release."""
     from creo_mechdog.source_provenance import local_provenance as collect
 
-    return collect(ROOT, ("tools/test_plan_performance.py", "tests/unit/test_plan_performance.py"))
+    evidence = collect(
+        ROOT,
+        (
+            "tools/test_plan_performance.py",
+            "tests/unit/test_plan_performance.py",
+        ),
+    )
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 # --- live runner ------------------------------------------------------------

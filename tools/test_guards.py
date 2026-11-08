@@ -3,16 +3,21 @@
 import asyncio
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if __name__ == "__main__" and not __package__:
+    raise SystemExit(
+        subprocess.call([sys.executable, "-m", "tools.test_guards", *sys.argv[1:]], cwd=ROOT)
+    )
+
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from test_extended import call, job
 
+from tools.test_extended import call, job
 from version import VERSION
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 async def main():

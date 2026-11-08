@@ -113,6 +113,57 @@ def get_mass_properties(model_id: str, density_g_cm3: float | None = None) -> di
     raise RuntimeError(f"Mass properties query returned no reading: job {job_id}")
 
 
+def measure_surface_group(
+    model_id: str,
+    references: list[dict],
+    tolerance_mm: float = 0.01,
+    gap_search_mm: float = 1.0,
+) -> dict:
+    """FEAT-039/H04: read the group-level boundary measurement synchronously.
+
+    The query is a read-only job: it writes nothing, does not regenerate and does
+    not advance the revision, so the caller gets the receipt instead of a job id
+    it would have to poll. The native executor measures the real boundary
+    topology; nothing here recomputes or defaults a value.
+    """
+    operation: dict = {
+        "op": "surface_group_measure",
+        "references": references,
+        "tolerance_mm": float(tolerance_mm),
+        "gap_search_mm": float(gap_search_mm),
+    }
+    accepted = submit([operation], model_id=model_id, readonly=True)
+    job_id = accepted["job_id"]
+    deadline = time.monotonic() + MASS_PROPERTIES_TIMEOUT_SECONDS
+    record: dict = {}
+    while True:
+        path = bridge.job_path(job_id) / "job.json"
+        if path.exists():
+            record = bridge.read_json(path)
+            if record.get("status") in _MASS_PROPERTIES_TERMINAL:
+                break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"Surface group measurement did not finish: job {job_id}")
+        time.sleep(0.25)
+    if record.get("status") != "succeeded":
+        message = record.get("message") or f"Surface group measurement failed: job {job_id}"
+        raise RuntimeError(str(message))
+    for entry in (record.get("result") or {}).get("operations") or []:
+        if isinstance(entry, dict) and entry.get("op") == "surface_group_measure":
+            return {
+                "job_id": job_id,
+                "model_id": model_id,
+                "revision": record.get("revision"),
+                "readonly": True,
+                "unit_name": entry.get("unit_name"),
+                "length_scale_to_mm": entry.get("length_scale_to_mm"),
+                "tolerance_mm": entry.get("tolerance_mm"),
+                "gap_search_mm": entry.get("gap_search_mm"),
+                "group": entry.get("group"),
+            }
+    raise RuntimeError(f"Surface group measurement returned no reading: job {job_id}")
+
+
 def inspect_model(
     model_id: str,
     detail: str = "compact",
@@ -250,7 +301,8 @@ def submit(
     if loft_seed and (model_id is not None or readonly or model_type != "part"):
         raise ValueError("Native loft seed initialization is only available for a new part")
     if readonly and any(
-        op["op"] not in ("dump_tree", "export", "udf_inspect", "mass_properties")
+        op["op"]
+        not in ("dump_tree", "export", "udf_inspect", "mass_properties", "surface_group_measure")
         for op in operations
     ):
         raise ValueError("Read-only requests may only inspect/export")

@@ -61,6 +61,8 @@ REGISTERED_OPERATIONS = (
     "surface_offset",
     "solidify",
     "surface_trim",
+    "surface_loft",
+    "surface_group_measure",
     "quilt_merge",
     "project_curve",
     "boolean_bodies",
@@ -547,11 +549,21 @@ def families() -> dict:
         },
         "surface_chain": {
             "enabled": True,
-            "tools": ["creo_surface_trim", "creo_project_curve", "creo_surface_offset"],
+            "tools": [
+                "creo_surface_loft",
+                "creo_surface_trim",
+                "creo_project_curve",
+                "creo_surface_offset",
+                "creo_measure_surface_group",
+            ],
             "scope": (
-                "trim one quilt with another quilt, a datum-plane label or a curve "
-                "geometry id; project one curve geometry id onto one quilt along an "
-                "explicit direction reference; offset one quilt along its surface normal"
+                "boundary-blend a quilt from exactly two single-curve sketch sections "
+                "(straight interpolation, measured area and closure); trim one quilt "
+                "with another quilt, a datum-plane label or a curve geometry id; "
+                "project one curve geometry id onto one quilt along an explicit "
+                "direction reference; offset one quilt along its surface normal; "
+                "measure a group of quilts read-only (open boundary edges, seam gap "
+                "against a tolerance, overlapping face area)"
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
@@ -560,12 +572,18 @@ def families() -> dict:
                 "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance"
             ),
             "limits": (
-                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); no multi-section loft, "
-                "no boundary blend and no surface loft tool; surface_trim offset_mm stays "
+                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); surface_loft is two "
+                "single-curve sections with straight interpolation only (no smooth, closed, "
+                "continuity, multi-section or solid output); surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
                 "quilt; it can add solid volume, and target_quilt_id names the source quilt; "
                 "trimmed quilt feature-label reuse and curved-quilt offset measurement "
-                "have no published geometric guarantee"
+                "have no published geometric guarantee; "
+                "creo_measure_surface_group reports member seams (state closed/open/"
+                "micro_gap/overlap) while boundary_closed tells whether the whole group "
+                "boundary is a shell; its overlap area is a tessellation estimate, gaps "
+                "wider than gap_search_mm are not quantified, and the join judgement is "
+                "sampled boundary geometry rather than a kernel boolean"
             ),
         },
         "boolean_bodies": {
@@ -604,6 +622,22 @@ def families() -> dict:
             "quilt, not a new downstream quilt; a closed quilt is not required. Measured "
             "distance is available only under offset_distance_status's planar/empty-model gate",
         },
+        "surface_loft": {
+            "enabled": True,
+            "tool": "creo_surface_loft",
+            "sdk_requirement": "Probbl.h boundary-blend tree; missing headers return SURFACE_LOFT_SDK_UNAVAILABLE",
+            "scope": (
+                "one boundary-blend quilt from exactly two MCP-owned sketches, in the "
+                "submitted order, straight interpolation"
+            ),
+            "limits": (
+                "two sections only; each section must own exactly one non-composite curve; "
+                "no smooth interpolation, closed surface, continuity/tangency, multi-section "
+                "or solid output; section order is the loft direction; measured closure comes "
+                "from ProQuiltVolumeEval, so an open quilt is reported as open instead of "
+                "being assumed"
+            ),
+        },
         "sweep": {
             "enabled": True,
             "native_test": "straight and quarter-circle trajectories; solid add, straight cut, open surface followed by thicken, symmetric thin; named section edits, native ID preservation, analytic volume checks, save/erase/reload and failed-assertion rollback on 2026-10-11; the surface mode was measured on 2026-11-05 with a 40x20 profile swept 20 mm: open 2400.000 mm2 (2*(40+20)*20), capped 4000.000 mm2 (walls plus two 40x20 caps) and the capped quilt solidifies to 15999.999999999998 mm3 (40*20*20)",
@@ -620,7 +654,7 @@ def families() -> dict:
             "scope": "direct native solid Blend from independent MCP-owned XY sketches ordered by increasing Z; create in a feature plan or append to an owned part",
             "interpolation": ["straight", "smooth"],
             "native_test": "3/4/6 straight and smooth factory cases; append 3/smooth to an existing saved base, preserve native IDs, edit dimensions, verify all-section STL, save/erase/reload and failed-append rollback with a live refresh",
-            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; there is no surface loft tool or surface_loft operation, and mode='surface' is refused before a job; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
+            "limits": "solid add into the default body only; no cut/surface/new_body, nonparallel sections or endpoint tangency/curvature controls; surface output belongs to creo_surface_loft (two sections, straight only), and mode='surface' is refused before a job; native reports support Chinese/English Creo; requires explicit resident callback initialization before modeling under every loader policy, otherwise rejects before DLL load; modeling never loads DLLs or changes security policy",
             "callback_setup": "creo_capabilities.direct_blend_callback lists the generated registry_file; load/start it via Creo Auxiliary Applications and review the DLL prompt before modeling",
         },
         "loft_seed": {
@@ -694,7 +728,14 @@ def families() -> dict:
                 "Creo cuts the end overlap; the four-wall box route is live verified "
                 "2026-11-06 (four walls built, saved and reloaded), while the cut amount "
                 "produced by a given width/offset is not yet quantified; forms, hems and "
-                "jogs are not high-level tools"
+                "jogs are not high-level tools; attaching solid material (bosses, louvers, "
+                "grilles, hinges, door ears) to an existing sheetmetal body is unsupported: "
+                "on Creo 12.4.0.0 (2026-11-07) an extrude add and a boolean union with the "
+                "sheetmetal body as target both return ProFeatureWithoptionsCreate=-1, and "
+                "the reverse union builds but consumes the sheetmetal body (all wall contours "
+                "answer ProSmtedgeContourGet=-8 and unbend fails), so new_body=true stays a "
+                "separate solid body instead of a one-piece sheetmetal result; Creo 10 has "
+                "never been tried"
             ),
         },
         "assembly": {

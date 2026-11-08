@@ -18,9 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from test_dev049_tilted_cut import TILTED_FIXTURE, setup_operations, tilted_normal
-
 from creo_mechdog.schema import validate_operations
+from tools.test_dev049_tilted_cut import TILTED_FIXTURE, setup_operations, tilted_normal
 
 SIDES = 30
 RADIUS_MM = 5.0
@@ -474,17 +473,18 @@ def validate_cases(cases: list[dict]) -> None:
 
 
 def provenance() -> dict:
-    """Collect evidence without requiring Git in an extracted release."""
     from creo_mechdog.source_provenance import local_provenance as collect
 
     evidence = collect(
         ROOT,
-        ("tests/unit/test_tilted_sketch_lifecycle.py", "tools/test_tilted_sketch_lifecycle.py"),
+        {"tools/test_tilted_sketch_lifecycle.py", "tests/unit/test_tilted_sketch_lifecycle.py"},
     )
-    return {
-        key: evidence[key]
-        for key in ("commit", "branch", "dirty", "source_fingerprint", "environment", "git_status")
-    }
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 def offline_report(run_tag: str) -> dict:

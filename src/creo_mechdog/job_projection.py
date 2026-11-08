@@ -115,6 +115,46 @@ PROJECT_CURVE_KEYS = (
     "simple_curve_count",
 )
 
+#: Keys produced by native/surface_loft.cpp: the created quilt id, the measured
+#: area and whether it is open/closed, plus the element-tree evidence that a
+#: failed boundary-blend regeneration needs.
+SURFACE_LOFT_KEYS = (
+    "sections",
+    "section_curve_ids",
+    "interpolation",
+    "route",
+    "create_code",
+    "create_element_errors",
+    "extract_code",
+    "extracted_tree",
+    "feature_id",
+    "feature_type",
+    "feature_status",
+    "surface_type",
+    "quilt_visit_code",
+    "quilt_count",
+    "quilt_ids",
+    "quilt_id",
+    "quilt_init_code",
+    "surface_area_mm2",
+    "surface_area_status",
+    "quilt_closed_native",
+    "closure",
+    "surface_group",
+    "has_solid",
+)
+
+#: Keys produced by native/surface_group.cpp (FEAT-039/H04). The whole group
+#: block is kept together: every value carries its own status, so a compact
+#: poll can still tell a measured zero from an unmeasured seam.
+SURFACE_GROUP_KEYS = (
+    "unit_name",
+    "length_scale_to_mm",
+    "tolerance_mm",
+    "gap_search_mm",
+    "group",
+)
+
 #: Keys produced by native/surfaces.cpp::generic_surface_solid. ``closure`` is
 #: the measured ProQuiltVolumeEval receipt (available/query_code/reason).
 SOLIDIFY_KEYS = (
@@ -151,6 +191,8 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "assemble_component": ASSEMBLY_POSE_KEYS,
     "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
+    "surface_loft": SURFACE_LOFT_KEYS,
+    "surface_group_measure": SURFACE_GROUP_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
     "solidify": SOLIDIFY_KEYS,

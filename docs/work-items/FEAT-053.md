@@ -1,5 +1,19 @@
 # FEAT-053：`datum_plane` 三点定面（`thru_points`）
 
+## 当前摘要（2026-11-07，DEV-073 复核）
+
+状态：**部分交付，剩余待验收**。结论：三点定面 Q05 live 8/8 与斜面草图 L1/L2 已通过。剩余：引用逐条核对仍未验证（关联 BUG-098）；已用数量校验规避阻塞。
+
+最新分段记录：[同卡 2026-11-01 Q15 离线集成状态](#dev073-latest-evidence)。
+
+证据：[原始登记与证据](#dev073-history)。本轮仅文档复核，历史环境和未测事实保留，不作为本次重跑结论。
+
+<a id="dev073-history"></a>
+
+## 原始登记与历史过程
+
+以下为原时点记录，当前以本摘要及 [BACKLOG](../BACKLOG.md) 为准。
+
 日期：2026-11-01。类型：功能。优先级：P2。状态：**已交付（0.11.1；本机实机通过 2026-11-01 Q05 8/8；被 [BUG-098](BUG-098.md) 阻断后修复）**。目标版本：0.11.1。
 
 来源：[0.10.0 晚间包 02_G5 曲面能力方案](../validation/feedback-0.10.0-2026-11-01/originals/02_G5曲面能力方案.md) §4、[03_BUG094报告](../validation/feedback-0.10.0-2026-11-01/originals/03_BUG094报告.md) §二/§六 与 [04_generic_cpp_patches](../validation/feedback-0.10.0-2026-11-01/originals/04_generic_cpp_patches.md) §补丁 1；[逐章映射](../validation/feedback-0.10.0-2026-11-01/MAPPING.md)。关联 [FEAT-008](FEAT-008.md)、[BUG-097](BUG-097.md)、[BUG-094](BUG-094.md)、[FEAT-009](FEAT-009.md)、[FEAT-039](FEAT-039.md)。
@@ -77,6 +91,8 @@
 - 原案转换：`tools/test_datum_plane_through_points.py::convert_plane_operation` / `converted_smoke_operations()`——`{"thru_points":[…]}` → `{"kind":"through_points","points":[…]}`；转换后的 smoke 计划可直接 `validate_operations`（单测已锁定）。
 - 真实帧：操作回执 `operations[].plane_frame`（`surface_id`/`normal`/`origin`/`length_unit`，创建特征回读、毫米）；亦可经 `inspect_model(datum_planes)` 按 `surface_id` 查询。**禁止从输入点或矩阵表象重建帧**（Review Focus 3）。
 - 三点平面成功不代表斜面草图可创建（[BUG-097](BUG-097.md)）；Q11 拆点后须保证每个 `datum_plane` 与其三个单点 `datum_points` 在同一计划内（按真实依赖分批）。
+
+<a id="dev073-latest-evidence"></a>
 
 ## 2026-11-01 Q15 离线集成状态
 

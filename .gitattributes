@@ -1,4 +1,5 @@
 * text=auto whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/validation/feedback-0.18.4-2026-11-08/originals/** -text
 
 # DEV-075: preserve the three supplied report originals byte for byte.
 docs/validation/feedback-0.18.1-2026-11-07/originals/** -text

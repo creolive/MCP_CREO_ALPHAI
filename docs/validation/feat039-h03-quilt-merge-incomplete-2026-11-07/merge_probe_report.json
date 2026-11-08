@@ -1,0 +1,345 @@
+{
+  "date": "2026-11-07",
+  "environment": {
+    "os": "Windows x64",
+    "creo": "12.4.0.0",
+    "sdk": "local matching Toolkit SDK",
+    "units": "mm",
+    "channel": "single session, serial",
+    "config_auto_start_creo": false,
+    "build": ".venv\\Scripts\\python.exe bridge.py build (exit 0)"
+  },
+  "fixture": "two coplanar 20x20 surface_fill patches sharing the edge x=20 (A x in [0,20], B x in [20,40]), z=0",
+  "route": "ProMerge.h array tree; baseline full create versus INCOMPLETE create + extract + redefine",
+  "attempts": [
+    {
+      "job_id": "0065877624af4cf4932a8179682908b3",
+      "model_id": "f2e4e78f01594872832ec3f9a7ab76ca",
+      "created_at": "2026-11-07T13:33:37.475461+00:00",
+      "status": "failed",
+      "message": "Surface merge produced no single result quilt; the feature owns 0 quilt geometry items",
+      "route": "documented array tree, full create (HEAD implementation)",
+      "operation": {
+        "op": "quilt_merge",
+        "label": "probe_merge",
+        "execution_status": "failed",
+        "feature_status": 0,
+        "feature_id": 129,
+        "inputs": {
+          "target_quilt_id": 91,
+          "tool_quilt_id": 127
+        },
+        "result_quilt_id": null,
+        "result_quilt_visit_code": -4,
+        "quilt_item_ids": [],
+        "surface_item_ids": [
+          {
+            "id": 132,
+            "type": 5
+          },
+          {
+            "id": 134,
+            "type": 5
+          },
+          {
+            "id": 136,
+            "type": 5
+          },
+          {
+            "id": 138,
+            "type": 5
+          }
+        ],
+        "surface_visit_code": 0,
+        "input_area_mm2": 800.0,
+        "input_area_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "area_mm2": null,
+        "area_status": {
+          "available": false,
+          "query_code": 0,
+          "reason": "result_quilt_visit_failed",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "closed": null,
+        "closed_status": {
+          "available": false,
+          "query_code": 0,
+          "reason": "result_quilt_visit_failed",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "merge_tree": "array",
+        "merge_type": "join"
+      }
+    },
+    {
+      "job_id": "80adc5a5ae714cf5bc40f9936ec6122d",
+      "model_id": "c749e6be6953448181fa64de3b0895c4",
+      "created_at": "2026-11-07T13:35:13.499794+00:00",
+      "status": "failed",
+      "message": "Surface merge produced no single result quilt; the feature owns 0 quilt and 4 surface geometry items",
+      "route": "documented array tree, PRO_FEAT_CR_INCOMPLETE_FEAT + extract + redefine",
+      "operation": {
+        "op": "quilt_merge",
+        "label": "probe_merge",
+        "execution_status": "failed",
+        "create_code": 0,
+        "create_element_errors": {
+          "sample": [],
+          "total": 0
+        },
+        "extract_code": 0,
+        "feature_status": 0,
+        "feature_id": 129,
+        "inputs": {
+          "target_quilt_id": 91,
+          "tool_quilt_id": 127
+        },
+        "result_quilt_id": null,
+        "result_quilt_visit_code": -4,
+        "quilt_item_ids": [],
+        "surface_item_ids": [
+          {
+            "id": 132,
+            "type": 5
+          },
+          {
+            "id": 134,
+            "type": 5
+          },
+          {
+            "id": 136,
+            "type": 5
+          },
+          {
+            "id": 138,
+            "type": 5
+          }
+        ],
+        "surface_visit_code": 0,
+        "input_area_mm2": 800.0,
+        "input_area_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "area_mm2": null,
+        "area_status": {
+          "available": false,
+          "query_code": 0,
+          "reason": "result_quilt_visit_failed",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "closed": null,
+        "closed_status": {
+          "available": false,
+          "query_code": 0,
+          "reason": "result_quilt_visit_failed",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "tree_elements_read": 11,
+        "merge_tree": "array_completed",
+        "merge_type": "join"
+      },
+      "kernel_completed_tree": {
+        "elements_read": 11,
+        "limit": 160,
+        "root": {
+          "array": false,
+          "children": [
+            {
+              "array": false,
+              "compound": false,
+              "id": 387,
+              "integer": 946,
+              "value_code": 0,
+              "value_type": 1
+            },
+            {
+              "array": true,
+              "children": [
+                {
+                  "array": false,
+                  "children": [
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3721,
+                      "reference_count": 1,
+                      "value_code": 0,
+                      "value_type": 6
+                    },
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3729,
+                      "integer": 1,
+                      "value_code": 0,
+                      "value_type": 1
+                    }
+                  ],
+                  "compound": true,
+                  "id": 3722
+                },
+                {
+                  "array": false,
+                  "children": [
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3721,
+                      "reference_count": 1,
+                      "value_code": 0,
+                      "value_type": 6
+                    },
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3729,
+                      "integer": 1,
+                      "value_code": 0,
+                      "value_type": 1
+                    }
+                  ],
+                  "compound": true,
+                  "id": 3722
+                }
+              ],
+              "compound": false,
+              "id": 3723
+            },
+            {
+              "array": false,
+              "compound": false,
+              "id": 1116,
+              "integer": 1,
+              "value_code": 0,
+              "value_type": 1
+            },
+            {
+              "array": false,
+              "compound": false,
+              "id": 1964,
+              "string": "PROBE_MERGE",
+              "value_code": 0,
+              "value_type": 5
+            }
+          ],
+          "compound": true,
+          "id": 386
+        },
+        "truncated": false
+      }
+    },
+    {
+      "job_id": "9b64c0fb330b49a285200d286934bc06",
+      "model_id": "35576f451b504977a5cb8ebe863d71d6",
+      "created_at": "2026-11-07T13:37:05.931831+00:00",
+      "status": "unknown_outcome",
+      "message": "Native worker timed out; inspect Creo and the native checkpoint before retrying",
+      "route": "INCOMPLETE route plus a temporary quilt-id scan diagnostic",
+      "operation": {},
+      "kernel_completed_tree": {
+        "elements_read": 11,
+        "limit": 160,
+        "root": {
+          "array": false,
+          "children": [
+            {
+              "array": false,
+              "compound": false,
+              "id": 387,
+              "integer": 946,
+              "value_code": 0,
+              "value_type": 1
+            },
+            {
+              "array": true,
+              "children": [
+                {
+                  "array": false,
+                  "children": [
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3721,
+                      "reference_count": 1,
+                      "value_code": 0,
+                      "value_type": 6
+                    },
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3729,
+                      "integer": 1,
+                      "value_code": 0,
+                      "value_type": 1
+                    }
+                  ],
+                  "compound": true,
+                  "id": 3722
+                },
+                {
+                  "array": false,
+                  "children": [
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3721,
+                      "reference_count": 1,
+                      "value_code": 0,
+                      "value_type": 6
+                    },
+                    {
+                      "array": false,
+                      "compound": false,
+                      "id": 3729,
+                      "integer": 1,
+                      "value_code": 0,
+                      "value_type": 1
+                    }
+                  ],
+                  "compound": true,
+                  "id": 3722
+                }
+              ],
+              "compound": false,
+              "id": 3723
+            },
+            {
+              "array": false,
+              "compound": false,
+              "id": 1116,
+              "integer": 1,
+              "value_code": 0,
+              "value_type": 1
+            },
+            {
+              "array": false,
+              "compound": false,
+              "id": 1964,
+              "string": "PROBE_MERGE",
+              "value_code": 0,
+              "value_type": 5
+            }
+          ],
+          "compound": true,
+          "id": 386
+        },
+        "truncated": false
+      }
+    }
+  ],
+  "conclusion": "Both routes create an ACTIVE (0) feature that owns four PRO_SURFACE items and no PRO_QUILT item; the quilt visit answers -4. The extracted tree of the INCOMPLETE route shows the kernel itself completed both members with PRO_E_SRF_MRG_QUILT_REF and PRO_E_SRF_MRG_QUILT_SIDE=1, and PRO_E_SRF_MRG_TYPE=1 (JOIN), so the completed tree is identical to the explicit one. No result quilt exists to measure, so the gate stays."
+}

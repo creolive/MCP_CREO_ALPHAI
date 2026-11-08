@@ -1,8 +1,8 @@
 # FEAT-058：原生矩形钣金平面壁及就地改型
 
-> **2026-11-07 新反馈（DEV-074）：** 报告方Creo10复现非零`origin=[-92.5,-116]`的185×232×1→100×60×1改型得到17200而非6000mm³并回滚。本轮只补逐尺寸诊断，**几何缺陷尚未修复**；下一步见[H01](../development/DEV-074-HANDOFF.md)。原有成功矩阵不覆盖此反例。
+> **2026-11-07 新反馈（DEV-074）：** 报告方Creo10复现非零`origin=[-92.5,-116]`的185×232×1→100×60×1改型得到17200而非6000mm³并回滚。本轮已按 H01 定性根因并修复，Creo 12.4.0.0 实机 14 例矩阵通过；Creo 10 与字面“会话擦除后重载”仍未验证。证据见 [FEAT-058-H01-2026-11-07](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)。原有成功矩阵不覆盖此反例。
 
-类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；A04 矩形首壁与就地改型已交付（原始实机 67/67），0.12.0 时点公开工具 95→97，默认模板路线保留。**仍开放**：非矩形/多环截面、四壁/第二折边、显式支撑面 origin、Creo 9/10 实机、WorkBuddy 黑盒。目标版本：0.12.0（已发布）。**0.17.0 已交付**：可选 `origin` 首壁定位与保持原点的改型（实机 112/112）；显式平面字典 + 非零 `origin` 仍由 schema 拒绝，斜置/非轴对齐 frame 的 resize 未取实机证据。**0.15.0 已交付**：`thickness_validation` / `thickness_loaded_validation` 双上下文回执；缺 API 的原生独立几何兜底已于 0.16.1 / 0.17.2 R03 实机 77/77 补证；本批 API 字段说明增量仍仅离线验证。
+类型：功能。优先级：P2。状态：已发布 **0.12.0**（2026-11-04；远端发布链与当前原始报告已复核）；A04 矩形首壁与就地改型已交付（原始实机 67/67），0.12.0 时点公开工具 95→97，默认模板路线保留。**仍开放**：非矩形/多环截面、四壁/第二折边、显式支撑面 origin、Creo 9/10 实机、WorkBuddy 黑盒。**0.17.0 已交付**：可选 `origin` 首壁定位与保持原点的改型（实机 112/112）；显式平面字典 + 非零 `origin` 仍由 schema 拒绝，斜置/非轴对齐 frame 的 resize 未取实机证据。**0.15.0 已交付**：`thickness_validation` / `thickness_loaded_validation` 双上下文回执；缺 API 的原生独立几何兜底已于 0.16.1 / 0.17.2 R03 实机 77/77 补证；本批 API 字段说明增量仍仅离线验证。**0.18.3 已交付（2026-11-07）**：非零 `origin` 大跨度 resize 按尺寸实测方向写入有符号值，Creo 12.4.0.0 实机 14/14，见 [H01 证据](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)。目标版本：0.12.0/0.15.0/0.16.1/0.17.0/0.18.3（均已交付子项）；坐标换参、扩展 frame 与非矩形截面未排期。
 
 来源：2026-11-03 用户要求比较 alphai 项目并建立由用户自行派工的计划；静态参考源码不构成当前实机证据。
 
@@ -225,3 +225,15 @@ Python 归一化：缺字段、非对象、未知 `status`/`source`、context �
 ## 2026-11-07 DEV-074 反馈对照（离线）
 
 0.17.4 四份外部 Creo 10 报告与当前代码已逐项对照。已有正证据、此次离线增量和未完成边界见 [MAPPING](../validation/feedback-0.17.4-2026-11-07/MAPPING.md) 与 [接手清单](../development/DEV-074-HANDOFF.md)。本轮未连接 Creo；不以离线编译/单元测试关闭原生几何或保存重载验收，不改变历史证据结论。
+
+## 2026-11-07 H01 非零 origin 跨轴 resize 修复（Creo 12.4.0.0 实机）
+
+根因（实机测得，不是推断）：驱动草图的 5 个尺寸是"到截面轴的距离"，其中 `coord_wall_1_end_y`（id 7，`PRO_TK_DIM_PNT_PNT_HORIZ`，引用坐标系原点 + `wall_1` 终点）在 `origin=[-92.5,-116]` 下当前值 116 而角点在截面 x=−116；目标 100×60 需要该角点落到截面 x=+56，`fabs()` 写法只能把它解到原侧的 −56，于是 v 跨距 `[-116,56]`=172、体积 17200 被回滚。尺寸方向属于尺寸本身，不能从记录值推导（首版按记录符号推断导致连续改型 100×60→150×180 解成 7800）。5 个尺寸语义、定位矩阵、引用与角点坐标均记录在证据文件中。
+
+修复（`native/planar_wall.cpp`）：新增 `planar_wall_dimension_side()`，用 `ProSecdimReferencesGet` 取该尺寸引用的线段端点，按 `value = side × coordinate` 实测方向；写值改为 `side * resized_coordinate`（负值即翻到轴另一侧），读回校验改为比较绝对值，允许 Creo 以负值保存。新增 `PLANAR_WALL_RESIZE_LOCATION`、`PLANAR_WALL_RESIZE_CORNER`、`PLANAR_WALL_RESIZE_DIMREF`、`PLANAR_WALL_RESIZE_ENVELOPE` 诊断，体积不符报错附带实测 u/v/n 包络。feature id、origin、厚度、`origin=[0,0]` 路径（该路径 `side` 恒 +1，写入值与旧实现相同）与全部守卫保留。中间版本（按记录符号推断方向）的连续改型失败证据一并记录。
+
+实机（Creo 12.4.0.0 / 匹配 SDK / Windows x64，同一会话串行提交，驱动 `tools/test_planar_wall_origin_resize.py --live --confirm-session-usable`）：14 例全部通过，均断言体积、实测 bbox、原生包络、feature id 前后一致、origin、厚度、`saved_file_reloaded_and_verified=true`、revision 前进——`xy_neg_cross` 185×232→100×60 得 6000（job `c408c679…`）、恒等 42920、小改 41400、不跨轴 20000、连续改型 6000→27000、放大 42920、`origin=[0,0]` 6000、正 origin 2400、混合 origin 1500、XZ 6000、YZ 6000、负厚度方向 6000、同计划 6000、save/reload 后 6000。报告与 SHA256 见证据目录。
+
+验证：`bridge.py build` 退出 0（worker `71EE9AD4…`）；`tests.unit.test_native_planar_wall` 53 项 OK（新增 `OriginCrossingResizeTest` 3 项）；`tools/test_planar_wall_origin_resize.py` 离线通过；`test_adoption_planar_wall.py` 与 `test_first_wall_origin.py` 离线通过；`ruff check`/`format --check` 通过。
+
+未验证：字面"会话擦除后重载"（erase 工具拒绝受管模型、重新 adopt 被拒 `managed_output`/`source_origin_mismatch`，本轮以 native save（保存+重载+校验）后再 resize 与跨 job resize 覆盖）；`test_adoption_planar_wall.py --live` 77 项本轮两次被其它客户端的 `session_status` 占用通道打断，未取得完整通过；Creo 9/10 实机、WorkBuddy 黑盒、XZ/YZ 负厚度方向、旋转 frame 与带子特征拒绝路径未重跑。证据：[SUMMARY](../validation/FEAT-058-H01-2026-11-07/SUMMARY.md)。
