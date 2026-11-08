@@ -65,6 +65,7 @@ REGISTERED_OPERATIONS = (
     "surface_boundary_fill",
     "surface_round",
     "surface_group_measure",
+    "surface_curvature",
     "quilt_merge",
     "project_curve",
     "boolean_bodies",
@@ -555,6 +556,7 @@ def families() -> dict:
                 "creo_surface_offset",
                 "creo_measure_surface_group",
                 "creo_surface_round",
+                "creo_measure_surface_curvature",
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
@@ -565,7 +567,10 @@ def families() -> dict:
                 "direction reference; offset one quilt along its surface normal; "
                 "measure a group of quilts read-only (open boundary edges, seam gap "
                 "against a tolerance, overlapping face area); round the edge shared by "
-                "two member faces of one quilt with a constant radius"
+                "two member faces of one quilt with a constant radius; analyse the "
+                "principal curvature of member faces and the normal angle across a "
+                "shared edge numerically. There is no zebra-stripe or curvature-comb "
+                "visualization API; the numeric analysis is the equivalent deliverable"
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
@@ -593,7 +598,13 @@ def families() -> dict:
                 "geometry ids (no holes, second loops, open chains or solid output), its "
                 "closure/order is checked from sampled curve endpoints at a 0.01 mm "
                 "tolerance in a known length unit, and its native tree is offline "
-                "implemented without hardware acceptance"
+                "implemented without hardware acceptance; "
+                "creo_measure_surface_curvature is numeric only (principal curvature, "
+                "radius and direction per UV sample, plus the normal angle across a "
+                "shared edge); Creo Toolkit has no zebra-stripe or curvature-comb "
+                "visualization API, so no image is produced, samples outside the trimmed "
+                "face are counted rather than measured, and its native sampling is "
+                "offline implemented without hardware acceptance"
             ),
         },
         "boolean_bodies": {
@@ -690,6 +701,34 @@ def families() -> dict:
                 "multi-set or solid target; edge-chain needs a quilt edge id channel that "
                 "creo_inspect_model does not publish (its edges enumerate solid faces only); "
                 "the quilt result is open by nature, so no solid volume is expected"
+            ),
+        },
+        "surface_curvature": {
+            "enabled": True,
+            "tool": "creo_measure_surface_curvature",
+            "scope": (
+                "read-only numerical curvature analysis of one or two member faces of one "
+                "quilt: principal curvatures (1/mm), curvature radii (mm), principal "
+                "directions, the aggregate max absolute curvature and min curvature radius, "
+                "and, for two faces sharing an edge, the normal angle across that edge"
+            ),
+            "native_test": (
+                "offline implemented on Creo 12.4.0.0 SDK; no hardware acceptance yet. The "
+                "2026-11-08 SDK re-check found ProSurfacePrincipalCrvtEval as the only "
+                "curvature query; ProSurfaceParamRangeGet does not exist in this SDK, so the "
+                "UV extents come from ProSurfaceDataGet"
+            ),
+            "limits": (
+                "no zebra-stripe or curvature-comb image: Toolkit has no such API, and the "
+                "numeric analysis is the declared equivalent; every sample is a UV cell "
+                "centre checked with ProSurfaceUvpntVerify, so a trimmed face reports only "
+                "samples inside its contour (outside samples are counted, not measured); a "
+                "failed curvature query is a count plus a reason, never zero curvature; an "
+                "unknown unit scale keeps 1/mm and mm values null; the G1 angle is the angle "
+                "between the two kernel normals as returned (an opposite-wound neighbour "
+                "would read near 180 degrees and must be confirmed live); the 0.5 degree "
+                "threshold only sets within_g1 and never replaces the measured angle; "
+                "offline implemented, hardware acceptance pending"
             ),
         },
         "sweep": {

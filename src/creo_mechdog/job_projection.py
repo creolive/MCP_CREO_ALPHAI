@@ -220,6 +220,25 @@ SURFACE_GROUP_KEYS = (
     "group",
 )
 
+#: Keys produced by native/surface_curvature.cpp (DEV-074/H08). The face blocks,
+#: the aggregate summary and the G1 block each keep their own status, so a
+#: compact poll can tell a measured zero curvature from an unmeasured sample.
+SURFACE_CURVATURE_KEYS = (
+    "unit_name",
+    "length_scale_to_mm",
+    "curvature_unit",
+    "radius_unit",
+    "quilt_id",
+    "samples_per_direction",
+    "faces",
+    "summary",
+    "g1_max_angle_deg",
+    "g1_status",
+    "g1_threshold_deg",
+    "within_g1",
+    "g1_points",
+)
+
 #: Keys produced by native/surfaces.cpp::generic_surface_solid. ``closure`` is
 #: the measured ProQuiltVolumeEval receipt (available/query_code/reason).
 SOLIDIFY_KEYS = (
@@ -260,6 +279,7 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "surface_boundary_fill": SURFACE_BOUNDARY_FILL_KEYS,
     "surface_round": SURFACE_ROUND_KEYS,
     "surface_group_measure": SURFACE_GROUP_KEYS,
+    "surface_curvature": SURFACE_CURVATURE_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
     "solidify": SOLIDIFY_KEYS,

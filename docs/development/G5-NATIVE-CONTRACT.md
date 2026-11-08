@@ -127,6 +127,8 @@
 | 曲线长度 | `ProCurveLengthEval(ProCurve, double*)` | `ProCurve.h:139` | 已核实 |
 | 曲线端点 | `ProCurveXyzdataEval(ProCurve, param, xyz, deriv1, deriv2)` 在 param=0/1 求值（复合曲线时 deriv 必须为 NULL） | `ProCurve.h:88-116` | 已核实 |
 | quilt 体积 | `ProQuiltVolumeEval`，**要求 quilt 闭合**，否则 `PRO_TK_INVALID_TYPE` | `ProQuilt.h:137-154` | 已核实（故体积不能代替面积） |
+| 主曲率 | `ProSurfacePrincipalCrvtEval(ProSurface, ProUvParam, double* max, double* min, ProVector dirs[2])` 是**唯一**曲率查询；无 `ProCurvature*`、zebra 或曲率梳 API | `ProSurface.h:586-610`、`ProAnalysis.h:10` | 已核实（DEV-074/H08，2026-11-08） |
+| 曲面 UV 范围 | 本机 SDK **无** `ProSurfaceParamRangeGet`；范围取 `ProSurfaceDataGet` → `ProSurfacedata.uv_min/uv_max` | `ProSurface.h:196`、`ProSurfacedata.h:197-215` | 已核实（**方案 API 名不存在**） |
 | 长度单位换算 | 本机已有 `native/inspection_units.h` 的 `InspectionLengthUnits`（主单位系 + 长度单位名）与 `native/assembly_units.h` 的 `length_scale_to_mm`（真实换算比例） | `native/inspection_units.h:8-30`、`native/assembly_units.h:21-56` | 已核实（**复用，不另写**） |
 | 面积单位换算 | SDK 无面积单位；面积是长度²，须用 `scale_to_mm²` | 同上（比例的平方） | 已核实（推导规则见 §4.4） |
 
@@ -812,6 +814,54 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 - 结果是否稳定为 1 个 `PRO_QUILT`、面积/闭合读数与边界边数是否与输入环一致；
 - 非 mm 单位（当前直接拒绝）、曲率/多条闭合链、Creo 9/10 未测。
 
+### 2.13 surface_curvature：数值等价交付与限制（DEV-074/H08，离线实现）
+
+**问题**：外部需求中的「曲率梳 / 斑马纹」是可视化检查。2026-11-08 对本机 Creo 12.4.0.0 SDK
+逐头文件复核：**没有** `ProCurvature*`、zebra 或曲率梳 API；全 SDK 与曲率有关的只有
+`ProSurface.h:586` 的 `ProSurfacePrincipalCrvtEval(ProSurface, ProUvParam, double* max,
+double* min, ProVector dirs[2])`（给定 UV 点返回最大/最小主曲率与主方向）。`ProAnalysis.h`
+只提供 `PRO_ANALYSIS_CLASS_EXTERNAL(8)` 的外部自定义分析类注册，没有内置曲率/斑马/梳图类型。
+因此曲率梳/斑马纹不是门禁问题，而是**没有接口**；可交付的是**数值分析**（曲率梳的数据面），
+并明确**不提供可视化图像**。
+
+**SDK 参数域修正**：本机 SDK **不存在** `ProSurfaceParamRangeGet`。UV 范围取自内核自己的
+曲面数据 `ProSurfaceDataGet` → `ProSurfacedata.uv_min/uv_max`；范围缺失或退化（非有限、
+`u_max <= u_min`、`v_max <= v_min`）是失败并给 `surface_uv_range_unavailable`，不猜 0..1。
+每个 UV 采样点再用 `ProSurfaceUvpntVerify` 判断是否落在裁剪后的面内：面外点只计数
+（`outside_contour_count`），不参与曲率统计，也不填 0。
+
+**原生路线**：
+
+1. `resolve_quilt_reference` 解析一个 quilt；`ProQuiltSurfaceVisit` 取成员面（id + handle）。
+2. 请求的面（`{kind:"surface",id:N}` 或零基成员索引）必须在成员面内；否则创建 job 后失败并回滚
+   （只读 job 不产生特征，revision 不变）。
+3. 对每个请求面，按 `samples_per_direction`（5–50，默认 12）在 UV 范围上取**单元中心**栅格；
+   `ProSurfaceUvpntVerify == PRO_UV_INSIDE` 后调用 `ProSurfacePrincipalCrvtEval`。
+4. 每点回执 `u`/`v`、最大/最小主曲率（1/mm）、对应曲率半径（mm）与主方向（无量纲单位向量）。
+5. 汇总 `max_abs_curvature_per_mm`、`min_curvature_radius_mm`、`sample_count`、`failure_count`。
+6. 请求两个共享边成员面时：两侧面的轮廓边经 `ProSurfaceContourVisit` + `ProContourEdgeVisit`
+   收集，按 `ProEdgeIdGet`（无 id 时按 handle）求交；对每条共享边用 `ProEdgeXyzdataEval` 采样
+   17 点，每侧用 `ProSurfaceParamEval` + `ProSurfaceXyzdataEval` 取单位法向，回执
+   `g1_max_angle_deg` 与逐点 `angle_deg`。
+
+**单位与失败**：曲率为长度的倒数，`1/mm = curvature_native / scale_to_mm`；曲率半径
+`mm = radius_native * scale_to_mm`。长度单位尺度未知时所有 1/mm 与 mm 值为 `null` +
+`unit_scale_unknown`，方向与采样计数仍保留。某个采样点的曲率查询失败只增加 `failure_count`，
+不写 0；整面无任何面内采样点时该面 `available=false` 并给
+`no_curvature_samples_inside_face` 或 `principal_curvature_eval_failed`。
+
+**G1 限制**：`g1_max_angle_deg` 是两个内核法向（按 `ProSurfaceXyzdataEval` 返回值）之间的夹角，
+不做朝向折叠；如果相邻面绕向相反，读数会接近 180°，必须在实机确认。`g1_threshold_deg = 0.5`
+只用于 `within_g1` 标记，**不替代**实测角度；无共享边时为 `null` + `no_shared_edge`。
+
+**明确不提供**：斑马纹、曲率梳或任何图像/截图输出；多面（>2）G1 链、G1/G2 连续性判定、
+自动修复、曲率极值搜索与曲面质量打分。
+
+**离线实现**：`native/surface_curvature.cpp` 的 `generic_surface_curvature`，只读
+（`generic_bridge.submit(readonly=True)`，原生不会 `ProSolidRegenerate`，revision 不变）。
+**实机未验证**：曲率数值、UV 范围的真实可用性、面内采样比例、G1 角度与 0.5° 阈值、
+非 mm 单位、Creo 9/10 均待实机。
+
 ---
 
 ## 3. 第一版能力边界（冻结）
@@ -1138,6 +1188,50 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 
 **边界**：`gap_search_mm` 之外的间距不计入 `gap_max_mm`（仍按开放边计数）；重叠面积是网格采样
 估计而不是布尔求交；判定基于采样边界几何，不是内核缝/布尔特征。
+
+### 4.9 曲面曲率与 G1 分析字段（DEV-074/H08）
+
+**测量对象**：一个 quilt 的 1–2 个成员面（`creo_measure_surface_curvature`，只读作业）。
+成员面由 `ProQuiltSurfaceVisit` 枚举；请求用 `{kind:"surface",id:N}` 或零基成员索引。
+
+**方法**：见 §2.13。UV 范围来自 `ProSurfaceDataGet`（本机 SDK 无
+`ProSurfaceParamRangeGet`），采样点为单元中心并用 `ProSurfaceUvpntVerify` 过滤；曲率来自
+`ProSurfacePrincipalCrvtEval`；G1 法向来自共享边采样 + `ProSurfaceParamEval` +
+`ProSurfaceXyzdataEval`。不提供斑马纹/曲率梳图像。
+
+**冻结字段**（每个值独立 `*_status`，结构见 §4.4.1）：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `quilt_id` | `int` | 被分析的 quilt 几何 ID |
+| `samples_per_direction` | `int` | 每方向 UV 采样密度（5–50，请求值回显） |
+| `curvature_unit` / `radius_unit` | `"1/mm"` / `"mm"` | 曲率与半径单位 |
+| `faces[]` | `list[object]` | 每个请求面一个块 |
+| `faces[].surface_id` | `int \| null` | 面的几何 ID |
+| `faces[].uv_range_mm_surface_parameters` | `list[float] \| null` | `[u_min,u_max,v_min,v_max]`，曲面参数不是 mm |
+| `faces[].uv_range_status` | `object` | §4.4.1 结构 |
+| `faces[].status` | `object` | 该面采样状态；整面无面内采样点为 `available=false` + reason |
+| `faces[].sample_count` / `failure_count` / `outside_contour_count` | `int \| null` | 面内成功采样数 / 失败数 / 裁剪域外样本数 |
+| `faces[].max_abs_curvature_per_mm` / `_status` | `float \| null` / `object` | 该面最大绝对主曲率 |
+| `faces[].min_curvature_radius_mm` / `_status` | `float \| null` / `object` | 该面最小曲率半径；全零曲率时 null + `zero_curvature` |
+| `faces[].points[]` | `list[object]` | 面内成功采样的逐点记录 |
+| `points[].u` / `.v` | `float` | UV 参数 |
+| `points[].max_curvature_per_mm` / `.min_curvature_per_mm` | `float \| null` | 最大/最小主曲率（1/mm） |
+| `points[].max_radius_mm` / `.min_radius_mm` | `float \| null` | 对应曲率半径（mm）；该方向零曲率或单位未知时 null |
+| `points[].max_direction` / `.min_direction` | `list[float]` | 主方向单位向量（无量纲） |
+| `points[].status` | `object` | §4.4.1 结构（含 `curvature_unit`/`radius_unit`） |
+| `summary.max_abs_curvature_per_mm` / `_status` | `float \| null` / `object` | 全请求面汇总 |
+| `summary.min_curvature_radius_mm` / `_status` | `float \| null` / `object` | 全请求面汇总 |
+| `summary.sample_count` / `failure_count` / `face_count` | `int \| null` | 汇总计数 |
+| `g1_max_angle_deg` / `g1_status` | `float \| null` / `object` | 两个请求面的共享边最大法向夹角（deg）；无共享边时 null + `no_shared_edge` |
+| `g1_threshold_deg` | `0.5` | 仅用于 `within_g1` 标记 |
+| `within_g1` | `bool \| null` | `g1_max_angle_deg <= g1_threshold_deg`；不替代实测角度 |
+| `g1_status.shared_edge_count` / `.sample_count` / `.failure_count` | `int \| null` | 共享边数与采样计数 |
+| `g1_points[]` | `list[object]` | 逐点 `edge_id`、`edge_parameter`、`point_mm`、两侧 `first_uv`/`second_uv`、`angle_deg` |
+
+**规则**：单位尺度未知时 1/mm 与 mm 值为 null + `unit_scale_unknown`，方向与计数仍发布；
+查询失败只增加 `failure_count`，不得伪造 0；单面请求时 G1 块 `available=false` +
+`two_faces_required`；只读作业不写模型、不推进 revision。
 
 ---
 

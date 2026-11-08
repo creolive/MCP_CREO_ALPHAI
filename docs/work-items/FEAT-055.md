@@ -1,6 +1,6 @@
 # FEAT-055：Q08–Q10 三曲面操作链重规划
 
-日期：2026-11-02。类型：功能/技术路线。优先级：P2。状态：已交付 0.18.4 子项（H08 曲线边圆角契约登记）；**2026-11-08 离线实现 `surface_round` / `creo_surface_round`，公开工具 104→105，实机未验证**；其余未排期（0.11.5/0.11.7/0.12.0 反馈批的归档与逐条映射挂在本卡下，派工编号 Q00—Q07；0.13.0 反馈批见修复计划）。Q00 归档已完成；Q09 投影曲线与 Q10 曲面修剪/加厚测量已由 [FEAT-039](FEAT-039.md) 在 **0.13.0** 实机公开（`creo_project_curve`、`creo_surface_trim`）；Q08 边界混合/`surface_loft` 路线仍不成立，没有公开工具或已注册操作；Q01—Q07 尚未整体实现，按 [0.13.0 修复计划](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md) 分批推进（本轮仅完成 R07 契约文档的离线部分）。**H08（0.18.4，2026-11-08）：曲面边圆角经实机确认可行（`PRO_FEAT_ROUND` + 两相邻面，结果留在 quilt 上，R3 后 5 面 1187.1238898038469 mm²）；同日离线实现并注册 `surface_round` / `creo_surface_round`，实机验收仍待另一轮**；曲率梳/斑马纹无 SDK API，跨边 G1 只有测量思路，见文末 H08 段。目标版本：0.18.4（H08 子项已交付）；剩余未排期。关联 [DEV-053](DEV-053.md)、[FEAT-053](FEAT-053.md)、[FEAT-039](FEAT-039.md)、[FEAT-054](FEAT-054.md)、[DEV-064](DEV-064.md)。
+日期：2026-11-02。类型：功能/技术路线。优先级：P2。状态：已交付 0.18.4 子项（H08 曲线边圆角契约登记）；**2026-11-08 离线实现 `surface_round` / `creo_surface_round`，公开工具 104→105，实机未验证**；**同日离线实现数值曲率/G1 分析 `surface_curvature` / `creo_measure_surface_curvature`，公开工具 106→107（实机未验证；不提供斑马纹/曲率梳图像）**；其余未排期（0.11.5/0.11.7/0.12.0 反馈批的归档与逐条映射挂在本卡下，派工编号 Q00—Q07；0.13.0 反馈批见修复计划）。Q00 归档已完成；Q09 投影曲线与 Q10 曲面修剪/加厚测量已由 [FEAT-039](FEAT-039.md) 在 **0.13.0** 实机公开（`creo_project_curve`、`creo_surface_trim`）；Q08 边界混合/`surface_loft` 路线仍不成立，没有公开工具或已注册操作；Q01—Q07 尚未整体实现，按 [0.13.0 修复计划](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md) 分批推进（本轮仅完成 R07 契约文档的离线部分）。**H08（0.18.4，2026-11-08）：曲面边圆角经实机确认可行（`PRO_FEAT_ROUND` + 两相邻面，结果留在 quilt 上，R3 后 5 面 1187.1238898038469 mm²）；同日离线实现并注册 `surface_round` / `creo_surface_round`，实机验收仍待另一轮**；曲率梳/斑马纹无 SDK API，跨边 G1 只有测量思路，见文末 H08 段。目标版本：0.18.4（H08 子项已交付）；剩余未排期。关联 [DEV-053](DEV-053.md)、[FEAT-053](FEAT-053.md)、[FEAT-039](FEAT-039.md)、[FEAT-054](FEAT-054.md)、[DEV-064](DEV-064.md)。
 
 ## 来源
 
@@ -113,11 +113,37 @@ C1/C2 的解析 oracle 精确命中：1200 − 2×3×10 + (π/2×3)×10 = **1187
   **实机未验证**：需另跑 H08 C1/C2/C5 同构用例并记录保存重载与回滚。
 - 分析侧：只能承诺数值读数（`ProSurfacePrincipalCrvtEval` 的主曲率与方向）；跨边 G1 的实现路径
   是共享边参数采样 → 两侧面各取法向（`ProSurfaceParamEval`/`ProSurfaceXyzdataEval`、
-  或 `ProSurfaceTessellationGet` + `ProTessellationNormalsGet`）→ 夹角 ≤0.5°，**尚未实现**，
-  本轮不发布任何 G1 数值，也不提供斑马/梳图。
+  或 `ProSurfaceTessellationGet` + `ProTessellationNormalsGet`）→ 夹角 ≤0.5°。该路径**已由下一节
+  离线实现**（`surface_curvature` / `creo_measure_surface_curvature`，实机未验证）；仍然
+  **不提供任何斑马/梳图**。
 
 证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、
 [h08_surface_round_probe.json](../validation/dev074-h07-h08-2026-11-08/h08_surface_round_probe.json)
 （SHA256 `D74FF061…FB6E64D5`）。**未覆盖**：edge-chain 变体（无 quilt 边 id）、变半径/full/过渡、
 圆角后继续 thicken/solidify、G1 与曲率实机数值、Creo 9/10。
+
+## 2026-11-08 H08 续：数值曲率与 G1 分析（离线实现，公开工具 106→107）
+
+- 需求对应关系：曲率梳/斑马纹是**可视化**检查；本机 Creo 12.4.0.0 SDK 没有 zebra、曲率梳或
+  `ProCurvature*` API，唯一曲率查询是 `ProSurface.h:586` 的 `ProSurfacePrincipalCrvtEval`。
+  因此本项交付的是**数值分析**（曲率梳的数据面），文档与工具描述都明确**不提供图像**。
+- 新增只读计划操作 `surface_curvature` / 公开工具 `creo_measure_surface_curvature`：
+  一个 quilt + 1–2 个成员面（`{kind:"surface",id:N}` 或零基成员索引）+ 可选
+  `samples_per_direction`（5–50，默认 12）。
+- 原生：`ProQuiltSurfaceVisit` 取成员面并校验归属；UV 范围来自 `ProSurfaceDataGet`
+  （本机 SDK **无** `ProSurfaceParamRangeGet`）；单元中心栅格经 `ProSurfaceUvpntVerify`
+  过滤后调用 `ProSurfacePrincipalCrvtEval`；每点回执 u/v、最大/最小主曲率（1/mm）、
+  曲率半径（mm）与主方向；汇总 `max_abs_curvature_per_mm`、`min_curvature_radius_mm`、
+  `sample_count`、`failure_count`、`outside_contour_count`。
+- 两个共享边成员面：轮廓边求交后沿共享边采样 `ProEdgeXyzdataEval`，两侧用
+  `ProSurfaceParamEval` + `ProSurfaceXyzdataEval` 取法向，回执 `g1_max_angle_deg` 与
+  `g1_points[].angle_deg`；`g1_threshold_deg=0.5` 只设置 `within_g1` 标记，不替代实测角度。
+- 只读：`readonly=True`，原生不 `ProSolidRegenerate`，revision 不变；schema 在 job 创建前拒绝
+  非法 quilt/面引用、重复面、密度越界/非整数；quilt 不存在、面不属于 quilt 由原生在 job 内拒绝。
+- 验证（离线）：`bridge.py build` exit 0；`tests/unit/test_surface_curvature_contract.py` 20 项通过；
+  `mcp.list_tools()` 实测 107 个工具（含 `creo_measure_surface_curvature`）。
+  **实机未验证**：曲率数值、UV 范围可用性、面内采样比例、G1 角度与 0.5° 阈值、非 mm 单位、
+  Creo 9/10。G1 法向按内核返回朝向计算，绕向相反的相邻面可能读成接近 180°，需实机确认。
+- 证据：[EVIDENCE](../validation/dev074-h08-curvature-offline-2026-11-08/EVIDENCE.md)。
+
 

@@ -2328,6 +2328,38 @@ async def creo_measure_surface_group(
 
 
 @mcp.tool(annotations=READ)
+async def creo_measure_surface_curvature(
+    model_id: str,
+    target: dict[str, Any],
+    faces: Annotated[list[Any], Field(min_length=1, max_length=2)],
+    samples_per_direction: int = 12,
+) -> dict[str, Any]:
+    """Analyse principal curvature and G1 numerically (read-only).
+
+    Creo Toolkit has no zebra-stripe or curvature-comb visualization API, so
+    this tool returns the equivalent numbers instead of an image. target is one
+    quilt ({kind:'quilt',id:N} or {kind:'quilt_feature',label:...}). faces names
+    one or two member faces, each as {kind:'surface',id:N} or a zero-based member
+    index; two faces add the shared-edge G1 analysis. samples_per_direction is
+    the UV raster density per direction (5..50, default 12).
+
+    For every sample inside the trimmed face the receipt reports u/v, the
+    maximum and minimum principal curvature (1/mm), their radii (mm) and
+    principal directions. summary carries max_abs_curvature_per_mm and
+    min_curvature_radius_mm with sample/failure counts. With two faces,
+    g1_max_angle_deg is the maximum normal angle across the shared edge and
+    g1_points carries the per-sample angles; g1_threshold_deg is 0.5 and
+    within_g1 is only a marker, never a replacement for the measured angle.
+    Each value has its own status: a failed query is a null value with a reason,
+    never 0, and an unknown unit scale keeps 1/mm and mm values null. The query
+    changes nothing and does not advance the revision.
+    """
+    return await invoke(
+        general.measure_surface_curvature, model_id, target, faces, samples_per_direction
+    )
+
+
+@mcp.tool(annotations=READ)
 async def creo_inspect_model(
     model_id: str,
     detail: Literal["compact", "full"] = "compact",

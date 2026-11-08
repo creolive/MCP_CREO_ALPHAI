@@ -166,8 +166,9 @@ class SurfaceRoundRegistrationTests(unittest.TestCase):
         self.assertNotIn("surface_round", UNAVAILABLE_OPERATIONS)
         tools = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
         self.assertIn("creo_surface_round", tools)
-        # 106 adds creo_surface_boundary_fill (DEV-074/H09, offline implemented).
-        self.assertEqual(len(tools), 106)
+        # 107 adds the read-only creo_measure_surface_curvature (DEV-074/H08)
+        # to the 106 that carry creo_surface_boundary_fill (DEV-074/H09).
+        self.assertEqual(len(tools), 107)
 
     def test_require_available_admits_the_operation(self):
         require_available(validate_operations([surface_round()]))

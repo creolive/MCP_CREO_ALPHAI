@@ -177,7 +177,8 @@ class BoundaryFillCapabilityTests(unittest.TestCase):
 
         tools = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
         self.assertIn("creo_surface_boundary_fill", tools)
-        self.assertEqual(len(tools), 106)
+        # 107 adds the read-only creo_measure_surface_curvature (DEV-074/H08).
+        self.assertEqual(len(tools), 107)
 
     def test_require_available_admits_the_operation(self):
         from creo_mechdog.capabilities import require_available

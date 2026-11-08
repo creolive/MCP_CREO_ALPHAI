@@ -448,3 +448,85 @@ class SurfaceRoundOp(StrictModel):
         if len(ids) != 2:
             raise ValueError("surface_round faces must be two distinct surfaces")
         return self
+
+
+CURVATURE_MIN_SAMPLES = 5
+CURVATURE_MAX_SAMPLES = 50
+
+
+def _curvature_face_problem(reference: Any, index: int) -> str | None:
+    """DEV-074/H08: describe why one curvature member face is unusable.
+
+    A member is named either by its geometry id (``{kind:"surface",id:N}``, the
+    id ``creo_inspect_model`` reports) or by its zero-based position in the
+    quilt's own member-face order. A feature label, an edge or a body is not a
+    face.
+    """
+    if type(reference) is int and not isinstance(reference, bool):
+        if reference < 0:
+            return f"faces[{index}] member index must be nonnegative"
+        return None
+    if not isinstance(reference, dict):
+        return f"faces[{index}] must be {{kind:'surface',id:N}} or a zero-based member index"
+    if reference.get("kind") != "surface":
+        return (
+            f"faces[{index}] must be {{kind:'surface',id:N}}; an edge, plane or body is not a face"
+        )
+    if set(reference) != {"kind", "id"}:
+        return f"faces[{index}] accepts only kind and id"
+    value = reference.get("id")
+    if type(value) is not int or not 0 <= value <= 2147483647:
+        return f"faces[{index}].id must be a nonnegative 32-bit integer"
+    return None
+
+
+class SurfaceCurvatureOp(StrictModel):
+    """Read-only principal-curvature and G1 analysis of quilt member faces.
+
+    DEV-074/H08: the SDK has no zebra-stripe or curvature-comb API, so the
+    equivalent deliverable is numeric. Each requested face is sampled on a
+    bounded UV raster (``samples_per_direction`` 5..50, default 12) and the
+    native side returns the principal curvatures, radii and directions of every
+    sample that lies inside the trimmed face. When two shared-edge member faces
+    are given, the normals are sampled along the shared edge and the angle is
+    reported; the 0.5 degree threshold is only a ``within_g1`` marker, not a
+    substitute for the measured angle.
+
+    The analysis is read-only: it creates no feature and does not advance the
+    revision. One or two faces are accepted; more than two has no field here.
+    """
+
+    op: Literal["surface_curvature"]
+    target: dict[str, Any]
+    faces: Annotated[list[Any], Field(min_length=1, max_length=2)]
+    samples_per_direction: int = 12
+
+    @field_validator("samples_per_direction", mode="before")
+    @classmethod
+    def density_is_a_bounded_integer(cls, value: Any) -> Any:
+        # A density is a real integer; booleans, strings, floats and NaN are
+        # refused before a job exists. The range keeps a raster bounded.
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(
+                "surface_curvature samples_per_direction must be an integer between "
+                f"{CURVATURE_MIN_SAMPLES} and {CURVATURE_MAX_SAMPLES}"
+            )
+        if not CURVATURE_MIN_SAMPLES <= value <= CURVATURE_MAX_SAMPLES:
+            raise ValueError(
+                "surface_curvature samples_per_direction must be between "
+                f"{CURVATURE_MIN_SAMPLES} and {CURVATURE_MAX_SAMPLES}"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def one_or_two_distinct_member_faces(self):
+        problem = quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_curvature target {problem}")
+        for index, reference in enumerate(self.faces):
+            problem = _curvature_face_problem(reference, index)
+            if problem:
+                raise ValueError(f"surface_curvature {problem}")
+        if len(self.faces) == 2 and self.faces[0] == self.faces[1]:
+            raise ValueError("surface_curvature faces must be two different member faces")
+        return self
