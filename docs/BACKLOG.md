@@ -1,5 +1,7 @@
 # 统一开发台账
 
+- **2026-11-08 DEV-066 / DEV-075补步（离线完成，未发布）：** 对照新增0.18.1报告，43个tools文件统一来源，无Git分发2884项0失败/0错误（2项SDK另补通过），补齐报告字段、负例捕获和日志取消跟踪；不连接Creo、不发布。见[工作卡](work-items/DEV-066.md)。
+
 - **2026-11-07 DEV-075 离线反馈批（离线完成，未发布）：** 新分支先比对下载目录0.18.1三份报告；已补校验诊断、质量契约、body边界及漏带的7个测试夹具；无Git分发2878项0失败/0错误（2项SDK另补通过），复用DEV-074已有内容。[接手清单](development/DEV-075-HANDOFF.md)。[工作卡](work-items/DEV-075.md)。本轮不联网、不连接Creo、不合main、不发布。当前实际条目188行/188唯一ID；DEV-074的187为其历史时点。
 
 - **2026-11-07 DEV-074 离线反馈批（未发布）：** 四份0.17.4报告已逐字节归档，对比当前0.18.0代码后补源码包来源降级、阶段计时、失败回执与预览证据等；几何余项和远端核对见[接手清单](development/DEV-074-HANDOFF.md)。当前实际条目 **187 行 / 187 唯一ID**；以下各旧日期统计为历史时点，不作为当前总数。
@@ -357,7 +359,7 @@
 | --- | --- | --- | --- | --- |
 | [DEV-067](work-items/DEV-067.md) | P2 | 开发中（P00 契约已冻结并提交，A01—A04 隔离工作树已就绪；实现负责人仍 unassigned） | 未排期 | alphai能力吸收派工协调：P00/P99；13项/四组子计划，接口/公共文件/依赖、串行实机及逐批交付；新增FEAT-057—064、复用FEAT-001/004/010/035/049。用户自行指派，实现负责人全部unassigned/未启动；[主计划](superpowers/plans/2026-11-03-alphai-capability-adoption-plan.md)、[P00 接口冻结契约](development/ALPHAI-ADOPTION-CONTRACT.md)。 **2026-11-04核验**：本批发布核验已做；新计划R00—R99就绪，当前MCP目录仍95工具，集成/联调入口需先对齐。 [后续计划](superpowers/plans/2026-11-04-alphai-post0120-integration-plan.md)。 |
 | [DEV-061](work-items/DEV-061.md) | P2 | 已交付（0.11.2 已发布） | 0.11.2 | 种子包摘要仓库级闸门：0.10.1 已交付包/安装/检查单三层闸门，但夹具自己写 `docs/seed_package.json`，仓库真实记录与当场重建归档的一致性无断言。**2026-11-02 交付**：新增 `release_integrity.assert_repo_record_matches()`（比对 digest + 声明版本，失配给回填指引），`tools/package_seeds.py` 构包后默认校验、失配保留归档并非零退出（`--allow-record-mismatch` 仅备回填），`RELEASING.md` 第 5 步同步；`tests/unit/test_seed_record_gate.py` 7 项通过（真重建一致、陈旧摘要、版本不符、缺归档、CLI 两种退出）。关联 BUG-089/DEV-053。 |
-| [DEV-066](work-items/DEV-066.md) | P2 | 部分修复（DEV-074：25个来源来源入口无Git降级；其它工具待核对） | 未排期 | `tools/` 离线证据工具硬依赖 PATH 中的 git：报告方实测 37 个脚本调用 git、32 处 `check=True` 无兜底，无 git 时全量 2196 项出现 38 errors、离线证据报告无法生成；负例测试红字（种子摘要不符）与真实失败视觉同形；`session_activity.json` 仍被跟踪且运行时追加。目标：`local_provenance()` 降级为 `{"git":"unavailable"}`、文案与 README/INSTALL 前置、负例输出改 capture；服务本体不依赖 git，不改运行语义。 |
+| [DEV-066](work-items/DEV-066.md) | P2 | 离线工具链完成，未发布；余项交接 | 未排期 | tools直接Git进程调用清零，43个文件共用helper；未知Git身份null、目录SHA256带范围/完整性。报告增skipped/原因/耗时，负例捕获、runtime日志取消跟踪且保留本机字节。无Git分发2884项0失败/0错误、2项SDK另补通过。[验收](development/DEV-066-ACCEPTANCE-2026-11-08.md)；真实客户端/升级与旧锁边界见[H08—H09](development/DEV-075-HANDOFF.md)。 |
 | [DEV-063](work-items/DEV-063.md) | P3 | 待规划 | 未排期 | 单目标 erase inspect 的 `remaining_after` 仍列全部组件；`preview.view_matrix_matches=false` 无说明。目标：`detail=compact` 只回 counts + 抽样（`detail=full` 保持现状、字段不裁剪），并在工具描述/README 解释视角字段。本批只登记。 |
 | [DEV-050](work-items/DEV-050.md) | P2 | 已完成（0.7.2 已交付） | 0.7.2 | `tools/dev_check.py` 单元阶段写死 300 秒，完整套件实测 347 秒被判 `unit_tests=timed_out`（1017 项实际通过，[0.7.1 记录](validation/RELEASE-0.7.1.md)）。T02 已新增 `--unit-timeout-seconds`（正整数，默认 900，0/负数/非整数在参数阶段拒绝），报告记录 `unit_test_timeout_seconds` 并保留 passed/failed/timed_out 三态；不改风格工具预算、不重建基线。8 项专项单测通过（300 秒 timed_out / 900 秒 passed 的矛盾以替身复现），`dev_check --skip-unit --work-item DEV-050` success=true。**T08（2026-10-28）**：统一入口全量运行 `dev_check --work-item DEV-049` 通过（1128 项单元 OK，无 timed_out）。见 [T02 记录](development/DEV049-T02-ACCEPTANCE.md)。 |
 | BUG-020 | P2 | 待规划 | 未排期 | STEP 导出会留下 *_out.log.N。需要说明哪些文件是交付产物、哪些是诊断附件，只清理本作业生成的副产物。检查 STEP 仍有效、用户文件未受影响。文件清理由开发者检查，MCP 黑盒只验证返回的文件说明。 |

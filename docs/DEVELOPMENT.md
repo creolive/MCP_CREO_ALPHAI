@@ -1,5 +1,7 @@
 # 开发入口
 
+2026-11-08 [DEV-066](work-items/DEV-066.md) / DEV-075新报告补步：当前tools直接Git调用清零，统一可选来源、报告跳过项/耗时、预期负例捕获、会话日志取消跟踪。无Git/无.git分发2884项0失败/0错误、2项SDK检查在本机另测通过；[验收记录](development/DEV-066-ACCEPTANCE-2026-11-08.md)，[H08—H09接手项](development/DEV-075-HANDOFF.md)。源码仍0.18.0、未发布，未连接Creo。
+
 2026-11-07 [DEV-075](work-items/DEV-075.md)：0.18.1文件夹三份反馈先比对后离线完成；最终无Git分发2878项0失败/0错误（2项SDK另补通过），样式门禁通过；源码版本仍0.18.0，未发布、未连接Creo。已有成果、本批修复及未完成项见[接手清单](development/DEV-075-HANDOFF.md)。开发期间其它流程的原生resize/测试驱动修改保留，不归入本批提交。
 
 2026-11-07 开发分支 [DEV-074](work-items/DEV-074.md)：0.17.4 四份反馈先对比后离线完善；当前版本仍0.18.0，未发布，未连接Creo。完成范围、验证和余项见[接手清单](development/DEV-074-HANDOFF.md)。本批同时清除本文件遗留的 FEAT-063 合并标记和已失效的“未发布/0.16.0”插入段；0.18.0 正式记录保留。
@@ -88,6 +90,10 @@
 6. 每次合入或直接提交到 `main`，均须在同一次交付流程按 [发布规则](development/RELEASING.md#合入-main-必须同步发布) 发布对应版本的 GitHub Release（包括文档和工程配置变更）。核对主干提交、版本标签、附件及 SHA256，并回填 Release 链接；Release 未发布或附件未齐则交付未完成。开发分支上的普通提交不要求发布。
 
 ## 配置开发环境
+
+Git仅用于补充commit/branch/dirty，不是MCP服务、原生编译或离线单测的必需条件。源码ZIP没有`.git`或PATH中没有Git时，证据工具使用分发目录源码SHA256，Git身份明确为null；目录哈希不代表Git提交。`creo_check_environment.development_tools.git_available`只作开发提示，不影响ready_to_build。
+
+全量单测依机器和夹具耗时而变，已有实测约6–18分钟；用`build/unit_test_report.json`的`duration_seconds`、`skipped`和`skipped_tests`核对本次耗时与跳过项。较慢机器可执行`python tools/dev_check.py --unit-timeout-seconds 1800`。移除Git时请保留PowerShell等系统工具；不要把精简PATH造成的命令缺失当作产品故障。离线重建editable包需提前缓存`pyproject.toml`指定的构建wheel，使用`PIP_NO_INDEX=1`和`PIP_FIND_LINKS`指向本地wheel目录；本项目不要求单测时下载依赖。
 
 Windows x64、Python 3.12+。已有源码安装环境可直接安装开发依赖；只运行单元与语言检查时无需安装 Creo、SDK 或许可。正式建模安装可使用 Creo 9、10 或 12 及匹配 SDK；Creo 9 的编译与运行时状态见[兼容矩阵](COMPATIBILITY.md)。
 

@@ -126,6 +126,11 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 .\.venv\Scripts\python.exe tools\test_general.py
 ```
 
+
+Git仅用于补充commit/branch/dirty，不是MCP服务、原生编译或离线单测的必需条件。源码ZIP没有`.git`或PATH中没有Git时，证据工具使用分发目录源码SHA256，Git身份明确为null；目录哈希不代表Git提交。`creo_check_environment.development_tools.git_available`只作开发提示，不影响ready_to_build。
+
+全量单测依机器和夹具耗时而变，已有实测约6–18分钟；用`build/unit_test_report.json`的`duration_seconds`、`skipped`和`skipped_tests`核对本次耗时与跳过项。较慢机器可执行`python tools/dev_check.py --unit-timeout-seconds 1800`。移除Git时请保留PowerShell等系统工具；不要把精简PATH造成的命令缺失当作产品故障。离线重建editable包需提前缓存`pyproject.toml`指定的构建wheel，使用`PIP_NO_INDEX=1`和`PIP_FIND_LINKS`指向本地wheel目录；本项目不要求单测时下载依赖。
+
 `tools/test_general.py` 等集成测试会真实连接 Creo 并创建测试模型；语言／单元检查与 Creo 实机验收分别记录证据。
 
 ## 许可证

@@ -20,6 +20,17 @@
 | H06 / FEAT-059/063及曲面历史余项 | 事务日志已交付，原生骨架/绑定未实现；box_frame仅唯一固定模板。曲面loft/merge/闭合测量/非平面fill/曲面fillet/薄壁整链继续开放。 | 先复用现有计划和DEV-074-HANDOFF H02—H10，按原生路线逐项取得几何/保存重载证据；不要因本目录反馈扩写未授权新工具或绕过门禁。 |
 | H07 / DEV-072/074/075 | 本轮未核远端0.18.1/tag/main/Release/四附件/body。报告有外部下载通过陈述，没有其_local原始JSON/日志。其它流程新增的POSTCHECK须独立检查来源和时间。 | 联网后执行check_release_assets精确tag，记录Asia/Shanghai时间、tag提交/主干、四件名/大小/API digest、本地SHA256/sidecar/body。写新POSTCHECK，不移动标签或覆盖附件，不把外部摘要冒充本地实算。需补旧原稿时索取真实文件再归档。 |
 
+## 2026-11-08 新增DEV-066报告的后续工作
+
+新增报告及逐项对照见[归档映射](../validation/feedback-dev066-0.18.1-2026-11-07/MAPPING.md)，本批实测见[DEV-066验收记录](DEV-066-ACCEPTANCE-2026-11-08.md)：无Git/无.git全量2884项0失败/0错误、2项SDK在本机补测通过；新报告记录跳过原因和358.797秒耗时，日志无裸ERROR。当前代码8def1e4补齐tools来源读取迁移、报告跳过项/耗时/来源、可选Git环境提示、负例capture和会话日志取消跟踪；缺Git仍保留目录SHA256，Git身份null且标明scope。原生resize的暂停前未提交修改在续做时已不在当前源码，未在本批恢复，不得据旧卡文字判为当前已交付。
+
+| 编号 / 条目 | 本次未做与下一步 | 验收边界 |
+| --- | --- | --- |
+| H08 / DEV-066、FEAT-020 | `test_update_check`只验证无Git来源构建，真实联网检查流程未运行；`startup_retry`/`toolkit_channel`/`toolkit_recovery`仅用拦截客户端的离线入口回归。需要客户端/健康Creo时再按既有授权条件执行。冻结历史`docs/validation/.../g0_driver.py`仍有Git调用，不改原件；需要时用当前受支持驱动或为历史复现提供本机Git。 | 来源降级通过不等于更新网络、重启恢复、真实并发/故障注入通过。WorkBuddy只调用公开MCP观察`creo_check_environment.development_tools`，不读源码/配置、不运行本地脚本。 |
+| H09 / DEV-066 | 取消跟踪保留了当前`session_activity.json`原路径和字节，未演练从仍跟踪该文件的旧tag升级。历史tag/附件不重写；旧版本操作前仍先备份。原卡的`lock_files.open_lock_file`瞬时WinError5低优先级问题没有当前复现，不当作已修。 | 在隔离副本演练旧版tracked日志→新版ignore（先自带夹具和备份，不碰真实日志），核丢失/覆盖保护和读取兼容；锁问题先复现并保留并发/保护语义，未确认前不得清锁或unknown。 |
+
+本批尚未合main或发布；旧0.18.1仍是报告方受测代码，不能标成包含本地修复。需要发布时选未发布版本、对齐各卡与元数据，并按同次Release/四附件规则完成远端后核对，沿用H07。
+
 ## 接手约束
 
 本机只启用MCP_CREO_MechDog_dev并指向本仓库。执行前先核BUG-001恢复记录和可操作会话；不得擅自连接、结束Creo、清unknown或做故障注入。本次未进行Creo建模或远端核对，最后分发回归禁止pip访问索引；编译不等于运行时验收。

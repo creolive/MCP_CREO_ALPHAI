@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-07",
+  "work_items": [
+    "DEV-066",
+    "DEV-075"
+  ],
+  "files": [
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.1\\2026-11-07_CREO_0.18.1_DEV-066未实现且git硬依赖扩散至43个离线证据脚本.md",
+      "archived_path": "originals/2026-11-07_CREO_0.18.1_DEV-066未实现且git硬依赖扩散至43个离线证据脚本.md",
+      "bytes": 10689,
+      "sha256": "5365192c8b01a82195a035467934ea123a5a6741f1acc0940c17f286a5bc7375"
+    }
+  ]
+}
