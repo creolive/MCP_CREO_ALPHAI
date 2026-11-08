@@ -17,7 +17,7 @@
 | H04 / FEAT-039 | **完成**：曲面组级 `open_edges`/`gap_max_mm`/`overlap` 四态测量，实机四例 42 检查通过 | [EVIDENCE](../validation/feat039-h04-surface-group-2026-11-07/EVIDENCE.md) |
 | H06 / FEAT-039 | **完成（保留侧几何子项）**：保留侧真实形心/bbox/世界方向，实机 41 检查通过；trim 标签下游引用 `-4` 仍开放 | [EVIDENCE](../validation/feat039-h06-kept-side-2026-11-07/EVIDENCE.md) |
 | H03 / FEAT-039 | **反证完成，门禁保持**：INCOMPLETE 骨架路线仍 4 面 0 quilt，`quilt_merge` 不解除 | [EVIDENCE](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md) |
-| H09 / FEAT-039 | **完成（替代路线）**：R8 半圆曲面旋转→球面 quilt 804.2477 mm²、trim 球冠 201.0619 mm²、2 mm thicken 404.2183 mm³、solidify 2144.6606 mm³，22 项实机检查通过；任意非平面 fill 仍拒绝、planar fill 未改 | [EVIDENCE](../validation/feat039-h09-surface-revolve-2026-11-07/EVIDENCE.md) |
+| H09 / FEAT-039 | **完成（替代路线）**：R8 半圆曲面旋转→球面 quilt 804.2477 mm²、trim 球冠 201.0619 mm²、2 mm thicken 404.2183 mm³、solidify 2144.6606 mm³，22 项实机检查通过；任意非平面 fill 仍拒绝、planar fill 未改。**2026-11-08 离线增量**：新增独立 `surface_boundary_fill` / `creo_surface_boundary_fill`（工具 105→106），闭合链 `Probbl.h` 树 + `PRO_E_BBL_ADD_CLOSED`、原生端点闭合/顺序校验，**实机未验证** | [EVIDENCE](../validation/feat039-h09-surface-revolve-2026-11-07/EVIDENCE.md)、[本轮离线说明](../validation/dev074-h09-boundary-fill-offline-2026-11-08/EVIDENCE.md) |
 | H11 / DEV-072/074 | **完成**：0.17.3–0.18.2 的 tag/main/Release/四附件/body 本机独立核对 | [POSTCHECK](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md) |
 | H13 / DEV-066 | **完成**：剩余 17 处 Git 读取迁入 `source_provenance.local_provenance`，缺 Git 时明确降级 | 本页 H13 行、[DEV-074 卡](../work-items/DEV-074.md) |
 | H12 / BUG-115、BUG-109、DEV-074 | **完成（2026-11-07 公开 MCP 实机 38/38）**：6 项回执/准入逐项复验，原始报告与字段见 [EVIDENCE](../validation/dev074-h12-receipts-2026-11-07/EVIDENCE.md) | 实机未清 unknown 保护、未启动/关闭 Creo、未故障注入 |

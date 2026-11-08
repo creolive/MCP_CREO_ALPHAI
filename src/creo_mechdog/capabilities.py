@@ -62,6 +62,7 @@ REGISTERED_OPERATIONS = (
     "solidify",
     "surface_trim",
     "surface_loft",
+    "surface_boundary_fill",
     "surface_round",
     "surface_group_measure",
     "quilt_merge",
@@ -548,6 +549,7 @@ def families() -> dict:
             "enabled": True,
             "tools": [
                 "creo_surface_loft",
+                "creo_surface_boundary_fill",
                 "creo_surface_trim",
                 "creo_project_curve",
                 "creo_surface_offset",
@@ -556,7 +558,8 @@ def families() -> dict:
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
-                "(straight interpolation, measured area and closure); trim one quilt "
+                "(straight interpolation, measured area and closure); fill one closed "
+                "non-planar boundary given as an ordered curve chain; trim one quilt "
                 "with another quilt, a datum-plane label or a curve geometry id; "
                 "project one curve geometry id onto one quilt along an explicit "
                 "direction reference; offset one quilt along its surface normal; "
@@ -585,7 +588,12 @@ def families() -> dict:
                 "sampled boundary geometry rather than a kernel boolean; "
                 "surface_round is one constant radius on two member faces of one quilt "
                 "(no variable radius, edge chain, transitions or solid target) and the "
-                "kernel decides whether the two faces share an edge"
+                "kernel decides whether the two faces share an edge; "
+                "surface_boundary_fill is one closed chain of at least 3 ordered curve "
+                "geometry ids (no holes, second loops, open chains or solid output), its "
+                "closure/order is checked from sampled curve endpoints at a 0.01 mm "
+                "tolerance in a known length unit, and its native tree is offline "
+                "implemented without hardware acceptance"
             ),
         },
         "boolean_bodies": {
@@ -637,6 +645,26 @@ def families() -> dict:
                 "or solid output; section order is the loft direction; measured closure comes "
                 "from ProQuiltVolumeEval, so an open quilt is reported as open instead of "
                 "being assumed"
+            ),
+        },
+        "surface_boundary_fill": {
+            "enabled": True,
+            "tool": "creo_surface_boundary_fill",
+            "scope": (
+                "one closed non-planar boundary, given as an ordered chain of at least three "
+                "curve geometry ids, filled by closing the Probbl.h boundary-blend tree across "
+                "its single direction; the receipt reports the result quilt, face count, area, "
+                "closure, boundary edge count and whether solid material appeared"
+            ),
+            "limits": (
+                "one loop only, no holes, second loops, nested lists or open chains; at least "
+                "three distinct curve geometry ids in chain order; consecutive curves must "
+                "share an endpoint within 0.01 mm in a known length unit (sampled from "
+                "ProCurveXyzdataEval, not from the request); a two-curve boundary belongs to "
+                "surface_loft; the planar sketch-based surface_fill operation is unchanged and "
+                "is not a fallback; the native tree is offline implemented and has no "
+                "hardware acceptance yet, so the result quilt and measured closure must be "
+                "confirmed on a real Creo session before relying on it"
             ),
         },
         "surface_round": {

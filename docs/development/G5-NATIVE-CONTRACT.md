@@ -755,6 +755,65 @@ edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
 
 ---
 
+### 2.12 surface_boundary_fill：闭合链非平面填充（DEV-074/H09，离线实现）
+
+**问题**：`surface_fill` 只接受一个平面草图（§2.1 之外的 `PRO_FLAT` +
+`PRO_E_SEC_USE_SKETCH`），没有 3D 边界通道；H09 早前的结论是“任意非平面闭合边界填充不可用”。
+本节新增的是**独立算子**，planar `surface_fill` 的语义与门禁完全不变，二者不互相回退。
+
+**SDK 依据（本机 Creo 12.4.0.0 头文件实读）**：`Probbl.h` 的边界混合树是唯一有文档的方向；
+`PRO_E_BBL_ADD_CLOSED` 位于 `PRO_E_BNBLN_1DIR`/`_2DIR` 下，头文件写明“closes the surface in
+1st or 2nd direction … Value `PRO_B_TRUE` is workable if there are at least 3 curves”。
+因此闭合链至少 3 条曲线，2 条曲线的闭合边界属于 `surface_loft`（两截面直纹面）。
+
+**离线实现（2026-11-08，本轮）**：`native/surface_boundary_fill.cpp` 的
+`generic_surface_boundary_fill` 复用 §2.1 的裸骨架，流程与 `surface_loft` 相同：
+`ProFeatureWithoptionsCreate(PRO_FEAT_CR_INCOMPLETE_FEAT)` → `ProFeatureElemtreeExtract` →
+`ProFeatureWithoptionsRedefine` → ACTIVE。区别只有两点：
+
+1. 边界链的每条曲线各占一个 `PRO_E_STD_CHAIN_HOLDER`，按请求顺序写入
+   `PRO_E_BNBLN_DIR_CURVES`；
+2. 在 `PRO_E_BNBLN_1DIR` 下写 `PRO_E_BBL_ADD_CLOSED = PRO_B_TRUE`，由内核把单向混合闭合成
+   一张填充面。
+
+切向条件、`PRO_E_EXT_SURF_CUT_SOLID_TYPE` 等可选值仍由内核在抽取树中补齐，实现**不**在创建前猜写。
+
+**链校验（原生，创建前）**：对每条曲线用 `ProCurveXyzdataEval(0/1)` 取真实端点，按请求顺序检查
+相邻曲线（含最后一条与第一条）在 `0.01 mm` 容差内相接；相邻曲线可用任一端点匹配（公开引用语法
+不携带曲线方向），但不允许跳过中间曲线。重复 id、非曲线 id、未知长度单位在创建特征前拒绝。
+长度单位未知时无法判定 0.01 mm 容差与面积，直接拒绝并要求先设置模型单位，不猜测、不回退。
+
+**最小契约（离线冻结）**：
+
+| 项 | 公开 | 拒绝 |
+| --- | --- | --- |
+| 操作/工具 | `surface_boundary_fill` / `creo_surface_boundary_fill` | — |
+| 边界 | 一条闭合链，`boundary` 为有序曲线列表，长度 3–200 | 空、1–2 条、嵌套列表/多环、孔 |
+| 曲线引用 | `{kind:"curve",id:N}`，N 为非负 32 位整数 | quilt/face/edge/body、特征标签、带 `label`/`reverse`/额外键 |
+| 重复边 | 每条曲线只出现一次 | 重复 curve id |
+| 闭合/顺序 | 原生按真实端点检查（0.01 mm） | 开放链、乱序链（错误消息给出 `surface_loft`/`project_curve` 替代） |
+| 单位 | 已知长度单位（mm 推荐） | 单位未知（面积与容差都不可判定） |
+| 输出 | 一张开放 datum-surface quilt，不产实体 | 实体、多 quilt、闭合壳（原生检查，失败整体回滚） |
+
+**回执**：`boundary`、`boundary_curve_ids`、`boundary_edges`、`boundary_closed`、
+`chain_gap_max_mm`、`boundary_tolerance_mm`、`route`、`add_closed`、`create_code`/
+`create_element_errors`、`extract_code`、`feature_id`/`feature_status`/`feature_type`/
+`surface_type`、`quilt_id`/`quilt_ids`/`quilt_count`、`surface_area_mm2` 与
+`surface_area_status`、`quilt_closed_native`/`closure`、`face_count`/`face_count_status`、
+`surface_group`（含组级 `boundary_edges`）、`has_solid`/`solid_surface_count`。所有测量值都来自
+原生 quilt 查询，不使用请求值回填；失败由 job 级既有检查点回滚，没有新增回滚机制。
+
+**实机未验证（关键待确认点）**：
+
+- 内核是否把「单向、N 个 chain holder、`PRO_E_BBL_ADD_CLOSED=true`」解释为一张闭合填充面，
+  而不是 N 段单向放样或拒绝该树；
+- `PRO_E_BNBLN_DIR_CURVES` 的顺序与曲线方向是否被内核按提交顺序消费（本实现的端点检查只保证
+  几何上首尾相接，不控制内核的参数方向）；
+- 结果是否稳定为 1 个 `PRO_QUILT`、面积/闭合读数与边界边数是否与输入环一致；
+- 非 mm 单位（当前直接拒绝）、曲率/多条闭合链、Creo 9/10 未测。
+
+---
+
 ## 3. 第一版能力边界（冻结）
 
 ### 3.1 surface_loft

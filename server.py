@@ -2806,6 +2806,37 @@ async def creo_surface_loft(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_boundary_fill(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    boundary: Annotated[list[dict[str, Any]], Field(min_length=3, max_length=200)],
+) -> dict[str, Any]:
+    """Fill one closed non-planar boundary given as an ordered chain of curves.
+
+    boundary is at least three distinct curve geometry ids in loop order, each
+    {kind:'curve',id:N} from creo_inspect_model. The native executor samples
+    each curve's endpoints and refuses an open boundary, a chain whose curves do
+    not meet in the submitted order, a repeated curve and an unknown length
+    unit, with a message naming the alternative (surface_loft for two curves,
+    project_curve to build a missing edge). The boundary blend is closed across
+    its single direction by the kernel. The result is one open datum-surface
+    quilt; the receipt reports quilt_id, face_count, surface_area_mm2,
+    quilt_closed_native, boundary_edges and has_solid with their statuses.
+    Holes, second loops and solid output are refused before a job exists, and
+    the planar sketch-based creo_surface_fill is unchanged. This route is
+    offline implemented on Creo 12.4.0.0 and still requires hardware acceptance.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_boundary_fill", label=label, boundary=boundary)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_surface_round(
     model_id: str,
     expected_revision: int,

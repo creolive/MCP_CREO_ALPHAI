@@ -1396,7 +1396,7 @@ def annotate_surface_group(result: dict[str, Any]) -> dict[str, Any]:
                 group = normalize_surface_group(operation.get("group"))
                 if group is not None:
                     operation["group"] = group
-        elif operation.get("op") == "surface_loft":
+        elif operation.get("op") in ("surface_loft", "surface_boundary_fill"):
             block = operation.get("surface_group")
             if isinstance(block, dict) and "group" in block:
                 group = normalize_surface_group(block.get("group"))

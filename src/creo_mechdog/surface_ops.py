@@ -284,6 +284,91 @@ class ProjectCurveOp(StrictModel):
         return self
 
 
+BOUNDARY_FILL_MIN_CURVES = 3
+BOUNDARY_FILL_MAX_CURVES = 200
+
+
+def _boundary_fill_curve_problem(reference: Any, index: int) -> str | None:
+    """DEV-074/H09: describe why one boundary-fill curve reference is unusable.
+
+    A boundary curve is one ``PRO_CURVE`` geometry id (a sketch curve, a
+    projected curve or a composite curve). Quilts, faces, edges, bodies and
+    feature labels are refused: the native route walks curve endpoints, and a
+    label would name a whole sketch rather than one edge of the loop.
+    """
+    if not isinstance(reference, dict):
+        return (
+            f"boundary[{index}] must be a single {{kind:'curve',id:N}} object in chain order; "
+            "nested loops, holes and multi-loop lists are not supported"
+        )
+    kind = reference.get("kind")
+    if kind != "curve":
+        return (
+            f"boundary[{index}] must be {{kind:'curve',id:N}}; a quilt, face, edge, body or "
+            "feature label is not a boundary curve"
+        )
+    if set(reference) != {"kind", "id"}:
+        return (
+            f"boundary[{index}] accepts only kind and id; a curve id is the geometry id from "
+            "creo_inspect_model, not a feature label or a loop marker"
+        )
+    value = reference.get("id")
+    if type(value) is not int or not 0 <= value <= 2147483647:
+        return f"boundary[{index}].id must be a nonnegative 32-bit integer"
+    return None
+
+
+class SurfaceBoundaryFillOp(StrictModel):
+    """Closed non-planar boundary fill through the boundary-blend kernel route.
+
+    DEV-074/H09: one closed boundary loop, given as an ordered list of curve
+    geometry ids. The native side writes the same ``Probbl.h`` skeleton
+    ``surface_loft`` uses, then closes the blend across its single direction
+    (``PRO_E_BBL_ADD_CLOSED``). Closure and order are geometric: the native
+    side samples each curve's endpoints and refuses a chain whose consecutive
+    curves do not meet, so this model only locks the request shape.
+
+    ``boundary`` is deliberately one flat list: a hole, a second loop or a
+    nested list has no field here and is refused before a job exists. At least
+    three curves are required because the documented closed-blend flag is only
+    workable with three or more curves; a two-curve closed loop is a
+    two-section surface and belongs to ``surface_loft``.
+    """
+
+    op: Literal["surface_boundary_fill"]
+    label: Label
+    boundary: Annotated[list[dict[str, Any]], Field(max_length=BOUNDARY_FILL_MAX_CURVES)]
+    closed: bool = True
+
+    @model_validator(mode="after")
+    def one_ordered_closed_curve_chain(self):
+        if not self.closed:
+            raise ValueError(
+                "surface_boundary_fill only builds a closed boundary; an open chain cannot be "
+                "filled - use surface_loft for a surface between two sections"
+            )
+        if len(self.boundary) < BOUNDARY_FILL_MIN_CURVES:
+            raise ValueError(
+                "surface_boundary_fill needs at least 3 ordered boundary curves (the closed "
+                "blend flag is only workable from 3 curves); split the loop into 3 or more "
+                "curves, or use surface_loft for a two-curve boundary"
+            )
+        ids: list[int] = []
+        for index, reference in enumerate(self.boundary):
+            problem = _boundary_fill_curve_problem(reference, index)
+            if problem:
+                raise ValueError(f"surface_boundary_fill {problem}")
+            ids.append(reference["id"])
+        duplicates = sorted({value for value in ids if ids.count(value) > 1})
+        if duplicates:
+            raise ValueError(
+                "surface_boundary_fill boundary curves must be distinct; repeated curve id(s): "
+                + ", ".join(str(value) for value in duplicates)
+                + ". Remove the duplicate edges from the chain"
+            )
+        return self
+
+
 class SurfaceRoundOp(StrictModel):
     """Constant round on the edge shared by two member faces of one quilt.
 

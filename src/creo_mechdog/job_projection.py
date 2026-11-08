@@ -144,6 +144,44 @@ SURFACE_LOFT_KEYS = (
     "has_solid",
 )
 
+#: Keys produced by native/surface_boundary_fill.cpp (DEV-074/H09): the echoed
+#: ordered chain, the sameness/order evidence, the created quilt id, the
+#: measured face count/area/closure and the boundary edge count. The
+#: ``surface_group`` block carries the group measurement used for
+#: ``boundary_edges``; every measurement keeps its own status.
+SURFACE_BOUNDARY_FILL_KEYS = (
+    "boundary",
+    "boundary_curve_ids",
+    "boundary_edges",
+    "boundary_closed",
+    "boundary_tolerance_mm",
+    "chain_gap_max_mm",
+    "route",
+    "add_closed",
+    "create_code",
+    "create_element_errors",
+    "extract_code",
+    "tree_elements_read",
+    "feature_id",
+    "feature_type",
+    "feature_status",
+    "surface_type",
+    "quilt_visit_code",
+    "quilt_count",
+    "quilt_ids",
+    "quilt_id",
+    "quilt_init_code",
+    "surface_area_mm2",
+    "surface_area_status",
+    "quilt_closed_native",
+    "closure",
+    "face_count",
+    "face_count_status",
+    "surface_group",
+    "has_solid",
+    "solid_surface_count",
+)
+
 #: Keys produced by native/surface_round.cpp (DEV-074/H08): the result quilt id,
 #: the measured face counts/areas before and after, closure, radius and the
 #: solid-face evidence. Every measurement keeps its own status, so a compact
@@ -219,6 +257,7 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
     "surface_loft": SURFACE_LOFT_KEYS,
+    "surface_boundary_fill": SURFACE_BOUNDARY_FILL_KEYS,
     "surface_round": SURFACE_ROUND_KEYS,
     "surface_group_measure": SURFACE_GROUP_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,

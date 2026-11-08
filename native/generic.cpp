@@ -3885,6 +3885,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "surface_group.cpp"
 #include "surface_loft.cpp"
 #include "surface_round.cpp"
+#include "surface_boundary_fill.cpp"
 #include "quilt_merge.cpp"
 #include "project_curve.cpp"
 #include "udf.cpp"
@@ -4172,6 +4173,8 @@ static void execute_operation_body(const J &op) {
         generic_surface_trim(op);
     else if (kind == "surface_loft")
         generic_surface_loft(op);
+    else if (kind == "surface_boundary_fill")
+        generic_surface_boundary_fill(op);
     else if (kind == "surface_round")
         generic_surface_round(op);
     else if (kind == "surface_group_measure")
