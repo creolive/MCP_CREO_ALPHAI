@@ -55,8 +55,6 @@ import asyncio
 import copy
 import hashlib
 import json
-import os
-import subprocess
 import sys
 import time
 import uuid
@@ -107,22 +105,14 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 def local_provenance() -> dict:
     """Record source evidence without recording config, license or session IDs."""
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
+    evidence = collect(ROOT)
     return {
-        "head": git("rev-parse", "HEAD"),
-        "dirty": bool(git("status", "--porcelain")),
-        "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
+        "head": evidence["commit"],
+        "dirty": evidence["dirty"],
+        "branch": evidence["branch"],
+        "git_status": evidence["git_status"],
     }
 
 

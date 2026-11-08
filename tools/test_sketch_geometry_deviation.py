@@ -15,11 +15,8 @@ is refused unless both flags are given.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
-import platform
-import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -221,33 +218,23 @@ def validate_cases(cases: list[dict]) -> None:
 
 
 def provenance() -> dict:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True, timeout=15
-        ).stdout.strip()
+    from creo_mechdog.source_provenance import local_provenance
 
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
+    evidence = local_provenance(
+        ROOT,
+        ("tools/test_sketch_geometry_deviation.py", "tests/unit/test_sketch_geometry_deviation.py"),
     )
-    names.update(
-        {"tools/test_sketch_geometry_deviation.py", "tests/unit/test_sketch_geometry_deviation.py"}
-    )
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
     return {
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
+        "commit": evidence["commit"],
+        "branch": evidence["branch"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+        **{
+            key: evidence[key]
+            for key in ("source_scope", "source_status", "source_errors", "source_file_count")
         },
+        "source_fingerprint": evidence["source_fingerprint"],
+        "environment": evidence["environment"],
     }
 
 

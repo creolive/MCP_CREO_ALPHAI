@@ -5,7 +5,6 @@ import asyncio
 import hashlib
 import json
 import platform
-import subprocess
 import sys
 import time
 import traceback
@@ -21,16 +20,27 @@ sys.path.insert(0, str(ROOT))
 from version import VERSION
 
 
+def provenance() -> dict:
+    from creo_mechdog.source_provenance import local_provenance
+
+    identity = local_provenance(ROOT)
+    return {
+        "source_commit": identity["commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
+    }
+
+
 async def run(output: Path, rounds: int, resume_jobs: list[str]) -> dict:
+    identity = provenance()
     report = {
         "work_item": "BUG-009",
         "version": VERSION,
         "mode": "real MCP and Creo",
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "source_commit": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip(),
-        "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
+        "source_commit": identity["source_commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
         "source_fingerprints": {
             name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             for name in (

@@ -28,9 +28,7 @@ import argparse
 import hashlib
 import json
 import os
-import platform
 import re
-import subprocess
 import sys
 import time
 import uuid
@@ -700,23 +698,10 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    from version import VERSION
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        ).stdout.strip()
-
-    names = set(
-        git("ls-files", "--", "*.py", "native/*.h", "native/*.hpp", "native/*.cpp").splitlines()
-    )
-    names.update(
+    evidence = collect(
+        ROOT,
         (
             "docs/development/G5-NATIVE-CONTRACT.md",
             "tools/test_g5_native_probe.py",
@@ -725,27 +710,21 @@ def local_provenance() -> dict:
             "native/generic.cpp",
             "native/surfaces.cpp",
             "native/blend_create.cpp",
-        )
+        ),
     )
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-        if (ROOT / name).is_file()
-    }
     return {
-        "version": VERSION,
-        "commit": git("rev-parse", "HEAD"),
-        "branch": git("branch", "--show-current"),
-        "dirty": bool(git("status", "--porcelain")),
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
+        "version": evidence["version"],
+        "commit": evidence["commit"],
+        "branch": evidence["branch"],
+        "dirty": evidence["dirty"],
+        "git_status": evidence["git_status"],
+        **{
+            key: evidence[key]
+            for key in ("source_scope", "source_status", "source_errors", "source_file_count")
         },
+        "source_sha256": evidence["source_sha256"],
+        "source_fingerprint": evidence["source_fingerprint"],
+        "environment": evidence["environment"],
         "creo_connected": False,
         "native_build_triggered": False,
     }

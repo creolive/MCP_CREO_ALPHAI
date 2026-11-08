@@ -692,6 +692,11 @@ def check_environment() -> dict:
         "license_diagnostics": license_diagnostics,
         "license_usable": "unverified_here; only successful native feature creation proves it",
         "transport": "stdio",
+        "development_tools": {
+            "git_available": shutil.which("git") is not None,
+            "git_required_for_mcp": False,
+            "scope": "Optional Git provenance only; extracted releases use directory source hashes",
+        },
         "supported_features": [
             op for op in REGISTERED_OPERATIONS if op not in UNAVAILABLE_OPERATIONS
         ],

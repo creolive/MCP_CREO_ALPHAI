@@ -38,26 +38,37 @@ class ProductRulesDriverTests(unittest.TestCase):
             report = json.loads((Path(directory) / "report.json").read_text(encoding="utf-8"))
             if report["git"]["commit"] is None:
                 self.assertIsNone(report["git"]["dirty"])
-                self.assertTrue(report["git"]["error"])
+                self.assertEqual(report["git"]["git_status"], "unavailable")
             else:
                 self.assertEqual(len(report["git"]["commit"]), 40)
                 self.assertIsInstance(report["git"]["dirty"], bool)
+                self.assertEqual(report["git"]["git_status"], "available")
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
             driver.main(["--live"])
         self.assertEqual(error.exception.code, 2)
 
     def test_git_identity_known_and_unavailable(self):
-        with patch.object(
-            subprocess,
-            "run",
-            side_effect=[
-                subprocess.CompletedProcess([], 0, "a" * 40 + "\n"),
-                subprocess.CompletedProcess([], 0, " M server.py\n"),
-            ],
+        root = driver.SOURCE_PATHS.resource_root
+        with (
+            patch("shutil.which", return_value="git"),
+            patch.object(
+                subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 0, str(root) + "\n"),
+                    subprocess.CompletedProcess([], 0, "version.py\n"),
+                    subprocess.CompletedProcess([], 0, "a" * 40 + "\n"),
+                    subprocess.CompletedProcess([], 0, "main\n"),
+                    subprocess.CompletedProcess([], 0, " M server.py\n"),
+                ],
+            ),
         ):
-            self.assertEqual(driver.git_identity(), {"commit": "a" * 40, "dirty": True})
+            self.assertEqual(
+                driver.git_identity(),
+                {"commit": "a" * 40, "dirty": True, "git_status": "available"},
+            )
         with patch.object(subprocess, "run", side_effect=FileNotFoundError("git unavailable")):
             identity = driver.git_identity()
         self.assertIsNone(identity["commit"])
         self.assertIsNone(identity["dirty"])
-        self.assertIn("git unavailable", identity["error"])
+        self.assertEqual(identity["git_status"], "unavailable")

@@ -40,6 +40,17 @@ def protected_files() -> dict:
     return values
 
 
+def provenance() -> dict:
+    from creo_mechdog.source_provenance import local_provenance
+
+    identity = local_provenance(ROOT)
+    return {
+        "source_commit": identity["commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
+    }
+
+
 async def run(args) -> dict:
     settings = creo_startup.Settings.load()
     before = creo_startup.inventory(settings)
@@ -47,14 +58,14 @@ async def run(args) -> dict:
         raise RuntimeError(
             "Cold retry test requires no existing Creo; this script never closes a session"
         )
+    identity = provenance()
     report = {
         "work_item": "BUG-008",
         "version": VERSION,
         "started_at": bridge.now(),
-        "source_commit": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip(),
-        "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
+        "source_commit": identity["source_commit"],
+        "dirty": identity["dirty"],
+        "git_status": identity["git_status"],
         "environment": {
             "os": platform.platform(),
             "python": sys.version,
