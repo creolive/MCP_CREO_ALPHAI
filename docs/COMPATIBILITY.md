@@ -7,6 +7,19 @@
 > **版本归属说明（2026-11-05 补记）：** 当时**已发布**版本为 **0.12.1**，本次交付候选为 **0.13.0**（开发分支验收完成，未合并 main、未发布，见[发布记录](validation/RELEASE-0.13.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-04 补记）：** 当时正式版为 **0.12.0**（见下方对应分节）。本文件按版本分节保留各自时点的结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 
+## 开发分支（DEV-074，未发布）：`creo_quilt_merge` 公开（2026-11-08）
+
+- **支持**：`creo_quilt_merge` 已出现在 MCP 面（公开工具 **107**），对**两片真实接触或相交的 quilt** 做 JOIN。
+  结果不是新 quilt，而是**目标 quilt 原地增长**：原生 `result_quilt_source=retrimmed_target_quilt`，
+  `result_quilt_id` 为目标 id，`area_mm2`/`closed` 均来自实测。
+- **本机实机（Creo 12.4.0.0）**：两片 20×20 共面填充（各 400 mm²）→ 结果 800.0 mm²、开放（`closed=false`）、
+  `saved_file_reloaded_and_verified=true`；同模型 2 mm `thicken` 成功（body 法向跨距 2.0 mm）。
+  2 mm 不相邻负例在创建阶段 `-1` 失败并回滚。证据
+  [EVIDENCE](validation/dev074-h03h07-2026-11-08/EVIDENCE.md)。
+- **边界/未验证**：`INTERSECT`、3 片以上、链式合并、闭合壳体与整组实体化未验收；被消耗的工具 quilt
+  在内核里留下不可测记录（属内核行为）；Creo 9/10、非 mm、WorkBuddy 未测。独立 quilt 偏置（H07）仍不公开，
+  `surface_trim` 的 `offset_mm`/`offset_side` 门禁不变。
+
 ## 折边几何选边（R10，开发分支候选，版本待定，未发布）
 
 - **支持**：`creo_sheetmetal_flange` 的 `edge` 增加 `{"kind":"edge_geometry","endpoints_mm":[[x,y,z],[x,y,z]],"tolerance_mm":1e-6}`，用当前模型坐标毫米的两端点点名一条直线边；`{"kind":"edge","id":N}` 保持不变。`tolerance_mm` 可省略（默认 `1e-6`，范围 `1e-9..1000`），对象只接受这两个键。

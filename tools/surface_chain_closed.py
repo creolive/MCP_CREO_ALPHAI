@@ -1,9 +1,9 @@
 """S08 closed chain case: closed surface -> solidify -> revise -> rollback.
 
-The merge step of the plan's closed chain is still gated, so the closed surface
-comes from a 360 degree revolve instead of a merge. Every expectation is an
-analytic oracle derived from the measured bounding box, and every job must
-report saved_file_reloaded_and_verified.
+The closed surface comes from a 360 degree revolve rather than a merge, so this
+case stays independent of the published ``quilt_merge`` operator. Every
+expectation is an analytic oracle derived from the measured bounding box, and
+every job must report saved_file_reloaded_and_verified.
 """
 
 from __future__ import annotations
@@ -49,12 +49,12 @@ def case_chain_closed_offline(plan: list[dict[str, Any]]) -> dict:
         check("schema_accepts_a_revise", False, {"error": str(error)})
     check("solidify_published", "solidify" not in UNAVAILABLE_OPERATIONS)
     check("revolve_registered", "revolve" in REGISTERED_OPERATIONS)
-    check("quilt_merge_still_gated", "quilt_merge" in UNAVAILABLE_OPERATIONS)
+    check("quilt_merge_published", "quilt_merge" not in UNAVAILABLE_OPERATIONS)
     return {
         "mode": "offline",
         "passed": all(item["ok"] for item in checks),
         "native_chain_closed": "not_verified",
-        "blocked_steps": ["quilt_merge"],
+        "blocked_steps": [],
         "checks": checks,
     }
 
@@ -223,7 +223,7 @@ async def case_chain_closed_live(
         "mode": "live",
         "passed": passed,
         "native_chain_closed": "verified" if passed else "failed",
-        "blocked_steps": ["quilt_merge"],
+        "blocked_steps": [],
         "jobs": jobs,
         "checks": checks,
     }

@@ -1085,13 +1085,13 @@ def case_merge_offline() -> dict:
         rejects({**operation, "tolerance_mm": 0.01}, "tolerance"),
     )
 
-    check("quilt_merge_gated", "quilt_merge" in UNAVAILABLE_OPERATIONS)
-    refused = False
+    check("quilt_merge_published", "quilt_merge" not in UNAVAILABLE_OPERATIONS)
+    admitted = True
     try:
         require_available([operation])
-    except ValueError as error:
-        refused = "no native job was queued" in str(error)
-    check("gate_refuses_before_job", refused)
+    except ValueError:
+        admitted = False
+    check("available_admits_before_job", admitted)
 
     generic = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
     native = (ROOT / "native" / "quilt_merge.cpp").read_text(encoding="utf-8")

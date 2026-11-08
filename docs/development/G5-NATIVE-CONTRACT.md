@@ -475,7 +475,10 @@ S05 的下一步因此被收敛成三件具体事（本机 SDK 不提供命令�
 
 ### 2.9 join 的可测量并集：trim + thicken（S03 的替代路线，2026-11-05 实机）
 
-`quilt_merge` 本身仍然门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
+> **2026-11-08 更新**：`quilt_merge` 已按 §2.4 的 `result_quilt_source` 判据公开；本节的
+> 「trim + thicken + 布尔」仍是**要得到 body 并集**时的有效路线，不再作为 merge 不可用的替代。
+
+（2026-11-05 时点）`quilt_merge` 当时仍门禁：`ProMerge.h` 的数组树建出来的是 ACTIVE 特征，持有 4 个
 `PRO_SURFACE` 项而没有 `PRO_QUILT` 项（JOIN/INTSCT × 贴合/真相交四条路线加交叉复测都如此），
 模型 quilt 数保持 0，所以合并结果无法作为 quilt 交给下游。
 
@@ -691,7 +694,7 @@ PRO_E_FEATURE_TREE
 
 数组成员用 `ProElementArraySet(root, elempath_of(PRO_E_SRF_MRG_QUILT_ARR), members)` 写入，`members` 由 `ProArrayAlloc` 分配；单个成员元素先以无父方式建出再放入数组。
 
-**2026-11-07 实测补充（H03，保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
+**2026-11-07 实测补充（H03，当轮保持门禁）**：`surface_loft` 的「INCOMPLETE 骨架 → extract →
 redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交 join：
 `ProFeatureWithoptionsCreate(..., PRO_FEAT_CR_INCOMPLETE_FEAT)` 返回 **0**、
 `ProErrorlist.total=0`、`ProFeatureElemtreeExtract` 返回 **0**，抽取树 11 个元素，其中
@@ -699,9 +702,28 @@ redefine」方法论对本树**无效**。两张共面共边 20×20 填充提交
 redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_QUILT`、
 4 个 `PRO_SURFACE`（132/134/136/138），与显式写 SIDE 的 HEAD 实现逐项相同。
 输入面积 800.0 mm² 可测，结果面积/闭合不可测；两次失败作业均清理新建模型
-（`terminal_effect.managed_model=no_effect`）。结论：本机数组树即使由内核补全也不产出
-结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
+（`terminal_effect.managed_model=no_effect`）。证据见
 [FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
+
+**2026-11-08 实测结论（H03，门禁已解除）**：**-4 不代表没有结果 quilt，而是结果不是本特征的
+`PRO_QUILT` 几何项**。本机内核把第二片 join 进**目标 quilt**（原地修改）：目标面积
+400 → **800.0 mm²**、外框覆盖 40×20，工具 quilt 变为不可测
+（`ProContourAreaEval=-4`）。因此结果解析按 `result_quilt_source` 分三级，全部来自实测：
+
+1. `feature_quilt_geomitem`：特征拥有恰好 1 个 `PRO_QUILT` 项（历史路径，仍优先）。
+2. `member_surface_quilt`：`ProSurfaceQuiltGet` + `ProQuiltIdGet` 在特征拥有的
+   `PRO_SURFACE` 项中找所属 quilt（`native/quilt_query.h::feature_member_surface_quilt`）。
+3. `retrimmed_target_quilt`：重新测量目标 quilt，只有面积**严格增长**
+   （`> 合并前 + 1e-6`）才认作结果；静默 no-op 面积不变，仍判失败并回滚。
+
+不得改用 `ProQuiltInit` 全 id 扫描找结果（曾使 worker 超时，`unknown_outcome`）。
+实机：job `8c1cd77b…` → `result_quilt_id=82`、`result_quilt_source=retrimmed_target_quilt`、
+`area_mm2=800.0`、`input_area_mm2=800.0`、`closed=false`、
+`saved_file_reloaded_and_verified=true`（revision 2）；同模型 2 mm `thicken` 成功，
+body bbox 法向跨距 2.0 mm。不相邻 2 mm 负例在 `ProFeatureWithoptionsCreate` 返回 **-1**
+并回滚（两片仍各 400 mm²，revision 1→1）。面级引用（`PRO_E_SRF_MRG_QUILT_REF` 指向
+`PRO_SURFACE`）不是可用路线：创建阶段直接 **-1**。
+证据：[H03/H07 证据](../validation/dev074-h03h07-2026-11-08/EVIDENCE.md)。
 
 ### 2.11 曲面边圆角 surface_round（DEV-074/H08，实机验收完成 2026-11-08）
 
@@ -947,13 +969,18 @@ double* min, ProVector dirs[2])`（给定 UV 点返回最大/最小主曲率与�
 
 ### 3.4 quilt_merge
 
-| 项 | 首版公开 | 首版明确拒绝 |
+**状态（2026-11-08）：已公开**。`creo_quilt_merge` 在 MCP 面；`quilt_merge` 不在
+`UNAVAILABLE_OPERATIONS`。门禁解除依据是 §2.4 的 `result_quilt_source` 实机判据：
+结果可为特征自有 quilt、成员面所属 quilt，或**面积严格增长的目标 quilt**。
+
+| 项 | 已公开 | 明确拒绝 |
 | --- | --- | --- |
 | 参与者 | **恰好 2 个类型明确的 quilt** | 基准面、曲线、body、多个参与者 |
 | 合并方式 | 只做 join（`PRO_SRF_MRG_JOIN`） | intersect 变体 |
 | 容差 | 不提供 | 任何 `tolerance` 参数（未证明生效前不得接受） |
 | 间隙测量 | 不提供 | 任何间隙字段 |
 | 闭合 | 只报告真实探测结果（§4.4.1 结构） | 由面积或外框反推 `closed` |
+| 结果来源 | `result_quilt_source` 三态（§2.4），全部实测 | 猜 id、全 id 扫描、静默 no-op 报成功 |
 | 输出 | 一个结果 quilt（`result_quilt_id`，可供 `thicken` 消费） | — |
 
 `quilt_merge` **不是** `boolean_bodies` 的替代：实体布尔不在曲面链里，不能用它掩饰缝合失败。

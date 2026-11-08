@@ -1,9 +1,10 @@
 """S03 quilt_merge contract tests (FEAT-039).
 
-Offline only. The schema, the gate and the native wiring are locked here; the
-documented ProMerge.h tree is compiled but its geometry, closure and saved
-reload belong to ``tools/test_surface_chain.py --case merge --live``. No test
-in this file claims a native merge ran.
+Offline only. The schema, the published state and the native wiring are locked
+here. The documented ProMerge.h tree relies on ``result_quilt_source``: the
+2026-11-08 live run showed the join owns surfaces and grows the target quilt in
+place, so the result is resolved from the feature items and then from the
+target's measured growth. No test in this file claims a native merge ran.
 """
 
 import unittest
@@ -85,11 +86,11 @@ class QuiltMergeSchemaTests(unittest.TestCase):
                 ]
             )
 
-    def test_quilt_merge_is_gated_until_live_evidence(self):
+    def test_quilt_merge_is_published_after_live_evidence(self):
         from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
 
         self.assertIn("quilt_merge", REGISTERED_OPERATIONS)
-        self.assertIn("quilt_merge", UNAVAILABLE_OPERATIONS)
+        self.assertNotIn("quilt_merge", UNAVAILABLE_OPERATIONS)
         server = (ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("async def creo_quilt_merge(", server)
 
@@ -148,6 +149,28 @@ class QuiltMergeNativeSourceTests(unittest.TestCase):
         self.assertNotIn("is_open ? false : nullptr", source)
         self.assertIn('details["closed"] = closed_json;', source)
         self.assertIn("closed_json = false;", source)
+
+    def test_native_resolves_the_result_quilt_by_source(self):
+        # Live 2026-11-08: the join owns PRO_SURFACE items and modifies the
+        # target quilt in place. Every result id must name where it came from.
+        source = QUILT_MERGE.read_text(encoding="utf-8")
+        for token in (
+            "result_quilt_source",
+            "feature_quilt_geomitem",
+            "member_surface_quilt",
+            "retrimmed_target_quilt",
+            "feature_member_surface_quilt",
+        ):
+            self.assertIn(token, source)
+        query = (ROOT / "native" / "quilt_query.h").read_text(encoding="utf-8")
+        self.assertIn("ProSurfaceQuiltGet", query)
+        self.assertIn("ProQuiltIdGet", query)
+
+    def test_native_growth_check_prevents_a_silent_noop_success(self):
+        # The target area must strictly grow; an unchanged area stays a failure.
+        source = QUILT_MERGE.read_text(encoding="utf-8")
+        self.assertIn("target_before", source)
+        self.assertIn("after.value > target_before.value + 1e-6", source)
 
     def test_driver_declares_merge_case(self):
         driver = DRIVER.read_text(encoding="utf-8")

@@ -103,14 +103,6 @@ SURFACE_TRIM_OFFSET_LIMIT = (
 )
 
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
-    "quilt_merge": (
-        "the surface merge is not published: on this machine the documented ProMerge.h array "
-        "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
-        "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
-        "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
-        "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
-        "change nothing, so the joined area and closure cannot be measured or handed to thicken"
-    ),
     "surface_boundary_fill": (
         "the closed non-planar boundary fill is not published: on this machine the documented "
         "Probbl.h closed-chain tree creates and extracts (ProFeatureWithoptionsCreate=0, "
@@ -562,6 +554,7 @@ def families() -> dict:
                 "creo_surface_trim",
                 "creo_project_curve",
                 "creo_surface_offset",
+                "creo_quilt_merge",
                 "creo_measure_surface_group",
                 "creo_surface_round",
                 "creo_measure_surface_curvature",
@@ -572,6 +565,8 @@ def families() -> dict:
                 "with another quilt, a datum-plane label or a curve geometry id; "
                 "project one curve geometry id onto one quilt along an explicit "
                 "direction reference; offset one quilt along its surface normal; "
+                "join two touching or intersecting quilts into the target quilt with a "
+                "measured result area and closure; "
                 "measure a group of quilts read-only (open boundary edges, seam gap "
                 "against a tolerance, overlapping face area); round the edge shared by "
                 "two member faces of one quilt with a constant radius; analyse the "
@@ -581,6 +576,8 @@ def families() -> dict:
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
+                "quilt_merge: 2026-11-08 live 2x400 mm2 adjacent fills joined into the "
+                "target quilt at 800.0 mm2, open, saved and reloaded, then thickened 2 mm; "
                 "project_curve: 40.000 mm and 25.133 mm measured projections, saved and "
                 "reloaded; surface_offset: 40x20 fill offset 5 mm on both sides, "
                 "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance; "
@@ -592,7 +589,11 @@ def families() -> dict:
                 "revision unchanged"
             ),
             "limits": (
-                "quilt merge and the closed non-planar boundary fill stay gated "
+                "quilt merge joins exactly two touching or intersecting quilts and reports "
+                "the target quilt it grew in place (result_quilt_source="
+                "retrimmed_target_quilt); the consumed tool quilt is no longer measurable, "
+                "intersect, three or more participants, chained merges and closed shells are "
+                "not published; the closed non-planar boundary fill stays gated "
                 "(UNAVAILABLE_OPERATIONS; the fill's closed single-direction chain "
                 "regenerates to no quilt on hardware); surface_loft is two "
                 "single-curve sections with straight interpolation only (no smooth, closed, "

@@ -1,0 +1,88 @@
+{
+  "checks": [],
+  "abort": null,
+  "session": {
+    "state": "ready",
+    "connected": true,
+    "message": "Toolkit connection verified; modeling is available"
+  },
+  "tool_count": 107,
+  "quilt_merge_published": true,
+  "build": {
+    "job_id": "dab9c274f29444bebd059dbcdc2f581e",
+    "status": "succeeded",
+    "model_id": "9a7bd25f35e3431fb5ca9a585957fbea",
+    "revision": 1,
+    "message": "General feature plan completed"
+  },
+  "quilts_before": [
+    {
+      "quilt_id": 82,
+      "area_mm2": 400.0,
+      "surface_ids": [
+        57
+      ]
+    },
+    {
+      "quilt_id": 127,
+      "area_mm2": 400.0,
+      "surface_ids": [
+        102
+      ]
+    }
+  ],
+  "merge": {
+    "job_id": "6a3facb773e44bfca8492e482deacb5b",
+    "status": "succeeded",
+    "revision": 2,
+    "message": "General feature plan completed",
+    "result": {
+      "success": true,
+      "creo_release_numeric": 44,
+      "creo_release_query_code": 0,
+      "toolkit_code": 0,
+      "part_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\models\\9a7bd25f35e3431fb5ca9a585957fbea\\output\\ai_part_9a7bd25f35e3.prt.3",
+      "sha256": "4fa281b663115297ee51ede85a5fd4bc9939aa8e5983fc530f22c12317eb6e0f",
+      "saved_file_reloaded_and_verified": true,
+      "rollback_succeeded": false,
+      "preview_file": "E:\\Projects\\MCP_CREO_MechDog-d074\\jobs\\6a3facb773e44bfca8492e482deacb5b\\output\\preview.jpg",
+      "preview_status": "written",
+      "preview_code": 0,
+      "connected": true,
+      "operations_total": 1,
+      "operations_truncated": false,
+      "operations": [
+        {
+          "op": "quilt_merge",
+          "index": 0,
+          "label": "merge_live",
+          "succeeded": true,
+          "execution_status": "succeeded",
+          "effect_status": "committed",
+          "feature_id": 129
+        }
+      ]
+    },
+    "operations": null
+  },
+  "quilts_after": [
+    {
+      "quilt_id": 82,
+      "area_mm2": 800.0,
+      "face_count": 1,
+      "closed": false,
+      "surface_ids": [
+        57
+      ]
+    },
+    {
+      "quilt_id": 127,
+      "area_mm2": null,
+      "face_count": 1,
+      "closed": true,
+      "surface_ids": [
+        102
+      ]
+    }
+  ]
+}

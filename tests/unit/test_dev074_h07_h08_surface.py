@@ -148,7 +148,8 @@ class HandoffEvidenceTests(unittest.TestCase):
     def test_the_handoff_rows_carry_both_verdicts(self):
         handoff = (ROOT / "docs" / "development" / "DEV-074-HANDOFF.md").read_text(encoding="utf-8")
         self.assertIn("H07 / FEAT-039 | **反证完成，门禁保持", handoff)
-        self.assertIn("H08 / FEAT-055 | **离线实现完成，实机未验证", handoff)
+        self.assertIn("H08 / FEAT-055 | **实机验收完成（2026-11-08）", handoff)
+        self.assertIn("H03 / FEAT-039 | **实机交付（2026-11-08）", handoff)
 
     def test_the_evidence_directory_exists_with_both_reports(self):
         evidence = ROOT / "docs" / "validation" / "dev074-h07-h08-2026-11-08"

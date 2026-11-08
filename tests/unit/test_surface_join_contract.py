@@ -18,13 +18,12 @@ class SurfaceJoinContractTests(unittest.TestCase):
 
         report = driver.case_join_offline()
         self.assertTrue(report["passed"], report.get("checks"))
-        self.assertEqual(report["blocked_steps"], ["quilt_merge_operator"])
+        self.assertEqual(report["blocked_steps"], [])
 
-    def test_the_merge_operator_stays_gated(self):
+    def test_the_merge_operator_is_published(self):
         from creo_mechdog.capabilities import UNAVAILABLE_OPERATIONS
 
-        self.assertIn("quilt_merge", UNAVAILABLE_OPERATIONS)
-        self.assertIn("zero quilts", UNAVAILABLE_OPERATIONS["quilt_merge"])
+        self.assertNotIn("quilt_merge", UNAVAILABLE_OPERATIONS)
 
     def test_the_analytic_oracle_is_consistent(self):
         from tools import surface_chain_join as join
