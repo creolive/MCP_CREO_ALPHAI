@@ -7,6 +7,15 @@
 > **版本归属说明（2026-11-05 补记）：** 当时**已发布**版本为 **0.12.1**，本次交付候选为 **0.13.0**（开发分支验收完成，未合并 main、未发布，见[发布记录](validation/RELEASE-0.13.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-04 补记）：** 当时正式版为 **0.12.0**（见下方对应分节）。本文件按版本分节保留各自时点的结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 
+## 开发分支（DEV-074，未发布）：钣金成形类路线勘察与反证（2026-11-08）
+
+- **不支持且门禁不放宽**：corner relief、百叶/成形、hem、jog、格栅孔、凸台/铰链/门板耳。公开工具仍 **107**，本轮无新增工具或参数。
+- **corner relief**：`ProSmtFlangeWall.h` 的 `PRO_E_SMT_CORNER_RELIEF`（`ProCornerRelType` V_NOTCH/CIRCULAR/RECTANGULAR/OBROUND/PARAM/SQUARE/NORMAL）写在折边特征内时，本机 Creo 12.4.0.0 上矩形 3×3、矩形 1×1 与 `PARAM` 三变体都在 181.46 mm 邻接边上 create 后再生失败（`toolkit_code=-1`、revision 与体积不变、回滚），同一条边的 `miter_cuts{1,1}` 对照成功。独立 `PRO_FEAT_SMT_CRN_REL` 需平面 + 两个折弯圆柱面三引用，未探针。`adjacent_bend_ends` 仍只由 `miter_cuts` 放行。
+- **成形/百叶**：`ProSmtSketchForm.h` 的 `PRO_FEAT_SMT_SKETCH_FORM`（不需工具件）三种元素树均 `ProFeatureWithoptionsCreate=-1` 回滚；`ProSmtForm.h` 的 `PRO_FEAT_GEN_MERGE` 路线必须引用冲头/凹模参考零件（`PRO_E_DSF_REF_MDL`），未尝试。`ProSmtPunchQuilt.h` 的 `PRO_FEAT_PUNCH_QUILT` 未尝试。
+- **hem / jog**：本机 Creo 12.4 SDK 无 Hem/Jog 头文件，`ProFeatType.h` 无对应特征常量；二者只以折边截面形状存在（`Common Files\text\smt\flange_shapes` 的 `c_hem.sec`/`duck_hem.sec`/`flushed_hem.sec`/`joggle_hem.sec`/`open_hem.sec`/`z_hem.sec`），当前 flange 只写单线截面。
+- **格栅**：现有 `extrude(cut)` 三种截面/深度组合（3×3 孔 through_all symmetric、1 孔 through_all positive、1 孔 blind 5 mm symmetric 中面草图）在 185×232×1 钣金壁上均报 “Extrude cut removes no material”、体积不变并回滚；BUG-046 的 −100 mm³ 正证据仍在，故判为驱动/截面配置问题，cut 口径不变，格栅未交付。
+- **证据**：[EVIDENCE](validation/dev074-forming-2026-11-08/EVIDENCE.md)、[evidence.json](validation/dev074-forming-2026-11-08/evidence.json)。未覆盖：Creo 9/10、非 mm、其他板厚/半径、独立角部释放特征、工具件成形、WorkBuddy。
+
 ## 开发分支（DEV-074，未发布）：`creo_quilt_merge` 公开（2026-11-08）
 
 - **支持**：`creo_quilt_merge` 已出现在 MCP 面（公开工具 **107**），对**两片真实接触或相交的 quilt** 做 JOIN。
