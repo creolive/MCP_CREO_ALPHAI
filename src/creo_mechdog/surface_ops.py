@@ -282,3 +282,84 @@ class ProjectCurveOp(StrictModel):
         if problem:
             raise ValueError(f"project_curve direction_ref {problem}")
         return self
+
+
+class SurfaceRoundOp(StrictModel):
+    """Constant round on the edge shared by two member faces of one quilt.
+
+    DEV-074/H08 measured this route on hardware: ``PRO_FEAT_ROUND`` with
+    ``PRO_ROUND_REF_SURF_SURF`` keeps the result on the same quilt. The
+    reference set uses the same shape the generic round already takes
+    (``[{"surfaces": [{kind:"surface",id:N}, {kind:"surface",id:M}]}]``), so
+    one operation has exactly one set and exactly two faces. An edge chain, a
+    second set, variable radii, full/chordal/through-curve radii and custom
+    transitions have no field here and are refused before a job exists.
+
+    The pair must be two distinct member faces of the target quilt. Face
+    membership is checked natively against the quilt's own face visit, which
+    also refuses a solid face or another quilt's face. Adjacency (sharing one
+    edge) is deliberately left to the kernel: the 2026-11-08 hardware probe
+    showed a non-adjacent pair failing regeneration with a full rollback, so a
+    guessed topology test here would only second-guess the kernel.
+    """
+
+    op: Literal["surface_round"]
+    label: Label
+    target: dict[str, Any]
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=1)]
+    radius: Positive
+
+    @field_validator("radius", mode="before")
+    @classmethod
+    def radius_is_a_number(cls, value: Any) -> Any:
+        # Pydantic would accept True as 1.0 and "3" as 3.0; a radius is a real
+        # number, not a boolean or a string.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("surface_round radius must be a finite value greater than zero")
+        return value
+
+    @model_validator(mode="after")
+    def one_constant_surface_pair(self):
+        problem = quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_round target {problem}")
+        if len(self.references) != 1:
+            raise ValueError(
+                "surface_round accepts exactly one {'surfaces':[...]} reference set; "
+                "multiple sets are not supported"
+            )
+        reference = self.references[0]
+        if not isinstance(reference, dict):
+            raise ValueError("surface_round references[0] must be a {'surfaces':[...]} object")
+        if set(reference) != {"surfaces"}:
+            raise ValueError(
+                "surface_round references[0] accepts only the 'surfaces' key; edge chains, "
+                "variable radii and transitions are not supported"
+            )
+        faces = reference.get("surfaces")
+        if not isinstance(faces, list) or len(faces) != 2:
+            raise ValueError(
+                "surface_round requires exactly two member faces as "
+                "{'surfaces':[{kind:'surface',id:N}, {kind:'surface',id:M}]}"
+            )
+        ids = set()
+        for index, face in enumerate(faces):
+            if not isinstance(face, dict) or face.get("kind") != "surface":
+                raise ValueError(
+                    f"surface_round faces[{index}] must be {{kind:'surface',id:N}}; an edge, "
+                    "a plane or a body is not a member face"
+                )
+            if set(face) != {"kind", "id"}:
+                raise ValueError(
+                    f"surface_round faces[{index}] accepts only kind and id; a face id is "
+                    "the geometry id from creo_inspect_model, not a feature label"
+                )
+            value = face.get("id")
+            if type(value) is not int or not 0 <= value <= 2147483647:
+                raise ValueError(
+                    f"surface_round faces[{index}].id must be a nonnegative 32-bit integer"
+                )
+            ids.add(value)
+        if len(ids) != 2:
+            raise ValueError("surface_round faces must be two distinct surfaces")
+        return self

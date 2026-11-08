@@ -22,7 +22,7 @@
 | H13 / DEV-066 | **完成**：剩余 17 处 Git 读取迁入 `source_provenance.local_provenance`，缺 Git 时明确降级 | 本页 H13 行、[DEV-074 卡](../work-items/DEV-074.md) |
 | H12 / BUG-115、BUG-109、DEV-074 | **完成（2026-11-07 公开 MCP 实机 38/38）**：6 项回执/准入逐项复验，原始报告与字段见 [EVIDENCE](../validation/dev074-h12-receipts-2026-11-07/EVIDENCE.md) | 实机未清 unknown 保护、未启动/关闭 Creo、未故障注入 |
 | H07 / FEAT-039 | **反证完成，门禁保持（2026-11-08 实机）**：独立 quilt 偏置仍无路线，`surface_offset` 确认是偏置壁 | [EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md) |
-| H08 / FEAT-055 | **可行性确认 + 最小契约登记（2026-11-08 实机），未实现**：曲面边圆角可行，曲率/斑马无 API | [EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md) |
+| H08 / FEAT-055 | **离线实现完成，实机未验证（2026-11-08）**：`surface_round` / `creo_surface_round` 已注册（工具 104→105），沿用 H08 实测的 `PRO_FEAT_ROUND` + 两成员面树；实机 C1/C2/C5 证据仍属契约探针 | [EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、[本轮离线说明](../validation/dev074-h08-offline-2026-11-08/EVIDENCE.md) |
 | H05 / FEAT-014 | **反证完成，门禁保持**（见下表） | — |
 | H10 / FEAT-039 | **完成（2026-11-07 实机 46/46）**：三片独立 quilt 的组级测量、逐片 0.3/2 mm 加厚、保存重载与再编辑；整组实体化仍等 merge | [EVIDENCE](../validation/feat039-h10-multi-quilt-2026-11-07/EVIDENCE.md) |
 

@@ -305,13 +305,14 @@ class ReferenceContractTests(unittest.TestCase):
 
     def test_schema_examples_list_all_three_axis_forms(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
-        # 104 adds creo_surface_loft (FEAT-009/H02, live 2026-11-07) and the
-        # read-only creo_measure_surface_group (FEAT-039/H04) to the 102 that
-        # already carry the offline creo_plan_product_variant (FEAT-063) and
-        # the read-only creo_get_mass_properties (FEAT-057).
+        # 105 adds creo_surface_round (DEV-074/H08, offline implemented) to the
+        # 104 that carry creo_surface_loft (FEAT-009/H02, live 2026-11-07) and
+        # the read-only creo_measure_surface_group (FEAT-039/H04).
+        # 104 = 102 that already carry the offline creo_plan_product_variant
+        # (FEAT-063) and the read-only creo_get_mass_properties (FEAT-057).
         # 102 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
         # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-        self.assertEqual(len(tools), 104)
+        self.assertEqual(len(tools), 105)
         axis = tools["creo_axis_pattern"].input_schema["properties"]["axis"]
         self.assertEqual(
             {form["properties"]["kind"]["const"] for form in axis["oneOf"]},

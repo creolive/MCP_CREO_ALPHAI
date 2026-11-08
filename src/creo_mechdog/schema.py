@@ -34,6 +34,7 @@ from creo_mechdog.surface_ops import (
     QuiltMergeOp,
     SurfaceGroupMeasureOp,
     SurfaceLoftOp,
+    SurfaceRoundOp,
     SurfaceTrimOp,
     quilt_reference_problem,
 )
@@ -2005,6 +2006,7 @@ Operation = Annotated[
         SolidifyOp,
         SurfaceTrimOp,
         SurfaceLoftOp,
+        SurfaceRoundOp,
         SurfaceGroupMeasureOp,
         QuiltMergeOp,
         ProjectCurveOp,

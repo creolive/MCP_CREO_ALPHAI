@@ -144,6 +144,33 @@ SURFACE_LOFT_KEYS = (
     "has_solid",
 )
 
+#: Keys produced by native/surface_round.cpp (DEV-074/H08): the result quilt id,
+#: the measured face counts/areas before and after, closure, radius and the
+#: solid-face evidence. Every measurement keeps its own status, so a compact
+#: poll can tell a measured value from an unmeasured one.
+SURFACE_ROUND_KEYS = (
+    "quilt_id",
+    "face_ids",
+    "radius",
+    "feature_id",
+    "feature_status",
+    "feature_type",
+    "face_count_before",
+    "face_count_before_status",
+    "face_count",
+    "face_count_status",
+    "area_before_mm2",
+    "area_before_status",
+    "area_mm2",
+    "area_status",
+    "closed_before",
+    "closed",
+    "closed_status",
+    "quilt_closed_native",
+    "has_solid",
+    "solid_surface_count",
+)
+
 #: Keys produced by native/surface_group.cpp (FEAT-039/H04). The whole group
 #: block is kept together: every value carries its own status, so a compact
 #: poll can still tell a measured zero from an unmeasured seam.
@@ -192,6 +219,7 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
     "surface_loft": SURFACE_LOFT_KEYS,
+    "surface_round": SURFACE_ROUND_KEYS,
     "surface_group_measure": SURFACE_GROUP_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,

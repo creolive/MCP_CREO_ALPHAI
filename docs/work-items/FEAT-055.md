@@ -1,6 +1,6 @@
 # FEAT-055：Q08–Q10 三曲面操作链重规划
 
-日期：2026-11-02。类型：功能/技术路线。优先级：P2。状态：已交付 0.18.4 子项（H08 曲线边圆角契约登记，未开放工具）；其余未排期（0.11.5/0.11.7/0.12.0 反馈批的归档与逐条映射挂在本卡下，派工编号 Q00—Q07；0.13.0 反馈批见修复计划）。Q00 归档已完成；Q09 投影曲线与 Q10 曲面修剪/加厚测量已由 [FEAT-039](FEAT-039.md) 在 **0.13.0** 实机公开（`creo_project_curve`、`creo_surface_trim`）；Q08 边界混合/`surface_loft` 路线仍不成立，没有公开工具或已注册操作；Q01—Q07 尚未整体实现，按 [0.13.0 修复计划](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md) 分批推进（本轮仅完成 R07 契约文档的离线部分）。**H08（0.18.4，2026-11-08）：曲面边圆角经实机确认可行（`PRO_FEAT_ROUND` + 两相邻面，结果留在 quilt 上，R3 后 5 面 1187.1238898038469 mm²），只登记最小契约、未实现工具**；曲率梳/斑马纹无 SDK API，跨边 G1 只有测量思路，见文末 H08 段。目标版本：0.18.4（H08 子项已交付）；剩余未排期。关联 [DEV-053](DEV-053.md)、[FEAT-053](FEAT-053.md)、[FEAT-039](FEAT-039.md)、[FEAT-054](FEAT-054.md)、[DEV-064](DEV-064.md)。
+日期：2026-11-02。类型：功能/技术路线。优先级：P2。状态：已交付 0.18.4 子项（H08 曲线边圆角契约登记）；**2026-11-08 离线实现 `surface_round` / `creo_surface_round`，公开工具 104→105，实机未验证**；其余未排期（0.11.5/0.11.7/0.12.0 反馈批的归档与逐条映射挂在本卡下，派工编号 Q00—Q07；0.13.0 反馈批见修复计划）。Q00 归档已完成；Q09 投影曲线与 Q10 曲面修剪/加厚测量已由 [FEAT-039](FEAT-039.md) 在 **0.13.0** 实机公开（`creo_project_curve`、`creo_surface_trim`）；Q08 边界混合/`surface_loft` 路线仍不成立，没有公开工具或已注册操作；Q01—Q07 尚未整体实现，按 [0.13.0 修复计划](../superpowers/plans/2026-11-06-0.13.0-feedback-repair-plan.md) 分批推进（本轮仅完成 R07 契约文档的离线部分）。**H08（0.18.4，2026-11-08）：曲面边圆角经实机确认可行（`PRO_FEAT_ROUND` + 两相邻面，结果留在 quilt 上，R3 后 5 面 1187.1238898038469 mm²）；同日离线实现并注册 `surface_round` / `creo_surface_round`，实机验收仍待另一轮**；曲率梳/斑马纹无 SDK API，跨边 G1 只有测量思路，见文末 H08 段。目标版本：0.18.4（H08 子项已交付）；剩余未排期。关联 [DEV-053](DEV-053.md)、[FEAT-053](FEAT-053.md)、[FEAT-039](FEAT-039.md)、[FEAT-054](FEAT-054.md)、[DEV-064](DEV-064.md)。
 
 ## 来源
 
@@ -60,7 +60,7 @@
 - `creo_surface_trim` 已注册进 `REGISTERED_OPERATIONS`，同时列入 `UNAVAILABLE_OPERATIONS`：`server.py` 的既有钩子把它从 MCP 工具面移除，`require_available` 在受理前拒绝并给出原因（保留侧绑定与 trim 结果引用仍需实机证据）。因此 quilts 查询面不变（`sections_available` 仍 21 项、`counts.quilts` 语义不变），新增的只是被门禁的算子和其原生实现。
 - 详见 [FEAT-039 S02 段](FEAT-039.md)。
 
-## 2026-11-08 H08：曲面边圆角可行性确认与最小契约（实机；本轮不实现）
+## 2026-11-08 H08：曲面边圆角可行性确认、最小契约与离线实现
 
 ### SDK 声明依据（本机 Creo 12.4.0.0 头文件实读）
 
@@ -94,17 +94,23 @@ C1/C2 的解析 oracle 精确命中：1200 − 2×3×10 + (π/2×3)×10 = **1187
 非相邻面对在再生阶段失败并整体回滚，共享边限制由内核兑现。**实体 round 不能替代**：C0 改变的是
 实体体积，C1/C2 改变的是 quilt 面积且不产生实体。
 
-### 最小契约（只登记，未实现；`surface_round` 未注册，不进入 MCP 工具面）
+### 最小契约（2026-11-08 已离线实现并注册；实机未验证）
 
-- 入口 `surface_round` / MCP 工具 `creo_surface_round`；输入 `reference`（一个 quilt：
-  `{kind:"quilt",id}` 或 `{kind:"quilt_feature",label}`）+ `faces`（恰好两个
-  `{kind:"surface",id}`，必须是该 quilt 的成员并共享一条边）+ `radius > 0`。
+- 入口 `surface_round` / MCP 工具 `creo_surface_round`；输入 `target`（一个 quilt：
+  `{kind:"quilt",id}` 或 `{kind:"quilt_feature",label}`）+ `references`（恰一组
+  `{"surfaces": [{kind:"surface",id:N}, {kind:"surface",id:M}]}`，两个不同成员面）+
+  `radius > 0`（mm，有限实数）。面成员资格由原生按 quilt 自己的面枚举校验。
 - 只做单组、常量半径、`PRO_ROUND_REF_SURF_SURF`、`PRO_E_RNDCH_ATTACH_TYPE=PRO_ROUND_ATTACHED`；
-  拒绝多组、非相邻/跨 quilt 面对、变半径、full/chordal/through-curve 与自定义 transitions。
+  拒绝多组、变半径、full/chordal/through-curve、edge-chain 与自定义 transitions。
+  非相邻面对允许提交，由内核在再生阶段拒绝并整体回滚（H08 C5 实测），schema 不提前猜拓扑。
 - `PRO_ROUND_REF_EDGE` 暂不开放：公开查询没有 quilt 边 id 通道（`creo_inspect_model` 的
   `edges` 走实体面枚举，曲面 quilt 模型实测 0 条）。
 - 回执：`quilt_id`、前后 `face_count`/`area_mm2` 及各 `*_status`、`radius`、
-  `reference_application`、`material_measurement`（曲面结果必须 `not_applicable`）、保存重载标记。
+  `reference_application`、`material_measurement`、`has_solid`/`solid_surface_count`、
+  保存重载标记；面积与面数由原生 `ProQuiltSurfaceVisit`/`quilt_area_native` 实测。
+- 本轮交付：`native/surface_round.cpp`、`SurfaceRoundOp`、`REGISTERED_OPERATIONS`、
+  `creo_surface_round`、compact 投影键与离线单测；`bridge.py build` 通过。
+  **实机未验证**：需另跑 H08 C1/C2/C5 同构用例并记录保存重载与回滚。
 - 分析侧：只能承诺数值读数（`ProSurfacePrincipalCrvtEval` 的主曲率与方向）；跨边 G1 的实现路径
   是共享边参数采样 → 两侧面各取法向（`ProSurfaceParamEval`/`ProSurfaceXyzdataEval`、
   或 `ProSurfaceTessellationGet` + `ProTessellationNormalsGet`）→ 夹角 ≤0.5°，**尚未实现**，

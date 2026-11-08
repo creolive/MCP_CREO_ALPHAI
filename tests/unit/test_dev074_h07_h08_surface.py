@@ -4,8 +4,9 @@ H07 (FEAT-039): no standalone quilt offset exists on this SDK. The public
 ``surface_offset`` is the documented ProThicken thin single-side offset wall,
 so the capability text must keep saying so and no ``quilt_offset`` operation
 may be registered. H08 (FEAT-055): the surface-edge round is feasible through
-``PRO_FEAT_ROUND`` with a two-face reference, but it is only a registered
-contract here -- the tool must not appear before it is implemented.
+``PRO_FEAT_ROUND`` with a two-face reference; it is now an implemented,
+registered operation (``surface_round`` / ``creo_surface_round``) whose
+hardware acceptance still has to be recorded.
 """
 
 from __future__ import annotations
@@ -111,11 +112,25 @@ class SurfaceRoundContractTests(unittest.TestCase):
                         ]
                     )
 
-    def test_surface_round_is_not_published_before_it_is_implemented(self):
+    def test_surface_round_is_registered_and_published(self):
         from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS
 
-        self.assertNotIn("surface_round", REGISTERED_OPERATIONS)
+        self.assertIn("surface_round", REGISTERED_OPERATIONS)
         self.assertNotIn("surface_round", UNAVAILABLE_OPERATIONS)
+
+    def test_the_native_surface_round_reuses_the_documented_face_pair_tree(self):
+        native = (ROOT / "native" / "surface_round.cpp").read_text(encoding="utf-8")
+        generic = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
+        for lock in (
+            "PRO_FEAT_ROUND",
+            "PRO_ROUND_REF_SURF_SURF",
+            "PRO_E_RNDCH_REFERENCE_SURFACE1",
+            "PRO_E_RNDCH_REFERENCE_SURFACE2",
+            "PRO_E_RNDCH_ATTACH_TYPE, PRO_ROUND_ATTACHED",
+        ):
+            self.assertIn(lock, native)
+        self.assertIn('#include "surface_round.cpp"', generic)
+        self.assertIn('kind == "surface_round"', generic)
 
     def test_the_native_round_uses_the_documented_face_pair_reference(self):
         native = (ROOT / "native" / "generic.cpp").read_text(encoding="utf-8")
@@ -133,7 +148,7 @@ class HandoffEvidenceTests(unittest.TestCase):
     def test_the_handoff_rows_carry_both_verdicts(self):
         handoff = (ROOT / "docs" / "development" / "DEV-074-HANDOFF.md").read_text(encoding="utf-8")
         self.assertIn("H07 / FEAT-039 | **反证完成，门禁保持", handoff)
-        self.assertIn("H08 / FEAT-055 | **可行性确认 + 最小契约登记", handoff)
+        self.assertIn("H08 / FEAT-055 | **离线实现完成，实机未验证", handoff)
 
     def test_the_evidence_directory_exists_with_both_reports(self):
         evidence = ROOT / "docs" / "validation" / "dev074-h07-h08-2026-11-08"

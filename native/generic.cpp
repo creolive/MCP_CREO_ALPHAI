@@ -3884,6 +3884,7 @@ static J choice_inspection(const J &holder, const char *key);
 #include "surface_trim.cpp"
 #include "surface_group.cpp"
 #include "surface_loft.cpp"
+#include "surface_round.cpp"
 #include "quilt_merge.cpp"
 #include "project_curve.cpp"
 #include "udf.cpp"
@@ -4110,8 +4111,11 @@ static void execute_operation_body(const J &op) {
     J details = J::object();
     staged_operation_result = J::object();
     has_staged_operation_result = false;
-    // FEAT-051: round/chamfer/draft carry per-operation material evidence.
-    const bool material_op = kind == "round" || kind == "chamfer" || kind == "draft";
+    // FEAT-051: round/chamfer/draft carry per-operation material evidence. The
+    // quilt round is included so a surface-only result reports
+    // material_measurement=not_applicable instead of omitting the field.
+    const bool material_op =
+        kind == "round" || kind == "chamfer" || kind == "draft" || kind == "surface_round";
     material_probe_active = material_op;
     material_probe_before = VolumeProbe{};
     if (material_op)
@@ -4168,6 +4172,8 @@ static void execute_operation_body(const J &op) {
         generic_surface_trim(op);
     else if (kind == "surface_loft")
         generic_surface_loft(op);
+    else if (kind == "surface_round")
+        generic_surface_round(op);
     else if (kind == "surface_group_measure")
         generic_surface_group_measure(op);
     else if (kind == "quilt_merge")

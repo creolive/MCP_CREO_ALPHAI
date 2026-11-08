@@ -701,6 +701,58 @@ redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_Q
 结果 quilt，不能再靠猜元素值推进；若继续应先用手工 Merge 参照件读回真实树。证据见
 [FEAT-039 H03 反证](../validation/feat039-h03-quilt-merge-incomplete-2026-11-07/EVIDENCE.md)。
 
+### 2.11 曲面边圆角 surface_round（DEV-074/H08 实机证据 + 离线实现）
+
+**SDK 依据（本机 Creo 12.4.0.0 头文件实读）**：`ProRound.h` 的 `PRO_FEAT_ROUND` 支持
+`ProRoundReferenceType = PRO_ROUND_REF_SURF_SURF(2)`，并在边集合条目下明文写明
+“Mixed selection from different solid bodies and/or quilts is supported. Resulting
+geometry will be attached back to the same solid body or quilt where the referenced
+edges came from.”。`PRO_E_RNDCH_ATTACH_TYPE` 有 `PRO_ROUND_ATTACHED(0)` /
+`PRO_ROUND_UNATTACHED(9)` / `PRO_ROUND_CAPPED_ENDS(15)`。
+
+**2026-11-08 实机（公开 MCP，DEV-074 H08）**：
+
+| 用例 | 选择 | 结果 |
+| --- | --- | --- |
+| C1 | 4 面开放 quilt 70（1200 mm²）、相邻面 (68,66)、R3 | quilt 70 → 5 面、**1187.1238898038469 mm²**、开放、0 实体面、`material_measurement=not_applicable`、保存重载 true |
+| C2 | 同一构造、相邻面 (66,64)、R3 | 同上 5 面、1187.1238898038469 mm² |
+| C5 | 同一 quilt、非相邻面 (68,64)、R3 | 再生失败（“Regeneration produced a failed, suppressed or incomplete feature”），整体回滚到 4 面 / 1200.0 mm² |
+
+解析 oracle（C1/C2 精确命中）：1200 − 2×3×10 + (π/2×3)×10 = 1187.1238898038469 mm²。
+证据：[EVIDENCE](../validation/dev074-h07-h08-2026-11-08/EVIDENCE.md)、
+`h08_surface_round_probe.json`（SHA256 `D74FF061…FB6E64D5`）。
+
+**离线实现（2026-11-08，本轮）**：`native/surface_round.cpp` 的 `generic_surface_round`
+沿用上面实测的同一棵 `PRO_FEAT_ROUND` + `PRO_ROUND_REF_SURF_SURF` 树，只写
+`PRO_E_RNDCH_SHAPE_OPTIONS=PRO_ROUND_TYPE_CONSTANT`、`PRO_E_RNDCH_LEG1` 常量半径、
+`PRO_E_RNDCH_ATTACH_TYPE=PRO_ROUND_ATTACHED` 和空的 `PRO_E_RNDCH_TRANSITIONS`。
+创建前先经 `resolve_quilt_reference` 解析一个 quilt，用 `ProQuiltSurfaceVisit` 枚举成员面，
+两个面 id 必须都在其中（实体面、别的 quilt 的面在此被拒）；创建后重测同一 quilt 的
+`ProQuiltSurfaceVisit` 面数、`quilt_area_native` 面积和 `quilt_closed_native` 闭合，
+并以 `area_before/after` 判定“圆角没有去掉面积”为失败。**结果面积/面数全部来自原生测量，
+不使用请求值回填。** 失败由 job 级既有检查点回滚处理，没有新增回滚机制。
+
+**最小契约（冻结）**：
+
+| 项 | 公开 | 拒绝 |
+| --- | --- | --- |
+| target | 一个 quilt：`{kind:"quilt",id}` 或 `{kind:"quilt_feature",label}` | 实体面、body、datum_plane、`{kind:"quilt",label}` |
+| faces | `references` 恰一组，`{"surfaces":[{kind:"surface",id:N},{kind:"surface",id:M}]}`，两个不同成员面 | 0/1/3 面、重复面、edge/plane/body、face 上带 label 或额外键 |
+| 半径 | 一个常量 `radius > 0`（mm，有限实数） | 0、负数、inf/nan、布尔、字符串、变半径字段 |
+| 组数/过渡 | 单组 | 多组、`transitions`、full/chordal/through-curve |
+| 相邻性 | **由内核判定**：非相邻面对允许提交，再生失败并回滚 | 不提前猜测拓扑（H08 C5 已实测失败模式） |
+| edge-chain | 未开放 | `PRO_ROUND_REF_EDGE` 需要 quilt 边 id 通道；`creo_inspect_model` 的 `edges` 只枚举实体面（曲面 quilt 模型实测 0 条） |
+
+回执字段（§4.4.2 同款 `*_status`）：`quilt_id`、`face_ids`、`radius`、`feature_id`、
+`feature_status`、`feature_type`、`face_count_before`/`face_count` 及各 `*_status`、
+`area_before_mm2`/`area_mm2` 及 `*_status`、`closed_before`/`closed`/`closed_status`、
+`quilt_closed_native`、`has_solid`、`solid_surface_count`、`reference_application`。
+
+**未开放/未验证**：变半径、full/chordal、through-curve、自定义过渡、edge-chain、多组；
+圆角后继续 thicken/solidify 的链；非 mm 单位、弯曲或多 quilt 成员；Creo 9/10。
+本轮只完成离线实现、编译与单测，**实机未验证**（H08 的 C1/C2/C5 是契约探针证据，不是本实现
+的实机验收）。
+
 ---
 
 ## 3. 第一版能力边界（冻结）
@@ -877,6 +929,24 @@ redefine 后 `feature_status=0`（ACTIVE）、quilt 访问 **-4**、0 个 `PRO_Q
 | `kept_side` | `"one" \| "two" \| null` | 实际保留的一侧 |
 | `kept_side_basis` | `object` | 保留侧的判定依据，见 §4.5 |
 | `kept_quilt_id` | `int \| null` | 保留区域 quilt 几何 ID，供 `thicken` 消费 |
+
+**surface_round**
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `quilt_id` | `int` | 圆角所在 quilt 的几何 ID（结果留在同一 quilt） |
+| `face_ids` | `list[int]` | 请求的两个成员面（输入回显，不是测量值） |
+| `radius` | `float` | 常量半径（mm） |
+| `face_count_before` / `face_count` | `int \| null` | 圆角前/后 `ProQuiltSurfaceVisit` 的真实成员面数 |
+| `face_count_before_status` / `face_count_status` | `object` | §4.4.1 结构 |
+| `area_before_mm2` / `area_mm2` | `float \| null` | 圆角前/后的真实 quilt 面积（mm²） |
+| `area_before_status` / `area_status` | `object` | §4.4.1 结构 |
+| `closed_before` / `closed` | `bool \| null` | 只来自 `ProQuiltVolumeEval`：闭合 `true`、明确开放 `false`、探测失败 `null` |
+| `closed_status` | `object` | §4.4.1 结构 |
+| `quilt_closed_native` | `"open" \| "closed" \| "unknown"` | 同上探测的字符串形式 |
+| `has_solid` | `bool` | 圆角后模型是否仍有实体材料（原生 inspection） |
+| `solid_surface_count` | `int \| null` | 圆角后实体面数量；曲面 quilt 模型应为 0，不能替代 quilt 面数 |
+| `reference_application` | `object` | 创建特征的 `PRO_E_RNDCH_SET` 计数证据（`applied_set_count`/`query_code`） |
 
 **quilt_merge**
 
@@ -1061,6 +1131,7 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 | `surface_loft` | `SurfaceLoftOp` | `op: Literal["surface_loft"]`、`label: Label`、`sections: list[str \| int]`（长度恰 2）、`interpolation: Literal["straight"] = "straight"` |
 | `project_curve` | `ProjectCurveOp` | `op: Literal["project_curve"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`source: dict[str, Any]`（curve 引用）、`direction_ref: dict[str, Any]`、`side: Literal["positive","negative"]` |
 | `surface_trim` | `SurfaceTrimOp` | `op: Literal["surface_trim"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`tool: dict[str, Any]`（quilt 或基准面）、`keep_side: Literal["one","two"]` |
+| `surface_round` | `SurfaceRoundOp`（`src/creo_mechdog/surface_ops.py`） | `op: Literal["surface_round"]`、`label: Label`、`target: dict[str, Any]`（quilt 引用）、`references: list[dict]`（恰 1 组 `{"surfaces":[面,面]}`）、`radius: Positive` |
 
 - 三者都加入既有 `Operation` 联合（`schema.py:1475`）。
 - 引用校验复用 `schema.py:1580-1607` 的 `references()` 递归校验；新增 kind 只允许 `quilt_feature` / `curve` / `datum_plane` / `datum_axis_feature` / `edge`。
@@ -1073,6 +1144,7 @@ joined 缝 ⇒ `closed`；无任何成员缝 ⇒ `open` + `no_member_seam_candid
 | `surface_loft` | `native/surface_loft.cpp`（或并入 `native/surfaces.cpp`） | `generic_surface_loft(const J &op)` |
 | `project_curve` | `native/project_curve.cpp` | `generic_project_curve(const J &op)` |
 | `surface_trim` | `native/surface_trim.cpp` | `generic_surface_trim(const J &op)` |
+| `surface_round` | `native/surface_round.cpp` | `generic_surface_round(const J &op)` |
 
 - 三者都在 `native/generic.cpp:2907` `execute_operation_body()` 的分发表里挂载（`else if (kind == "surface_loft")` 等），**只加分支，不改既有分支**。
 - 共享测量 helper 全部来自 `native/surface_measure.h`（§4.7）。

@@ -62,6 +62,7 @@ REGISTERED_OPERATIONS = (
     "solidify",
     "surface_trim",
     "surface_loft",
+    "surface_round",
     "surface_group_measure",
     "quilt_merge",
     "project_curve",
@@ -551,6 +552,7 @@ def families() -> dict:
                 "creo_project_curve",
                 "creo_surface_offset",
                 "creo_measure_surface_group",
+                "creo_surface_round",
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
@@ -559,7 +561,8 @@ def families() -> dict:
                 "project one curve geometry id onto one quilt along an explicit "
                 "direction reference; offset one quilt along its surface normal; "
                 "measure a group of quilts read-only (open boundary edges, seam gap "
-                "against a tolerance, overlapping face area)"
+                "against a tolerance, overlapping face area); round the edge shared by "
+                "two member faces of one quilt with a constant radius"
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
@@ -579,7 +582,10 @@ def families() -> dict:
                 "micro_gap/overlap) while boundary_closed tells whether the whole group "
                 "boundary is a shell; its overlap area is a tessellation estimate, gaps "
                 "wider than gap_search_mm are not quantified, and the join judgement is "
-                "sampled boundary geometry rather than a kernel boolean"
+                "sampled boundary geometry rather than a kernel boolean; "
+                "surface_round is one constant radius on two member faces of one quilt "
+                "(no variable radius, edge chain, transitions or solid target) and the "
+                "kernel decides whether the two faces share an edge"
             ),
         },
         "boolean_bodies": {
@@ -631,6 +637,31 @@ def families() -> dict:
                 "or solid output; section order is the loft direction; measured closure comes "
                 "from ProQuiltVolumeEval, so an open quilt is reported as open instead of "
                 "being assumed"
+            ),
+        },
+        "surface_round": {
+            "enabled": True,
+            "tool": "creo_surface_round",
+            "scope": (
+                "one constant round on the edge shared by two member faces of one quilt "
+                "(PRO_FEAT_ROUND with PRO_ROUND_REF_SURF_SURF); the result stays on the "
+                "same quilt and reports its measured face count, area and closure"
+            ),
+            "native_test": (
+                "2026-11-08 Creo 12.4.0.0 probe through the generic round tree: a 4-face "
+                "open quilt of 1200 mm2, R3 on adjacent face pairs (68,66) and (66,64), "
+                "became 5 faces / 1187.1238898038469 mm2 (analytic 1200-60+pi/2*3*10) with "
+                "saved_file_reloaded_and_verified=true; a non-adjacent pair failed "
+                "regeneration and rolled back to 4 faces / 1200 mm2"
+            ),
+            "limits": (
+                "exactly two member faces of one quilt with one shared edge, one constant "
+                "radius, one reference set; the kernel decides adjacency (H08 measured the "
+                "non-adjacent pair failing regeneration and rolling back); no variable "
+                "radius, full/chordal/through-curve radius, edge chain, transitions, "
+                "multi-set or solid target; edge-chain needs a quilt edge id channel that "
+                "creo_inspect_model does not publish (its edges enumerate solid faces only); "
+                "the quilt result is open by nature, so no solid volume is expected"
             ),
         },
         "sweep": {

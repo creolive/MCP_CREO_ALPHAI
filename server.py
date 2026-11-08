@@ -2806,6 +2806,49 @@ async def creo_surface_loft(
 
 
 @mcp.tool(annotations=CREATE)
+async def creo_surface_round(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=1)],
+    radius: float,
+) -> dict[str, Any]:
+    """Round the edge shared by two member faces of one quilt with a constant radius.
+
+    target is one quilt ({kind:'quilt',id:N} or {kind:'quilt_feature',label:...}).
+    references is exactly one set: [{'surfaces': [{kind:'surface',id:N},
+    {kind:'surface',id:M}]}], matching the face-pair form creo_round already takes.
+    Both faces must be distinct member faces of that quilt; a solid face or another
+    quilt's face is refused natively before the feature is created. radius is one
+    constant value in mm and must be finite and greater than zero. Variable radius,
+    full/chordal/through-curve radius, edge chains, transitions and multiple sets are
+    refused before a job exists. Adjacency (one shared edge) is decided by the kernel:
+    the 2026-11-08 H08 probe measured a non-adjacent pair failing regeneration and
+    rolling back to the saved checkpoint. The receipt reports quilt_id, the measured
+    face counts and areas before/after with their statuses, closure, radius, the
+    solid-face evidence and reference_application; the result stays on the same quilt
+    and is not a solid. This route was proved on Creo 12.4.0.0; other versions are
+    unverified.
+    """
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="surface_round",
+                label=label,
+                target=target,
+                references=references,
+                radius=radius,
+            )
+        ],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
 async def creo_quilt_merge(
     model_id: str,
     expected_revision: int,
