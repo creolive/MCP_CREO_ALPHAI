@@ -1,6 +1,7 @@
 #include "assembly_pose.h"
 #include "constraint_names.h"
 #include "geometry_diagnostics.h"
+#include "flange_profile.h"
 #include <iomanip>
 #include <sstream>
 
@@ -991,7 +992,10 @@ static J flange_relief_record(const J &op, const FlangeReliefRequest &request) {
     double thickness = 0;
     bool thickness_known = part_thickness_read(&thickness);
     bool enabled = request.side1 || request.side2;
-    double corner_run = std::max(0.0, op["height"].get<double>() - op["radius"].get<double>());
+    double guard_extent = op.value("op", "") == "sheetmetal_flange_profile"
+                              ? op.at("profile_guard_extent_mm").get<double>()
+                              : op.at("height").get<double>();
+    double corner_run = std::max(0.0, guard_extent - op["radius"].get<double>());
     return {{"type", request.type},
             {"ends", request.ends},
             {"sides", sides},
@@ -1251,15 +1255,22 @@ static void flange_created_feature_evidence(const J &op, const ProFeature &creat
         (int)status, (int)geometry.size(), geometry_code);
     try {
         evidence["edge_forensics"] = flange_edge_forensics(op);
-        double a = op["angle"].get<double>() * acos(-1.0) / 180;
-        double h = op["height"].get<double>();
-        evidence["section_leg_sketch"] = {
-            {"leg_dx", h * sin(a)},
-            {"leg_dy", h * cos(a)},
-            {"angle_deg", op["angle"]},
-            {"height_mm", h},
-            {"note", "request echo of the sketch-frame leg; measured wall placement comes "
-                     "from the driver's inspection, not from here"}};
+        if (op.value("op", "") == "sheetmetal_flange_profile") {
+            evidence["section_request"] = {
+                {"profile", op.at("profile")},
+                {"request_derived_guard_extent_mm", op.at("profile_guard_extent_mm")},
+                {"note", "request bound only; no observed wall height"}};
+        } else {
+            double a = op["angle"].get<double>() * acos(-1.0) / 180;
+            double h = op["height"].get<double>();
+            evidence["section_leg_sketch"] = {
+                {"leg_dx", h * sin(a)},
+                {"leg_dy", h * cos(a)},
+                {"angle_deg", op["angle"]},
+                {"height_mm", h},
+                {"note", "request echo of the sketch-frame leg; measured wall placement comes "
+                         "from the driver's inspection, not from here"}};
+        }
     } catch (...) {
         log("FLANGE_EDGE_FORENSICS_FAILED=exception\n");
         evidence["edge_forensics"] = J();
@@ -1689,7 +1700,27 @@ static ProSelection resolve_flange_edge(const J &edge_ref) {
     return selection(flange_geometry_edge_id(edge_ref), PRO_EDGE);
 }
 
-static void generic_sheetmetal_flange(const J &op) {
+static void generic_sheetmetal_flange(const J &input_op) {
+    J op = input_op;
+    bool profile_candidate = op.value("op", "") == "sheetmetal_flange_profile";
+    J candidate_section;
+    if (profile_candidate) {
+        if (op.contains("height") || op.contains("angle"))
+            throw std::runtime_error("profile flange forbids height/angle");
+        // This candidate is only admitted on actual millimeter models. A failed
+        // SDK units query propagates; unknown/non-mm never receives mm coordinates.
+        ProUnitsystem units;
+        ProUnititem length_unit;
+        CK(ProMdlPrincipalunitsystemGet(board, &units));
+        CK(ProUnitsystemUnitGet(&units, PRO_UNITTYPE_LENGTH, &length_unit));
+        if (wcscmp(length_unit.name, L"mm"))
+            throw std::runtime_error("profile flange requires actual mm model units");
+        double extent;
+        candidate_section = flange_profile_request(op.at("profile"), extent);
+        op["profile_guard_extent_mm"] = extent;
+    } else if (op.contains("profile")) {
+        throw std::runtime_error("legacy flange forbids raw profile payload");
+    }
     // Validate the relief request before any feature exists so an unsupported
     // combination cannot leave a created-but-wrong wall behind.
     FlangeReliefRequest relief_request = flange_relief_request(op);
@@ -1812,20 +1843,28 @@ static void generic_sheetmetal_flange(const J &op) {
     // wall and sketch +y lies inside the parent wall. Angle 90 therefore needs the leg on
     // sketch +x, and angle 0 is a straight in-plane continuation. The drawn sign does not
     // pick the bend side (Creo normalises it); PRO_E_SMT_FLANGE_SEC_FLIP does, see below.
-    double a = op["angle"].get<double>() * acos(-1.0) / 180, h = op["height"];
-    double leg[2] = {h * sin(a), h * cos(a)};
-    J profile = {{"profile", J::array({{{"type", "line"},
-                                        {"name", "wall"},
-                                        {"start", J::array({0, 0})},
-                                        {"end", J::array({leg[0], leg[1]})}}})},
-                 {"dimensions", J::array({{{"name", "height"},
-                                           {"type", "length"},
-                                           {"refs", J::array({{{"entity", "wall"}}})},
-                                           {"value", h},
-                                           {"position", J::array({leg[0] * 0.5 + 2 * cos(a),
-                                                                  leg[1] * 0.5 - 2 * sin(a)})}}})},
-                 {"constraints", J::array()}};
+    J profile;
+    if (profile_candidate)
+        profile = candidate_section;
+    else {
+        double a = op["angle"].get<double>() * acos(-1.0) / 180, h = op["height"];
+        double leg[2] = {h * sin(a), h * cos(a)};
+        profile = {
+            {"profile", J::array({{{"type", "line"},
+                                   {"name", "wall"},
+                                   {"start", J::array({0, 0})},
+                                   {"end", J::array({leg[0], leg[1]})}}})},
+            {"dimensions", J::array({{{"name", "height"},
+                                      {"type", "length"},
+                                      {"refs", J::array({{{"entity", "wall"}}})},
+                                      {"value", h},
+                                      {"position", J::array({leg[0] * 0.5 + 2 * cos(a),
+                                                             leg[1] * 0.5 - 2 * sin(a)})}}})},
+            {"constraints", J::array()}};
+    }
     J extra = populate_profile(section, profile);
+    if (profile_candidate)
+        extra["request_derived_guard_extent_mm"] = op.at("profile_guard_extent_mm");
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_WALL);
     integer(root, PRO_E_SMT_WALL_TYPE, PRO_SMT_WALL_TYPE_FLANGE);

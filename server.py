@@ -119,6 +119,10 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/windows_boot.py",
     "src/creo_mechdog/window_observations.py",
     "src/creo_mechdog/schema.py",
+    "src/creo_mechdog/surface_ops.py",
+    "src/creo_mechdog/sheetmetal_candidates.py",
+    "src/creo_mechdog/flange_profile.py",
+    "src/creo_mechdog/modeling_recipes.py",
     "src/creo_mechdog/profile_checks.py",
     "src/creo_mechdog/profile_diagnostics.py",
     "src/creo_mechdog/airfoil.py",
@@ -138,6 +142,11 @@ _SOURCE_NAMES = (
     "src/creo_mechdog/native_planar_wall.py",
     "native/loft_seed.cpp",
     "native/advanced.cpp",
+    "native/sheetmetal_candidates.cpp",
+    "native/sheetmetal_target_guard.h",
+    "native/flange_profile.h",
+    "native/surface_boundary_topology.h",
+    "native/surface_boundary_fill.cpp",
     "native/geometry_diagnostics.h",
     "native/preview.h",
     "native/surface_measure.h",
@@ -3157,7 +3166,10 @@ async def creo_create_udf(
 
 
 for _unavailable in UNAVAILABLE_OPERATIONS:
-    mcp.remove_tool("creo_" + _unavailable)
+    # Some offline candidates have only a plan operation, never a standalone
+    # tool. Remove an existing wrapper without inventing a public placeholder.
+    if "creo_" + _unavailable in globals():
+        mcp.remove_tool("creo_" + _unavailable)
 
 if __name__ == "__main__":
     from creo_mechdog.stdio_lifecycle import StdioExitGuard

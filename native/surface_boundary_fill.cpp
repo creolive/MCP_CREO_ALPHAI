@@ -1,57 +1,19 @@
-// surface_boundary_fill.cpp — DEV-074/H09: fill one closed non-planar boundary.
-//
-// Status 2026-11-08: GATED. On Creo 12.4.0.0 the tree below creates and
-// extracts (ProFeatureWithoptionsCreate=0, ProFeatureElemtreeExtract=0) but the
-// redefine leaves feature_status=6 and the feature owns no quilt (quilt visit
-// -4, quilt_count=0, element-error list empty); a planar 4-curve rectangle loop
-// with a 1.9e-31 mm measured endpoint gap reproduces it. The operation is in
-// UNAVAILABLE_OPERATIONS and its tool is removed from the MCP surface; this
-// file is the falsified candidate route, not a published capability.
-//
-// Contract: docs/development/G5-NATIVE-CONTRACT.md §2.12 (offline rationale and
-// open questions), §4.4.2 (status-shaped measurements). The route reuses the
-// only documented boundary-blend tree on this SDK (Probbl.h, §2.1): the same
-// bare skeleton surface_loft already creates through
-// PRO_FEAT_CR_INCOMPLETE_FEAT/extract/redefine, with one chain holder per
-// boundary curve and PRO_E_BBL_ADD_CLOSED set for the closed loop. Probbl.h
-// documents PRO_E_BBL_ADD_CLOSED as workable from three curves, which is why
-// the schema and this entry point both require at least three.
-//
-// The input is one ordered closed chain of curve geometry ids. This file
-// samples each curve's endpoints with ProCurveXyzdataEval and refuses a chain
-// that is open, out of order or repeated, so a typo never becomes a silently
-// different surface. It does not write any optional value the kernel owns
-// (tangency conditions are still filled by the extracted tree).
-//
-// This file is included by generic.cpp after the shared element-tree,
-// selection, quilt and measurement helpers are visible; it defines no entry
-// point of its own beyond generic_surface_boundary_fill.
+// DEV-078: unavailable four-perimeter two-direction Boundary Blend candidate.
+// Close blend joins last section back to first; it does not fill a perimeter.
+// Probbl.h requires two curves per defined direction and defaults CLOSED=false.
 #include <ProCurve.h>
+#include "surface_boundary_topology.h"
 
-static constexpr int SURFACE_BOUNDARY_FILL_MIN_CURVES = 3;
-static constexpr int SURFACE_BOUNDARY_FILL_MAX_CURVES = 200;
-// Same join tolerance surface_group_measure publishes as its default: a chain
-// whose endpoints are farther apart than this is not one closed loop.
 static constexpr double SURFACE_BOUNDARY_FILL_TOLERANCE_MM = 0.01;
 static constexpr double SURFACE_BOUNDARY_FILL_GROUP_TOLERANCE_MM = 0.01;
 static constexpr double SURFACE_BOUNDARY_FILL_GROUP_GAP_SEARCH_MM = 1.0;
-
-struct BoundaryFillCurve {
-    int id = -1;
-    double start[3] = {0.0, 0.0, 0.0};
-    double end[3] = {0.0, 0.0, 0.0};
-};
+using BoundaryFillCurve = boundary_patch::Curve;
 
 struct BoundaryFillFaces {
     std::vector<int> ids;
     bool visit_ok = true;
     ProError query_code = PRO_TK_NO_ERROR;
 };
-
-static double boundary_fill_distance(const double a[3], const double b[3]) {
-    const double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-    return std::sqrt(dx * dx + dy * dy + dz * dz);
-}
 
 static void boundary_fill_copy(double target[3], const double source[3]) {
     for (int axis = 0; axis < 3; axis++)
@@ -87,50 +49,28 @@ static BoundaryFillCurve boundary_fill_curve(const J &reference, int index) {
     return result;
 }
 
-// Closest distance between the two curves' endpoint sets. Curve parameter
-// direction is not part of the public reference syntax, so a matched end may be
-// either endpoint; order is still enforced because only consecutive curves may
-// touch.
-static double boundary_fill_link_gap(const BoundaryFillCurve &a, const BoundaryFillCurve &b) {
-    double gap = boundary_fill_distance(a.end, b.start);
-    gap = std::min(gap, boundary_fill_distance(a.end, b.end));
-    gap = std::min(gap, boundary_fill_distance(a.start, b.start));
-    gap = std::min(gap, boundary_fill_distance(a.start, b.end));
-    return gap;
-}
-
-static std::string boundary_fill_pair(const std::vector<BoundaryFillCurve> &curves, size_t second) {
-    return std::to_string(curves[second - 1].id) + " and " + std::to_string(curves[second].id);
-}
-
-// Returns the largest measured link gap in native units. `scale` converts the
-// message distances to mm; the caller already refused an unknown unit.
-static double boundary_fill_check_chain(const std::vector<BoundaryFillCurve> &curves,
-                                        double tolerance_native, double scale) {
-    double max_gap = 0.0;
-    for (size_t index = 1; index < curves.size(); index++) {
-        const double gap = boundary_fill_link_gap(curves[index - 1], curves[index]);
-        max_gap = std::max(max_gap, gap);
-        if (gap > tolerance_native)
-            throw std::runtime_error(
-                "surface_boundary_fill boundary curves " + boundary_fill_pair(curves, index) +
-                " are not connected in the submitted order (closest endpoints are " +
-                std::to_string(gap * scale) + " mm apart, tolerance " +
-                std::to_string(SURFACE_BOUNDARY_FILL_TOLERANCE_MM) +
-                " mm); reorder the chain so each curve meets the next one, or rebuild the "
-                "missing edge with creo_project_curve / creo_surface_loft");
-    }
-    const double closing = boundary_fill_link_gap(curves.back(), curves.front());
-    max_gap = std::max(max_gap, closing);
-    if (closing > tolerance_native)
+// The SDK collection writer supports reference collection, not an established
+// per-chain reversal. Accept only already aligned parameters; never silently
+// drop a computed reverse flag. Gated until real reference-tree evidence exists.
+static boundary_patch::Layout boundary_fill_check_chain(
+    const std::vector<BoundaryFillCurve> &curves, double tolerance_native, double scale) {
+    boundary_patch::Layout layout;
+    try {
+        layout = boundary_patch::layout(curves, tolerance_native);
+    } catch (const std::runtime_error &error) {
         throw std::runtime_error(
-            "surface_boundary_fill boundary chain is open: the last curve " +
-            std::to_string(curves.back().id) + " does not meet the first curve " +
-            std::to_string(curves.front().id) + " (gap " + std::to_string(closing * scale) +
-            " mm, tolerance " + std::to_string(SURFACE_BOUNDARY_FILL_TOLERANCE_MM) +
-            " mm); surface_boundary_fill fills a closed loop only - close the boundary first, "
-            "or use creo_surface_loft for a surface between two sections");
-    return max_gap;
+            std::string("surface_boundary_fill ") + error.what() + "; endpoint tolerance " +
+            std::to_string(tolerance_native * scale) + " mm; model unit to mm factor " +
+            std::to_string(scale) + "; close/reorder the chain or use creo_surface_loft");
+    }
+    for (int i = 0; i < 4; ++i)
+        if (layout.reverse[i])
+            throw std::runtime_error(
+                "surface_boundary_fill curve " + std::to_string(curves[i].id) +
+                " requires parameter reversal; the SDK collection route has no verified "
+                "reversal encoding. Supply consistently parameterized opposite sides; "
+                "this candidate remains unavailable");
+    return layout;
 }
 
 static ProError boundary_fill_face_cb(ProSurface surface, ProError status, ProAppData data) {
@@ -181,16 +121,10 @@ static J boundary_fill_tree_json(ProElement root) {
 
 static void generic_surface_boundary_fill(const J &op) {
     const J &boundary = op.at("boundary");
-    if (!boundary.is_array() || (int)boundary.size() < SURFACE_BOUNDARY_FILL_MIN_CURVES)
-        throw std::runtime_error(
-            "surface_boundary_fill needs at least " +
-            std::to_string(SURFACE_BOUNDARY_FILL_MIN_CURVES) +
-            " ordered boundary curves (the closed blend flag is only workable from 3 curves); "
-            "split the loop into 3 or more curves, or use surface_loft for a two-curve boundary");
-    if ((int)boundary.size() > SURFACE_BOUNDARY_FILL_MAX_CURVES)
-        throw std::runtime_error("surface_boundary_fill accepts at most " +
-                                 std::to_string(SURFACE_BOUNDARY_FILL_MAX_CURVES) +
-                                 " boundary curves");
+    if (!boundary.is_array() || boundary.size() != 4)
+        throw std::runtime_error("surface_boundary_fill needs exactly 4 ordered perimeter curves");
+    if (!op.value("closed", true))
+        throw std::runtime_error("surface_boundary_fill requires a closed perimeter");
 
     std::vector<BoundaryFillCurve> curves;
     curves.reserve(boundary.size());
@@ -215,7 +149,8 @@ static void generic_surface_boundary_fill(const J &op) {
             std::to_string((int)scale.unit_query_code) +
             "); set the model length unit (mm recommended) and retry");
     const double tolerance_native = SURFACE_BOUNDARY_FILL_TOLERANCE_MM / scale.scale;
-    const double chain_gap_max = boundary_fill_check_chain(curves, tolerance_native, scale.scale);
+    const auto layout = boundary_fill_check_chain(curves, tolerance_native, scale.scale);
+    const double chain_gap_max = layout.max_gap;
 
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
     integer(root, PRO_E_FEATURE_TYPE, PRO_FEAT_DATUM_SURF);
@@ -223,17 +158,17 @@ static void generic_surface_boundary_fill(const J &op) {
     integer(root, PRO_E_DTM_SRF_TYPE, PRO_E_DTM_SRF_TYPE_BND_BLEND);
     text(root, PRO_E_STD_FEATURE_NAME, wide(op["label"]).c_str());
     ProElement blend = node(root, PRO_E_BNBLN_CURVES);
-    ProElement direction = node(blend, PRO_E_BNBLN_1DIR);
-    ProElement holders = node(direction, PRO_E_BNBLN_DIR_CURVES);
-    for (const auto &curve : curves) {
-        ProElement holder = node(holders, PRO_E_STD_CHAIN_HOLDER);
-        curve_collection(node(holder, PRO_E_STD_CURVE_COLLECTION_APPL),
-                         J::array({{{"kind", "curve"}, {"id", curve.id}}}));
+    const int direction_ids[2] = {PRO_E_BNBLN_1DIR, PRO_E_BNBLN_2DIR};
+    for (int dir = 0; dir < 2; ++dir) {
+        ProElement direction = node(blend, direction_ids[dir]);
+        ProElement holders = node(direction, PRO_E_BNBLN_DIR_CURVES);
+        for (int side : layout.sides[dir]) {
+            ProElement holder = node(holders, PRO_E_STD_CHAIN_HOLDER);
+            curve_collection(node(holder, PRO_E_STD_CURVE_COLLECTION_APPL),
+                             J::array({{{"kind", "curve"}, {"id", curves[side].id}}}));
+        }
+        integer(direction, PRO_E_BBL_ADD_CLOSED, PRO_B_FALSE);
     }
-    // Probbl.h: this closes the surface across the first direction and is
-    // documented as workable from three curves. The ordered chain supplies the
-    // boundary; the kernel owns every other optional value.
-    integer(direction, PRO_E_BBL_ADD_CLOSED, PRO_B_TRUE);
 
     J details = {{"op", "surface_boundary_fill"},
                  {"boundary", boundary},
@@ -242,8 +177,8 @@ static void generic_surface_boundary_fill(const J &op) {
                  {"boundary_closed", true},
                  {"boundary_tolerance_mm", SURFACE_BOUNDARY_FILL_TOLERANCE_MM},
                  {"chain_gap_max_mm", chain_gap_max * scale.scale},
-                 {"route", "probbl_boundary_blend_closed_chain"},
-                 {"add_closed", true}};
+                 {"route", "probbl_boundary_blend_four_sided_two_direction"},
+                 {"add_closed", false}};
     for (const auto &curve : curves)
         details["boundary_curve_ids"].push_back(curve.id);
 
@@ -281,7 +216,7 @@ static void generic_surface_boundary_fill(const J &op) {
         throw std::runtime_error(
             "surface_boundary_fill boundary blend create failed (code " +
             std::to_string((int)created) + ", " + std::to_string((int)curves.size()) +
-            " boundary curves); the kernel may reject this closed chain as one blend direction "
+            " boundary curves); the kernel may reject this four-sided two-direction patch "
             "- see create_element_errors");
     }
     ProElementFree(&root);

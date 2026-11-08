@@ -1,18 +1,10 @@
-"""DEV-074/H09 surface_boundary_fill contract tests (offline only).
-
-These tests lock the Python admission surface, the gated capability, the
-result projection and the native source-level route of the closed non-planar
-boundary fill. They never connect to Creo: the geometric closure/order rules
-live in the native executor (curve endpoint sampling) and are locked here by
-source, while the schema tests cover every request shape that must be refused
-before a job exists. The 2026-11-08 live probe refuted the route (create and
-extract succeed, regeneration leaves status 6 and no quilt), so the operation
-is registered but gated and its tool is absent from the MCP surface.
-"""
+"""DEV-078 offline schema, native topology and gated route regressions."""
 
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -31,6 +23,7 @@ def boundary_fill(**overrides):
             {"kind": "curve", "id": 44},
             {"kind": "curve", "id": 52},
             {"kind": "curve", "id": 58},
+            {"kind": "curve", "id": 66},
         ],
     }
     operation.update(overrides)
@@ -43,7 +36,7 @@ class BoundaryFillSchemaTests(unittest.TestCase):
 
         return validate_operations([operation])
 
-    def test_accepts_an_ordered_three_curve_chain(self):
+    def test_accepts_an_ordered_four_curve_chain(self):
         validated = self.validate(boundary_fill())
         self.assertEqual(validated[0]["op"], "surface_boundary_fill")
         self.assertEqual(
@@ -52,23 +45,19 @@ class BoundaryFillSchemaTests(unittest.TestCase):
                 {"kind": "curve", "id": 44},
                 {"kind": "curve", "id": 52},
                 {"kind": "curve", "id": 58},
+                {"kind": "curve", "id": 66},
             ],
         )
         self.assertTrue(validated[0]["closed"])
 
-    def test_accepts_a_longer_chain(self):
-        boundary = [{"kind": "curve", "id": value} for value in (44, 52, 58, 66)]
-        self.assertEqual(len(self.validate(boundary_fill(boundary=boundary))[0]["boundary"]), 4)
-
-    def test_rejects_an_empty_chain(self):
-        with self.assertRaisesRegex(ValueError, "at least 3"):
-            self.validate(boundary_fill(boundary=[]))
-
-    def test_rejects_a_two_curve_boundary_and_names_surface_loft(self):
-        with self.assertRaisesRegex(ValueError, "surface_loft"):
-            self.validate(
-                boundary_fill(boundary=[{"kind": "curve", "id": 44}, {"kind": "curve", "id": 52}])
-            )
+    def test_rejects_every_non_four_curve_count(self):
+        for count in (0, 1, 2, 3, 5, 200):
+            with self.subTest(count=count), self.assertRaisesRegex(ValueError, "exactly 4"):
+                self.validate(
+                    boundary_fill(
+                        boundary=[{"kind": "curve", "id": value} for value in range(count)]
+                    )
+                )
 
     def test_rejects_an_explicitly_open_chain(self):
         with self.assertRaisesRegex(ValueError, "open chain"):
@@ -82,6 +71,7 @@ class BoundaryFillSchemaTests(unittest.TestCase):
                         {"kind": "curve", "id": 44},
                         {"kind": "curve", "id": 52},
                         {"kind": "curve", "id": 44},
+                        {"kind": "curve", "id": 66},
                     ]
                 )
             )
@@ -120,6 +110,7 @@ class BoundaryFillSchemaTests(unittest.TestCase):
                                 {"kind": "curve", "id": 44},
                                 {"kind": "curve", "id": 52},
                                 item,
+                                {"kind": "curve", "id": 66},
                             ]
                         )
                     )
@@ -134,6 +125,7 @@ class BoundaryFillSchemaTests(unittest.TestCase):
                                 {"kind": "curve", "id": 44},
                                 {"kind": "curve", "id": 52},
                                 {"kind": "curve", "id": value},
+                                {"kind": "curve", "id": 66},
                             ]
                         )
                     )
@@ -163,7 +155,7 @@ class BoundaryFillCapabilityTests(unittest.TestCase):
 
         self.assertIn("surface_boundary_fill", REGISTERED_OPERATIONS)
         self.assertIn("surface_boundary_fill", UNAVAILABLE_OPERATIONS)
-        self.assertIn("feature_status=6", UNAVAILABLE_OPERATIONS["surface_boundary_fill"])
+        self.assertTrue(UNAVAILABLE_OPERATIONS["surface_boundary_fill"])
         self.assertNotIn("creo_surface_boundary_fill", families()["surface_chain"]["tools"])
         self.assertNotIn("surface_boundary_fill", families())
 
@@ -263,7 +255,7 @@ class BoundaryFillNativeTests(unittest.TestCase):
             line for line in cls.text.splitlines() if not line.lstrip().startswith("//")
         )
 
-    def test_the_route_reuses_the_documented_closed_blend_tree(self):
+    def test_the_route_uses_two_open_blend_directions(self):
         for lock in (
             "static void generic_surface_boundary_fill(const J &op)",
             "PRO_FEAT_DATUM_SURF",
@@ -271,6 +263,7 @@ class BoundaryFillNativeTests(unittest.TestCase):
             "PRO_E_DTM_SRF_TYPE_BND_BLEND",
             "PRO_E_BNBLN_CURVES",
             "PRO_E_BNBLN_1DIR",
+            "PRO_E_BNBLN_2DIR",
             "PRO_E_BNBLN_DIR_CURVES",
             "PRO_E_STD_CHAIN_HOLDER",
             "PRO_E_STD_CURVE_COLLECTION_APPL",
@@ -286,9 +279,7 @@ class BoundaryFillNativeTests(unittest.TestCase):
         for lock in (
             "ProCurveXyzdataEval",
             "boundary_fill_check_chain",
-            "boundary_fill_link_gap",
-            "not connected in the submitted order",
-            "boundary chain is open",
+            "boundary_patch::layout",
             "SURFACE_BOUNDARY_FILL_TOLERANCE_MM",
         ):
             self.assertIn(lock, self.text)
@@ -322,6 +313,80 @@ class BoundaryFillNativeTests(unittest.TestCase):
         self.assertIn('#include "surface_boundary_fill.cpp"', generic)
         self.assertIn('else if (kind == "surface_boundary_fill")', generic)
         self.assertIn("generic_surface_boundary_fill(op)", generic)
+
+
+class BoundaryTopologyBehaviorTests(unittest.TestCase):
+    def test_real_native_helper_endpoint_and_direction_behavior(self):
+        vcvars = Path(
+            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat"
+        )
+        if not vcvars.exists():
+            self.skipTest("MSVC x64 environment unavailable for standalone helper")
+        source = r"""#include "surface_boundary_topology.h"
+#include <cassert>
+#include <limits>
+using namespace boundary_patch;
+int main() {
+    std::vector<Curve> c = {
+        {1,{0,0,0},{1,0,0}}, {2,{1,0,0},{1,1,1}},
+        {3,{0,1,0},{1,1,1}}, {4,{0,0,0},{0,1,0}}};
+    auto a = layout(c,0.01);
+    assert(a.sides[0][0]==0 && a.sides[0][1]==2);
+    assert(a.sides[1][0]==3 && a.sides[1][1]==1);
+    for (bool r:a.reverse) assert(!r);
+    // All sixteen parameter orientations retain the same patch topology;
+    // computed reversals exactly recover the original aligned parameters.
+    for(int mask=0;mask<16;++mask) {
+        auto changed=c;
+        for(int i=0;i<4;++i) if(mask&(1<<i))
+            for(int k=0;k<3;++k) std::swap(changed[i].start[k],changed[i].end[k]);
+        auto mapped=layout(changed,0.01);
+        for(int i=0;i<4;++i) {
+            if(mapped.reverse[i])
+                for(int k=0;k<3;++k) std::swap(changed[i].start[k],changed[i].end[k]);
+        }
+        // Opposite directions can both be globally reversed; origins still
+        // meet at the same patch corner (c0.start = c3.start).
+        assert(distance(changed[0].start,changed[3].start)<=0.01);
+        assert(distance(changed[0].end,changed[1].start)<=0.01);
+        assert(distance(changed[2].start,changed[3].end)<=0.01);
+        assert(distance(changed[2].end,changed[1].end)<=0.01);
+    }
+    auto rejected=[](std::vector<Curve> bad) {
+        try { layout(bad,0.01); } catch(const std::runtime_error &) {return true;}
+        return false;
+    };
+    auto bad=c; bad[3].start[0]=2; assert(rejected(bad)); // open
+    bad=c; std::swap(bad[1],bad[2]); assert(rejected(bad)); // wrong order
+    bad=c; bad.pop_back(); assert(rejected(bad));
+    bad=c; bad.push_back(c[0]); assert(rejected(bad));
+    bad=c; bad[0].end[0]=std::numeric_limits<double>::quiet_NaN(); assert(rejected(bad));
+    // Closest-pair adjacency would falsely accept this star at the origin.
+    bad={{1,{0,0,0},{1,0,0}},{2,{0,0,0},{0,1,0}},
+         {3,{0,0,0},{-1,0,0}},{4,{0,0,0},{0,-1,0}}};
+    assert(rejected(bad));
+    bad=c; bad[3].start[0]=0.005; assert(layout(bad,0.01).max_gap>0);
+    assert(rejected(bad)==false);
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="boundary-topology-") as tmp:
+            cpp = Path(tmp) / "test.cpp"
+            exe = Path(tmp) / "test.exe"
+            cpp.write_text(source, encoding="utf-8")
+            command = (
+                f'call "{vcvars}" >nul && cl /nologo /EHsc /std:c++17 '
+                f'/I"{ROOT / "native"}" "{cpp}" /Fe:"{exe}"'
+            )
+            compiled = subprocess.run(
+                'cmd /d /s /c "' + command + '"',
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                errors="replace",
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+            executed = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
 
 
 if __name__ == "__main__":

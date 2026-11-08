@@ -33,6 +33,9 @@ REGISTERED_OPERATIONS = (
     "sheetmetal_planar_wall",
     "resize_sheetmetal_planar_wall",
     "sheetmetal_flange",
+    "sheetmetal_flange_profile",
+    "sheetmetal_corner_relief",
+    "sheetmetal_quilt_form",
     "sheetmetal_unbend",
     "sheetmetal_flat_pattern",
     "sheetmetal_bend_back",
@@ -103,14 +106,26 @@ SURFACE_TRIM_OFFSET_LIMIT = (
 )
 
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
+    "sheetmetal_flange_profile": (
+        "DEV-078 multi-entity flange profiles are offline candidates only; "
+        "hem/joggle geometry, sheetmetal identity, flat pattern and saved reload are not verified"
+    ),
+    "sheetmetal_corner_relief": (
+        "DEV-078 independent three-surface corner relief is an offline candidate only; "
+        "a real ripped edge and intersecting bends are prerequisites, not verified inputs"
+    ),
+    "sheetmetal_quilt_form": (
+        "DEV-078 quilt form is an offline candidate only; native forming, gauge retention "
+        "and flatten/unflatten behavior require hardware evidence"
+    ),
     "surface_boundary_fill": (
-        "the closed non-planar boundary fill is not published: on this machine the documented "
-        "Probbl.h closed-chain tree creates and extracts (ProFeatureWithoptionsCreate=0, "
+        "DEV-078 four-boundary two-direction blend is offline only and not published; "
+        "the previous single-direction candidate creates and extracts (ProFeatureWithoptionsCreate=0, "
         "ProFeatureElemtreeExtract=0) but regeneration fails with feature_status=6 "
-        "(PRO_FEAT_INCOMPLETE) and produces no quilt (quilt visit -4, quilt_count=0, empty "
+        "and produces no quilt (quilt visit -4, quilt_count=0, empty "
         "element-error list); a planar 4-curve rectangle loop whose measured endpoint gap is "
         "1.9e-31 mm reproduces it twice and rolls back, so the closed single-direction chain "
-        "does not yield a measurable filled surface"
+        "does not yield a measurable filled surface; this evidence does not test the new route"
     ),
 }
 
@@ -594,8 +609,9 @@ def families() -> dict:
                 "retrimmed_target_quilt); the consumed tool quilt is no longer measurable, "
                 "intersect, three or more participants, chained merges and closed shells are "
                 "not published; the closed non-planar boundary fill stays gated "
-                "(UNAVAILABLE_OPERATIONS; the fill's closed single-direction chain "
-                "regenerates to no quilt on hardware); surface_loft is two "
+                "(UNAVAILABLE_OPERATIONS; the former single-direction candidate "
+                "regenerated to no quilt; DEV-078's four-boundary two-direction route "
+                "is offline only and rejects unsupported parameter reversals); surface_loft is two "
                 "single-curve sections with straight interpolation only (no smooth, closed, "
                 "continuity, multi-section or solid output); surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
