@@ -310,6 +310,15 @@ class SeedPackagingGateTests(SeedArchiveFixture):
 
 
 class SeedPackagerAllowlistTests(unittest.TestCase):
+    def test_feedback0184_manifest_members_are_distributed_intact(self):
+        base = ROOT / "docs/validation/feedback-0.18.4-2026-11-08"
+        packaged = set(package.source_files())
+        manifest = json.loads((base / "manifest.json").read_text(encoding="utf-8"))
+        for item in manifest["files"]:
+            path = base / item["archived_path"]
+            self.assertIn(path, packaged)
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), item["sha256"])
+
     def test_seed_packager_and_release_gate_share_one_member_set(self):
         members = {
             path.relative_to(ROOT / "seed_library").as_posix()

@@ -54,6 +54,7 @@ def source_files():
         "docs/validation/track-feedback-2026-10-16/track-modeling-rev2.txt",
         "docs/validation/bug-001-repro-2026-10-16/g0_driver.py",
         "tools/test_callback_payload.cpp",
+        "docs/validation/feedback-0.18.4-2026-11-08/originals/surface_loft.local.patch.diff",
     )
     files = [ROOT / name for name in names]
     for directory, extensions in {
