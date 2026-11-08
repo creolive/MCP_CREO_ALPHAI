@@ -96,3 +96,5 @@ docs/PRODUCT_RULES.md text eol=lf
 
 # DEV-074: preserve the four 0.17.4 feedback originals byte for byte.
 docs/validation/feedback-0.17.4-2026-11-07/originals/** -text
+
+docs/validation/feedback-0.18.4-surface-2026-11-08/originals/** -text

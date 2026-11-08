@@ -52,3 +52,17 @@ H02钣金融合、H03质量实机、H04孔深元素树、H05新诊断黑盒、H0
 用户原有DEV-054、tools/test_toolkit_recovery.py、tools/test_update_check.py、.trae/及FEAT-014计划未纳入本批；开发期间另有流程修改原生resize和多个测试来源入口，均保留，不随本批提交。接手先git status/diff，测试证据须注明实际组合源码与dirty状态。
 
 运行期间出现的toolkit-channel.json是未跟踪运行数据，不纳入本批，未清理占用或unknown。另有流程文件仅做过格式整理，未带入本批提交。原始反馈提到的宿主删除守卫干扰属于其环境事实，本次隔离分发验证不等于修复或复现了该宿主限制。
+
+## 2026-11-08 追加曲面报告：H13—H19
+
+[逐项对照与具体验收动作](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)。本次已修组边界state_reason矛盾，补SDK条件字段、修剪提示和路线/预算限制；尚未实现以下能力：
+
+- H13 / FEAT-009、BUG-107：worker身份驱动的动态SDK可用性/提交前拒绝，以及Creo10真实放样路线；不能猜枚举常量或仅看release放行。
+- H14 / FEAT-039：真实交线与拓扑分割诊断；开放弧机理仅推断，目标边界连接也可能闭合有效区域。
+- H15 / FEAT-039：overlap采样预算与覆盖/误差诊断，大面不可用仍必须null，不能写0。
+- H16 / FEAT-039：trim结果可靠quilt引用、连续操作与保存重载。
+- H17 / FEAT-039：Creo10 ProMerge NO_OPTS直创与Creo12 incomplete重定义的等载荷对照；低层成功不直接解禁高层工具，不外推>2片。
+- H18 / FEAT-039：半圆球面等输入跨环境复测；报告自己标了载荷错误，暂不改revolve校验，半球替代不等价。
+- H19 / DEV-076：取得旧0.18.2反馈原件及本报告PRT/JPG/原始回执，关联worker指纹/哈希/日志；mtime不能当构建身份证据。
+
+本批没有Creo/Toolkit连接；前述正证都是报告方Creo10结果，不是本轮复测。G1/多片缝合/非平面fill/独立offset/round/曲率检查按既有工作卡继续接手。

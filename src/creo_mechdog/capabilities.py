@@ -101,12 +101,15 @@ SURFACE_TRIM_OFFSET_LIMIT = (
 
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
     "quilt_merge": (
-        "the surface merge is not published: on this machine the documented ProMerge.h array "
+        "the surface merge is not published: on this machine (Creo 12.4, incomplete-feature "
+        "extract/redefine route) the documented ProMerge.h array "
         "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
         "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
         "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
         "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
-        "change nothing, so the joined area and closure cannot be measured or handed to thicken"
+        "change nothing, so the joined area and closure cannot be measured or handed to thicken. "
+        "External Creo 10 reports describe a successful direct-create array tree; that route "
+        "has not been independently accepted here and does not remove this gate"
     ),
 }
 
@@ -574,7 +577,11 @@ def families() -> dict:
             "limits": (
                 "quilt merge stays gated (UNAVAILABLE_OPERATIONS); surface_loft is two "
                 "single-curve sections with straight interpolation only (no smooth, closed, "
-                "continuity, multi-section or solid output); surface_trim offset_mm stays "
+                "continuity, multi-section or solid output), conditional on Probbl.h in the "
+                "worker build SDK; intersection with a trim tool does not by itself prove "
+                "that it partitions a removable region (a closed loop or connections to "
+                "target boundaries may be needed); intersection curves are not measured; "
+                "surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
                 "quilt; it can add solid volume, and target_quilt_id names the source quilt; "
                 "trimmed quilt feature-label reuse and curved-quilt offset measurement "
@@ -583,7 +590,8 @@ def families() -> dict:
                 "micro_gap/overlap) while boundary_closed tells whether the whole group "
                 "boundary is a shell; its overlap area is a tessellation estimate, gaps "
                 "wider than gap_search_mm are not quantified, and the join judgement is "
-                "sampled boundary geometry rather than a kernel boolean"
+                "sampled boundary geometry rather than a kernel boolean; overlap sampling "
+                "is bounded and can be unavailable for larger or finely tessellated groups"
             ),
         },
         "boolean_bodies": {
@@ -624,6 +632,9 @@ def families() -> dict:
         },
         "surface_loft": {
             "enabled": True,
+            "availability": "sdk_conditional",
+            "sdk_requirements": ["Probbl.h"],
+            "enabled_semantics": "registered implementation; not verification of the loaded worker SDK",
             "tool": "creo_surface_loft",
             "sdk_requirement": "Probbl.h boundary-blend tree; missing headers return SURFACE_LOFT_SDK_UNAVAILABLE",
             "scope": (

@@ -1,0 +1,35 @@
+{
+  "source_commit": "186883d73b4199e7515f79249f89338475bcf366",
+  "dirty": true,
+  "directory": "C:\\s076_791e4d",
+  "files_copied": 1601,
+  "code_files": 491,
+  "code_fingerprint": "b033be4209ad0def206353398edf7b44372e53d79d30255ab6d68d7a8541034a",
+  "fingerprint_algorithm": "sha256-path-lf-filehash-v1",
+  "git_available": false,
+  "pip_no_index": true,
+  "import_check": "C:\\s076_791e4d\\src\\creo_mechdog\\__init__.py",
+  "exit_code": 0,
+  "code_unchanged": true,
+  "workspace_tests": {
+    "run": 117,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 21.301
+  },
+  "distribution_tests": {
+    "run": 117,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 1,
+    "duration_seconds": 18.398
+  },
+  "native_build": {
+    "exit_code": 0,
+    "sdk": "Creo12.4.0.0",
+    "worker_bytes": 13907968,
+    "worker_sha256": "1d044e7d913b6ccbbd207cfe4dc3abd9a840f8a8dd6749da8fac2d10b2169215"
+  },
+  "toolkit_connection": false
+}

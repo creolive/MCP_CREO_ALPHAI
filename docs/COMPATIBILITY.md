@@ -1,3 +1,5 @@
+2026-11-08 DEV-076曲面追加：外部Creo10报告验证了trim形心/面积和单片0.3加厚；放样缺Probbl.h不可用。capabilities新增SDK条件元数据，enabled仅表示注册实现，不代表已核验加载worker；动态投影仍待H13。ProMerge的Creo10直创正证与Creo12 incomplete反证须分路线记录，不能按版本猜测解禁。完整球面半圆案例尚未同载荷对照。详见[映射](validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)。
+
 # Creo 兼容与验收矩阵
 
 2026-11-08 DEV-076开发分支补步：0.18.3/0.18.4的手写surface_loft曾无条件包含Probbl.h，报告方Creo10 SDK因此构建失败。本分支增加头存在性门控；缺头时该操作明确SURFACE_LOFT_SDK_UNAVAILABLE，不生成特征，有头保留原实现。缺头分支以SDK无关C++夹具验证；完整Creo9/10 SDK构建及运行时不据此判通过。本批不修改已发布标签/附件。

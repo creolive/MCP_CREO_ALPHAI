@@ -807,8 +807,9 @@ static void group_state_decide(const SurfaceGroupMeasurement &measurement, doubl
         return;
     }
     out.state = "open";
-    out.state_reason =
-        measurement.gap_available ? "no_member_seam_candidate" : "boundary_edges_unavailable";
+    // Boundary traversal succeeded. A missing inter-member gap candidate does
+    // not make the measured open boundary unavailable.
+    out.state_reason = "open_edges_present";
 }
 
 // Project the measurement into the §4.4.1 status shape. Every value carries its

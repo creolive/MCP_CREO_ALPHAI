@@ -720,3 +720,7 @@ gated、开放成员无法 `solidify`，且已加厚成员不能回到组级测�
 0.3 mm 整瓶全链、五爪阵列与瓶底收口（仍依赖 merge）、WorkBuddy。
 
 
+
+## 2026-11-08 曲面反馈追加
+
+新增Creo10外部ProMerge直创正证、trim形心/单片加厚正证与trim/句柄/预算负证；已修state_reason，交线/引用/预算/直创等仍按H14—H18验收，门禁不解除。外部资料及本次范围见[映射](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)，具体动作见DEV-075-HANDOFF H13—H19；本轮不连接Creo。

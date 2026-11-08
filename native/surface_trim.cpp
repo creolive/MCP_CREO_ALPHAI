@@ -345,7 +345,10 @@ static void generic_surface_trim(const J &op) {
             "Surface trim regeneration failed (feature_status=" + std::to_string((int)status) +
             ", feature_id=" + std::to_string(feature.id) + ", target_quilt_id=" +
             std::to_string(target_id) + ", tool=" + tool.kind + ", keep_side=" + keep_side +
-            "); check that the tool actually intersects the target quilt");
+            "); check that the tool actually intersects the target quilt and partitions a "
+            "removable region. Intersection alone may be insufficient: an open intersection "
+            "arc may need a closed loop or connections to target boundaries. Intersection "
+            "curves were not measured; this is troubleshooting guidance, not a detected cause");
     }
     stage_operation_result(details);
     // Honest success test: a trim that removes nothing is a failure, not a

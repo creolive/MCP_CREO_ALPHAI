@@ -115,3 +115,7 @@ C1/C2 的解析 oracle 精确命中：1200 − 2×3×10 + (π/2×3)×10 = **1187
 （SHA256 `D74FF061…FB6E64D5`）。**未覆盖**：edge-chain 变体（无 quilt 边 id）、变半径/full/过渡、
 圆角后继续 thicken/solidify、G1 与曲率实机数值、Creo 9/10。
 
+
+## 2026-11-08 曲面反馈追加
+
+报告对G1、公开round、曲率/斑马检查的需求沿用本卡；本批没有注册或合入另一分支的surface_round。外部资料及本次范围见[映射](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)，具体动作见DEV-075-HANDOFF H13—H19；本轮不连接Creo。
