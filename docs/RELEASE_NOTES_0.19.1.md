@@ -51,3 +51,11 @@
 | `MCP_CREO_MechDog-0.19.1-seed-library.zip.sha256` | 107 | `16206fd52e2aa91f755bfc321beb02fa2403fd8049132d26d34f333befb161e2` |
 
 源码包内含本说明与发布记录，归档生成时无法写入自身 ZIP 的摘要，包内副本保留回填前占位；工作树、Release body 与本表以上述最终值为准。
+
+## 交付与发布后核对（2026-11-08 16:08 +08:00）
+
+- 合并提交：`9dcf5ee`（`main` 直接包含 DEV-077: deliver 0.19.1 feedback fixes）
+- 版本标签：附注标签 `v0.19.1`（标签对象 `e34075d3a7ec453bec29807329b6c4686bc54c1f`）→ 提交 `9dcf5ee`
+- Release 状态：非草稿、非 Pre-release；`published_at=2026-11-08T08:07:49Z`
+- 核对：`tools/check_release_assets.py --tag v0.19.1 --version 0.19.1` → exit 0，四附件齐全，两个 sidecar 与对应 ZIP 摘要一致
+- 合并后记录提交：`693a6e0`（回填 v0.19.1 与历史版本远端正核对，不移动标签、不覆盖附件）
