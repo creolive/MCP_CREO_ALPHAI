@@ -15,13 +15,17 @@ class CapabilitySummaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shipped_summaries_match_registered_tools_and_family_modes(self):
         tools = {tool.name for tool in await server.mcp.list_tools()}
-        # 104 adds creo_surface_loft (FEAT-009/H02, live 2026-11-07) and the
-        # read-only creo_measure_surface_group (FEAT-039/H04) to the 102 that
-        # carry the offline creo_plan_product_variant (FEAT-063) and the
-        # read-only creo_get_mass_properties (FEAT-057).
-        # 102 = the 97 published in 0.12.1 plus creo_surface_trim (live P3),
-        # creo_project_curve (live S04) and creo_surface_offset (live S07, 2026-11-05).
-        self.assertEqual(len(tools), 104)
+        # 107 adds creo_quilt_merge (FEAT-039/H03, live 2026-11-08), the
+        # read-only creo_measure_surface_curvature (DEV-074/H08, live
+        # 2026-11-08), creo_surface_round (DEV-074/H08, live 2026-11-08),
+        # creo_surface_loft (FEAT-009/H02, live 2026-11-07) and the read-only
+        # creo_measure_surface_group (FEAT-039/H04) to the 102 published before
+        # the surface chain; creo_surface_boundary_fill is gated (DEV-074/H09).
+        # 105 = 104 that carry the offline creo_plan_product_variant (FEAT-063)
+        # and the read-only creo_get_mass_properties (FEAT-057).
+        # 104 = 102 that carry creo_surface_trim (live P3), creo_project_curve
+        # (live S04) and creo_surface_offset (live S07, 2026-11-05).
+        self.assertEqual(len(tools), 107)
         status = server._support_status()
         families = capabilities.families()
         for summary, family in (

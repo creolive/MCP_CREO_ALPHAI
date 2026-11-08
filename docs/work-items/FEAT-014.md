@@ -2,6 +2,8 @@
 
 > **当前状态（2026-11-06 晚）**：四壁盒子经 `miter_cuts`（`PRO_E_SMT_MTR_CUTS`，BLIND 数值）路线实机建成，四墙均保存重载验证（见文末第二段），已随 **0.16.0** 合入 `main` 并发布。`adjacent_bend_ends` 保护默认行为不变（仅显式传 `miter_cuts` 才放行）；切角量与角部间隙尺寸仍未量化。同日 `sheetmetal_flange.edge` 新增计划内几何选边 `edge_geometry` 并实机验收，见下节；`edge_geometry` 已随 **0.17.0** 合入 `main` 并发布。
 >
+> **2026-11-08 补充（随 0.19.0 交付）：** 钣金成形类路线勘察与实机反证完成——corner relief 三变体在折边特征内再生失败并回滚（同边 `miter_cuts` 对照成功）、`PRO_FEAT_SMT_SKETCH_FORM` 三种元素树 `-1`、本机 SDK 无 Hem/Jog API、格栅 cut 与 BUG-046 矛盾记为未取证、凸台/铰链/门板耳沿用 H05 反证；**均不可用，门禁保持**，公开面零变化，见 [成形类证据](../validation/dev074-forming-2026-11-08/EVIDENCE.md)。本卡目标版本：0.19.0（0.18.4/0.19.0 反证子项已交付）；其余未排期。
+>
 > **2026-11-07 补充（随 0.18.4 交付）：** `new_body=true` + `boolean_bodies(union)` 已实机反证（Creo 12.4 不可用，Creo 10 未测），门禁保持，见文末 H05 节与 [H05 证据](../validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md)。附着增料仍是不可用结论，不构成新增能力。
 
 ## 2026-11-07：0.17.1 反馈离线增量（DEV-072）
@@ -322,6 +324,21 @@ T05 可交付可复现/未复现结论与根因证据，但只有四壁原生特
 **后续行为（同一模型 followup）**：`creo_sheetmetal_unbend` 全展开 rev 7→8、体积 106499.15656→106181.93079、保存重载 true；`creo_sheetmetal_bend_back` rev 8→9、体积回到 106499.15656；带子特征的父壁 resize 在被提交前拒绝、rev 9→9；无效边（id 999999）折边 `status=failed`、`rollback_status=succeeded`、rev 9→9、体积不变。产品没有“折边高度编辑/删除折边”操作，两项按无该能力记录，不模拟。
 
 **边界**：本轮验证的是 miter_cuts 固定 1/1 基线、两组换参、native_planar 路线与展开/折回/失败回滚；relief 材料几何、更大厚度/半径范围、跨计划多级改型仍未覆盖，FEAT-014 的 relief 子项保持开放。
+
+
+## 2026-11-08 DEV-074 成形类路线 SDK 勘察与有界实机探针（百叶/成形/hem/jog/格栅/corner relief）
+
+分支 `codex/DEV-074-forming`，worktree `MCP_CREO_MechDog-d074`，探针时 HEAD `2aab4af`；Creo 12.4.0.0 手工启动会话、单通道串行、`auto_start_creo=false`，未启动/关闭 Creo、未清 unknown、未故障注入。完整头文件清单、原始返回码与数值见 [EVIDENCE](../validation/dev074-forming-2026-11-08/EVIDENCE.md) 与 [evidence.json](../validation/dev074-forming-2026-11-08/evidence.json)。
+
+**结论（公开面零变化，工具仍 107）**：
+
+- **corner relief 不可用**：折边特征内 `PRO_E_SMT_CORNER_RELIEF`（`ProSmtFlangeWall.h`）三变体——矩形 3×3、矩形 1×1、`PRO_CORNER_RELIEF_PARAM` 默认——在 `+x` 折边后的 `-y` 顶边（id 197、跨度 181.46 mm、端部邻接折弯）全部 `toolkit_code=-1`、“Regeneration produced a failed, suppressed or incomplete feature”、revision 2→2、体积 60 945.29123405193 不变、回滚成立；同一条边的 `miter_cuts{1,1}` 对照成功（rev 2→3、75 014.2426845472 mm³、+14 068.95145049526、保存重载 true）。探针期的原生写入/回读/保护放行与 schema/server/投影字段已全部回退，`adjacent_bend_ends` 仍只由 `miter_cuts` 放行。独立 `PRO_FEAT_SMT_CRN_REL`（需平面 + 两个折弯圆柱面三引用）本轮未探针。
+- **百叶/草图成形本轮不可用**：`PRO_FEAT_SMT_SKETCH_FORM`（`ProSmtSketchForm.h`，**不需要**工具件）三种元素树（XY 基准面草图、首壁顶面草图、顶面+`PRO_E_BODY`）均在 `ProFeatureWithoptionsCreate` 返回 `-1`、元素错误为空、rev 2→2、6 000 mm³ 不变、回滚。工具件路线 `ProSmtForm.h`（`PRO_FEAT_GEN_MERGE`，必须引用冲头/凹模零件 `PRO_E_DSF_REF_MDL`）未尝试。
+- **hem/jog 不可用（API 反证）**：本机 SDK 无 Hem/Jog 头文件，`ProFeatType.h` 无对应特征常量；二者只以折边截面形状存在（`Common Files\text\smt\flange_shapes` 的 `c_hem.sec`/`duck_hem.sec`/`flushed_hem.sec`/`joggle_hem.sec`/`open_hem.sec`/`z_hem.sec`），现有 flange 只写单线截面。
+- **格栅未取证**：既有 `extrude(cut)` 三种变体（3×3 孔 through_all symmetric、1 孔 through_all positive、1 孔 blind 5 mm symmetric 中面草图）均报 “Extrude cut removes no material”，体积 47 025.29123380686 不变、回滚。BUG-046 曾记录钣金件 cut 成功（−100 mm³），故判定为驱动/截面配置问题，不改写既有 cut 口径，也不宣称格栅已可用。
+- **凸台/铰链/门板耳**：沿用 [H05 反证](../validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md)，门禁保持，本轮未重复探针。
+
+验证：`bridge.py build` 退出 0；无新增公开工具（107→107），无 schema/参数变化，改动仅为文档与证据。
 
 
 ## 2026-11-07 离线接续（未发布）

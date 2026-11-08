@@ -1,0 +1,1963 @@
+{
+  "mode": "live",
+  "passed": true,
+  "claw_mode": "five_arc_ruled_petals",
+  "native_five_claw_bottle": "verified",
+  "jobs": [
+    "f32318979560461b9e7ad5ed9c0a77da",
+    "1002ed04637f4bd8a221af7e807595c2",
+    "845ad76754cb46f2a0c754342f6d106e",
+    "af7f029b248645f5bf1fc270f5473ae7",
+    "aedf930d9b7e4c2bba5a744cde79dad1",
+    "0fea62240f3f4535aa4914d0fe73db0b",
+    "7332e8140daf4b7586da9dc1ce056f2b",
+    "c2881d45d51d46e5b2ede67eb0bf1526",
+    "bf89a97eecd74d12a2c711598cdb3156",
+    "ebfb39dfe4b44f36a12d6e8f59e69367",
+    "c137047f10ca4fd2aca6f099865d2171",
+    "9481fcd018b147c7a418385e6038116e",
+    "fdd063622eb742088342f4efcd786236",
+    "c9848d5a79874c4182b7c792c394405b",
+    "0d995136a51746929751b5d61a937a6e",
+    "00be5a02d1fa4659b45463b9319a72b7",
+    "a87985a421ec4528a58b29b8d54d1d08",
+    "3a561ad8e1e245588271c2a6f338b085",
+    "6408c4de631b4831878e2e7cca426255",
+    "2fd8f2f203f44e7a800e2110d35fa77b",
+    "e5a6028826454a7ba955ead4f87524c6",
+    "f382f85f2f5b4453a5a87268b6fd89bc",
+    "ce59083541ac4aa9b54ca36052b4a5ed",
+    "e8ce8b8ae11446d4b876de7a8795fedb",
+    "6e940d840d94496da8b0241336bc5594",
+    "dabc6d9f50a840109ba10ed566291b43",
+    "a190ff7b6f9043138eda79e1766adfe3",
+    "4e52dfad96d7468a833e67cc991543a0",
+    "34e33854c7a54754ad15d2f9cad3d982",
+    "e37a7f9cf5e947ffb2332e6a68af7da7",
+    "4f8eec1204ac4e6da4bd6f079b6135f4",
+    "66ebaa860f10447b8e2dad0fd59642d9",
+    "06c6da75857042abb2b9425156a7b56c",
+    "77167f4c512441f49b91758d2f74a98d",
+    "215aaf9a16a74c6c936468a3670996e8",
+    "feccd52535cc48b1bbf44e4ff0e8a2cd",
+    "68826372d5d34db088fe55418f9124cc",
+    "97ae4e1087cc4c219f5329e3d1c74711",
+    "49cf64dcc78147a2ba6b0c820f1ff6a8",
+    "7ef1974fcb994d88962837c2391f6101",
+    "de7cc7b3795449df8913462c0289895a",
+    "84fcf2c48ca64a67b3c677b3d2b736ed",
+    "0539d07ccfcb46b58466e9f4d861eeac",
+    "5406ee1de9c74bb2921d1cdb8727d58d",
+    "c5e75269796949ed819c4a7a3374756f",
+    "9d39112e7c474e2ebfe4ea273dee4a4e"
+  ],
+  "evidence": {
+    "tool_count": 107,
+    "chain_a": {
+      "petal_steps": [
+        {
+          "index": 0,
+          "job_id": "f32318979560461b9e7ad5ed9c0a77da",
+          "status": "succeeded",
+          "quilt_id": 60,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 54,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 1,
+          "job_id": "1002ed04637f4bd8a221af7e807595c2",
+          "status": "succeeded",
+          "quilt_id": 86,
+          "area_mm2": 274.81017765074034,
+          "closed": "open",
+          "feature_id": 80,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 2,
+          "job_id": "845ad76754cb46f2a0c754342f6d106e",
+          "status": "succeeded",
+          "quilt_id": 112,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 106,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 3,
+          "job_id": "af7f029b248645f5bf1fc270f5473ae7",
+          "status": "succeeded",
+          "quilt_id": 138,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 132,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 4,
+          "job_id": "aedf930d9b7e4c2bba5a744cde79dad1",
+          "status": "succeeded",
+          "quilt_id": 164,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 158,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "merges": [
+        {
+          "label": "merge_petal1",
+          "job_id": "7332e8140daf4b7586da9dc1ce056f2b",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 86,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 549.6203553014809,
+          "area_mm2": 549.6203553014808,
+          "expected_area_mm2": 549.6203553014811,
+          "closed": false,
+          "feature_id": 255,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal2",
+          "job_id": "c2881d45d51d46e5b2ede67eb0bf1526",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 112,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 824.4305329522213,
+          "area_mm2": 824.4305329522213,
+          "expected_area_mm2": 824.4305329522217,
+          "closed": false,
+          "feature_id": 262,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal3",
+          "job_id": "bf89a97eecd74d12a2c711598cdb3156",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 138,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1099.2407106029618,
+          "area_mm2": 1099.2407106029616,
+          "expected_area_mm2": 1099.2407106029623,
+          "closed": false,
+          "feature_id": 269,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal4",
+          "job_id": "ebfb39dfe4b44f36a12d6e8f59e69367",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 164,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1374.050888253702,
+          "area_mm2": 1374.050888253702,
+          "expected_area_mm2": 1374.0508882537029,
+          "closed": false,
+          "feature_id": 276,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_foot_disc",
+          "job_id": "c137047f10ca4fd2aca6f099865d2171",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 225,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1575.1128180834485,
+          "area_mm2": 1575.1128180512596,
+          "expected_area_mm2": 1575.1128180834496,
+          "closed": false,
+          "feature_id": 286,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_body_tube",
+          "job_id": "9481fcd018b147c7a418385e6038116e",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 192,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 6601.661063794927,
+          "area_mm2": 6601.661063794929,
+          "expected_area_mm2": 6601.661063827119,
+          "closed": false,
+          "feature_id": 297,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_top_cap",
+          "job_id": "fdd063622eb742088342f4efcd786236",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 253,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 7858.298125230845,
+          "area_mm2": 7858.298125230911,
+          "expected_area_mm2": 7858.298125263036,
+          "closed": true,
+          "feature_id": 310,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "claw_mode": "five_arc_ruled_petals",
+      "model_id": "663abd7ffc9d4f45abd3bff129d3ce04",
+      "revision": 13,
+      "chain_id": 60,
+      "chain_area": 7858.298125263036,
+      "ok": true,
+      "quilts_after_build": {
+        "count": 8,
+        "areas_mm2": [
+          274.8101776507404,
+          274.81017765074046,
+          274.81017765074046,
+          274.81017765074046,
+          274.8101776507404,
+          5026.548245743668,
+          201.06192982974665,
+          1256.6370614359175
+        ],
+        "tube": 192,
+        "foot": 225,
+        "cap": 253
+      },
+      "final_quilt": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      },
+      "body_build": {
+        "job_id": "0fea62240f3f4535aa4914d0fe73db0b",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    "claw_mode": "five_arc_ruled_petals",
+    "group_measure": {
+      "job_id": "c9848d5a79874c4182b7c792c394405b",
+      "is_error": false,
+      "refusal_text": "",
+      "revision": 13,
+      "unit_name": "mm",
+      "tolerance_mm": 0.01,
+      "gap_search_mm": 1.0,
+      "state": "closed",
+      "state_reason": null,
+      "open_edges": 0,
+      "boundary_edges": 12,
+      "joined_edges": 12,
+      "joined_pairs": null,
+      "boundary_closed": true,
+      "gap_max_mm": null,
+      "gap_status": {
+        "available": false,
+        "candidate_pairs": null,
+        "gap_pairs": null,
+        "gap_search_mm": 1.0,
+        "joined_pairs": null,
+        "query_code": 0,
+        "reason": "no_member_seam_candidate",
+        "scale_to_mm_known": true,
+        "tolerance_mm": 0.01,
+        "unit_name": "mm",
+        "within_tolerance": null
+      },
+      "overlap_detected": null,
+      "overlap_reason": "overlap_sample_budget_exceeded",
+      "overlap_query_code": -1,
+      "overlap_area_mm2": null
+    },
+    "thicken_0_3": {
+      "job_id": "0d995136a51746929751b5d61a937a6e",
+      "status": "succeeded",
+      "volume_before_mm3": 0.0,
+      "volume_after_mm3": 2357.526186516854,
+      "expected_volume_mm3": 2357.489437578911,
+      "thickness_mm": 0.3,
+      "saved": true,
+      "revision": 14,
+      "compact_keys": [
+        "adopted",
+        "complete",
+        "created_at",
+        "detail",
+        "detail_available",
+        "feature_state",
+        "inspection",
+        "last_job",
+        "last_query_at",
+        "model_id",
+        "model_name",
+        "model_type",
+        "part_file",
+        "part_sha256",
+        "pending_job",
+        "revision",
+        "sections_available",
+        "snapshot",
+        "source_kind",
+        "status",
+        "updated_at"
+      ],
+      "has_solid": null,
+      "bodies": [
+        {
+          "id": -5778,
+          "surface_count": 12,
+          "bbox": [
+            [
+              -20.169730612295456,
+              -20.150000000000002,
+              -10.15
+            ],
+            [
+              20.169730612295456,
+              20.150000000000002,
+              40.15
+            ]
+          ],
+          "span_x": 40.33946122459091,
+          "span_z": 50.3
+        }
+      ],
+      "message": "General feature plan completed"
+    },
+    "round_edge": {
+      "edge_id": 356,
+      "surface_count": 12,
+      "edge_count": 24
+    },
+    "round": {
+      "job_id": "00be5a02d1fa4659b45463b9319a72b7",
+      "status": "succeeded",
+      "volume_before_mm3": 2357.526186516854,
+      "volume_after_mm3": 2357.254786398942,
+      "material_delta_mm3": -0.2714001179119805,
+      "edge_id": 356,
+      "radius_mm": 0.1,
+      "saved": true,
+      "revision": 15,
+      "message": "General feature plan completed"
+    },
+    "solidify": {
+      "job_id": "a87985a421ec4528a58b29b8d54d1d08",
+      "status": "failed",
+      "volume_before_mm3": null,
+      "volume_after_mm3": null,
+      "expected_volume_mm3": 56799.99517690347,
+      "saved": null,
+      "revision": null,
+      "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_solidify"
+    },
+    "final_state": {
+      "revision": 15,
+      "expected_revision": 15,
+      "quilt": {
+        "quilt_id": 60,
+        "area_mm2": 1099.2407106029616,
+        "closed": true,
+        "face_count": 1
+      },
+      "body_count": 1,
+      "bodies": [
+        {
+          "id": -5778,
+          "surface_count": 14,
+          "bbox": [
+            [
+              -20.150000000000002,
+              -20.150000000000002,
+              -10.15
+            ],
+            [
+              20.150000000000002,
+              20.150000000000002,
+              40.15
+            ]
+          ],
+          "span_x": 40.300000000000004,
+          "span_z": 50.3
+        }
+      ],
+      "note": "after the thicken the kernel re-associates the merged quilt item: its record keeps the id and closed=true but reports a sub-quilt area and one face, while the body carries the whole 12-face wall"
+    },
+    "chain_b": {
+      "petal_steps": [
+        {
+          "index": 0,
+          "job_id": "3a561ad8e1e245588271c2a6f338b085",
+          "status": "succeeded",
+          "quilt_id": 60,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 54,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 1,
+          "job_id": "6408c4de631b4831878e2e7cca426255",
+          "status": "succeeded",
+          "quilt_id": 86,
+          "area_mm2": 274.81017765074034,
+          "closed": "open",
+          "feature_id": 80,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 2,
+          "job_id": "2fd8f2f203f44e7a800e2110d35fa77b",
+          "status": "succeeded",
+          "quilt_id": 112,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 106,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 3,
+          "job_id": "e5a6028826454a7ba955ead4f87524c6",
+          "status": "succeeded",
+          "quilt_id": 138,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 132,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 4,
+          "job_id": "f382f85f2f5b4453a5a87268b6fd89bc",
+          "status": "succeeded",
+          "quilt_id": 164,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 158,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "merges": [
+        {
+          "label": "merge_petal1",
+          "job_id": "e8ce8b8ae11446d4b876de7a8795fedb",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 86,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 549.6203553014809,
+          "area_mm2": 549.6203553014808,
+          "expected_area_mm2": 549.6203553014811,
+          "closed": false,
+          "feature_id": 255,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal2",
+          "job_id": "6e940d840d94496da8b0241336bc5594",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 112,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 824.4305329522213,
+          "area_mm2": 824.4305329522213,
+          "expected_area_mm2": 824.4305329522217,
+          "closed": false,
+          "feature_id": 262,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal3",
+          "job_id": "dabc6d9f50a840109ba10ed566291b43",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 138,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1099.2407106029618,
+          "area_mm2": 1099.2407106029616,
+          "expected_area_mm2": 1099.2407106029623,
+          "closed": false,
+          "feature_id": 269,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal4",
+          "job_id": "a190ff7b6f9043138eda79e1766adfe3",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 164,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1374.050888253702,
+          "area_mm2": 1374.050888253702,
+          "expected_area_mm2": 1374.0508882537029,
+          "closed": false,
+          "feature_id": 276,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_foot_disc",
+          "job_id": "4e52dfad96d7468a833e67cc991543a0",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 225,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1575.1128180834485,
+          "area_mm2": 1575.1128180512596,
+          "expected_area_mm2": 1575.1128180834496,
+          "closed": false,
+          "feature_id": 286,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_body_tube",
+          "job_id": "34e33854c7a54754ad15d2f9cad3d982",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 192,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 6601.661063794927,
+          "area_mm2": 6601.661063794929,
+          "expected_area_mm2": 6601.661063827119,
+          "closed": false,
+          "feature_id": 297,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_top_cap",
+          "job_id": "e37a7f9cf5e947ffb2332e6a68af7da7",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 253,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 7858.298125230845,
+          "area_mm2": 7858.298125230911,
+          "expected_area_mm2": 7858.298125263036,
+          "closed": true,
+          "feature_id": 310,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "claw_mode": "five_arc_ruled_petals",
+      "model_id": "9d7a9ed527254cfa926ecaf8be866d15",
+      "revision": 13,
+      "chain_id": 60,
+      "chain_area": 7858.298125263036,
+      "ok": true,
+      "quilts_after_build": {
+        "count": 8,
+        "areas_mm2": [
+          274.8101776507404,
+          274.81017765074046,
+          274.81017765074046,
+          274.81017765074046,
+          274.8101776507404,
+          5026.548245743668,
+          201.06192982974665,
+          1256.6370614359175
+        ],
+        "tube": 192,
+        "foot": 225,
+        "cap": 253
+      },
+      "final_quilt": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      },
+      "body_build": {
+        "job_id": "ce59083541ac4aa9b54ca36052b4a5ed",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    "thicken_2_0": {
+      "job_id": "4f8eec1204ac4e6da4bd6f079b6135f4",
+      "status": "succeeded",
+      "volume_before_mm3": 0.0,
+      "volume_after_mm3": 15727.484826184516,
+      "expected_volume_mm3": 15716.596250526072,
+      "thickness_mm": 2.0,
+      "saved": true,
+      "revision": 14,
+      "bodies": [
+        {
+          "id": -5778,
+          "surface_count": 12,
+          "bbox": [
+            [
+              -21.020550657133615,
+              -21.0,
+              -11.0
+            ],
+            [
+              21.020550657133615,
+              21.0,
+              41.0
+            ]
+          ],
+          "span_x": 42.04110131426723,
+          "span_z": 52.0
+        }
+      ],
+      "message": "General feature plan completed"
+    },
+    "round_b": {
+      "edge_id": 356,
+      "radius_mm": 0.5,
+      "surface_count": 12,
+      "edge_count": 24,
+      "job_id": "66ebaa860f10447b8e2dad0fd59642d9",
+      "status": "succeeded",
+      "volume_before_mm3": 15727.484826184516,
+      "volume_after_mm3": 15720.443452138248,
+      "material_delta_mm3": -7.041374046268174,
+      "saved": true,
+      "revision": 15,
+      "message": "General feature plan completed"
+    },
+    "model_b_final": {
+      "revision": 15,
+      "expected_revision": 15,
+      "quilt": {
+        "quilt_id": 60,
+        "area_mm2": 1099.2407106029616,
+        "closed": true
+      },
+      "bodies": [
+        {
+          "id": -5778,
+          "surface_count": 14,
+          "bbox": [
+            [
+              -21.0,
+              -21.0,
+              -11.0
+            ],
+            [
+              21.0,
+              21.0,
+              41.0
+            ]
+          ],
+          "span_x": 42.0,
+          "span_z": 52.0
+        }
+      ]
+    },
+    "chain_c": {
+      "petal_steps": [
+        {
+          "index": 0,
+          "job_id": "06c6da75857042abb2b9425156a7b56c",
+          "status": "succeeded",
+          "quilt_id": 60,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 54,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 1,
+          "job_id": "77167f4c512441f49b91758d2f74a98d",
+          "status": "succeeded",
+          "quilt_id": 86,
+          "area_mm2": 274.81017765074034,
+          "closed": "open",
+          "feature_id": 80,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 2,
+          "job_id": "215aaf9a16a74c6c936468a3670996e8",
+          "status": "succeeded",
+          "quilt_id": 112,
+          "area_mm2": 274.81017765074046,
+          "closed": "open",
+          "feature_id": 106,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 3,
+          "job_id": "feccd52535cc48b1bbf44e4ff0e8a2cd",
+          "status": "succeeded",
+          "quilt_id": 138,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 132,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "index": 4,
+          "job_id": "68826372d5d34db088fe55418f9124cc",
+          "status": "succeeded",
+          "quilt_id": 164,
+          "area_mm2": 274.8101776507404,
+          "closed": "open",
+          "feature_id": 158,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "merges": [
+        {
+          "label": "merge_petal1",
+          "job_id": "49cf64dcc78147a2ba6b0c820f1ff6a8",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 86,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 549.6203553014809,
+          "area_mm2": 549.6203553014808,
+          "expected_area_mm2": 549.6203553014811,
+          "closed": false,
+          "feature_id": 255,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal2",
+          "job_id": "7ef1974fcb994d88962837c2391f6101",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 112,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 824.4305329522213,
+          "area_mm2": 824.4305329522213,
+          "expected_area_mm2": 824.4305329522217,
+          "closed": false,
+          "feature_id": 262,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal3",
+          "job_id": "de7cc7b3795449df8913462c0289895a",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 138,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1099.2407106029618,
+          "area_mm2": 1099.2407106029616,
+          "expected_area_mm2": 1099.2407106029623,
+          "closed": false,
+          "feature_id": 269,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_petal4",
+          "job_id": "84fcf2c48ca64a67b3c677b3d2b736ed",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 164,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1374.050888253702,
+          "area_mm2": 1374.050888253702,
+          "expected_area_mm2": 1374.0508882537029,
+          "closed": false,
+          "feature_id": 276,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_foot_disc",
+          "job_id": "0539d07ccfcb46b58466e9f4d861eeac",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 225,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 1575.1128180834485,
+          "area_mm2": 1575.1128180512596,
+          "expected_area_mm2": 1575.1128180834496,
+          "closed": false,
+          "feature_id": 286,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_body_tube",
+          "job_id": "5406ee1de9c74bb2921d1cdb8727d58d",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 192,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 6601.661063794927,
+          "area_mm2": 6601.661063794929,
+          "expected_area_mm2": 6601.661063827119,
+          "closed": false,
+          "feature_id": 297,
+          "saved": true,
+          "message": "General feature plan completed"
+        },
+        {
+          "label": "merge_top_cap",
+          "job_id": "c5e75269796949ed819c4a7a3374756f",
+          "status": "succeeded",
+          "target_quilt_id": 60,
+          "tool_quilt_id": 253,
+          "result_quilt_id": 60,
+          "result_quilt_source": "retrimmed_target_quilt",
+          "input_area_mm2": 7858.298125230845,
+          "area_mm2": 7858.298125230911,
+          "expected_area_mm2": 7858.298125263036,
+          "closed": true,
+          "feature_id": 310,
+          "saved": true,
+          "message": "General feature plan completed"
+        }
+      ],
+      "claw_mode": "five_arc_ruled_petals",
+      "model_id": "04d6e50dad2d4384aa9e875c7b51099d",
+      "revision": 13,
+      "chain_id": 60,
+      "chain_area": 7858.298125263036,
+      "ok": true,
+      "quilts_after_build": {
+        "count": 8,
+        "areas_mm2": [
+          274.8101776507404,
+          274.81017765074046,
+          274.81017765074046,
+          274.81017765074046,
+          274.8101776507404,
+          5026.548245743668,
+          201.06192982974665,
+          1256.6370614359175
+        ],
+        "tube": 192,
+        "foot": 225,
+        "cap": 253
+      },
+      "final_quilt": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      },
+      "body_build": {
+        "job_id": "97ae4e1087cc4c219f5329e3d1c74711",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    "solidify_fresh": {
+      "job_id": "9d39112e7c474e2ebfe4ea273dee4a4e",
+      "status": "succeeded",
+      "volume_before_mm3": 0.0,
+      "volume_after_mm3": 56799.99517675038,
+      "expected_volume_mm3": 56799.99517690347,
+      "saved": true,
+      "revision": 14,
+      "bodies": [
+        {
+          "id": 317,
+          "surface_count": 6,
+          "bbox": [
+            [
+              -20.020037373172045,
+              -20.0,
+              -10.0
+            ],
+            [
+              20.020037373172045,
+              20.0,
+              40.0
+            ]
+          ],
+          "span_x": 40.04007474634409,
+          "span_z": 50.0
+        }
+      ],
+      "message": "General feature plan completed"
+    },
+    "model_c_final": {
+      "revision": 14,
+      "expected_revision": 14,
+      "bodies": [
+        {
+          "id": 317,
+          "surface_count": 6,
+          "bbox": [
+            [
+              -20.020037373172045,
+              -20.0,
+              -10.0
+            ],
+            [
+              20.020037373172045,
+              20.0,
+              40.0
+            ]
+          ],
+          "span_x": 40.04007474634409,
+          "span_z": 50.0
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready"
+      }
+    },
+    {
+      "check": "surface_loft_published",
+      "ok": true
+    },
+    {
+      "check": "quilt_merge_published",
+      "ok": true
+    },
+    {
+      "check": "surface_group_measure_published",
+      "ok": true
+    },
+    {
+      "check": "surface_fill_published",
+      "ok": true
+    },
+    {
+      "check": "thicken_published",
+      "ok": true
+    },
+    {
+      "check": "round_published",
+      "ok": true
+    },
+    {
+      "check": "bottle_five_petal_lofts_built",
+      "ok": true,
+      "detail": {
+        "petal_steps": [
+          {
+            "index": 0,
+            "job_id": "f32318979560461b9e7ad5ed9c0a77da",
+            "status": "succeeded",
+            "quilt_id": 60,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 54,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 1,
+            "job_id": "1002ed04637f4bd8a221af7e807595c2",
+            "status": "succeeded",
+            "quilt_id": 86,
+            "area_mm2": 274.81017765074034,
+            "closed": "open",
+            "feature_id": 80,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 2,
+            "job_id": "845ad76754cb46f2a0c754342f6d106e",
+            "status": "succeeded",
+            "quilt_id": 112,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 106,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 3,
+            "job_id": "af7f029b248645f5bf1fc270f5473ae7",
+            "status": "succeeded",
+            "quilt_id": 138,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 132,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 4,
+            "job_id": "aedf930d9b7e4c2bba5a744cde79dad1",
+            "status": "succeeded",
+            "quilt_id": 164,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 158,
+            "saved": true,
+            "message": "General feature plan completed"
+          }
+        ],
+        "petal_area_mm2": 274.81017765074057
+      }
+    },
+    {
+      "check": "bottle_body_build_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "0fea62240f3f4535aa4914d0fe73db0b",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    {
+      "check": "bottle_tube_measured_5026",
+      "ok": true,
+      "detail": {
+        "area_mm2": 5026.548245743668
+      }
+    },
+    {
+      "check": "bottle_cap_measured_1256",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1256.6370614359175
+      }
+    },
+    {
+      "check": "bottle_petal_chain_merged",
+      "ok": true,
+      "detail": {
+        "merges": 4,
+        "chain_area_mm2": 1374.0508882537029
+      }
+    },
+    {
+      "check": "bottle_petal_band_area_1374",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1374.050888253702,
+        "expected": 1374.0508882537029
+      }
+    },
+    {
+      "check": "bottle_closed_chain_merged",
+      "ok": true,
+      "detail": {
+        "chain_area_mm2": 7858.298125263036,
+        "expected_area_mm2": 7858.298125263036
+      }
+    },
+    {
+      "check": "bottle_merged_quilt_area_is_closed_bottle",
+      "ok": true,
+      "detail": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "bottle_merged_quilt_reports_closed",
+      "ok": true,
+      "detail": {
+        "closed": true
+      }
+    },
+    {
+      "check": "bottle_merged_quilt_bbox_is_the_bottle",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "group_measure_finished",
+      "ok": true,
+      "detail": {
+        "state": "closed",
+        "reason": null
+      }
+    },
+    {
+      "check": "group_state_closed",
+      "ok": true,
+      "detail": {
+        "job_id": "c9848d5a79874c4182b7c792c394405b",
+        "is_error": false,
+        "refusal_text": "",
+        "revision": 13,
+        "unit_name": "mm",
+        "tolerance_mm": 0.01,
+        "gap_search_mm": 1.0,
+        "state": "closed",
+        "state_reason": null,
+        "open_edges": 0,
+        "boundary_edges": 12,
+        "joined_edges": 12,
+        "joined_pairs": null,
+        "boundary_closed": true,
+        "gap_max_mm": null,
+        "gap_status": {
+          "available": false,
+          "candidate_pairs": null,
+          "gap_pairs": null,
+          "gap_search_mm": 1.0,
+          "joined_pairs": null,
+          "query_code": 0,
+          "reason": "no_member_seam_candidate",
+          "scale_to_mm_known": true,
+          "tolerance_mm": 0.01,
+          "unit_name": "mm",
+          "within_tolerance": null
+        },
+        "overlap_detected": null,
+        "overlap_reason": "overlap_sample_budget_exceeded",
+        "overlap_query_code": -1,
+        "overlap_area_mm2": null
+      }
+    },
+    {
+      "check": "group_boundary_is_a_shell",
+      "ok": true,
+      "detail": {
+        "boundary_closed": true,
+        "open_edges": 0
+      }
+    },
+    {
+      "check": "group_gap_is_not_reported_because_no_edge_is_open",
+      "ok": true,
+      "detail": {
+        "gap_max_mm": null,
+        "open_edges": 0
+      }
+    },
+    {
+      "check": "group_overlap_is_not_reported_as_detected",
+      "ok": true,
+      "detail": {
+        "detected": null,
+        "reason": "overlap_sample_budget_exceeded"
+      }
+    },
+    {
+      "check": "thicken_0_3_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "0d995136a51746929751b5d61a937a6e",
+        "status": "succeeded",
+        "volume_before_mm3": 0.0,
+        "volume_after_mm3": 2357.526186516854,
+        "expected_volume_mm3": 2357.489437578911,
+        "thickness_mm": 0.3,
+        "saved": true,
+        "revision": 14,
+        "compact_keys": [
+          "adopted",
+          "complete",
+          "created_at",
+          "detail",
+          "detail_available",
+          "feature_state",
+          "inspection",
+          "last_job",
+          "last_query_at",
+          "model_id",
+          "model_name",
+          "model_type",
+          "part_file",
+          "part_sha256",
+          "pending_job",
+          "revision",
+          "sections_available",
+          "snapshot",
+          "source_kind",
+          "status",
+          "updated_at"
+        ],
+        "has_solid": null,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 12,
+            "bbox": [
+              [
+                -20.169730612295456,
+                -20.150000000000002,
+                -10.15
+              ],
+              [
+                20.169730612295456,
+                20.150000000000002,
+                40.15
+              ]
+            ],
+            "span_x": 40.33946122459091,
+            "span_z": 50.3
+          }
+        ],
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_0_3_volume_is_area_times_thickness",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 2357.526186516854,
+        "expected_mm3": 2357.489437578911
+      }
+    },
+    {
+      "check": "thicken_0_3_thickness_readback",
+      "ok": true,
+      "detail": {
+        "span_z_mm": 50.3,
+        "expected_mm": 50.3
+      }
+    },
+    {
+      "check": "thicken_0_3_body_is_a_shell",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 12,
+            "bbox": [
+              [
+                -20.169730612295456,
+                -20.150000000000002,
+                -10.15
+              ],
+              [
+                20.169730612295456,
+                20.150000000000002,
+                40.15
+              ]
+            ],
+            "span_x": 40.33946122459091,
+            "span_z": 50.3
+          }
+        ]
+      }
+    },
+    {
+      "check": "solid_rim_edge_found",
+      "ok": true,
+      "detail": {
+        "edge_id": 356,
+        "surface_count": 12,
+        "edge_count": 24
+      }
+    },
+    {
+      "check": "solid_round_on_thickened_model",
+      "ok": true,
+      "detail": {
+        "job_id": "00be5a02d1fa4659b45463b9319a72b7",
+        "status": "succeeded",
+        "volume_before_mm3": 2357.526186516854,
+        "volume_after_mm3": 2357.254786398942,
+        "material_delta_mm3": -0.2714001179119805,
+        "edge_id": 356,
+        "radius_mm": 0.1,
+        "saved": true,
+        "revision": 15,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "solidify_after_thicken_has_a_recorded_outcome",
+      "ok": true,
+      "detail": {
+        "job_id": "a87985a421ec4528a58b29b8d54d1d08",
+        "status": "failed",
+        "volume_before_mm3": null,
+        "volume_after_mm3": null,
+        "expected_volume_mm3": 56799.99517690347,
+        "saved": null,
+        "revision": null,
+        "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_solidify"
+      }
+    },
+    {
+      "check": "final_revision_matches",
+      "ok": true,
+      "detail": {
+        "model_revision": 15,
+        "last_job_revision": 15
+      }
+    },
+    {
+      "check": "thickened_body_survives_reload",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 14,
+            "bbox": [
+              [
+                -20.150000000000002,
+                -20.150000000000002,
+                -10.15
+              ],
+              [
+                20.150000000000002,
+                20.150000000000002,
+                40.15
+              ]
+            ],
+            "span_x": 40.300000000000004,
+            "span_z": 50.3
+          }
+        ]
+      }
+    },
+    {
+      "check": "quilt_record_keeps_its_id_and_closed_flag",
+      "ok": true,
+      "detail": {
+        "quilt_id": 60,
+        "area_mm2": 1099.2407106029616,
+        "closed": true,
+        "face_count": 1
+      }
+    },
+    {
+      "check": "wall2_five_petal_lofts_built",
+      "ok": true,
+      "detail": {
+        "petal_steps": [
+          {
+            "index": 0,
+            "job_id": "3a561ad8e1e245588271c2a6f338b085",
+            "status": "succeeded",
+            "quilt_id": 60,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 54,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 1,
+            "job_id": "6408c4de631b4831878e2e7cca426255",
+            "status": "succeeded",
+            "quilt_id": 86,
+            "area_mm2": 274.81017765074034,
+            "closed": "open",
+            "feature_id": 80,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 2,
+            "job_id": "2fd8f2f203f44e7a800e2110d35fa77b",
+            "status": "succeeded",
+            "quilt_id": 112,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 106,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 3,
+            "job_id": "e5a6028826454a7ba955ead4f87524c6",
+            "status": "succeeded",
+            "quilt_id": 138,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 132,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 4,
+            "job_id": "f382f85f2f5b4453a5a87268b6fd89bc",
+            "status": "succeeded",
+            "quilt_id": 164,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 158,
+            "saved": true,
+            "message": "General feature plan completed"
+          }
+        ],
+        "petal_area_mm2": 274.81017765074057
+      }
+    },
+    {
+      "check": "wall2_body_build_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "ce59083541ac4aa9b54ca36052b4a5ed",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    {
+      "check": "wall2_tube_measured_5026",
+      "ok": true,
+      "detail": {
+        "area_mm2": 5026.548245743668
+      }
+    },
+    {
+      "check": "wall2_cap_measured_1256",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1256.6370614359175
+      }
+    },
+    {
+      "check": "wall2_petal_chain_merged",
+      "ok": true,
+      "detail": {
+        "merges": 4,
+        "chain_area_mm2": 1374.0508882537029
+      }
+    },
+    {
+      "check": "wall2_petal_band_area_1374",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1374.050888253702,
+        "expected": 1374.0508882537029
+      }
+    },
+    {
+      "check": "wall2_closed_chain_merged",
+      "ok": true,
+      "detail": {
+        "chain_area_mm2": 7858.298125263036,
+        "expected_area_mm2": 7858.298125263036
+      }
+    },
+    {
+      "check": "wall2_merged_quilt_area_is_closed_bottle",
+      "ok": true,
+      "detail": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "wall2_merged_quilt_reports_closed",
+      "ok": true,
+      "detail": {
+        "closed": true
+      }
+    },
+    {
+      "check": "wall2_merged_quilt_bbox_is_the_bottle",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "thicken_2_0_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "4f8eec1204ac4e6da4bd6f079b6135f4",
+        "status": "succeeded",
+        "volume_before_mm3": 0.0,
+        "volume_after_mm3": 15727.484826184516,
+        "expected_volume_mm3": 15716.596250526072,
+        "thickness_mm": 2.0,
+        "saved": true,
+        "revision": 14,
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 12,
+            "bbox": [
+              [
+                -21.020550657133615,
+                -21.0,
+                -11.0
+              ],
+              [
+                21.020550657133615,
+                21.0,
+                41.0
+              ]
+            ],
+            "span_x": 42.04110131426723,
+            "span_z": 52.0
+          }
+        ],
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "thicken_2_0_volume_is_area_times_thickness",
+      "ok": true,
+      "detail": {
+        "volume_after_mm3": 15727.484826184516,
+        "expected_mm3": 15716.596250526072
+      }
+    },
+    {
+      "check": "thicken_2_0_thickness_readback",
+      "ok": true,
+      "detail": {
+        "span_z_mm": 52.0,
+        "expected_mm": 52.0
+      }
+    },
+    {
+      "check": "thick_wall_rim_edge_found",
+      "ok": true,
+      "detail": {
+        "edge_id": 356,
+        "radius_mm": 0.5,
+        "surface_count": 12,
+        "edge_count": 24,
+        "job_id": "66ebaa860f10447b8e2dad0fd59642d9",
+        "status": "succeeded",
+        "volume_before_mm3": 15727.484826184516,
+        "volume_after_mm3": 15720.443452138248,
+        "material_delta_mm3": -7.041374046268174,
+        "saved": true,
+        "revision": 15,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "solid_round_on_the_2mm_wall",
+      "ok": true,
+      "detail": {
+        "edge_id": 356,
+        "radius_mm": 0.5,
+        "surface_count": 12,
+        "edge_count": 24,
+        "job_id": "66ebaa860f10447b8e2dad0fd59642d9",
+        "status": "succeeded",
+        "volume_before_mm3": 15727.484826184516,
+        "volume_after_mm3": 15720.443452138248,
+        "material_delta_mm3": -7.041374046268174,
+        "saved": true,
+        "revision": 15,
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "model_b_revision_matches",
+      "ok": true,
+      "detail": {
+        "model_revision": 15,
+        "last_job_revision": 15
+      }
+    },
+    {
+      "check": "model_b_body_survives_the_round",
+      "ok": true,
+      "detail": {
+        "bodies": [
+          {
+            "id": -5778,
+            "surface_count": 14,
+            "bbox": [
+              [
+                -21.0,
+                -21.0,
+                -11.0
+              ],
+              [
+                21.0,
+                21.0,
+                41.0
+              ]
+            ],
+            "span_x": 42.0,
+            "span_z": 52.0
+          }
+        ]
+      }
+    },
+    {
+      "check": "model_b_quilt_record_keeps_its_id",
+      "ok": true,
+      "detail": {
+        "quilt_id": 60,
+        "area_mm2": 1099.2407106029616,
+        "closed": true
+      }
+    },
+    {
+      "check": "solid_five_petal_lofts_built",
+      "ok": true,
+      "detail": {
+        "petal_steps": [
+          {
+            "index": 0,
+            "job_id": "06c6da75857042abb2b9425156a7b56c",
+            "status": "succeeded",
+            "quilt_id": 60,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 54,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 1,
+            "job_id": "77167f4c512441f49b91758d2f74a98d",
+            "status": "succeeded",
+            "quilt_id": 86,
+            "area_mm2": 274.81017765074034,
+            "closed": "open",
+            "feature_id": 80,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 2,
+            "job_id": "215aaf9a16a74c6c936468a3670996e8",
+            "status": "succeeded",
+            "quilt_id": 112,
+            "area_mm2": 274.81017765074046,
+            "closed": "open",
+            "feature_id": 106,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 3,
+            "job_id": "feccd52535cc48b1bbf44e4ff0e8a2cd",
+            "status": "succeeded",
+            "quilt_id": 138,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 132,
+            "saved": true,
+            "message": "General feature plan completed"
+          },
+          {
+            "index": 4,
+            "job_id": "68826372d5d34db088fe55418f9124cc",
+            "status": "succeeded",
+            "quilt_id": 164,
+            "area_mm2": 274.8101776507404,
+            "closed": "open",
+            "feature_id": 158,
+            "saved": true,
+            "message": "General feature plan completed"
+          }
+        ],
+        "petal_area_mm2": 274.81017765074057
+      }
+    },
+    {
+      "check": "solid_body_build_succeeded",
+      "ok": true,
+      "detail": {
+        "job_id": "97ae4e1087cc4c219f5329e3d1c74711",
+        "status": "succeeded",
+        "saved": true,
+        "message": "General feature plan completed",
+        "claw_mode": "five_arc_ruled_petals"
+      }
+    },
+    {
+      "check": "solid_tube_measured_5026",
+      "ok": true,
+      "detail": {
+        "area_mm2": 5026.548245743668
+      }
+    },
+    {
+      "check": "solid_cap_measured_1256",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1256.6370614359175
+      }
+    },
+    {
+      "check": "solid_petal_chain_merged",
+      "ok": true,
+      "detail": {
+        "merges": 4,
+        "chain_area_mm2": 1374.0508882537029
+      }
+    },
+    {
+      "check": "solid_petal_band_area_1374",
+      "ok": true,
+      "detail": {
+        "area_mm2": 1374.050888253702,
+        "expected": 1374.0508882537029
+      }
+    },
+    {
+      "check": "solid_closed_chain_merged",
+      "ok": true,
+      "detail": {
+        "chain_area_mm2": 7858.298125263036,
+        "expected_area_mm2": 7858.298125263036
+      }
+    },
+    {
+      "check": "solid_merged_quilt_area_is_closed_bottle",
+      "ok": true,
+      "detail": {
+        "quilt_id": 60,
+        "area_mm2": 7858.298125230911,
+        "closed": true,
+        "face_count": 6,
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "solid_merged_quilt_reports_closed",
+      "ok": true,
+      "detail": {
+        "closed": true
+      }
+    },
+    {
+      "check": "solid_merged_quilt_bbox_is_the_bottle",
+      "ok": true,
+      "detail": {
+        "bbox_mm": [
+          [
+            -20.020037373172045,
+            -20.0,
+            -10.0
+          ],
+          [
+            20.020037373172045,
+            20.0,
+            40.0
+          ]
+        ]
+      }
+    },
+    {
+      "check": "solidify_measured_the_bottle_volume",
+      "ok": true,
+      "detail": {
+        "job_id": "9d39112e7c474e2ebfe4ea273dee4a4e",
+        "status": "succeeded",
+        "volume_before_mm3": 0.0,
+        "volume_after_mm3": 56799.99517675038,
+        "expected_volume_mm3": 56799.99517690347,
+        "saved": true,
+        "revision": 14,
+        "bodies": [
+          {
+            "id": 317,
+            "surface_count": 6,
+            "bbox": [
+              [
+                -20.020037373172045,
+                -20.0,
+                -10.0
+              ],
+              [
+                20.020037373172045,
+                20.0,
+                40.0
+              ]
+            ],
+            "span_x": 40.04007474634409,
+            "span_z": 50.0
+          }
+        ],
+        "message": "General feature plan completed"
+      }
+    },
+    {
+      "check": "model_c_revision_matches",
+      "ok": true,
+      "detail": {
+        "model_revision": 14,
+        "last_job_revision": 14
+      }
+    },
+    {
+      "check": "solidified_bottle_survives_reload",
+      "ok": true,
+      "detail": {
+        "revision": 14,
+        "expected_revision": 14,
+        "bodies": [
+          {
+            "id": 317,
+            "surface_count": 6,
+            "bbox": [
+              [
+                -20.020037373172045,
+                -20.0,
+                -10.0
+              ],
+              [
+                20.020037373172045,
+                20.0,
+                40.0
+              ]
+            ],
+            "span_x": 40.04007474634409,
+            "span_z": 50.0
+          }
+        ]
+      }
+    }
+  ],
+  "run_id": "20261108-134309-f44608",
+  "report_path": "docs\\validation\\dev074-h10-five-claw-2026-11-08\\report.json"
+}

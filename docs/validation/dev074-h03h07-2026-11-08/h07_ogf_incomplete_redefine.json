@@ -1,0 +1,107 @@
+{
+  "variants": {
+    "V6_detach_redefine": {
+      "build": {
+        "job_id": "3ae3dc1b1c044a4aa3eaf8a52f337d13",
+        "status": "succeeded",
+        "model_id": "6e2eb49aa14a4cd2bb25a045e2ac0435",
+        "revision": 1,
+        "message": "General feature plan completed"
+      },
+      "source_quilts": [
+        {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "surface_ids": [
+            55
+          ]
+        }
+      ],
+      "probe": {
+        "job_id": "70c511d06e1248adbe258b6decaeab64",
+        "status": "failed",
+        "revision": null,
+        "message": "Toolkit call CompleteFeature failed with code -1 during execute_surface_probe"
+      },
+      "operation": {
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "feature_errors": {
+          "api": "ProFeatureWithoptionsRedefine",
+          "code": -1,
+          "element_errors": {
+            "sample": [],
+            "total": 0,
+            "truncated": false
+          },
+          "failed_stage": "CompleteFeature",
+          "section_errors": {
+            "available": false,
+            "sample": [],
+            "total": null,
+            "truncated": false,
+            "unavailable_reason": "no section solve ran before this failure"
+          }
+        },
+        "index": 0,
+        "label": "v6_detach_redefine",
+        "op": "surface_probe",
+        "succeeded": false
+      }
+    },
+    "V7_attach_redefine": {
+      "build": {
+        "job_id": "ea21715781f643088da22d24563366fe",
+        "status": "succeeded",
+        "model_id": "6fa3e066e8a146569969b7ed79fab475",
+        "revision": 1,
+        "message": "General feature plan completed"
+      },
+      "source_quilts": [
+        {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "surface_ids": [
+            55
+          ]
+        }
+      ],
+      "probe": {
+        "job_id": "b81c08881727419fb886fd0f9f1293b1",
+        "status": "failed",
+        "revision": null,
+        "message": "Toolkit call CompleteFeature failed with code -1 during execute_surface_probe"
+      },
+      "operation": {
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "feature_errors": {
+          "api": "ProFeatureWithoptionsRedefine",
+          "code": -1,
+          "element_errors": {
+            "sample": [],
+            "total": 0,
+            "truncated": false
+          },
+          "failed_stage": "CompleteFeature",
+          "section_errors": {
+            "available": false,
+            "sample": [],
+            "total": null,
+            "truncated": false,
+            "unavailable_reason": "no section solve ran before this failure"
+          }
+        },
+        "index": 0,
+        "label": "v7_attach_redefine",
+        "op": "surface_probe",
+        "succeeded": false
+      }
+    }
+  },
+  "abort": null,
+  "session": {
+    "state": "ready",
+    "connected": true
+  }
+}

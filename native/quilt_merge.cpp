@@ -54,8 +54,11 @@ static void generic_quilt_merge(const J &op) {
         throw std::runtime_error("quilt_merge needs two distinct quilts; both references name " +
                                  std::to_string(first_id));
 
-    // Input areas are measured before the merge consumes them.
+    // Input areas are measured before the merge consumes them. The target area
+    // is kept on its own: a join may modify the target quilt in place instead
+    // of creating a new quilt item (live 2026-11-08).
     MeasurementOutcome input_area;
+    MeasurementOutcome target_before;
     {
         ProQuilt quilt = nullptr;
         ProQuilt other = nullptr;
@@ -64,6 +67,7 @@ static void generic_quilt_merge(const J &op) {
             a = quilt_area_native(quilt);
         else
             a.reason = "target_quilt_init_failed";
+        target_before = a;
         if (!ProQuiltInit((ProSolid)board, second_id, &other))
             b = quilt_area_native(other);
         else
@@ -117,8 +121,29 @@ static void generic_quilt_merge(const J &op) {
     ProError surface_visit =
         ProFeatureGeomitemVisit(&feature, PRO_SURFACE, collect_geom_ids, nullptr, &surface_ids);
     int result_id = -1;
-    if (result_visit == PRO_TK_NO_ERROR && ids.size() == 1)
+    const char *result_source = nullptr;
+    if (result_visit == PRO_TK_NO_ERROR && ids.size() == 1) {
         result_id = ids[0]["id"];
+        result_source = "feature_quilt_geomitem";
+    } else if (!surface_ids.empty() &&
+               !feature_member_surface_quilt((ProSolid)board, surface_ids, result_id)) {
+        // Live 2026-11-08: an accepted merge feature owns its member surfaces
+        // instead of a PRO_QUILT geomitem (-4). The result quilt is still
+        // resolvable from those surfaces when the kernel keeps them in one.
+        result_source = "member_surface_quilt";
+    } else if (target_before.available) {
+        // Otherwise the join may have merged the tool into the target quilt in
+        // place: the target's measured area then grows past its own pre-merge
+        // area. A silent no-op keeps the area unchanged and stays a failure.
+        ProQuilt retrimmed = nullptr;
+        if (!ProQuiltInit((ProSolid)board, first_id, &retrimmed)) {
+            MeasurementOutcome after = quilt_area_native(retrimmed);
+            if (after.available && after.value > target_before.value + 1e-6) {
+                result_id = first_id;
+                result_source = "retrimmed_target_quilt";
+            }
+        }
+    }
     MeasurementOutcome area;
     MeasurementOutcome closed;
     if (result_id < 0) {
@@ -143,6 +168,7 @@ static void generic_quilt_merge(const J &op) {
         details[it.key()] = it.value();
     bool is_open = quilt_closed_is_open(closed);
     details["result_quilt_id"] = result_id < 0 ? J(nullptr) : J(result_id);
+    details["result_quilt_source"] = result_source ? J(result_source) : J(nullptr);
     details["result_quilt_visit_code"] = (int)result_visit;
     // Branch-by-branch: a bool/nullptr ternary folds into nullptr on MSVC and
     // reports null for an open quilt (live 2026-11-04 on the quilts section).
@@ -168,9 +194,11 @@ static void generic_quilt_merge(const J &op) {
             "Surface merge regeneration failed; check that the two quilts share a boundary or "
             "intersect where the join expects them");
     if (result_id < 0)
-        throw std::runtime_error(
-            "Surface merge produced no single result quilt; the feature owns " +
-            std::to_string((int)ids.size()) + " quilt geometry items");
+        throw std::runtime_error("Surface merge produced no result quilt: the feature owns " +
+                                 std::to_string((int)ids.size()) + " quilt geomitems (visit code " +
+                                 std::to_string((int)result_visit) + ") and " +
+                                 std::to_string((int)surface_ids.size()) +
+                                 " surfaces, none of which reports an owning quilt");
     if (!area.available)
         throw std::runtime_error(std::string("Surface merge result is not measurable") +
                                  (area.reason ? ": " : "") + (area.reason ? area.reason : ""));

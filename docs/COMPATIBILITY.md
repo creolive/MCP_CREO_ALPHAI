@@ -4,12 +4,41 @@
 
 2026-11-08 DEV-076开发分支补步：0.18.3/0.18.4的手写surface_loft曾无条件包含Probbl.h，报告方Creo10 SDK因此构建失败。本分支增加头存在性门控；缺头时该操作明确SURFACE_LOFT_SDK_UNAVAILABLE，不生成特征，有头保留原实现。缺头分支以SDK无关C++夹具验证；完整Creo9/10 SDK构建及运行时不据此判通过。本批不修改已发布标签/附件。
 
-> **版本归属说明（2026-11-07 补记）：** 当前**已发布**版本为 **0.18.4**（DEV-074 0.18.3 后续实机批：FEAT-039/H09 旋转球面替代、H10 多 quilt 整链、H07 独立 quilt 偏置反证，FEAT-055/H08 曲面边圆角可行性，FEAT-014/H05 钣金附着增料反证，BUG-115/H12 回执复验；公开工具仍 104，无新增能力，见[发布记录](validation/RELEASE-0.18.4.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
+> **版本归属说明（2026-11-08）：** 当前**已发布**版本为 **0.19.0**（DEV-074 曲面与整链批：FEAT-055/H08 新增 `creo_surface_round` 与只读 `creo_measure_surface_curvature`，FEAT-039/H03 重新公开 `creo_quilt_merge`，H10 五爪整瓶整链实机；公开工具 104→107；钣金成形类、独立 quilt 偏置与任意非平面 fill 仍不可用，门禁保持，见[发布记录](validation/RELEASE-0.19.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
+> **版本归属说明（2026-11-07 补记）：** 当时**已发布**版本为 **0.18.4**（DEV-074 0.18.3 后续实机批：FEAT-039/H09 旋转球面替代、H10 多 quilt 整链、H07 独立 quilt 偏置反证，FEAT-055/H08 曲面边圆角可行性，FEAT-014/H05 钣金附着增料反证，BUG-115/H12 回执复验；公开工具仍 104，无新增能力，见[发布记录](validation/RELEASE-0.18.4.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-07 补记）：** 当时**已发布**版本为 **0.18.3**（DEV-074 0.17.4 反馈批：FEAT-058/H01 非零 origin 大跨度 resize 修复、FEAT-009/H02 `creo_surface_loft`、FEAT-039/H04 `creo_measure_surface_group` 与 H06 保留侧几何，公开工具 102→104，见[发布记录](validation/RELEASE-0.18.3.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-07 补记）：** 当时**已发布**版本为 **0.18.0**（FEAT-063/FEAT-035/FEAT-059/FEAT-057 本地分支集成，公开工具 102，见[发布记录](validation/RELEASE-0.18.0.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-06 补记）：** 当时**已发布**版本为 **0.16.0**（FEAT-014 miter cuts 四壁与 FEAT-004 尺寸守卫，公开工具仍 100，见[发布记录](validation/RELEASE-0.16.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-05 补记）：** 当时**已发布**版本为 **0.12.1**，本次交付候选为 **0.13.0**（开发分支验收完成，未合并 main、未发布，见[发布记录](validation/RELEASE-0.13.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-04 补记）：** 当时正式版为 **0.12.0**（见下方对应分节）。本文件按版本分节保留各自时点的结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
+
+## 0.19.0 已发布：曲面边圆角与数值曲率/G1（2026-11-08）
+
+- **支持**：`creo_surface_round`（同一 quilt 内两个相邻成员面的恒定半径圆角）与只读 `creo_measure_surface_curvature`（主曲率、曲率半径、UV 采样与共享边法向夹角/G1）。
+- **本机实机（Creo 12.4.0.0，mm）**：4 面 1200 mm² quilt 相邻面 R3 → 5 面 **1187.1238898038469 mm²**（oracle 逐位一致）、开放、无实体面、保存重载 true；非相邻面 `feature_status=6` 失败并回滚（revision 2→2）。曲率：平面 **0.0 /mm**（144/144，半径 null / `zero_curvature`）、R8 球面 **0.12500000000000003 /mm** 与半径 **7.999999999999998 mm**、相邻垂直平面墙 G1 **90.0°**（阈值 0.5°，`within_g1=false`）；三次只读作业 revision 不变。证据 [EVIDENCE](validation/dev074-h08-h09-live-2026-11-08/EVIDENCE.md)。
+- **边界/未验证**：无 quilt 边 id 通道（`PRO_ROUND_REF_EDGE`/edge-chain 未试）、变半径/full/过渡、圆角后 thicken/solidify、弯曲 quilt、非 mm、Creo 9/10 未验；Creo Toolkit 无斑马纹/曲率梳 API，数值分析为等价交付。
+
+## 0.19.0 已发布：钣金成形类路线勘察与反证（2026-11-08）
+
+- **不支持且门禁不放宽**：corner relief、百叶/成形、hem、jog、格栅孔、凸台/铰链/门板耳。公开工具仍 **107**，本轮无新增工具或参数。
+- **corner relief**：`ProSmtFlangeWall.h` 的 `PRO_E_SMT_CORNER_RELIEF`（`ProCornerRelType` V_NOTCH/CIRCULAR/RECTANGULAR/OBROUND/PARAM/SQUARE/NORMAL）写在折边特征内时，本机 Creo 12.4.0.0 上矩形 3×3、矩形 1×1 与 `PARAM` 三变体都在 181.46 mm 邻接边上 create 后再生失败（`toolkit_code=-1`、revision 与体积不变、回滚），同一条边的 `miter_cuts{1,1}` 对照成功。独立 `PRO_FEAT_SMT_CRN_REL` 需平面 + 两个折弯圆柱面三引用，未探针。`adjacent_bend_ends` 仍只由 `miter_cuts` 放行。
+- **成形/百叶**：`ProSmtSketchForm.h` 的 `PRO_FEAT_SMT_SKETCH_FORM`（不需工具件）三种元素树均 `ProFeatureWithoptionsCreate=-1` 回滚；`ProSmtForm.h` 的 `PRO_FEAT_GEN_MERGE` 路线必须引用冲头/凹模参考零件（`PRO_E_DSF_REF_MDL`），未尝试。`ProSmtPunchQuilt.h` 的 `PRO_FEAT_PUNCH_QUILT` 未尝试。
+- **hem / jog**：本机 Creo 12.4 SDK 无 Hem/Jog 头文件，`ProFeatType.h` 无对应特征常量；二者只以折边截面形状存在（`Common Files\text\smt\flange_shapes` 的 `c_hem.sec`/`duck_hem.sec`/`flushed_hem.sec`/`joggle_hem.sec`/`open_hem.sec`/`z_hem.sec`），当前 flange 只写单线截面。
+- **格栅**：现有 `extrude(cut)` 三种截面/深度组合（3×3 孔 through_all symmetric、1 孔 through_all positive、1 孔 blind 5 mm symmetric 中面草图）在 185×232×1 钣金壁上均报 “Extrude cut removes no material”、体积不变并回滚；BUG-046 的 −100 mm³ 正证据仍在，故判为驱动/截面配置问题，cut 口径不变，格栅未交付。
+- **证据**：[EVIDENCE](validation/dev074-forming-2026-11-08/EVIDENCE.md)、[evidence.json](validation/dev074-forming-2026-11-08/evidence.json)。未覆盖：Creo 9/10、非 mm、其他板厚/半径、独立角部释放特征、工具件成形、WorkBuddy。
+
+## 0.19.0 已发布：`creo_quilt_merge` 公开（2026-11-08）
+
+- **支持**：`creo_quilt_merge` 已出现在 MCP 面（公开工具 **107**），对**两片真实接触或相交的 quilt** 做 JOIN。
+  结果不是新 quilt，而是**目标 quilt 原地增长**：原生 `result_quilt_source=retrimmed_target_quilt`，
+  `result_quilt_id` 为目标 id，`area_mm2`/`closed` 均来自实测。
+- **本机实机（Creo 12.4.0.0）**：两片 20×20 共面填充（各 400 mm²）→ 结果 800.0 mm²、开放（`closed=false`）、
+  `saved_file_reloaded_and_verified=true`；同模型 2 mm `thicken` 成功（body 法向跨距 2.0 mm）。
+  2 mm 不相邻负例在创建阶段 `-1` 失败并回滚。证据
+  [EVIDENCE](validation/dev074-h03h07-2026-11-08/EVIDENCE.md)。
+- **边界/未验证**：`INTERSECT`、3 片以上、链式合并、闭合壳体与整组实体化未验收；被消耗的工具 quilt
+  在内核里留下不可测记录（属内核行为）；Creo 9/10、非 mm、WorkBuddy 未测。独立 quilt 偏置（H07）仍不公开，
+  `surface_trim` 的 `offset_mm`/`offset_side` 门禁不变。
 
 ## 折边几何选边（R10，开发分支候选，版本待定，未发布）
 

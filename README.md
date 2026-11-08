@@ -1,12 +1,12 @@
-# MCP_CREO_MechDog 0.18.4
+# MCP_CREO_MechDog 0.19.0
 
-![version](https://img.shields.io/badge/version-0.18.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
+![version](https://img.shields.io/badge/version-0.19.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
 
-当前正式版 **0.18.4**（PATCH——DEV-074 0.18.3 后续实机批：非平面填充替代「旋转球面」、多 quilt 组整链、曲面边圆角可行性、钣金附着增料与独立 quilt 偏置反证（门禁保持）、BUG-115 回执 MCP 复验；公开工具仍 104，无 schema/接口不兼容变更） · [版本说明](docs/RELEASE_NOTES_0.18.4.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
+当前正式版 **0.19.0**（MINOR——DEV-074 曲面与整链批：新增公开工具 `creo_surface_round`（曲面边圆角）与只读 `creo_measure_surface_curvature`（数值曲率/G1），解除门禁并公开 `creo_quilt_merge`（quilt 合并），公开工具 **104→107**；五爪整瓶整链 46 个作业、63 项实机检查通过；钣金成形类、独立 quilt 偏置、任意非平面边界填充仍不可用，门禁保持） · [版本说明](docs/RELEASE_NOTES_0.19.0.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
 
 > 让 AI 客户端通过 MCP，直接在 Creo Parametric 里创建**原生可编辑的参数化特征**——不是导出网格，也不是脚本模拟。
 
-MCP_CREO_MechDog 是运行在你自己 Windows 电脑上的本地 MCP 服务（stdio）。它把 Creo 官方 C/C++ Toolkit 封装成 104 个公开工具（以 `creo_capabilities` 的 `tool_count` 为准；另有 `creo_quilt_merge` 已定义但门禁隐藏），供 WorkBuddy、Claude Desktop、Cursor 等支持 MCP 的 AI 客户端调用：从一句需求出发，生成带草图、尺寸、约束与特征树的 `.prt` / `.asm`，并保存到磁盘。
+MCP_CREO_MechDog 是运行在你自己 Windows 电脑上的本地 MCP 服务（stdio）。它把 Creo 官方 C/C++ Toolkit 封装成 107 个公开工具（以 `creo_capabilities` 的 `tool_count` 为准；`creo_surface_boundary_fill` 已定义但门禁隐藏），供 WorkBuddy、Claude Desktop、Cursor 等支持 MCP 的 AI 客户端调用：从一句需求出发，生成带草图、尺寸、约束与特征树的 `.prt` / `.asm`，并保存到磁盘。
 
 **适合**：重复性参数化建模、批量零件、AI 驱动的草图→拉伸→孔→装配流程、接管已有模型继续修改。
 **不适合**：任意复杂自由曲面、专业模块的完整封装、没有真实 Creo 与许可的「云端建模」。
@@ -14,7 +14,7 @@ MCP_CREO_MechDog 是运行在你自己 Windows 电脑上的本地 MCP 服务（s
 ## 特性
 
 - **原生参数化**：Creo 内可编辑的草图、拉伸、旋转、孔、圆角、抽壳、钣金、装配，保留尺寸与依赖关系。
-- **104 个公开工具**（以 `creo_capabilities` 返回为准；`creo_quilt_merge` 已定义但门禁隐藏，不计入）：实体特征、装配、工程图、放样／翼型、曲面修剪／投影曲线／法向偏置、两截面直纹曲面放样与曲面组级缝合测量、参数与关系式、特征树查询、标准螺纹孔、只读质量属性、离线产品变体规划、保存与导出。
+- **107 个公开工具**（以 `creo_capabilities` 返回为准；`creo_surface_boundary_fill` 已定义但门禁隐藏，不计入）：实体特征、装配、工程图、放样／翼型、曲面修剪／投影曲线／法向偏置、两截面直纹曲面放样、quilt 合并、曲面边圆角、曲面组级缝合测量、数值曲率/G1 分析（不提供斑马纹/曲率梳图像）、参数与关系式、特征树查询、标准螺纹孔、只读质量属性、离线产品变体规划、保存与导出。
 - **保存即校验**：每次修改后保存 `.prt.N` / `.asm.N`、从磁盘重载并比对特征、尺寸、体积与参数（`saved_file_reloaded_and_verified`）。
 - **可回滚**：revision 保护、失败自动回滚、`unknown_outcome` 保留现场，旧请求不会改坏模型。
 - **本地可控**：几何计算全在 Creo 进程内完成；服务不执行任意命令、不改动 Creo 安装目录、不上传模型。
@@ -105,7 +105,7 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 | 确认哪些功能已实测 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
 | 种子库 / 换电脑换 Agent | [docs/SEED_LIBRARY.md](docs/SEED_LIBRARY.md)、[docs/MIGRATION.md](docs/MIGRATION.md) |
 | 直接混合的一次性回调 | [docs/CALLBACK_LIFECYCLE.md](docs/CALLBACK_LIFECYCLE.md) |
-| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.18.4 版本说明](docs/RELEASE_NOTES_0.18.4.md) |
+| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.19.0 版本说明](docs/RELEASE_NOTES_0.19.0.md) |
 | 参与开发 / 看台账 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)、[docs/BACKLOG.md](docs/BACKLOG.md) |
 
 ## 已知限制

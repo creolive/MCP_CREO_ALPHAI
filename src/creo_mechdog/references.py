@@ -504,6 +504,46 @@ def reference_capabilities() -> dict[str, Any]:
                     ),
                 },
             },
+            "creo_surface_round": {
+                "target": {"kind": "quilt", "id": 21},
+                "target_by_label": {"kind": "quilt_feature", "label": "fill_label"},
+                "references": [
+                    {"surfaces": [{"kind": "surface", "id": 68}, {"kind": "surface", "id": 66}]}
+                ],
+                "radius": 3.0,
+                "requires": (
+                    "one quilt target and exactly one reference set holding exactly two "
+                    "distinct member faces of that quilt; each face is "
+                    "{kind:'surface',id:N} with a geometry id from creo_inspect_model, and "
+                    "the radius is one finite constant greater than zero"
+                ),
+                "rejected": {
+                    "multiple_sets": "a second set or a second radius is refused before a job",
+                    "edge_chain": (
+                        "{'edge':...} and PRO_ROUND_REF_EDGE chains are refused; there is no "
+                        "quilt edge id channel in creo_inspect_model, whose edges enumerate "
+                        "solid faces only"
+                    ),
+                    "variable_or_named_radius": (
+                        "variable radius, full/chordal/through-curve radius and custom "
+                        "transitions have no field on this operation"
+                    ),
+                    "solid_or_other_quilt_face": (
+                        "a face that the target quilt does not own (a solid face or another "
+                        "quilt's face) is refused natively before the feature is created"
+                    ),
+                },
+                "adjacency": (
+                    "the two faces must share one edge, and the kernel decides it: the "
+                    "2026-11-08 H08 probe measured a non-adjacent pair failing regeneration "
+                    "and rolling back instead of being accepted"
+                ),
+                "result": (
+                    "the round stays on the same quilt (quilt_id unchanged, open by nature); "
+                    "the receipt carries measured face counts and areas before/after with "
+                    "their statuses, closure, radius and the solid-face evidence"
+                ),
+            },
             "creo_loft": {
                 "sections": ["section_a", 42],
                 "mode": {"values": ["add"], "meaning": "cut and surface are refused before a job"},

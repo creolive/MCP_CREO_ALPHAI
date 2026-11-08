@@ -104,14 +104,14 @@ def case_join_offline() -> dict:
     check("surface_trim_published", "surface_trim" not in UNAVAILABLE_OPERATIONS)
     check("thicken_registered", "thicken" in REGISTERED_OPERATIONS)
     check("boolean_registered", "boolean_bodies" in REGISTERED_OPERATIONS)
-    # The merge operator itself stays gated; this case is the documented
-    # fallback for the join need, not a replacement for the operator.
-    check("quilt_merge_still_gated", "quilt_merge" in UNAVAILABLE_OPERATIONS)
+    # The merge operator itself is published since 2026-11-08; this case stays
+    # the documented body-union fallback for callers that want a solid.
+    check("quilt_merge_published", "quilt_merge" not in UNAVAILABLE_OPERATIONS)
     return {
         "mode": "offline",
         "passed": all(item["ok"] for item in checks),
         "native_join": "not_verified",
-        "blocked_steps": ["quilt_merge_operator"],
+        "blocked_steps": [],
         "checks": checks,
     }
 
@@ -337,7 +337,7 @@ async def case_join_live(wait_ready) -> dict:
         "mode": "live",
         "passed": passed,
         "native_join": "verified" if passed else "failed",
-        "blocked_steps": ["quilt_merge_operator"],
+        "blocked_steps": [],
         "jobs": jobs,
         "checks": checks,
     }

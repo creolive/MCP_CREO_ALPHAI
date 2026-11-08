@@ -164,6 +164,66 @@ def measure_surface_group(
     raise RuntimeError(f"Surface group measurement returned no reading: job {job_id}")
 
 
+def measure_surface_curvature(
+    model_id: str,
+    target: dict,
+    faces: list,
+    samples_per_direction: int = 12,
+) -> dict:
+    """DEV-074/H08: read the numerical curvature/G1 analysis synchronously.
+
+    The query is a read-only job: it creates no feature, does not regenerate and
+    does not advance the revision. The native executor samples the kernel's
+    principal curvature and the seam normals; nothing here recomputes, rounds or
+    defaults a value. There is no zebra-stripe or curvature-comb image API in
+    Toolkit, so this receipt is the declared numeric equivalent.
+    """
+    operation: dict = {
+        "op": "surface_curvature",
+        "target": target,
+        "faces": faces,
+        "samples_per_direction": int(samples_per_direction),
+    }
+    accepted = submit([operation], model_id=model_id, readonly=True)
+    job_id = accepted["job_id"]
+    deadline = time.monotonic() + MASS_PROPERTIES_TIMEOUT_SECONDS
+    record: dict = {}
+    while True:
+        path = bridge.job_path(job_id) / "job.json"
+        if path.exists():
+            record = bridge.read_json(path)
+            if record.get("status") in _MASS_PROPERTIES_TERMINAL:
+                break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"Surface curvature analysis did not finish: job {job_id}")
+        time.sleep(0.25)
+    if record.get("status") != "succeeded":
+        message = record.get("message") or f"Surface curvature analysis failed: job {job_id}"
+        raise RuntimeError(str(message))
+    for entry in (record.get("result") or {}).get("operations") or []:
+        if isinstance(entry, dict) and entry.get("op") == "surface_curvature":
+            return {
+                "job_id": job_id,
+                "model_id": model_id,
+                "revision": record.get("revision"),
+                "readonly": True,
+                "unit_name": entry.get("unit_name"),
+                "length_scale_to_mm": entry.get("length_scale_to_mm"),
+                "curvature_unit": entry.get("curvature_unit"),
+                "radius_unit": entry.get("radius_unit"),
+                "quilt_id": entry.get("quilt_id"),
+                "samples_per_direction": entry.get("samples_per_direction"),
+                "faces": entry.get("faces"),
+                "summary": entry.get("summary"),
+                "g1_max_angle_deg": entry.get("g1_max_angle_deg"),
+                "g1_status": entry.get("g1_status"),
+                "g1_threshold_deg": entry.get("g1_threshold_deg"),
+                "within_g1": entry.get("within_g1"),
+                "g1_points": entry.get("g1_points"),
+            }
+    raise RuntimeError(f"Surface curvature analysis returned no reading: job {job_id}")
+
+
 def inspect_model(
     model_id: str,
     detail: str = "compact",
@@ -302,7 +362,14 @@ def submit(
         raise ValueError("Native loft seed initialization is only available for a new part")
     if readonly and any(
         op["op"]
-        not in ("dump_tree", "export", "udf_inspect", "mass_properties", "surface_group_measure")
+        not in (
+            "dump_tree",
+            "export",
+            "udf_inspect",
+            "mass_properties",
+            "surface_group_measure",
+            "surface_curvature",
+        )
         for op in operations
     ):
         raise ValueError("Read-only requests may only inspect/export")

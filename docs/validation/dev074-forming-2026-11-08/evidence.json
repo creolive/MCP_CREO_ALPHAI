@@ -1,0 +1,161 @@
+{
+  "task": "FEAT-014 / DEV-074 forming routes",
+  "date": "2026-11-08",
+  "worktree": "e:\\Projects\\MCP_CREO_MechDog-d074",
+  "branch": "codex/DEV-074-forming",
+  "head_at_probe": "2aab4af",
+  "environment": {
+    "os": "Windows x64",
+    "creo": "12.4.0.0 (manually started by the user; auto_start_creo=false)",
+    "toolkit": "matching local SDK, mm, single channel, serial submissions",
+    "restrictions_observed": [
+      "never started, closed or restarted Creo",
+      "never cleared an unknown protection",
+      "no fault injection",
+      "never resubmitted an accepted job",
+      "no concurrent MCP calls"
+    ]
+  },
+  "sdk_survey": {
+    "header_dir": "C:\\Program Files\\PTC\\Creo 12.4.0.0\\Common Files\\protoolkit\\includes",
+    "headers_present": [
+      "ProSmtBend.h", "ProSmtBendBack.h", "ProSmtConnectRip.h", "ProSmtCornerRelief.h",
+      "ProSmtDrvSurf.h", "ProSmtEdgeBend.h", "ProSmtEdgeRip.h", "ProSmtEditBend.h",
+      "ProSmtEditBendRelief.h", "ProSmtEditCornerRelief.h", "ProSmtEditCornerSeam.h",
+      "ProSmtExtendWall.h", "ProSmtFlangeWall.h", "ProSmtFlattenForm.h", "ProSmtFlatWall.h",
+      "ProSmtForm.h", "ProSmtJoinWalls.h", "ProSmtMergeWalls.h", "ProSmtPunchQuilt.h",
+      "ProSmtRecognition.h", "ProSmtRegularRip.h", "ProSmtShell.h", "ProSmtSketchForm.h",
+      "ProSmtSplitArea.h", "ProSmtSurfaceRip.h", "ProSmtTwist.h"
+    ],
+    "no_hem_or_jog_header": true,
+    "no_hem_or_jog_feature_constant_in_ProFeatType": true,
+    "flange_wall_entries": {
+      "header": "ProSmtFlangeWall.h",
+      "feature": "PRO_FEAT_WALL, PRO_SMT_WALL_TYPE_FLANGE=17",
+      "bend_relief": "PRO_E_SMT_BEND_RELIEF_SIDE1/SIDE2 (ProBendRlfType 0..5)",
+      "corner_relief": [
+        "PRO_E_SMT_CORNER_RELIEF", "PRO_E_SMT_CORNER_RELIEF_TYPE",
+        "PRO_E_SMT_CORNER_RELIEF_WIDTH(_TYPE/_VAL)", "PRO_E_SMT_CORNER_RELIEF_DEPTH(_TYPE/_VAL)"
+      ],
+      "corner_relief_types": {
+        "PRO_CORNER_RELIEF_V_NOTCH": 0,
+        "PRO_CORNER_RELIEF_CIRCULAR": 1,
+        "PRO_CORNER_RELIEF_RECTANGULAR": 2,
+        "PRO_CORNER_RELIEF_OBROUND": 3,
+        "PRO_CORNER_RELIEF_NO": 5,
+        "PRO_CORNER_RELIEF_PARAM": 6,
+        "PRO_CORNER_RELIEF_SQUARE": 7,
+        "PRO_CORNER_RELIEF_NORMAL": 8
+      },
+      "corner_relief_dimension_types": {
+        "PRO_DIM_ENTER": -4,
+        "PRO_DIM_DEF_CRN_REL_WIDTH": -10,
+        "PRO_DIM_DEF_CRN_REL_DEPTH": -11
+      },
+      "miter_cuts": ["PRO_E_SMT_MTR_CUTS", "PRO_E_SMT_MTR_CUTS_ADD", "PRO_E_SMT_MTR_CUTS_WIDTH(_TYPE/_VAL)", "PRO_E_SMT_MTR_CUTS_OFFSET(_TYPE/_VAL)"],
+      "edge_rips": ["PRO_E_SMT_CORNERS_ARR", "PRO_E_SMT_EDGE_RIP_TYPE (ProEdgeRipType)"]
+    },
+    "separate_corner_relief_feature": {
+      "headers": ["ProSmtCornerRelief.h", "ProSmtEditCornerRelief.h"],
+      "feature": "PRO_FEAT_SMT_CRN_REL (1098); edit variant PRO_FEAT_EDIT_CORNER_RELIEF",
+      "references": ["PRO_E_CORNER_RELIEF_REF_FLAT (flat surface)", "PRO_E_CORNER_RELIEF_REF_BND_1/2 (cylinder surfaces)"],
+      "reference_types": {"PRO_CRN_REL_3_SURFACES": 0, "PRO_CRN_REL_ALL": 1},
+      "create_states": {"PRO_CRN_REL_CR_IN_FORMED": 0, "PRO_CRN_REL_CR_IN_UNBEND_ONLY": 1},
+      "note": "requires three surface references (one flat plus two bend cylinders); not attempted in this round"
+    },
+    "form_features": {
+      "tool_based": {
+        "header": "ProSmtForm.h",
+        "feature": "PRO_FEAT_GEN_MERGE with PRO_E_GMRG_SMT_TYPE = PRO_GEN_MERGE_SMT_TYPE_FORM_PUNCH(1)/FORM_DIE(2)",
+        "requires_reference_model": "PRO_E_DSF_REF_MDL / PRO_E_DSF_SEL_REF_MDL (a punch/die part model)",
+        "other_elements": ["PRO_E_FORM_TOOL_CSYS", "PRO_E_FORM_TOOL_NAME", "PRO_E_FORM_PUNCH_SIDE", "PRO_E_FORM_DIE_POCKET_GEOM_CMP", "PRO_E_SMT_FILLET_INTERSECT"]
+      },
+      "sketch_based": {
+        "header": "ProSmtSketchForm.h",
+        "feature": "PRO_FEAT_SMT_SKETCH_FORM (1270)",
+        "types": {"PRO_SMT_SKETCH_FORM_TYPE_PUNCH": 1, "PRO_SMT_SKETCH_FORM_TYPE_PIERCING": 2},
+        "elements": ["PRO_E_STD_SECTION", "PRO_E_SKETCH_FORM_TYPE", "PRO_E_SKETCH_FORM_DEPTH_PUNCH", "PRO_E_SKETCH_FORM_DEPTH_PIERCING", "PRO_E_SKETCH_FORM_DIR", "PRO_E_FORM_PUNCH_MATERIAL_SIDE", "PRO_E_SMT_FILLET_INTERSECT", "PRO_E_SMT_FILLET_QUILT", "PRO_E_SMT_TRIM_FORM_SIDES"],
+        "needs_no_tool_part": true
+      },
+      "punch_quilt": {
+        "header": "ProSmtPunchQuilt.h",
+        "feature": "PRO_FEAT_PUNCH_QUILT",
+        "elements": ["PRO_E_FORM_PUNCH_QUILT", "PRO_E_FORM_PUNCH_SIDE", "PRO_E_FORM_PUNCH_MATERIAL_SIDE (ProSmdPunchMatSide OUTSIDE=0/INSIDE=1)", "PRO_E_FORM_PUNCH_HIDE_QUILT"]
+      },
+      "flatten": {"header": "ProSmtFlattenForm.h", "feature": "PRO_FEAT_FLATTEN"}
+    },
+    "stock_section_shapes": {
+      "dir": "C:\\Program Files\\PTC\\Creo 12.4.0.0\\Common Files\\text\\smt\\flange_shapes",
+      "files": ["arc_wall.sec", "c_hem.sec", "duck_hem.sec", "flushed_hem.sec", "i_wall.sec", "joggle_hem.sec", "open_hem.sec", "s_wall.sec", "z_hem.sec"],
+      "conclusion": "hem and jog exist only as flange section shapes, not as features or Toolkit entry points"
+    }
+  },
+  "probes": {
+    "corner_relief_same_feature": {
+      "route": "temporary PRO_E_SMT_CORNER_RELIEF on the flange feature (probe-only code, reverted)",
+      "fixture": "185x232x1 wall, free +x flange h80/R2.54, then -y flange on the 181.46 mm top edge whose end abuts that bend",
+      "report": "build/sheetmetal_corner_relief/20261108T124429_d2aa262a/report.json",
+      "report_sha256": "f5f50a8f8366f7c244574ab9ac27ed8e649d41fc3343fcde387282afdb148f8f",
+      "cases": [
+        {"case": "relief_3x3", "job_id": "62d1c9bf5c574c8f9439f7c8467ae6e3", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_sheetmetal_flange", "message": "Regeneration produced a failed, suppressed or incomplete feature", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 60945.29123405193, "added_mm3": 0.0},
+        {"case": "relief_1x1", "job_id": "15e7befa86294f0e818ae8d9b0e39496", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_sheetmetal_flange", "message": "Regeneration produced a failed, suppressed or incomplete feature", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 60945.29123405193, "added_mm3": 0.0},
+        {"case": "param_default", "job_id": "cbba5b2600ef4cabbd9ae0832e869031", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_sheetmetal_flange", "message": "Regeneration produced a failed, suppressed or incomplete feature", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 60945.29123405193, "added_mm3": 0.0},
+        {"case": "miter_1x1_control", "job_id": "8b38c051f62a4d888b4237de82ee5160", "status": "succeeded", "toolkit_code": 0, "rollback_succeeded": null, "revision": "2->3", "volume_mm3": 75014.2426845472, "added_mm3": 14068.95145049526, "saved_file_reloaded_and_verified": true, "edge_id": 197, "edge_start_mm": [0.0, -232.0, 0.5], "edge_end_mm": [181.46, -232.0, 0.5], "adjacency": {"failure_reason": "adjacent_bend_ends", "allowed_by_miter_cut": true, "end1": {"neighbor_edge_id": 201, "neighbor_arc": true, "neighbor_radius_mm": 2.54, "bend_face_ids": [193], "radius_bound_mm": 7.081}}}
+      ],
+      "verdict": "unavailable; the same-feature corner-relief element does not create the wall, and the miter control on the identical edge succeeds"
+    },
+    "louver_sketch_form": {
+      "route": "public feature_tree op with PRO_FEAT_SMT_SKETCH_FORM (no tool part required)",
+      "fixture": "native_planar 100x60x1 wall, 10x6 rectangle sketch, punch depth 2 mm",
+      "report_dir": "build/louver_probe",
+      "cases": [
+        {"case": "punch_top", "dir": "20261108T123441_8b859255", "model_id": "74f228b789a54d64a4824cc1d9c6fe36", "sketch": "XY datum plane offset 1.0", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_feature_tree", "message": "Toolkit call ProFeatureWithoptionsCreate failed with code -1 during execute_feature_tree", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 6000.0},
+        {"case": "punch_surface", "dir": "20261108T123604_9d1d1d89", "model_id": "08fbe6f5ea53472bb5d4efd86e1575fb", "sketch": "wall top surface id 84", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_feature_tree", "message": "ProFeatureWithoptionsCreate failed with code -1", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 6000.0},
+        {"case": "punch_body", "dir": "20261108T123708_dc261501", "model_id": "cc90e801ed7b40e182a175d01a8ee99", "sketch": "wall top surface id 84 plus PRO_E_BODY selected", "status": "failed", "toolkit_code": -1, "failed_stage": "execute_feature_tree", "message": "ProFeatureWithoptionsCreate failed with code -1", "rollback_succeeded": true, "revision": "2->2", "volume_mm3": 6000.0}
+      ],
+      "verdict": "unavailable in this round; three element-tree variants fail at create with an empty element error list and a full rollback"
+    },
+    "hem_jog": {
+      "route": "none",
+      "evidence": "no ProSmt*Hem/Jog header and no hem/jog feature constant in ProFeatType.h; only stock flange section shapes (c_hem.sec, duck_hem.sec, flushed_hem.sec, joggle_hem.sec, open_hem.sec, z_hem.sec) exist, and the current flange implementation writes a single-line section only",
+      "attempted_live": false,
+      "verdict": "unavailable; no SDK entry point"
+    },
+    "grille_cut_group": {
+      "route": "existing public extrude cut on a sheetmetal wall",
+      "fixture": "185x232x1 wall plus h20 +x flange (47025.29123380686 mm3), XY sketch of 6x4 rectangles",
+      "cases": [
+        {"dir": "20261108T123926_3e99035c", "model_id": "ec0b8048de6d4a64bc246429b89195e6", "geometry": "3x3 grid, through_all, symmetric", "expected_removed_mm3": 216.0, "status": "failed", "message": "Extrude cut removes no material; check the sketch position, direction and depth against existing geometry", "rollback_succeeded": true, "volume_mm3": 47025.29123380686},
+        {"dir": "20261108T124116_c0925066", "model_id": "a4865e8e0dae4b9a8915ea560df9866a", "geometry": "1 hole, through_all, positive", "expected_removed_mm3": 24.0, "status": "failed", "message": "Extrude cut removes no material", "rollback_succeeded": true, "volume_mm3": 47025.29123380686},
+        {"dir": "20261108T124215_c7d816b8", "model_id": "81d365e247614bb6a7b27a1b6ff69adf", "geometry": "1 hole, blind 5 mm, symmetric, sketch on the mid plane", "expected_removed_mm3": 24.0, "status": "failed", "message": "Extrude cut removes no material", "rollback_succeeded": true, "volume_mm3": 47025.29123380686}
+      ],
+      "side_finding": "creo_get_job detail=full for a nine-hole sketch exceeds the response budget (Query metadata exceeds response budget); compact polling was used",
+      "verdict": "undelivered this round; the three variants removed no material. BUG-046 recorded a working sheetmetal cut (-100 mm3), so this is a driver/section configuration question, not evidence that cuts are impossible on sheetmetal"
+    },
+    "boss_hinge_ear": {
+      "route": "reference only",
+      "evidence": "docs/validation/feat014-h05-sheetmetal-solid-add-2026-11-07/EVIDENCE.md",
+      "verdict": "unavailable (H05 counter-evidence): solid add -1, union into the sheetmetal body -1, reverse union swallows the sheetmetal identity"
+    }
+  },
+  "product_surface": {
+    "new_public_tools": 0,
+    "tool_count_before": 107,
+    "tool_count_after": 107,
+    "temporary_probe_code_reverted": [
+      "native/advanced.cpp corner relief request/write/echo plus the adjacent guard release",
+      "src/creo_mechdog/schema.py FlangeCornerRelief and SheetmetalFlangeOp.corner_relief",
+      "server.py creo_sheetmetal_flange corner_relief parameter",
+      "job_projection / compact_sections / operation_results corner_relief keys"
+    ]
+  },
+  "not_covered": [
+    "separate PRO_FEAT_SMT_CRN_REL feature with three surface references (flat plus two bend cylinders)",
+    "ProSmtForm tool-based punch/die with a reference part model",
+    "ProSmtPunchQuilt form",
+    "hem/jog section shapes through a multi-entity flange section",
+    "PRO_FEAT_CUT_SMT (955), which has no documented element tree in this SDK",
+    "Creo 9/10, non-mm units, other thicknesses and radii",
+    "WorkBuddy black-box acceptance"
+  ]
+}

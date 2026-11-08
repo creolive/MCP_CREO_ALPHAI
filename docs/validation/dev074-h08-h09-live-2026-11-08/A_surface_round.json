@@ -1,0 +1,441 @@
+{
+  "case": "A",
+  "checks": [
+    {
+      "check": "session_ready",
+      "ok": true,
+      "detail": {
+        "state": "ready",
+        "connected": true,
+        "message": "Toolkit connection verified; modeling is available"
+      }
+    },
+    {
+      "check": "published_surface_round",
+      "ok": true
+    },
+    {
+      "check": "published_surface_boundary_fill",
+      "ok": true
+    },
+    {
+      "check": "published_surface_curvature",
+      "ok": true
+    },
+    {
+      "check": "tool_count_107",
+      "ok": true,
+      "detail": 107
+    },
+    {
+      "check": "A_build_succeeded",
+      "ok": true,
+      "detail": "General feature plan completed"
+    },
+    {
+      "check": "A_quilt_4_faces",
+      "ok": true,
+      "detail": [
+        4
+      ]
+    },
+    {
+      "check": "A_area_before_1200",
+      "ok": true,
+      "detail": 1200.0
+    },
+    {
+      "check": "A_four_member_faces",
+      "ok": true,
+      "detail": [
+        62,
+        64,
+        66,
+        68
+      ]
+    },
+    {
+      "check": "A_round_succeeded",
+      "ok": true,
+      "detail": "General feature plan completed"
+    },
+    {
+      "check": "A_round_area_oracle",
+      "ok": true,
+      "detail": {
+        "actual": 1187.1238898038469,
+        "oracle": 1187.1238898038469
+      }
+    },
+    {
+      "check": "A_round_face_count_5",
+      "ok": true,
+      "detail": 5
+    },
+    {
+      "check": "A_round_open",
+      "ok": true,
+      "detail": "open"
+    },
+    {
+      "check": "A_round_no_solid",
+      "ok": true,
+      "detail": false
+    },
+    {
+      "check": "A_round_saved_reloaded",
+      "ok": true
+    },
+    {
+      "check": "A_round_quilt_id_stable",
+      "ok": true,
+      "detail": 70
+    },
+    {
+      "check": "A_reload_area_stable",
+      "ok": true,
+      "detail": 1187.1238898038469
+    },
+    {
+      "check": "A_reload_face_count_5",
+      "ok": true,
+      "detail": 5
+    },
+    {
+      "check": "A_nonadjacent_failed",
+      "ok": true,
+      "detail": "surface_round regeneration failed (feature_status=6, feature_id=114, quilt_id=70, faces=62/66); the two faces must share an edge of that quilt (2026-11-08 H08: a non-adjacent pair fails regeneration and rolls back)"
+    },
+    {
+      "check": "A_rollback_revision_unchanged",
+      "ok": true,
+      "detail": {
+        "before": 2,
+        "after": 2
+      }
+    },
+    {
+      "check": "A_rollback_area_unchanged",
+      "ok": true,
+      "detail": 1187.1238898038469
+    },
+    {
+      "check": "A_rollback_face_count_5",
+      "ok": true,
+      "detail": 5
+    }
+  ],
+  "jobs": [
+    {
+      "job_id": "31815a61e695408e944887b71cf23340",
+      "status": "succeeded",
+      "model_id": "1cb0ea96072341ef9e3b6c4bacb55285",
+      "revision": 1,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "3dfc36030e4e42779f8fedf112a9d84a",
+      "status": "succeeded",
+      "model_id": "1cb0ea96072341ef9e3b6c4bacb55285",
+      "revision": 2,
+      "message": "General feature plan completed"
+    },
+    {
+      "job_id": "b9016b1c90c24f35bf6dfc207fca3ae1",
+      "status": "failed",
+      "model_id": "1cb0ea96072341ef9e3b6c4bacb55285",
+      "revision": null,
+      "message": "surface_round regeneration failed (feature_status=6, feature_id=114, quilt_id=70, faces=62/66); the two faces must share an edge of that quilt (2026-11-08 H08: a non-adjacent pair fails regeneration and rolls back)"
+    }
+  ],
+  "data": {
+    "session": {
+      "state": "ready",
+      "connected": true,
+      "message": "Toolkit connection verified; modeling is available"
+    },
+    "tool_count": 107,
+    "quilts_before": [
+      {
+        "area_mm2": 1200.0,
+        "area_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "bbox_mm": [
+          [
+            -2.0847564738719126e-48,
+            0.0,
+            0.0
+          ],
+          [
+            40.0,
+            20.0,
+            10.0
+          ]
+        ],
+        "bbox_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "closed": false,
+        "closed_status": {
+          "available": false,
+          "query_code": -18,
+          "reason": "quilt_is_open",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "face_count": 4,
+        "feature_ids": [
+          49
+        ],
+        "quilt_id": 70,
+        "surface_ids": [
+          68,
+          66,
+          64,
+          62
+        ],
+        "surfaces_visit_code": 0
+      }
+    ],
+    "face_ids": [
+      62,
+      64,
+      66,
+      68
+    ],
+    "round_operation": {
+      "op": "surface_round",
+      "index": 0,
+      "label": "round_r3",
+      "succeeded": true,
+      "execution_status": "succeeded",
+      "effect_status": "committed",
+      "feature_id": 78,
+      "volume_before_mm3": null,
+      "volume_after_mm3": null,
+      "material_delta_mm3": null,
+      "material_measurement": {
+        "after_query_code": 0,
+        "before_query_code": 0,
+        "status": "not_applicable"
+      },
+      "reference_application": {
+        "applied_set_count": 1,
+        "query_code": 0,
+        "requested_set_count": 1,
+        "source": "feature_tree"
+      },
+      "quilt_id": 70,
+      "face_ids": [
+        62,
+        64
+      ],
+      "radius": 3.0,
+      "feature_status": 0,
+      "feature_type": 913,
+      "face_count_before": 4,
+      "face_count_before_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "face_count": 5,
+      "face_count_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "area_before_mm2": 1200.0,
+      "area_before_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "area_mm2": 1187.1238898038469,
+      "area_status": {
+        "available": true,
+        "query_code": 0,
+        "reason": null,
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "closed_before": false,
+      "closed": false,
+      "closed_status": {
+        "available": false,
+        "query_code": -18,
+        "reason": "quilt_is_open",
+        "scale_to_mm_known": true,
+        "unit_name": "mm"
+      },
+      "quilt_closed_native": "open",
+      "has_solid": false,
+      "solid_surface_count": 0
+    },
+    "quilts_after_round": [
+      {
+        "area_mm2": 1187.1238898038469,
+        "area_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "bbox_mm": [
+          [
+            -2.0847564738719126e-48,
+            0.0,
+            -7.105427357601002e-15
+          ],
+          [
+            40.0,
+            20.0,
+            10.0
+          ]
+        ],
+        "bbox_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "closed": false,
+        "closed_status": {
+          "available": false,
+          "query_code": -18,
+          "reason": "quilt_is_open",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "face_count": 5,
+        "feature_ids": [
+          49
+        ],
+        "quilt_id": 70,
+        "surface_ids": [
+          68,
+          66,
+          64,
+          62,
+          79
+        ],
+        "surfaces_visit_code": 0
+      }
+    ],
+    "nonadjacent_failure": {
+      "status": "failed",
+      "message": "surface_round regeneration failed (feature_status=6, feature_id=114, quilt_id=70, faces=62/66); the two faces must share an edge of that quilt (2026-11-08 H08: a non-adjacent pair fails regeneration and rolls back)",
+      "operation": {
+        "op": "surface_round",
+        "index": 0,
+        "label": "round_opposite",
+        "succeeded": false,
+        "execution_status": "failed",
+        "effect_status": "rolled_back",
+        "feature_id": 114,
+        "volume_before_mm3": 0.0,
+        "volume_after_mm3": null,
+        "material_delta_mm3": null,
+        "material_measurement": {
+          "after_query_code": null,
+          "before_query_code": 0,
+          "status": "unknown"
+        },
+        "reference_application": {
+          "applied_set_count": 1,
+          "query_code": 0,
+          "requested_set_count": 1,
+          "source": "feature_tree"
+        },
+        "feature_errors": {
+          "api": "ProFeatureStatusGet",
+          "code": 6,
+          "failed_stage": "surface_round_regeneration",
+          "element_errors": {
+            "total": 0,
+            "truncated": false,
+            "sample": []
+          },
+          "section_errors": {
+            "available": false,
+            "total": null,
+            "truncated": false,
+            "sample": [],
+            "unavailable_reason": "no section solve ran before this failure"
+          }
+        },
+        "quilt_id": 70,
+        "face_ids": [
+          62,
+          66
+        ],
+        "radius": 3.0,
+        "feature_status": 6,
+        "feature_type": 913,
+        "face_count_before": 5,
+        "face_count_before_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "face_count": 5,
+        "face_count_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "area_before_mm2": 1187.1238898038469,
+        "area_before_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "area_mm2": 1187.1238898038469,
+        "area_status": {
+          "available": true,
+          "query_code": 0,
+          "reason": null,
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "closed_before": false,
+        "closed": false,
+        "closed_status": {
+          "available": false,
+          "query_code": -18,
+          "reason": "quilt_is_open",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "quilt_closed_native": "open",
+        "has_solid": false,
+        "solid_surface_count": 0
+      }
+    }
+  },
+  "abort": null,
+  "passed": true
+}

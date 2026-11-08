@@ -12,7 +12,7 @@
 4. BACKLOG 每个 ID 只有一行：优先级、当前状态、目标版本、简短剩余工作、工作卡链接。工作卡首页维护当前结论、剩余范围、依赖和最新证据，旧过程保留日期。无保留范围的完成项移至[完成档案](BACKLOG_COMPLETED.md)，部分完成不关整卡。
 5. 实现最小完整改动；格式整理、路径迁移与行为修改分开提交。能力变化同步工具描述、README 和能力边界。PR 使用仓库模板；开发分支提交本身不要求发布。
 
-逐版过程留在对应版本说明和发布记录，不在入口重复回填：[0.18.4 版本说明](RELEASE_NOTES_0.18.4.md)、[0.18.4 发布记录](validation/RELEASE-0.18.4.md)、[0.18.3 版本说明](RELEASE_NOTES_0.18.3.md)、[0.18.3 发布记录](validation/RELEASE-0.18.3.md)、[0.18.2 版本说明](RELEASE_NOTES_0.18.2.md)、[0.18.2 发布记录](validation/RELEASE-0.18.2.md)、[0.18.1 发布记录](validation/RELEASE-0.18.1.md)、[版本说明目录入口](../README.md)。源码版本只认 [version.py](../version.py)，启用工具只认 [包内 capabilities](../src/creo_mechdog/capabilities.py)；本地版本号、标签存在与正式 Release 交付不是同一事实，发布核对归原集成负责人。
+逐版过程留在对应版本说明和发布记录，不在入口重复回填：[0.19.0 版本说明](RELEASE_NOTES_0.19.0.md)、[0.19.0 发布记录](validation/RELEASE-0.19.0.md)、[0.18.4 版本说明](RELEASE_NOTES_0.18.4.md)、[0.18.4 发布记录](validation/RELEASE-0.18.4.md)、[0.18.3 版本说明](RELEASE_NOTES_0.18.3.md)、[0.18.3 发布记录](validation/RELEASE-0.18.3.md)、[0.18.2 版本说明](RELEASE_NOTES_0.18.2.md)、[0.18.2 发布记录](validation/RELEASE-0.18.2.md)、[0.18.1 发布记录](validation/RELEASE-0.18.1.md)、[版本说明目录入口](../README.md)。源码版本只认 [version.py](../version.py)，启用工具只认 [包内 capabilities](../src/creo_mechdog/capabilities.py)；本地版本号、标签存在与正式 Release 交付不是同一事实，发布核对归原集成负责人。
 
 ## 架构与环境
 

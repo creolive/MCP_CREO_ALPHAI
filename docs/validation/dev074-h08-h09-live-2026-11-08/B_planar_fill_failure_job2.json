@@ -1,0 +1,1074 @@
+{
+  "job_id": "cd7b435ffa9041e383f8816e6ed9f6e7",
+  "kind": "generic",
+  "model_id": "6328f14d361b49759bcb4b2e312de63b",
+  "status": "failed",
+  "readonly": false,
+  "created_at": "2026-11-08T02:22:46.615847+00:00",
+  "operations": [
+    {
+      "op": "surface_boundary_fill",
+      "label": "planar_fill_retry",
+      "boundary": [
+        {
+          "kind": "curve",
+          "id": 45
+        },
+        {
+          "kind": "curve",
+          "id": 46
+        },
+        {
+          "kind": "curve",
+          "id": 47
+        },
+        {
+          "kind": "curve",
+          "id": 48
+        }
+      ],
+      "closed": true
+    }
+  ],
+  "operations_view": "normalized",
+  "job_directory": "E:\\Projects\\MCP_CREO_MechDog-d074\\jobs\\cd7b435ffa9041e383f8816e6ed9f6e7",
+  "output_directory": "E:\\Projects\\MCP_CREO_MechDog-d074\\jobs\\cd7b435ffa9041e383f8816e6ed9f6e7\\output",
+  "message": "surface_boundary_fill boundary blend regeneration failed (feature_status=6, feature_id=49, quilt_count=0); the closed chain did not produce a regenerated surface",
+  "runner_identity": {
+    "pid": 21224,
+    "created": 134385781666454596,
+    "alive": true
+  },
+  "stage": "execute_surface_boundary_fill",
+  "started_at": "2026-11-08T02:22:47.057437+00:00",
+  "worker_started": true,
+  "result": {
+    "completion_stage": "result_delivery",
+    "connected": true,
+    "creo_release_numeric": 44,
+    "creo_release_query_code": 0,
+    "delivery_complete": true,
+    "disconnect_budget_seconds": 20.0,
+    "disconnect_code": 0,
+    "failed_model_cleanup": {
+      "absence_verified": false,
+      "attempted": false,
+      "erase_code": null,
+      "reason": "not_new_model_job",
+      "status": "skipped"
+    },
+    "failed_operation": {
+      "index": 0,
+      "operation": "surface_boundary_fill",
+      "stage": "execute_surface_boundary_fill",
+      "feature_label": "planar_fill_retry",
+      "sketch_name": null,
+      "toolkit_call": null,
+      "pro_error": null,
+      "pro_error_source": "unsupported",
+      "message": "surface_boundary_fill boundary blend regeneration failed (feature_status=6, feature_id=49, quilt_count=0); the closed chain did not produce a regenerated surface",
+      "message_truncated": false,
+      "input_matrix": null,
+      "matrix_source": null,
+      "determinant": null,
+      "orthogonality_residual": null,
+      "precision_class": null,
+      "precision_advice": null
+    },
+    "failed_operation_index": 0,
+    "failed_stage": "execute_surface_boundary_fill",
+    "failed_toolkit_call": null,
+    "inspection_source": "rollback_verified",
+    "loft_checks": {
+      "loaded": {},
+      "rollback": {}
+    },
+    "message": "surface_boundary_fill boundary blend regeneration failed (feature_status=6, feature_id=49, quilt_count=0); the closed chain did not produce a regenerated surface",
+    "native_pid": 21792,
+    "operations": [
+      {
+        "add_closed": true,
+        "boundary": [
+          {
+            "id": 45,
+            "kind": "curve"
+          },
+          {
+            "id": 46,
+            "kind": "curve"
+          },
+          {
+            "id": 47,
+            "kind": "curve"
+          },
+          {
+            "id": 48,
+            "kind": "curve"
+          }
+        ],
+        "boundary_closed": true,
+        "boundary_curve_ids": [
+          45,
+          46,
+          47,
+          48
+        ],
+        "boundary_edges": 4,
+        "boundary_tolerance_mm": 0.01,
+        "chain_gap_max_mm": 1.882820214045141e-31,
+        "closure": {
+          "available": false,
+          "query_code": 0,
+          "reason": "quilt_geometry_missing"
+        },
+        "create_code": 0,
+        "create_element_errors": {
+          "sample": [],
+          "total": 0
+        },
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "extract_code": 0,
+        "extracted_tree": {
+          "elements_read": 107,
+          "limit": 160,
+          "root": {
+            "array": false,
+            "children": [
+              {
+                "array": false,
+                "compound": false,
+                "id": 387,
+                "integer": 942,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 388,
+                "integer": 512,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1131,
+                "integer": 11,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": true,
+                        "children": [
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 2124,
+                                "value_code": 0,
+                                "value_type": 6
+                              }
+                            ],
+                            "compound": true,
+                            "id": 3058
+                          },
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 2124,
+                                "value_code": 0,
+                                "value_type": 6
+                              }
+                            ],
+                            "compound": true,
+                            "id": 3058
+                          },
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 2124,
+                                "value_code": 0,
+                                "value_type": 6
+                              }
+                            ],
+                            "compound": true,
+                            "id": 3058
+                          },
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 2124,
+                                "value_code": 0,
+                                "value_type": 6
+                              }
+                            ],
+                            "compound": true,
+                            "id": 3058
+                          }
+                        ],
+                        "compound": false,
+                        "id": 657
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 3175,
+                        "integer": 1,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 651
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": true,
+                        "compound": false,
+                        "id": 657
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 3175,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 652
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": true,
+                        "compound": false,
+                        "id": 657
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 3175,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 656
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 3170,
+                    "value_code": 0,
+                    "value_type": 6
+                  }
+                ],
+                "compound": true,
+                "id": 661
+              },
+              {
+                "array": true,
+                "children": [
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 461,
+                        "integer": 1,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 735,
+                                "integer": 1,
+                                "value_code": 0,
+                                "value_type": 1
+                              },
+                              {
+                                "array": true,
+                                "children": [
+                                  {
+                                    "array": false,
+                                    "children": [
+                                      {
+                                        "array": false,
+                                        "compound": false,
+                                        "id": 738,
+                                        "value_code": 0,
+                                        "value_type": 6
+                                      }
+                                    ],
+                                    "compound": true,
+                                    "id": 737
+                                  }
+                                ],
+                                "compound": false,
+                                "id": 736
+                              }
+                            ],
+                            "compound": true,
+                            "id": 734
+                          }
+                        ],
+                        "compound": true,
+                        "id": 834
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 471,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 468,
+                        "integer": -1,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "double": 0.0,
+                        "id": 474,
+                        "value_code": 0,
+                        "value_type": 2
+                      }
+                    ],
+                    "compound": true,
+                    "id": 460
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 461,
+                        "integer": 1,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 735,
+                                "integer": 1,
+                                "value_code": 0,
+                                "value_type": 1
+                              },
+                              {
+                                "array": true,
+                                "children": [
+                                  {
+                                    "array": false,
+                                    "children": [
+                                      {
+                                        "array": false,
+                                        "compound": false,
+                                        "id": 738,
+                                        "value_code": 0,
+                                        "value_type": 6
+                                      }
+                                    ],
+                                    "compound": true,
+                                    "id": 737
+                                  }
+                                ],
+                                "compound": false,
+                                "id": 736
+                              }
+                            ],
+                            "compound": true,
+                            "id": 734
+                          }
+                        ],
+                        "compound": true,
+                        "id": 834
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 471,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 468,
+                        "integer": -1,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "double": 0.0,
+                        "id": 474,
+                        "value_code": 0,
+                        "value_type": 2
+                      }
+                    ],
+                    "compound": true,
+                    "id": 460
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 461,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 735,
+                                "integer": 0,
+                                "value_code": 0,
+                                "value_type": 1
+                              },
+                              {
+                                "array": true,
+                                "children": [
+                                  {
+                                    "array": false,
+                                    "children": [
+                                      {
+                                        "array": false,
+                                        "compound": false,
+                                        "id": 738,
+                                        "value_code": 0,
+                                        "value_type": 6
+                                      }
+                                    ],
+                                    "compound": true,
+                                    "id": 737
+                                  }
+                                ],
+                                "compound": false,
+                                "id": 736
+                              }
+                            ],
+                            "compound": true,
+                            "id": 734
+                          }
+                        ],
+                        "compound": true,
+                        "id": 834
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 471,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 468,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "double": 0.0,
+                        "id": 474,
+                        "value_code": 0,
+                        "value_type": 2
+                      }
+                    ],
+                    "compound": true,
+                    "id": 460
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 461,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "children": [
+                              {
+                                "array": false,
+                                "compound": false,
+                                "id": 735,
+                                "integer": 0,
+                                "value_code": 0,
+                                "value_type": 1
+                              },
+                              {
+                                "array": true,
+                                "children": [
+                                  {
+                                    "array": false,
+                                    "children": [
+                                      {
+                                        "array": false,
+                                        "compound": false,
+                                        "id": 738,
+                                        "value_code": 0,
+                                        "value_type": 6
+                                      }
+                                    ],
+                                    "compound": true,
+                                    "id": 737
+                                  }
+                                ],
+                                "compound": false,
+                                "id": 736
+                              }
+                            ],
+                            "compound": true,
+                            "id": 734
+                          }
+                        ],
+                        "compound": true,
+                        "id": 834
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 471,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 468,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "double": 0.0,
+                        "id": 474,
+                        "value_code": 0,
+                        "value_type": 2
+                      }
+                    ],
+                    "compound": true,
+                    "id": 460
+                  }
+                ],
+                "compound": false,
+                "id": 459
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": true,
+                        "compound": false,
+                        "id": 3055
+                      }
+                    ],
+                    "compound": true,
+                    "id": 641
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": true,
+                        "compound": false,
+                        "id": 3055
+                      }
+                    ],
+                    "compound": true,
+                    "id": 645
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 646,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 662
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 512,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 513,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 473,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5817,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 469
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "double": 0.0,
+                    "id": 663,
+                    "value_code": 0,
+                    "value_type": 2
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 664,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 665,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 655
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1964,
+                "string": "PLANAR_FILL_RETRY",
+                "value_code": 0,
+                "value_type": 5
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1956,
+                "integer": 942,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "double": 0.0,
+                "id": 3332,
+                "value_code": 0,
+                "value_type": 2
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 499,
+                "integer": 0,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 3333,
+                "integer": 0,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 3262,
+                "integer": 0,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 3270,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "double": 0.0,
+                    "id": 3271,
+                    "value_code": 0,
+                    "value_type": 2
+                  }
+                ],
+                "compound": true,
+                "id": 3272
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 3264,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 3266,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "double": 0.0,
+                        "id": 3265,
+                        "value_code": 0,
+                        "value_type": 2
+                      }
+                    ],
+                    "compound": true,
+                    "id": 3267
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 3268,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 3269
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5102,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5103,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6711,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 5104
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5818,
+                "integer": 1,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6315,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6316,
+                    "value_code": 0,
+                    "value_type": 6
+                  }
+                ],
+                "compound": true,
+                "id": 6314
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 6876,
+                "integer": 0,
+                "value_code": 0,
+                "value_type": 1
+              }
+            ],
+            "compound": true,
+            "id": 386
+          },
+          "truncated": false
+        },
+        "face_count": null,
+        "face_count_status": {
+          "available": false,
+          "query_code": -4,
+          "reason": "quilt_surface_visit_failed",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "feature_errors": {
+          "api": "ProFeatureStatusGet",
+          "code": 6,
+          "failed_stage": "surface_boundary_fill_regeneration",
+          "element_errors": {
+            "total": 0,
+            "truncated": false,
+            "sample": []
+          },
+          "section_errors": {
+            "available": false,
+            "total": null,
+            "truncated": false,
+            "sample": [],
+            "unavailable_reason": "no section solve ran before this failure"
+          }
+        },
+        "feature_id": 49,
+        "feature_status": 6,
+        "feature_type": 942,
+        "has_solid": false,
+        "index": 0,
+        "label": "planar_fill_retry",
+        "op": "surface_boundary_fill",
+        "quilt_closed_native": "unknown",
+        "quilt_count": 0,
+        "quilt_id": null,
+        "quilt_ids": [],
+        "quilt_visit_code": -4,
+        "route": "probbl_boundary_blend_closed_chain",
+        "solid_surface_count": 0,
+        "succeeded": false,
+        "surface_area_mm2": null,
+        "surface_area_status": {
+          "available": false,
+          "query_code": 0,
+          "reason": "quilt_geometry_missing",
+          "scale_to_mm_known": true,
+          "unit_name": "mm"
+        },
+        "surface_group": null,
+        "surface_type": "datum_surface",
+        "tree_elements_read": 107
+      }
+    ],
+    "rollback_succeeded": true,
+    "saved_file_reloaded_and_verified": false,
+    "session_fingerprint": "5502691909443614261",
+    "success": false,
+    "toolkit_code": -1,
+    "verify_stages": [
+      {
+        "elapsed_ms": 79,
+        "name": "connect",
+        "since_start_ms": 79
+      },
+      {
+        "elapsed_ms": 4718,
+        "name": "connected",
+        "since_start_ms": 4797
+      }
+    ],
+    "inspection_ref": {
+      "file": "E:\\Projects\\MCP_CREO_MechDog-d074\\jobs\\cd7b435ffa9041e383f8816e6ed9f6e7\\inspection-verified-169f7b931a3dbd80.json",
+      "sha256": "169f7b931a3dbd80192bab831b71a72cfb4926bb80f8d3bfd5a5b0e5a0c36e11",
+      "bytes": 10602
+    },
+    "inspection_summary": {
+      "healthy": true,
+      "has_solid": false,
+      "units": "mm",
+      "units_query_code": 0,
+      "length_unit": {
+        "name": "mm",
+        "query_code": 0,
+        "scale_query_codes": {
+          "conversion": 0,
+          "mm_unit": 0,
+          "unit": 0
+        },
+        "scale_to_mm": 1.0,
+        "scale_to_mm_known": true
+      },
+      "center_of_gravity": null,
+      "model_type": "part",
+      "volume_mm3": null,
+      "volume_query_code": null,
+      "inspection_source": "rollback_verified",
+      "inspection_available": true,
+      "counts": {
+        "features": 6,
+        "surfaces": 0,
+        "edges": 0,
+        "quilts": 0,
+        "bodies": 1,
+        "components": null
+      },
+      "body_counts": {
+        "objects": 1,
+        "records": 1,
+        "active": 0,
+        "with_material": 0,
+        "without_material": 1,
+        "counts_meaning": {
+          "bodies": "body_objects",
+          "with_material": "active_bodies_with_surfaces"
+        }
+      }
+    },
+    "aliases_ref": {
+      "file": "E:\\Projects\\MCP_CREO_MechDog-d074\\jobs\\cd7b435ffa9041e383f8816e6ed9f6e7\\details\\detail-aliases-3ce480b26add3bb4.json",
+      "sha256": "3ce480b26add3bb4e058e31fbcb1d7ad98a914e4f088cb3aa74e152bbe4a5a7a",
+      "bytes": 9922
+    },
+    "terminal_effect": {
+      "managed_model": {
+        "effect": "rolled_back",
+        "status": "confirmed",
+        "reason": "checkpoint_restored",
+        "scope": "managed_model"
+      },
+      "component_bindings": {
+        "effect": "rolled_back",
+        "status": "confirmed",
+        "reason": "checkpoint_restored",
+        "scope": "component_bindings"
+      },
+      "external_outputs": {
+        "effect": "no_effect",
+        "status": "confirmed",
+        "reason": "no_external_outputs_requested",
+        "scope": "external_outputs"
+      }
+    }
+  },
+  "finished_at": "2026-11-08T02:22:54.490116+00:00"
+}

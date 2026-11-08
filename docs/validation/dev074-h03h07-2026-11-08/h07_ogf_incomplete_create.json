@@ -1,0 +1,966 @@
+{
+  "variants": {
+    "V3_minimal": {
+      "build": {
+        "job_id": "22b0d5c94cc44ceeb16d2524470fb803",
+        "status": "succeeded",
+        "model_id": "208627dff3b1426f9a9f6d59cd1e79f5",
+        "revision": 1,
+        "message": "General feature plan completed"
+      },
+      "source_quilts": [
+        {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "surface_ids": [
+            55
+          ]
+        }
+      ],
+      "probe": {
+        "job_id": "947349a254564a8898305f19426f216a",
+        "status": "failed",
+        "revision": null,
+        "message": "Regeneration produced a failed, suppressed or incomplete feature"
+      },
+      "operation": {
+        "create_code": 0,
+        "create_element_errors": {
+          "sample": [],
+          "total": 0
+        },
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "extract_code": 0,
+        "extracted_elements_read": 36,
+        "extracted_tree": {
+          "elements_read": 36,
+          "limit": 160,
+          "root": {
+            "array": false,
+            "children": [
+              {
+                "array": false,
+                "compound": false,
+                "id": 387,
+                "integer": 1263,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1964,
+                "string": "V3_MINIMAL",
+                "value_code": 0,
+                "value_type": 5
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 2213,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "compound": false,
+                "double": 5.0,
+                "id": 5147,
+                "value_code": 0,
+                "value_type": 2
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5148,
+                "integer": 1,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5793,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5473,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5474,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5475,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5476,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5612,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5690,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5613,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 2124,
+                        "value_code": 0,
+                        "value_type": 6
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5516
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5152,
+                    "value_code": -45,
+                    "value_type": 0
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5536,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5743,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5150
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5151
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5149
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2213,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5487
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 5535,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5488
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 5489,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5486
+                  }
+                ],
+                "compound": true,
+                "id": 5478
+              },
+              {
+                "array": true,
+                "compound": false,
+                "id": 5726
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5404,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6952,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6953,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 6951
+              }
+            ],
+            "compound": true,
+            "id": 386
+          },
+          "truncated": false
+        },
+        "feature_id": 67,
+        "feature_status": 0,
+        "incomplete": true,
+        "index": 0,
+        "label": "v3_minimal",
+        "model_quilt_count": 1,
+        "op": "surface_probe",
+        "quilt_ids": [],
+        "quilt_visit_code": -4,
+        "succeeded": false,
+        "surface_ids": [],
+        "surface_visit_code": -4
+      }
+    },
+    "V4_no_dir": {
+      "build": {
+        "job_id": "22cfc55b3b9a415ab9ac157ea907cdc3",
+        "status": "succeeded",
+        "model_id": "ed645b7ce9374b4cb1e3583d9753a88a",
+        "revision": 1,
+        "message": "General feature plan completed"
+      },
+      "source_quilts": [
+        {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "surface_ids": [
+            55
+          ]
+        }
+      ],
+      "probe": {
+        "job_id": "05ea81fbb75f48c2b1b287d074915324",
+        "status": "failed",
+        "revision": null,
+        "message": "Regeneration produced a failed, suppressed or incomplete feature"
+      },
+      "operation": {
+        "create_code": 0,
+        "create_element_errors": {
+          "sample": [],
+          "total": 0
+        },
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "extract_code": 0,
+        "extracted_elements_read": 36,
+        "extracted_tree": {
+          "elements_read": 36,
+          "limit": 160,
+          "root": {
+            "array": false,
+            "children": [
+              {
+                "array": false,
+                "compound": false,
+                "id": 387,
+                "integer": 1263,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1964,
+                "string": "V4_NO_DIR",
+                "value_code": 0,
+                "value_type": 5
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 2213,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "compound": false,
+                "double": 5.0,
+                "id": 5147,
+                "value_code": 0,
+                "value_type": 2
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5148,
+                "integer": 1,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5793,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5473,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5474,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5475,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5476,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5612,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5690,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5613,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 2124,
+                        "value_code": 0,
+                        "value_type": 6
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5516
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5152,
+                    "value_code": -45,
+                    "value_type": 0
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5536,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5743,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5150
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5151
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5149
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2213,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5487
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 5535,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5488
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 5489,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5486
+                  }
+                ],
+                "compound": true,
+                "id": 5478
+              },
+              {
+                "array": true,
+                "compound": false,
+                "id": 5726
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5404,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6952,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6953,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 6951
+              }
+            ],
+            "compound": true,
+            "id": 386
+          },
+          "truncated": false
+        },
+        "feature_id": 67,
+        "feature_status": 0,
+        "incomplete": true,
+        "index": 0,
+        "label": "v4_no_dir",
+        "model_quilt_count": 1,
+        "op": "surface_probe",
+        "quilt_ids": [],
+        "quilt_visit_code": -4,
+        "succeeded": false,
+        "surface_ids": [],
+        "surface_visit_code": -4
+      }
+    },
+    "V5_full": {
+      "build": {
+        "job_id": "4e2da0fdd4a2495cb264115cc869d768",
+        "status": "succeeded",
+        "model_id": "b429e1e53ffe444999af6834d723a12b",
+        "revision": 1,
+        "message": "General feature plan completed"
+      },
+      "source_quilts": [
+        {
+          "quilt_id": 61,
+          "area_mm2": 800.0,
+          "surface_ids": [
+            55
+          ]
+        }
+      ],
+      "probe": {
+        "job_id": "a649c039571a485d8f76799ea2d06f8f",
+        "status": "failed",
+        "revision": null,
+        "message": "Regeneration produced a failed, suppressed or incomplete feature"
+      },
+      "operation": {
+        "create_code": 0,
+        "create_element_errors": {
+          "sample": [],
+          "total": 0
+        },
+        "effect_status": "rolled_back",
+        "execution_status": "failed",
+        "extract_code": 0,
+        "extracted_elements_read": 36,
+        "extracted_tree": {
+          "elements_read": 36,
+          "limit": 160,
+          "root": {
+            "array": false,
+            "children": [
+              {
+                "array": false,
+                "compound": false,
+                "id": 387,
+                "integer": 1263,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 1964,
+                "string": "V5_FULL",
+                "value_code": 0,
+                "value_type": 5
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 2213,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "compound": false,
+                "double": 5.0,
+                "id": 5147,
+                "value_code": 0,
+                "value_type": 2
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5148,
+                "integer": 1,
+                "value_code": 0,
+                "value_type": 1
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5793,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5473,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5474,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5475,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5476,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5612,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5690,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5613,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 2124,
+                        "value_code": 0,
+                        "value_type": 6
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5516
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5152,
+                    "value_code": -45,
+                    "value_type": 0
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5536,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 5743,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5150
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2124,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5151
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5149
+                  },
+                  {
+                    "array": false,
+                    "children": [
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 2213,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5487
+                      },
+                      {
+                        "array": false,
+                        "children": [
+                          {
+                            "array": false,
+                            "compound": false,
+                            "id": 5535,
+                            "value_code": 0,
+                            "value_type": 6
+                          }
+                        ],
+                        "compound": true,
+                        "id": 5488
+                      },
+                      {
+                        "array": false,
+                        "compound": false,
+                        "id": 5489,
+                        "integer": 0,
+                        "value_code": 0,
+                        "value_type": 1
+                      }
+                    ],
+                    "compound": true,
+                    "id": 5486
+                  }
+                ],
+                "compound": true,
+                "id": 5478
+              },
+              {
+                "array": true,
+                "compound": false,
+                "id": 5726
+              },
+              {
+                "array": false,
+                "compound": false,
+                "id": 5404,
+                "value_code": 0,
+                "value_type": 6
+              },
+              {
+                "array": false,
+                "children": [
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6952,
+                    "integer": 1,
+                    "value_code": 0,
+                    "value_type": 1
+                  },
+                  {
+                    "array": false,
+                    "compound": false,
+                    "id": 6953,
+                    "integer": 0,
+                    "value_code": 0,
+                    "value_type": 1
+                  }
+                ],
+                "compound": true,
+                "id": 6951
+              }
+            ],
+            "compound": true,
+            "id": 386
+          },
+          "truncated": false
+        },
+        "feature_id": 67,
+        "feature_status": 0,
+        "incomplete": true,
+        "index": 0,
+        "label": "v5_full",
+        "model_quilt_count": 1,
+        "op": "surface_probe",
+        "quilt_ids": [],
+        "quilt_visit_code": -4,
+        "succeeded": false,
+        "surface_ids": [],
+        "surface_visit_code": -4
+      }
+    }
+  },
+  "abort": null,
+  "session": {
+    "state": "ready",
+    "connected": true
+  }
+}

@@ -62,7 +62,10 @@ REGISTERED_OPERATIONS = (
     "solidify",
     "surface_trim",
     "surface_loft",
+    "surface_boundary_fill",
+    "surface_round",
     "surface_group_measure",
+    "surface_curvature",
     "quilt_merge",
     "project_curve",
     "boolean_bodies",
@@ -100,16 +103,16 @@ SURFACE_TRIM_OFFSET_LIMIT = (
 )
 
 UNAVAILABLE_OPERATIONS: dict[str, str] = {
-    "quilt_merge": (
-        "the surface merge is not published: on this machine (Creo 12.4, incomplete-feature "
-        "extract/redefine route) the documented ProMerge.h array "
-        "tree creates an ACTIVE feature that owns four PRO_SURFACE items and no PRO_QUILT item "
-        "whatever the merge type (JOIN or INTERSECT) and geometry (touching or truly "
-        "intersecting), the quilt visit answers -4 and the model keeps zero quilts; the legacy "
-        "flat tree is rejected with -1, an explicit quilt side and a forced full regenerate "
-        "change nothing, so the joined area and closure cannot be measured or handed to thicken. "
-        "External Creo 10 reports describe a successful direct-create array tree; that route "
-        "has not been independently accepted here and does not remove this gate"
+    # quilt_merge is published again in 0.19.0 (FEAT-039/H03 resolved the joined
+    # target quilt); the old global gate is deliberately not carried forward.
+    "surface_boundary_fill": (
+        "the closed non-planar boundary fill is not published: on this machine the documented "
+        "Probbl.h closed-chain tree creates and extracts (ProFeatureWithoptionsCreate=0, "
+        "ProFeatureElemtreeExtract=0) but regeneration fails with feature_status=6 "
+        "(PRO_FEAT_INCOMPLETE) and produces no quilt (quilt visit -4, quilt_count=0, empty "
+        "element-error list); a planar 4-curve rectangle loop whose measured endpoint gap is "
+        "1.9e-31 mm reproduces it twice and rolls back, so the closed single-direction chain "
+        "does not yield a measurable filled surface"
     ),
 }
 
@@ -557,7 +560,10 @@ def families() -> dict:
                 "creo_surface_trim",
                 "creo_project_curve",
                 "creo_surface_offset",
+                "creo_quilt_merge",
                 "creo_measure_surface_group",
+                "creo_surface_round",
+                "creo_measure_surface_curvature",
             ],
             "scope": (
                 "boundary-blend a quilt from exactly two single-curve sketch sections "
@@ -565,17 +571,37 @@ def families() -> dict:
                 "with another quilt, a datum-plane label or a curve geometry id; "
                 "project one curve geometry id onto one quilt along an explicit "
                 "direction reference; offset one quilt along its surface normal; "
+                "join two touching or intersecting quilts into the target quilt with a "
+                "measured result area and closure; "
                 "measure a group of quilts read-only (open boundary edges, seam gap "
-                "against a tolerance, overlapping face area)"
+                "against a tolerance, overlapping face area); round the edge shared by "
+                "two member faces of one quilt with a constant radius; analyse the "
+                "principal curvature of member faces and the normal angle across a "
+                "shared edge numerically. There is no zebra-stripe or curvature-comb "
+                "visualization API; the numeric analysis is the equivalent deliverable"
             ),
             "native_test": (
                 "surface_trim: 800 mm2 fill cut to 600 mm2 with a measured retained side; "
+                "quilt_merge: 2026-11-08 live 2x400 mm2 adjacent fills joined into the "
+                "target quilt at 800.0 mm2, open, saved and reloaded, then thickened 2 mm; "
                 "project_curve: 40.000 mm and 25.133 mm measured projections, saved and "
                 "reloaded; surface_offset: 40x20 fill offset 5 mm on both sides, "
-                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance"
+                "3999.9999999999995 mm3 and 4.999999999999999 mm measured distance; "
+                "surface_round: 2026-11-08 live quilt 1200 mm2 R3 on adjacent faces "
+                "-> 5 faces / 1187.1238898038469 mm2, open, no solid, saved and reloaded, "
+                "with a non-adjacent pair failing regeneration and rolling back; "
+                "surface_curvature: 2026-11-08 live planar 0.0 1/mm, R8 sphere "
+                "0.125 1/mm / 8.0 mm, 90-degree G1 between adjacent planar walls, "
+                "revision unchanged"
             ),
             "limits": (
-                "quilt merge stays gated (UNAVAILABLE_OPERATIONS); surface_loft is two "
+                "quilt merge joins exactly two touching or intersecting quilts and reports "
+                "the target quilt it grew in place (result_quilt_source="
+                "retrimmed_target_quilt); the consumed tool quilt is no longer measurable, "
+                "intersect, three or more participants, chained merges and closed shells are "
+                "not published; the closed non-planar boundary fill stays gated "
+                "(UNAVAILABLE_OPERATIONS; the fill's closed single-direction chain "
+                "regenerates to no quilt on hardware); surface_loft is two "
                 "single-curve sections with straight interpolation only (no smooth, closed, "
                 "continuity, multi-section or solid output), conditional on Probbl.h in the "
                 "worker build SDK; intersection with a trim tool does not by itself prove "
@@ -591,7 +617,15 @@ def families() -> dict:
                 "boundary is a shell; its overlap area is a tessellation estimate, gaps "
                 "wider than gap_search_mm are not quantified, and the join judgement is "
                 "sampled boundary geometry rather than a kernel boolean; overlap sampling "
-                "is bounded and can be unavailable for larger or finely tessellated groups"
+                "is bounded and can be unavailable for larger or finely tessellated groups; "
+                "surface_round is one constant radius on two member faces of one quilt "
+                "(no variable radius, edge chain, transitions or solid target) and the "
+                "kernel decides whether the two faces share an edge; "
+                "creo_measure_surface_curvature is numeric only (principal curvature, "
+                "radius and direction per UV sample, plus the normal angle across a "
+                "shared edge); Creo Toolkit has no zebra-stripe or curvature-comb "
+                "visualization API, so no image is produced and samples outside the trimmed "
+                "face are counted rather than measured"
             ),
         },
         "boolean_bodies": {
@@ -647,6 +681,62 @@ def families() -> dict:
                 "or solid output; section order is the loft direction; measured closure comes "
                 "from ProQuiltVolumeEval, so an open quilt is reported as open instead of "
                 "being assumed"
+            ),
+        },
+        "surface_round": {
+            "enabled": True,
+            "tool": "creo_surface_round",
+            "scope": (
+                "one constant round on the edge shared by two member faces of one quilt "
+                "(PRO_FEAT_ROUND with PRO_ROUND_REF_SURF_SURF); the result stays on the "
+                "same quilt and reports its measured face count, area and closure"
+            ),
+            "native_test": (
+                "2026-11-08 Creo 12.4.0.0 probe through the generic round tree: a 4-face "
+                "open quilt of 1200 mm2, R3 on adjacent face pairs (68,66) and (66,64), "
+                "became 5 faces / 1187.1238898038469 mm2 (analytic 1200-60+pi/2*3*10) with "
+                "saved_file_reloaded_and_verified=true; a non-adjacent pair failed "
+                "regeneration and rolled back to 4 faces / 1200 mm2"
+            ),
+            "limits": (
+                "exactly two member faces of one quilt with one shared edge, one constant "
+                "radius, one reference set; the kernel decides adjacency (H08 measured the "
+                "non-adjacent pair failing regeneration and rolling back); no variable "
+                "radius, full/chordal/through-curve radius, edge chain, transitions, "
+                "multi-set or solid target; edge-chain needs a quilt edge id channel that "
+                "creo_inspect_model does not publish (its edges enumerate solid faces only); "
+                "the quilt result is open by nature, so no solid volume is expected"
+            ),
+        },
+        "surface_curvature": {
+            "enabled": True,
+            "tool": "creo_measure_surface_curvature",
+            "scope": (
+                "read-only numerical curvature analysis of one or two member faces of one "
+                "quilt: principal curvatures (1/mm), curvature radii (mm), principal "
+                "directions, the aggregate max absolute curvature and min curvature radius, "
+                "and, for two faces sharing an edge, the normal angle across that edge"
+            ),
+            "native_test": (
+                "2026-11-08 Creo 12.4.0.0 live: a planar 40x20 surface_loft quilt measures "
+                "0.0 1/mm max absolute curvature with 144/144 samples inside the face and "
+                "min_curvature_radius_mm=null (reason zero_curvature); an R8 revolve sphere "
+                "measures 0.12500000000000003 1/mm and 7.999999999999998 mm; two adjacent "
+                "planar walls report g1_max_angle_deg=90.0 over 1 shared edge and 17 samples "
+                "with within_g1=false; revision stays unchanged (read-only)"
+            ),
+            "limits": (
+                "no zebra-stripe or curvature-comb image: Toolkit has no such API, and the "
+                "numeric analysis is the declared equivalent; every sample is a UV cell "
+                "centre checked with ProSurfaceUvpntVerify, so a trimmed face reports only "
+                "samples inside its contour (outside samples are counted, not measured); a "
+                "failed curvature query is a count plus a reason, never zero curvature; an "
+                "unknown unit scale keeps 1/mm and mm values null; the G1 angle is the angle "
+                "between the two kernel normals as returned (an opposite-wound neighbour "
+                "would read near 180 degrees and must be confirmed live); the 0.5 degree "
+                "threshold only sets within_g1 and never replaces the measured angle; only "
+                "the dedicated read-only tool keeps the revision unchanged - the generic "
+                "execute_plan entry is a write job and saves the model"
             ),
         },
         "sweep": {

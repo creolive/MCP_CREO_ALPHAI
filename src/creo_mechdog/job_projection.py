@@ -144,6 +144,71 @@ SURFACE_LOFT_KEYS = (
     "has_solid",
 )
 
+#: Keys produced by native/surface_boundary_fill.cpp (DEV-074/H09): the echoed
+#: ordered chain, the sameness/order evidence, the created quilt id, the
+#: measured face count/area/closure and the boundary edge count. The
+#: ``surface_group`` block carries the group measurement used for
+#: ``boundary_edges``; every measurement keeps its own status.
+SURFACE_BOUNDARY_FILL_KEYS = (
+    "boundary",
+    "boundary_curve_ids",
+    "boundary_edges",
+    "boundary_closed",
+    "boundary_tolerance_mm",
+    "chain_gap_max_mm",
+    "route",
+    "add_closed",
+    "create_code",
+    "create_element_errors",
+    "extract_code",
+    "tree_elements_read",
+    "feature_id",
+    "feature_type",
+    "feature_status",
+    "surface_type",
+    "quilt_visit_code",
+    "quilt_count",
+    "quilt_ids",
+    "quilt_id",
+    "quilt_init_code",
+    "surface_area_mm2",
+    "surface_area_status",
+    "quilt_closed_native",
+    "closure",
+    "face_count",
+    "face_count_status",
+    "surface_group",
+    "has_solid",
+    "solid_surface_count",
+)
+
+#: Keys produced by native/surface_round.cpp (DEV-074/H08): the result quilt id,
+#: the measured face counts/areas before and after, closure, radius and the
+#: solid-face evidence. Every measurement keeps its own status, so a compact
+#: poll can tell a measured value from an unmeasured one.
+SURFACE_ROUND_KEYS = (
+    "quilt_id",
+    "face_ids",
+    "radius",
+    "feature_id",
+    "feature_status",
+    "feature_type",
+    "face_count_before",
+    "face_count_before_status",
+    "face_count",
+    "face_count_status",
+    "area_before_mm2",
+    "area_before_status",
+    "area_mm2",
+    "area_status",
+    "closed_before",
+    "closed",
+    "closed_status",
+    "quilt_closed_native",
+    "has_solid",
+    "solid_surface_count",
+)
+
 #: Keys produced by native/surface_group.cpp (FEAT-039/H04). The whole group
 #: block is kept together: every value carries its own status, so a compact
 #: poll can still tell a measured zero from an unmeasured seam.
@@ -153,6 +218,25 @@ SURFACE_GROUP_KEYS = (
     "tolerance_mm",
     "gap_search_mm",
     "group",
+)
+
+#: Keys produced by native/surface_curvature.cpp (DEV-074/H08). The face blocks,
+#: the aggregate summary and the G1 block each keep their own status, so a
+#: compact poll can tell a measured zero curvature from an unmeasured sample.
+SURFACE_CURVATURE_KEYS = (
+    "unit_name",
+    "length_scale_to_mm",
+    "curvature_unit",
+    "radius_unit",
+    "quilt_id",
+    "samples_per_direction",
+    "faces",
+    "summary",
+    "g1_max_angle_deg",
+    "g1_status",
+    "g1_threshold_deg",
+    "within_g1",
+    "g1_points",
 )
 
 #: Keys produced by native/surfaces.cpp::generic_surface_solid. ``closure`` is
@@ -192,7 +276,10 @@ _OPERATION_CRITERIA: dict[str, tuple[str, ...]] = {
     "component_placement": ASSEMBLY_POSE_KEYS,
     "surface_trim": SURFACE_TRIM_KEYS,
     "surface_loft": SURFACE_LOFT_KEYS,
+    "surface_boundary_fill": SURFACE_BOUNDARY_FILL_KEYS,
+    "surface_round": SURFACE_ROUND_KEYS,
     "surface_group_measure": SURFACE_GROUP_KEYS,
+    "surface_curvature": SURFACE_CURVATURE_KEYS,
     "surface_offset": SURFACE_OFFSET_KEYS,
     "project_curve": PROJECT_CURVE_KEYS,
     "solidify": SOLIDIFY_KEYS,

@@ -2332,6 +2332,38 @@ async def creo_measure_surface_group(
 
 
 @mcp.tool(annotations=READ)
+async def creo_measure_surface_curvature(
+    model_id: str,
+    target: dict[str, Any],
+    faces: Annotated[list[Any], Field(min_length=1, max_length=2)],
+    samples_per_direction: int = 12,
+) -> dict[str, Any]:
+    """Analyse principal curvature and G1 numerically (read-only).
+
+    Creo Toolkit has no zebra-stripe or curvature-comb visualization API, so
+    this tool returns the equivalent numbers instead of an image. target is one
+    quilt ({kind:'quilt',id:N} or {kind:'quilt_feature',label:...}). faces names
+    one or two member faces, each as {kind:'surface',id:N} or a zero-based member
+    index; two faces add the shared-edge G1 analysis. samples_per_direction is
+    the UV raster density per direction (5..50, default 12).
+
+    For every sample inside the trimmed face the receipt reports u/v, the
+    maximum and minimum principal curvature (1/mm), their radii (mm) and
+    principal directions. summary carries max_abs_curvature_per_mm and
+    min_curvature_radius_mm with sample/failure counts. With two faces,
+    g1_max_angle_deg is the maximum normal angle across the shared edge and
+    g1_points carries the per-sample angles; g1_threshold_deg is 0.5 and
+    within_g1 is only a marker, never a replacement for the measured angle.
+    Each value has its own status: a failed query is a null value with a reason,
+    never 0, and an unknown unit scale keeps 1/mm and mm values null. The query
+    changes nothing and does not advance the revision.
+    """
+    return await invoke(
+        general.measure_surface_curvature, model_id, target, faces, samples_per_direction
+    )
+
+
+@mcp.tool(annotations=READ)
 async def creo_inspect_model(
     model_id: str,
     detail: Literal["compact", "full"] = "compact",
@@ -2806,6 +2838,82 @@ async def creo_surface_loft(
     return await invoke(
         general.submit,
         [dict(op="surface_loft", label=label, sections=sections, interpolation=interpolation)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_surface_boundary_fill(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    boundary: Annotated[list[dict[str, Any]], Field(min_length=3, max_length=200)],
+) -> dict[str, Any]:
+    """Fill one closed non-planar boundary given as an ordered chain of curves.
+
+    boundary is at least three distinct curve geometry ids in loop order, each
+    {kind:'curve',id:N} from creo_inspect_model. The native executor samples
+    each curve's endpoints and refuses an open boundary, a chain whose curves do
+    not meet in the submitted order, a repeated curve and an unknown length
+    unit, with a message naming the alternative (surface_loft for two curves,
+    project_curve to build a missing edge). The boundary blend is closed across
+    its single direction by the kernel. The result is one open datum-surface
+    quilt; the receipt reports quilt_id, face_count, surface_area_mm2,
+    quilt_closed_native, boundary_edges and has_solid with their statuses.
+    Holes, second loops and solid output are refused before a job exists, and
+    the planar sketch-based creo_surface_fill is unchanged. On 2026-11-08 the
+    closed single-direction chain created and extracted but regenerated to no
+    quilt on Creo 12.4.0.0, so the operation stays in UNAVAILABLE_OPERATIONS and
+    this tool is removed from the MCP surface.
+    """
+    return await invoke(
+        general.submit,
+        [dict(op="surface_boundary_fill", label=label, boundary=boundary)],
+        model_id,
+        None,
+        expected_revision,
+    )
+
+
+@mcp.tool(annotations=CREATE)
+async def creo_surface_round(
+    model_id: str,
+    expected_revision: int,
+    label: str,
+    target: dict[str, Any],
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=1)],
+    radius: float,
+) -> dict[str, Any]:
+    """Round the edge shared by two member faces of one quilt with a constant radius.
+
+    target is one quilt ({kind:'quilt',id:N} or {kind:'quilt_feature',label:...}).
+    references is exactly one set: [{'surfaces': [{kind:'surface',id:N},
+    {kind:'surface',id:M}]}], matching the face-pair form creo_round already takes.
+    Both faces must be distinct member faces of that quilt; a solid face or another
+    quilt's face is refused natively before the feature is created. radius is one
+    constant value in mm and must be finite and greater than zero. Variable radius,
+    full/chordal/through-curve radius, edge chains, transitions and multiple sets are
+    refused before a job exists. Adjacency (one shared edge) is decided by the kernel:
+    the 2026-11-08 H08 probe measured a non-adjacent pair failing regeneration and
+    rolling back to the saved checkpoint. The receipt reports quilt_id, the measured
+    face counts and areas before/after with their statuses, closure, radius, the
+    solid-face evidence and reference_application; the result stays on the same quilt
+    and is not a solid. This route was proved on Creo 12.4.0.0; other versions are
+    unverified.
+    """
+    return await invoke(
+        general.submit,
+        [
+            dict(
+                op="surface_round",
+                label=label,
+                target=target,
+                references=references,
+                radius=radius,
+            )
+        ],
         model_id,
         None,
         expected_revision,

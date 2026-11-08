@@ -282,3 +282,255 @@ class ProjectCurveOp(StrictModel):
         if problem:
             raise ValueError(f"project_curve direction_ref {problem}")
         return self
+
+
+BOUNDARY_FILL_MIN_CURVES = 3
+BOUNDARY_FILL_MAX_CURVES = 200
+
+
+def _boundary_fill_curve_problem(reference: Any, index: int) -> str | None:
+    """DEV-074/H09: describe why one boundary-fill curve reference is unusable.
+
+    A boundary curve is one ``PRO_CURVE`` geometry id (a sketch curve, a
+    projected curve or a composite curve). Quilts, faces, edges, bodies and
+    feature labels are refused: the native route walks curve endpoints, and a
+    label would name a whole sketch rather than one edge of the loop.
+    """
+    if not isinstance(reference, dict):
+        return (
+            f"boundary[{index}] must be a single {{kind:'curve',id:N}} object in chain order; "
+            "nested loops, holes and multi-loop lists are not supported"
+        )
+    kind = reference.get("kind")
+    if kind != "curve":
+        return (
+            f"boundary[{index}] must be {{kind:'curve',id:N}}; a quilt, face, edge, body or "
+            "feature label is not a boundary curve"
+        )
+    if set(reference) != {"kind", "id"}:
+        return (
+            f"boundary[{index}] accepts only kind and id; a curve id is the geometry id from "
+            "creo_inspect_model, not a feature label or a loop marker"
+        )
+    value = reference.get("id")
+    if type(value) is not int or not 0 <= value <= 2147483647:
+        return f"boundary[{index}].id must be a nonnegative 32-bit integer"
+    return None
+
+
+class SurfaceBoundaryFillOp(StrictModel):
+    """Closed non-planar boundary fill through the boundary-blend kernel route.
+
+    DEV-074/H09: one closed boundary loop, given as an ordered list of curve
+    geometry ids. The native side writes the same ``Probbl.h`` skeleton
+    ``surface_loft`` uses, then closes the blend across its single direction
+    (``PRO_E_BBL_ADD_CLOSED``). Closure and order are geometric: the native
+    side samples each curve's endpoints and refuses a chain whose consecutive
+    curves do not meet, so this model only locks the request shape.
+
+    The route is registered but gated: the 2026-11-08 live probe created and
+    extracted this tree yet regeneration failed with feature_status=6 and no
+    quilt, so ``require_available`` refuses it before a job exists.
+
+    ``boundary`` is deliberately one flat list: a hole, a second loop or a
+    nested list has no field here and is refused before a job exists. At least
+    three curves are required because the documented closed-blend flag is only
+    workable with three or more curves; a two-curve closed loop is a
+    two-section surface and belongs to ``surface_loft``.
+    """
+
+    op: Literal["surface_boundary_fill"]
+    label: Label
+    boundary: Annotated[list[dict[str, Any]], Field(max_length=BOUNDARY_FILL_MAX_CURVES)]
+    closed: bool = True
+
+    @model_validator(mode="after")
+    def one_ordered_closed_curve_chain(self):
+        if not self.closed:
+            raise ValueError(
+                "surface_boundary_fill only builds a closed boundary; an open chain cannot be "
+                "filled - use surface_loft for a surface between two sections"
+            )
+        if len(self.boundary) < BOUNDARY_FILL_MIN_CURVES:
+            raise ValueError(
+                "surface_boundary_fill needs at least 3 ordered boundary curves (the closed "
+                "blend flag is only workable from 3 curves); split the loop into 3 or more "
+                "curves, or use surface_loft for a two-curve boundary"
+            )
+        ids: list[int] = []
+        for index, reference in enumerate(self.boundary):
+            problem = _boundary_fill_curve_problem(reference, index)
+            if problem:
+                raise ValueError(f"surface_boundary_fill {problem}")
+            ids.append(reference["id"])
+        duplicates = sorted({value for value in ids if ids.count(value) > 1})
+        if duplicates:
+            raise ValueError(
+                "surface_boundary_fill boundary curves must be distinct; repeated curve id(s): "
+                + ", ".join(str(value) for value in duplicates)
+                + ". Remove the duplicate edges from the chain"
+            )
+        return self
+
+
+class SurfaceRoundOp(StrictModel):
+    """Constant round on the edge shared by two member faces of one quilt.
+
+    DEV-074/H08 measured this route on hardware: ``PRO_FEAT_ROUND`` with
+    ``PRO_ROUND_REF_SURF_SURF`` keeps the result on the same quilt. The
+    reference set uses the same shape the generic round already takes
+    (``[{"surfaces": [{kind:"surface",id:N}, {kind:"surface",id:M}]}]``), so
+    one operation has exactly one set and exactly two faces. An edge chain, a
+    second set, variable radii, full/chordal/through-curve radii and custom
+    transitions have no field here and are refused before a job exists.
+
+    The pair must be two distinct member faces of the target quilt. Face
+    membership is checked natively against the quilt's own face visit, which
+    also refuses a solid face or another quilt's face. Adjacency (sharing one
+    edge) is deliberately left to the kernel: the 2026-11-08 hardware probe
+    showed a non-adjacent pair failing regeneration with a full rollback, so a
+    guessed topology test here would only second-guess the kernel.
+    """
+
+    op: Literal["surface_round"]
+    label: Label
+    target: dict[str, Any]
+    references: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=1)]
+    radius: Positive
+
+    @field_validator("radius", mode="before")
+    @classmethod
+    def radius_is_a_number(cls, value: Any) -> Any:
+        # Pydantic would accept True as 1.0 and "3" as 3.0; a radius is a real
+        # number, not a boolean or a string.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("surface_round radius must be a finite value greater than zero")
+        return value
+
+    @model_validator(mode="after")
+    def one_constant_surface_pair(self):
+        problem = quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_round target {problem}")
+        if len(self.references) != 1:
+            raise ValueError(
+                "surface_round accepts exactly one {'surfaces':[...]} reference set; "
+                "multiple sets are not supported"
+            )
+        reference = self.references[0]
+        if not isinstance(reference, dict):
+            raise ValueError("surface_round references[0] must be a {'surfaces':[...]} object")
+        if set(reference) != {"surfaces"}:
+            raise ValueError(
+                "surface_round references[0] accepts only the 'surfaces' key; edge chains, "
+                "variable radii and transitions are not supported"
+            )
+        faces = reference.get("surfaces")
+        if not isinstance(faces, list) or len(faces) != 2:
+            raise ValueError(
+                "surface_round requires exactly two member faces as "
+                "{'surfaces':[{kind:'surface',id:N}, {kind:'surface',id:M}]}"
+            )
+        ids = set()
+        for index, face in enumerate(faces):
+            if not isinstance(face, dict) or face.get("kind") != "surface":
+                raise ValueError(
+                    f"surface_round faces[{index}] must be {{kind:'surface',id:N}}; an edge, "
+                    "a plane or a body is not a member face"
+                )
+            if set(face) != {"kind", "id"}:
+                raise ValueError(
+                    f"surface_round faces[{index}] accepts only kind and id; a face id is "
+                    "the geometry id from creo_inspect_model, not a feature label"
+                )
+            value = face.get("id")
+            if type(value) is not int or not 0 <= value <= 2147483647:
+                raise ValueError(
+                    f"surface_round faces[{index}].id must be a nonnegative 32-bit integer"
+                )
+            ids.add(value)
+        if len(ids) != 2:
+            raise ValueError("surface_round faces must be two distinct surfaces")
+        return self
+
+
+CURVATURE_MIN_SAMPLES = 5
+CURVATURE_MAX_SAMPLES = 50
+
+
+def _curvature_face_problem(reference: Any, index: int) -> str | None:
+    """DEV-074/H08: describe why one curvature member face is unusable.
+
+    A member is named either by its geometry id (``{kind:"surface",id:N}``, the
+    id ``creo_inspect_model`` reports) or by its zero-based position in the
+    quilt's own member-face order. A feature label, an edge or a body is not a
+    face.
+    """
+    if type(reference) is int and not isinstance(reference, bool):
+        if reference < 0:
+            return f"faces[{index}] member index must be nonnegative"
+        return None
+    if not isinstance(reference, dict):
+        return f"faces[{index}] must be {{kind:'surface',id:N}} or a zero-based member index"
+    if reference.get("kind") != "surface":
+        return (
+            f"faces[{index}] must be {{kind:'surface',id:N}}; an edge, plane or body is not a face"
+        )
+    if set(reference) != {"kind", "id"}:
+        return f"faces[{index}] accepts only kind and id"
+    value = reference.get("id")
+    if type(value) is not int or not 0 <= value <= 2147483647:
+        return f"faces[{index}].id must be a nonnegative 32-bit integer"
+    return None
+
+
+class SurfaceCurvatureOp(StrictModel):
+    """Read-only principal-curvature and G1 analysis of quilt member faces.
+
+    DEV-074/H08: the SDK has no zebra-stripe or curvature-comb API, so the
+    equivalent deliverable is numeric. Each requested face is sampled on a
+    bounded UV raster (``samples_per_direction`` 5..50, default 12) and the
+    native side returns the principal curvatures, radii and directions of every
+    sample that lies inside the trimmed face. When two shared-edge member faces
+    are given, the normals are sampled along the shared edge and the angle is
+    reported; the 0.5 degree threshold is only a ``within_g1`` marker, not a
+    substitute for the measured angle.
+
+    The analysis is read-only: it creates no feature and does not advance the
+    revision. One or two faces are accepted; more than two has no field here.
+    """
+
+    op: Literal["surface_curvature"]
+    target: dict[str, Any]
+    faces: Annotated[list[Any], Field(min_length=1, max_length=2)]
+    samples_per_direction: int = 12
+
+    @field_validator("samples_per_direction", mode="before")
+    @classmethod
+    def density_is_a_bounded_integer(cls, value: Any) -> Any:
+        # A density is a real integer; booleans, strings, floats and NaN are
+        # refused before a job exists. The range keeps a raster bounded.
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(
+                "surface_curvature samples_per_direction must be an integer between "
+                f"{CURVATURE_MIN_SAMPLES} and {CURVATURE_MAX_SAMPLES}"
+            )
+        if not CURVATURE_MIN_SAMPLES <= value <= CURVATURE_MAX_SAMPLES:
+            raise ValueError(
+                "surface_curvature samples_per_direction must be between "
+                f"{CURVATURE_MIN_SAMPLES} and {CURVATURE_MAX_SAMPLES}"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def one_or_two_distinct_member_faces(self):
+        problem = quilt_reference_problem(self.target, allow_datum_plane=False)
+        if problem:
+            raise ValueError(f"surface_curvature target {problem}")
+        for index, reference in enumerate(self.faces):
+            problem = _curvature_face_problem(reference, index)
+            if problem:
+                raise ValueError(f"surface_curvature {problem}")
+        if len(self.faces) == 2 and self.faces[0] == self.faces[1]:
+            raise ValueError("surface_curvature faces must be two different member faces")
+        return self
