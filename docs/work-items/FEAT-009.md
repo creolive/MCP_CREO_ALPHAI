@@ -76,3 +76,7 @@
 ## 2026-11-08 曲面反馈追加
 
 surface_loft缺Probbl.h时不可用；结构化SDK条件元数据已补，动态worker可用性与Creo10真实放样仍待H13，不猜枚举值。外部资料及本次范围见[映射](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)，具体动作见DEV-075-HANDOFF H13—H19；本轮不连接Creo。
+
+### 2026-11-08 H13 动态worker准入
+
+worker 新增无 Toolkit 的 `build-info`，自报编译期 `source_digest` 与 `surface_loft` 的 `Probbl.h` 条件状态；`creo_session_status` 返回 `worker_build_identity`，`creo_capabilities.families.surface_loft` 按已验证身份投影 `available/availability/enabled`，`generic_bridge.submit` 在创建 job 前拒绝被编译掉的放样。身份未知时保持 `sdk_conditional`，不以 Python 本机 SDK 或 release_numeric 推断。Creo12.4 实机身份 verified、surface_loft compiled；Creo10 缺头实机拒绝和公开 MCP 黑盒仍未验，离线由真实缺头 C++ 夹具覆盖。

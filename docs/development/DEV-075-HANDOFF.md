@@ -57,12 +57,12 @@ H02钣金融合、H03质量实机、H04孔深元素树、H05新诊断黑盒、H0
 
 [逐项对照与具体验收动作](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)。本次已修组边界state_reason矛盾，补SDK条件字段、修剪提示和路线/预算限制；尚未实现以下能力：
 
-- H13 / FEAT-009、BUG-107：worker身份驱动的动态SDK可用性/提交前拒绝，以及Creo10真实放样路线；不能猜枚举常量或仅看release放行。
-- H14 / FEAT-039：真实交线与拓扑分割诊断；开放弧机理仅推断，目标边界连接也可能闭合有效区域。
-- H15 / FEAT-039：overlap采样预算与覆盖/误差诊断，大面不可用仍必须null，不能写0。
-- H16 / FEAT-039：trim结果可靠quilt引用、连续操作与保存重载。
-- H17 / FEAT-039：Creo10 ProMerge NO_OPTS直创与Creo12 incomplete重定义的等载荷对照；低层成功不直接解禁高层工具，不外推>2片。
-- H18 / FEAT-039：半圆球面等输入跨环境复测；报告自己标了载荷错误，暂不改revolve校验，半球替代不等价。
-- H19 / DEV-076：取得旧0.18.2反馈原件及本报告PRT/JPG/原始回执，关联worker指纹/哈希/日志；mtime不能当构建身份证据。
+- H13 / FEAT-009、BUG-107：**动态worker准入已实现并离线/实机核验**。worker `build-info` 自报编译期 `source_digest` 与 `surface_loft` 头条件；`creo_session_status` 返回 `worker_build_identity`，能力族按已验证身份投影 `available/availability/enabled`，提交前拒绝被编译掉的 `surface_loft`。Creo12.4 实机返回 compiled；Creo10 缺头实机拒绝与公开 MCP 黑盒仍未验证（离线用真实缺头 C++ 夹具）。Creo10 完整放样路线仍不得猜枚举。
+- H14 / FEAT-039：**未完成**。真实交线数量/闭环/边界连接/长度及原始码仍无原生 API 证据；开放弧机理只是推断，目标边界连接也可能闭合有效区域。先做原生探针，不能按推断改拒绝。
+- H15 / FEAT-039：**已实现并实机核验诊断字段**。overlap 失败保持面积 null，新增预算/覆盖/部分诊断；Creo12.4 四态组实机返回 `sample_budget=20000`、`faces 2/2`、`tests 220/220`、`coverage=1.0`。大面 `budget_exceeded` 真机复现仍缺样本。
+- H16 / FEAT-039：**已实现并实机核验**。`surface_trim` 在 `ProQuiltInit` 接受后发布 `result_quilt_id`/`result_quilt_handle`；Creo12.4 四个 trim 均 `visit_code=-4` 但句柄可用，连续第二次 trim 复用 id 面积 600 mm²、保存重载 true、revision 1→2。
+- H17 / FEAT-039：**外部对照仍缺**。v0.19.0 已按 Creo12.4 目标 quilt 路线公开 `quilt_merge`（两片 400→800 mm²），但没有 Creo10 `NO_OPTS` 直创等载荷原件/原始 job JSON；不得据此主张 Creo10 或多片支持。
+- H18 / FEAT-039：**不改代码**。报告自述载荷错误，半圆两端在轴上不是一般拒绝条件；Creo12 H09 证据保留，Creo10 同载荷仍未取得，半球替代不等价。
+- H19 / DEV-076：**部分完成**。旧 0.18.2 原件、PRT/JPG 与原始回执仍未提供，不能伪造归档；构建身份已改为 worker 自报 digest（`source_digest`/`worker_sha256`），mtime 不再作为身份证据。
 
-本批没有Creo/Toolkit连接；前述正证都是报告方Creo10结果，不是本轮复测。G1/多片缝合/非平面fill/独立offset/round/曲率检查按既有工作卡继续接手。
+本轮（2026-11-08 接手）已在 Creo 12.4.0.0 上做只读会话探测、trim/group 实机验证；报告方的 Creo10 正证仍不是本轮复测。G1/多片缝合/非平面fill/独立offset/round/曲率检查按既有工作卡继续接手。

@@ -22,3 +22,11 @@
 ## 待补
 
 0.18.3/4精确tag远端四附件、sidecar/API摘要、本地主干关系、body原文与时间来源仍需联网核验。Creo9/10真实SDK全量构建、缺头SDK的公开MCP拒绝、正常SDK surface_loft的几何/保存重载和WorkBuddy重启后黑盒验收仍未在本轮执行，接手见[DEV-075-HANDOFF](DEV-075-HANDOFF.md)。
+
+## v0.19.0 发布记录占位收口
+
+`docs/validation/RELEASE-0.19.0.md` 第 10—12 节保留发布前占位（`合入提交 ____`、`待主代理创建后回填`、`待主代理发布后执行`）。该文件是已发布历史原件，本次不回写；以下为 2026-11-08 的独立联网核对结论，统一记录在 [RELEASE-POSTCHECK](RELEASE-POSTCHECK-2026-11-07.md) 的 v0.19.0 段：
+
+- 合并提交 `86020e7`，附注标签 `v0.19.0` → `86020e7`（标签对象 `3f17e88`）；Release 非草稿、非 Pre-release，`published_at=2026-11-08T06:40:55Z`。
+- `tools/check_release_assets.py --tag v0.19.0 --version 0.19.0` exit 0，四附件齐全，两个 sidecar 与对应 ZIP 摘要一致；四个文件名、字节数和 SHA256 见 POSTCHECK 表。
+- 核对时间 `2026-11-08T07:41:05Z` / `2026-11-08 15:41:05 +08:00`。未修改标签、附件或 Release 正文。

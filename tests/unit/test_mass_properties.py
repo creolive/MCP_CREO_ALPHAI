@@ -44,6 +44,21 @@ class NormalizeMassPropertiesTest(unittest.TestCase):
                 )
             )
 
+    def test_conflicting_receipt_error_names_the_bounded_raw_fields(self):
+        with self.assertRaises(ValueError) as caught:
+            normalize_mass_properties(
+                reading(
+                    mass_source="computed_from_density",
+                    mass_unavailable_reason="material_query_failed",
+                    hint="The model material could not be measured; mass is unavailable",
+                )
+            )
+        message = str(caught.exception)
+        self.assertIn("density_source=request", message)
+        self.assertIn("mass_unavailable_reason=material_query_failed", message)
+        self.assertIn("mass_g=47.1", message)
+        self.assertNotIn("The model material could not be measured", message)
+
     def test_native_mass_source_matches_material_density(self):
         result = normalize_mass_properties(
             reading(density_source="model_material", mass_source="native")

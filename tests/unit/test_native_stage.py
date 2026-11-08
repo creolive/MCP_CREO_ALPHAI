@@ -151,6 +151,49 @@ class NativeStageReport(unittest.TestCase):
         self.assertEqual(report["sub_stage"], "verify_model_erase")
         self.assertEqual(report["elapsed_ms"], 5)
 
+    def test_truncated_log_falls_back_to_result_verify_stages(self):
+        self.write(
+            "PHASE=failed\n" + "diagnostic filler\n" * 1000 + "PHASE=execute_boolean_bodies\n"
+        )
+        verify_stages = [
+            {"name": "connect", "elapsed_ms": 68, "since_start_ms": 68},
+            {"name": "connected", "elapsed_ms": 4710, "since_start_ms": 4778},
+        ]
+        report = stall_report(self.directory, verify_stages=verify_stages, now=at(10))
+        self.assertTrue(report["truncated"])
+        self.assertNotEqual(report["reason"], "no_stage_timing")
+        self.assertEqual(report["connect_timing"]["connect"]["elapsed_ms"], 68)
+        self.assertEqual(report["connect_timing"]["connected"]["since_start_ms"], 4778)
+        self.assertEqual(report["stages_seen"], 2)
+        self.assertEqual(report["timing_source"], "verify_stages")
+
+    def test_verify_stages_do_not_replace_a_complete_log_tail(self):
+        self.write(
+            "PHASE=verify_model\n"
+            f"STAGE name=verify_model_save elapsed_ms=7 since_start_ms=9 ts={BASE_MS}\n"
+        )
+        report = stall_report(
+            self.directory,
+            verify_stages=[{"name": "connect", "elapsed_ms": 68}],
+            now=at(1),
+        )
+        self.assertEqual(report["sub_stage"], "verify_model_save")
+        self.assertEqual(report["stages_seen"], 1)
+        self.assertEqual(report["timing_source"], "native_log")
+
+    def test_verify_stages_without_names_are_ignored(self):
+        self.write(
+            "PHASE=failed\n" + "diagnostic filler\n" * 1000 + "PHASE=execute_boolean_bodies\n"
+        )
+        report = stall_report(
+            self.directory,
+            verify_stages=[{"elapsed_ms": 68}, None, "connect"],
+            now=at(1),
+        )
+        self.assertEqual(report["stages_seen"], 0)
+        self.assertEqual(report["timing_source"], "native_log")
+        self.assertEqual(report["reason"], "no_stage_timing")
+
     def test_undecodable_bytes_do_not_break_the_report(self):
         (self.directory / "native.log").write_bytes(b"PHASE=verify_model\n\xff\xfeSTAGE name=x\n")
         report = stall_report(self.directory, now=at(0))

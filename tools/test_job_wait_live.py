@@ -65,15 +65,15 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def offline_checks() -> dict:
-    accepted = [value for value in (0, 1, 30) if _validate_wait_seconds(value) == value]
+    accepted = [value for value in (0, 1, 30, 300) if _validate_wait_seconds(value) == value]
     refused = {}
-    for value in (31, -1, 1.5, True, "5", None):
+    for value in (301, -1, 1.5, True, "5", None):
         try:
             _validate_wait_seconds(value)
         except ValueError as error:
             refused[repr(value)] = str(error)[:120]
-    assert accepted == [0, 1, 30], accepted
-    assert set(refused) == {"31", "-1", "1.5", "True", "'5'", "None"}, refused
+    assert accepted == [0, 1, 30, 300], accepted
+    assert set(refused) == {"301", "-1", "1.5", "True", "'5'", "None"}, refused
     return {
         "max_wait_seconds": MAX_JOB_WAIT_SECONDS,
         "accepted": accepted,

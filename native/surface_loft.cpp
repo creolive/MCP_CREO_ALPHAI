@@ -26,6 +26,15 @@
 #endif
 #endif
 
+// H13 / BUG-107: the running executor, not the Python build environment, owns
+// the answer to "did this binary compile the boundary-blend route". The worker
+// reports this state in its build-info probe so admission can reject the
+// operation before a job exists instead of inferring the loaded worker's SDK
+// from this machine's headers or from release_numeric.
+const char *mechdog_surface_loft_sdk_state() {
+    return MECHDOG_HAS_PROBBL_HEADER ? "compiled" : "sdk_header_missing";
+}
+
 #if MECHDOG_HAS_PROBBL_HEADER
 #include <Probbl.h>
 

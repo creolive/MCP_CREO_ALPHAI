@@ -802,6 +802,18 @@ async def case_trim_live() -> dict:
                     },
                 )
                 tool_normal = basis.get("tool_normal")
+                result_handle = operation.get("result_quilt_handle") or {}
+                check(
+                    f"trim_{name}_result_handle",
+                    isinstance(operation.get("result_quilt_id"), int)
+                    and result_handle.get("available") is True
+                    and result_handle.get("id") == operation.get("result_quilt_id"),
+                    {
+                        "result_quilt_id": operation.get("result_quilt_id"),
+                        "result_quilt_handle": result_handle,
+                        "kept_quilt_visit_code": operation.get("kept_quilt_visit_code"),
+                    },
+                )
                 if tool == "plane":
                     normal_source = basis.get("tool_normal_source")
                     signed = basis.get("signed_offset_mm")
@@ -841,6 +853,67 @@ async def case_trim_live() -> dict:
                             "signed_offset_status": basis.get("signed_offset_status"),
                         },
                     )
+                if tool == "plane" and side == "one":
+                    # H16: reuse the published result_quilt_id as the next trim's
+                    # target on the same model. This is the consecutive-operation
+                    # case the receipt exists for; a fallback id that cannot be
+                    # referenced fails here even when the first area is correct.
+                    second_plan = [
+                        {
+                            "op": "datum_plane",
+                            "label": "trim_cut_plane_second",
+                            "reference": {"kind": "datum_plane", "axis": "x", "offset": 0},
+                            "offset": 10.0,
+                        },
+                        {
+                            "op": "surface_trim",
+                            "label": "trim_result_second",
+                            "target": {"kind": "quilt", "id": operation.get("result_quilt_id")},
+                            "tool": {"kind": "datum_plane", "label": "trim_cut_plane_second"},
+                            "keep_side": "one",
+                        },
+                    ]
+                    second = await submit_plan(
+                        client,
+                        second_plan,
+                        jobs,
+                        state.get("model_id"),
+                        state.get("revision"),
+                    )
+                    second_operation = second.get("operation") or {}
+                    second_handle = second_operation.get("result_quilt_handle") or {}
+                    check(
+                        "trim_consecutive_succeeded",
+                        second.get("status") == "succeeded",
+                        {"job_id": second.get("job_id"), "message": second.get("message")},
+                    )
+                    check(
+                        "trim_consecutive_saved_and_reloaded",
+                        second.get("saved_verified") is True,
+                    )
+                    check(
+                        "trim_consecutive_area",
+                        _near(second_operation.get("area_after_mm2"), 600.0, 0.5),
+                        {"area_after_mm2": second_operation.get("area_after_mm2")},
+                    )
+                    check(
+                        "trim_consecutive_result_handle",
+                        isinstance(second_operation.get("result_quilt_id"), int)
+                        and second_handle.get("available") is True,
+                        {
+                            "result_quilt_id": second_operation.get("result_quilt_id"),
+                            "result_quilt_handle": second_handle,
+                        },
+                    )
+                    check(
+                        "trim_consecutive_revision",
+                        isinstance(second.get("revision"), int)
+                        and second.get("revision") > (state.get("revision") or 0),
+                        {
+                            "revision_before": state.get("revision"),
+                            "revision_after": second.get("revision"),
+                        },
+                    )
                 evidence.append(
                     {
                         "tool": tool,
@@ -858,6 +931,8 @@ async def case_trim_live() -> dict:
                         "tool_normal": tool_normal,
                         "tool_normal_source": basis.get("tool_normal_source"),
                         "signed_offset_mm": basis.get("signed_offset_mm"),
+                        "result_quilt_id": operation.get("result_quilt_id"),
+                        "result_quilt_handle": result_handle,
                         "saved_file_reloaded_and_verified": state.get("saved_verified"),
                     }
                 )

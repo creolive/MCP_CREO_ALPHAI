@@ -47,7 +47,7 @@ from creo_mechdog.validation_errors import operation_validation_error
 _LABEL_PATTERN = _schema_base._LABEL_PATTERN
 
 
-def _rotation_matrix(value: Any) -> Any:
+def _rotation_matrix_shape(value: Any) -> Any:
     if not isinstance(value, list) or len(value) != 3:
         raise ValueError("rotation_matrix must be a nested 3x3 array")
     for row in value:
@@ -55,18 +55,25 @@ def _rotation_matrix(value: Any) -> Any:
             raise ValueError("rotation_matrix must be a nested 3x3 array")
         if any(type(v) not in (int, float) or not -math.inf < v < math.inf for v in row):
             raise ValueError("rotation_matrix requires finite real numbers")
+    return value
+
+
+def _rotation_matrix(value: Any, tolerance: float = ADMISSION_TOLERANCE) -> Any:
+    _rotation_matrix_shape(value)
     status = admission_status(value)
     residual = status["orthogonality_residual"]
-    if not math.isfinite(residual) or residual > ADMISSION_TOLERANCE:
+    tolerance_text = "1e-6" if tolerance == ADMISSION_TOLERANCE else f"{tolerance:g}"
+    if not math.isfinite(residual) or residual > tolerance:
         raise ValueError(
-            "rotation_matrix must be orthogonal within 1e-6 "
+            f"rotation_matrix must be orthogonal within {tolerance_text} "
             f"(max |R*R^T-I| = {residual:.9g}); the input is echoed and never repaired, "
-            "so supply exact orthonormal values"
+            "so supply exact orthonormal values, or pass an explicit rotation_tolerance to "
+            "admit a documented rounded matrix"
         )
     determinant = status["determinant"]
-    if abs(determinant - 1) > ADMISSION_TOLERANCE:
+    if abs(determinant - 1) > tolerance:
         raise ValueError(
-            "rotation_matrix determinant must be +1 within 1e-6 "
+            f"rotation_matrix determinant must be +1 within {tolerance_text} "
             f"(det = {determinant:.9g}); the input is echoed and never repaired, "
             "so supply a right-handed orthonormal basis"
         )
@@ -74,7 +81,7 @@ def _rotation_matrix(value: Any) -> Any:
 
 
 RotationMatrix = Annotated[
-    list[Point3], Field(min_length=3, max_length=3), BeforeValidator(_rotation_matrix)
+    list[Point3], Field(min_length=3, max_length=3), BeforeValidator(_rotation_matrix_shape)
 ]
 
 
@@ -107,11 +114,37 @@ class AssemblyPose(StrictModel):
             f"Row-vector local-to-parent rotation: {ROTATION_FORMULA} "
             "(p_local is a row vector; the matrix is not a column-vector transpose). "
             "It is a 3x3 matrix whose rows are the local X/Y/Z axes in the parent frame, "
-            "must be orthogonal (R*R^T = I) with determinant +1 within 1e-6, and is "
-            "mutually exclusive with rotation (Euler). The values are applied exactly as "
-            "given: never transposed, orthonormalized or repaired."
+            "must be orthogonal (R*R^T = I) with determinant +1 within rotation_tolerance "
+            "(default 1e-6), and is mutually exclusive with rotation (Euler). The values are "
+            "applied exactly as given: never transposed, orthonormalized or repaired."
         ),
     )
+    rotation_tolerance: Positive | None = Field(
+        default=None,
+        description=(
+            "Optional admission tolerance for rotation_matrix orthogonality and determinant "
+            "(default 1e-6). It admits a documented rounded matrix without repairing it; "
+            "the echoed values remain exactly the caller's input."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def matrix_tolerance_valid(cls, data: Any) -> Any:
+        if not isinstance(data, dict) or data.get("rotation_matrix") is None:
+            return data
+        tolerance = data.get("rotation_tolerance", ADMISSION_TOLERANCE)
+        if tolerance is None:
+            tolerance = ADMISSION_TOLERANCE
+        if (
+            isinstance(tolerance, bool)
+            or not isinstance(tolerance, (int, float))
+            or not math.isfinite(float(tolerance))
+            or float(tolerance) <= 0.0
+        ):
+            raise ValueError("rotation_tolerance must be a positive finite number")
+        _rotation_matrix(data["rotation_matrix"], float(tolerance))
+        return data
 
     @model_validator(mode="after")
     def orientation_valid(self):

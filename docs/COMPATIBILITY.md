@@ -1,4 +1,4 @@
-2026-11-08 DEV-076曲面追加：外部Creo10报告验证了trim形心/面积和单片0.3加厚；放样缺Probbl.h不可用。capabilities新增SDK条件元数据，enabled仅表示注册实现，不代表已核验加载worker；动态投影仍待H13。ProMerge的Creo10直创正证与Creo12 incomplete反证须分路线记录，不能按版本猜测解禁。完整球面半圆案例尚未同载荷对照。详见[映射](validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)。
+2026-11-08 DEV-076曲面追加：外部Creo10报告验证了trim形心/面积和单片0.3加厚；放样缺Probbl.h不可用。H13 已实现 worker 自报构建身份（`creo_worker.exe build-info` 的 `source_digest` 与头条件状态）并投影到 `creo_session_status`/`creo_capabilities`，`surface_loft` 在提交前按已验证身份拒绝；Creo12.4 实机返回 compiled，Creo10 缺头实机仍未验。H15 overlap 失败保持面积 null 并新增预算/覆盖/部分诊断；H16 trim 发布 `result_quilt_id`/`result_quilt_handle`，Creo12.4 连续 trim 复用通过。ProMerge 的 Creo10 直创正证与 Creo12 反证仍分路线记录；0.19.0 已按 Creo12.4 目标 quilt 路线公开 `quilt_merge`，不据此主张 Creo10。完整球面半圆案例尚未同载荷对照。详见[映射](validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)。
 
 # Creo 兼容与验收矩阵
 

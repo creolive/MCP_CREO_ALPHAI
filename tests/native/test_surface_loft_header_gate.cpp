@@ -7,6 +7,10 @@ using J = int;
 #include "surface_loft.cpp"
 
 int main() {
+    // H13: the same compile-time gate must be reportable to the build-info
+    // probe without a Toolkit connection.
+    if (std::string(mechdog_surface_loft_sdk_state()) != "sdk_header_missing")
+        return 3;
     try {
         generic_surface_loft(0);
     } catch (const std::runtime_error &error) {

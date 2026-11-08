@@ -56,7 +56,12 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     if reason is not None and reason not in MASS_UNAVAILABLE_REASONS:
         raise ValueError(f"Unknown mass unavailable reason: {reason!r}")
     if source != "none" and reason is not None:
-        raise ValueError("A mass reading with a density source cannot carry an unavailable reason")
+        raise ValueError(
+            "A mass reading with a density source cannot carry an unavailable reason "
+            f"(density_source={source}, mass_unavailable_reason={reason}, "
+            f"mass_g={mass}, volume_mm3={volume}, "
+            f"hint_present={raw.get('hint') is not None})"
+        )
 
     if source == "none":
         if mass is not None or density is not None:

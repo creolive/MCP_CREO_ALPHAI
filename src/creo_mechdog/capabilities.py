@@ -160,6 +160,289 @@ def require_available(operations: list[dict]) -> None:
             raise ValueError(SURFACE_TRIM_OFFSET_LIMIT)
 
 
+# H13: operations whose native implementation is compiled only when the worker's
+# Toolkit SDK carries a specific header. The running worker's own build-info is
+# the only authority; Python must not inspect this machine's SDK or guess from
+# release_numeric.
+WORKER_CONDITIONAL_OPERATIONS = ("surface_loft",)
+
+
+def _verified_worker_feature(identity: object, name: str) -> dict | None:
+    if not isinstance(identity, dict) or identity.get("identity_status") != "verified":
+        return None
+    features = identity.get("features")
+    feature = features.get(name) if isinstance(features, dict) else None
+    if not isinstance(feature, dict) or not isinstance(feature.get("available"), bool):
+        return None
+    return feature
+
+
+def _missing_requirements(feature: dict) -> list[str]:
+    missing = feature.get("missing_sdk_requirements")
+    if isinstance(missing, list) and missing:
+        return [str(item) for item in missing]
+    requirements = feature.get("sdk_requirements")
+    if isinstance(requirements, list) and requirements:
+        return [str(item) for item in requirements]
+    return ["Probbl.h"]
+
+
+def require_worker_availability(operations: list[dict], identity: object) -> None:
+    """Reject a conditional operation before a job exists when the worker lacks it.
+
+    Only a verified worker self-report can reject. A missing or invalid identity
+    stays unknown: the runtime error remains the authority, and Python never
+    substitutes its own SDK inspection for the loaded executor.
+    """
+    for op in operations:
+        name = op.get("op")
+        if name not in WORKER_CONDITIONAL_OPERATIONS:
+            continue
+        feature = _verified_worker_feature(identity, name)
+        if feature is None or feature["available"]:
+            continue
+        missing = ", ".join(_missing_requirements(feature))
+        digest = identity.get("source_digest") if isinstance(identity, dict) else None
+        raise ValueError(
+            f"{name} is compiled out of the current worker: its Toolkit SDK is missing "
+            f"{missing} (worker source_digest={digest}, state={feature.get('state')}). "
+            "No native job was queued. Rebuild the worker against an SDK that ships the "
+            "required header or use a route that does not need it; availability is taken "
+            "from the executor's own build identity, not from the Python environment's "
+            "SDK headers or release_numeric."
+        )
+
+
+def project_worker_availability(families_doc: dict, identity: object) -> dict:
+    """Show the verified worker's compiled feature state in capability families."""
+    feature = _verified_worker_feature(identity, "surface_loft")
+    entry = families_doc.get("surface_loft")
+    if feature is None or not isinstance(entry, dict):
+        return families_doc
+    available = feature["available"]
+    entry["available"] = available
+    entry["availability"] = "available" if available else "unavailable"
+    entry["worker_build_identity"] = {
+        "identity_status": identity.get("identity_status"),
+        "identity_source": identity.get("identity_source"),
+        "source_digest": identity.get("source_digest"),
+        "worker_sha256": identity.get("worker_sha256"),
+        "feature_state": feature.get("state"),
+        "probe": "creo_worker.exe build-info",
+    }
+    if available:
+        entry["enabled_semantics"] = (
+            "compiled into the current worker; a live run is still required for geometry"
+        )
+    else:
+        missing = ", ".join(_missing_requirements(feature))
+        entry["enabled"] = False
+        entry["unavailable_reason"] = f"sdk_header_missing: {missing}"
+        entry["enabled_semantics"] = (
+            "compiled out of the current worker; the SDK requirement is not satisfied"
+        )
+    return families_doc
+
+
+KNOWN_LIMITATIONS = (
+    {
+        "id": "surface_loft_sdk_header",
+        "condition": "worker built against a Toolkit SDK without Probbl.h",
+        "release": "external Creo 10 report; local Creo 12.4 has the header",
+        "evidence": "DEV-076 H13 worker build-info; missing-header C++ fixture",
+        "configurable": False,
+        "effect": "creo_surface_loft is unavailable and refused before a job",
+    },
+    {
+        "id": "surface_trim_open_tool",
+        "condition": "the tool intersects the target as an open arc or does not partition a region",
+        "release": "Creo 12.4 and external Creo 10 evidence",
+        "evidence": "DEV-075 H14 / surface_trim_regeneration feature_status=6",
+        "configurable": False,
+        "effect": "trim fails and rolls back; intersection curves are not measured",
+    },
+    {
+        "id": "surface_trim_offset_semantics",
+        "condition": "surface_trim offset_mm/offset_side requested",
+        "release": "Creo 12.4",
+        "evidence": "FEAT-039 S07 / six direction variants",
+        "configurable": False,
+        "effect": "refused; the documented thin tree removes a band and ignores direction",
+    },
+    {
+        "id": "surface_offset_result",
+        "condition": "caller expects a standalone offset quilt",
+        "release": "Creo 12.4",
+        "evidence": "FEAT-039 H07",
+        "configurable": False,
+        "effect": "returns the offset wall; target_quilt_id names the source quilt",
+    },
+    {
+        "id": "quilt_merge_scope",
+        "condition": "INTERSECT, more than two quilts in one call, closed-shell merge or non-mm units",
+        "release": "Creo 12.4",
+        "evidence": "FEAT-039 H03 / 0.19.0 two-quilt JOIN",
+        "configurable": False,
+        "effect": "only two-quilt JOIN is published; other modes are unverified",
+    },
+    {
+        "id": "surface_round_scope",
+        "condition": "edge-chain, variable radius, full/transition or non-adjacent faces",
+        "release": "Creo 12.4",
+        "evidence": "FEAT-055 H08",
+        "configurable": False,
+        "effect": "constant radius on two adjacent faces only; no quilt edge-id channel",
+    },
+    {
+        "id": "sheetmetal_forming_unavailable",
+        "condition": "corner relief beyond miter cuts, louver/form, hem/jog, grille cut, boss/hinge/ear",
+        "release": "Creo 12.4 counter-evidence",
+        "evidence": "FEAT-014 forming survey; 0.19.0 release notes",
+        "configurable": False,
+        "effect": "features are unavailable or unproven; gates remain",
+    },
+    {
+        "id": "quilt_offset_unavailable",
+        "condition": "standalone offset quilt",
+        "release": "Creo 12.4 counter-evidence",
+        "evidence": "FEAT-039 H07",
+        "configurable": False,
+        "effect": "no public quilt_offset tool; surface_offset produces a wall",
+    },
+    {
+        "id": "surface_boundary_fill_unavailable",
+        "condition": "non-planar closed boundary fill",
+        "release": "Creo 12.4 counter-evidence",
+        "evidence": "FEAT-039 H09 / surface_boundary_fill gate",
+        "configurable": False,
+        "effect": "the tool is gated; planar sketch fill is unchanged",
+    },
+    {
+        "id": "assembly_mass_parts_only",
+        "condition": "creo_get_mass_properties called on an assembly",
+        "release": "all releases through 0.19.0",
+        "evidence": "FEAT-057 parts_only contract",
+        "configurable": False,
+        "effect": "refused; query managed parts individually or use creo_inspect_model",
+    },
+    {
+        "id": "creo9_10_unverified",
+        "condition": "Creo 9 or Creo 10 runtime behavior",
+        "release": "external reports only; local baseline is Creo 12.4",
+        "evidence": "DEV-074/075/076 handoffs",
+        "configurable": False,
+        "effect": "do not infer Creo 9/10 support from Creo 12.4 results",
+    },
+    {
+        "id": "long_poll_limit",
+        "condition": "creo_get_job wait_seconds above the published maximum",
+        "release": "0.19.1+ maximum 300 seconds",
+        "evidence": "FEAT-007",
+        "configurable": True,
+        "effect": "values above 300 are rejected before reading the job",
+    },
+)
+
+
+PLAN_EXAMPLES = (
+    {
+        "name": "rectangle_extrude",
+        "goal": "new part: 40x20 sketch extruded 10 mm",
+        "operations": [
+            {
+                "op": "sketch",
+                "label": "profile",
+                "entities": [
+                    {
+                        "type": "rectangle",
+                        "name": "rect",
+                        "min": [0, 0],
+                        "max": [40, 20],
+                    }
+                ],
+            },
+            {"op": "extrude", "label": "body", "sketch": "profile", "depth": 10},
+        ],
+    },
+    {
+        "name": "surface_fill_and_trim",
+        "goal": "planar 40x20 fill trimmed at x=5 by a datum plane",
+        "operations": [
+            {
+                "op": "sketch",
+                "label": "fill_profile",
+                "entities": [
+                    {
+                        "type": "rectangle",
+                        "name": "rect",
+                        "min": [0, 0],
+                        "max": [40, 20],
+                    }
+                ],
+            },
+            {"op": "surface_fill", "label": "patch", "sketch": "fill_profile"},
+            {
+                "op": "datum_plane",
+                "label": "cut_plane",
+                "reference": {"kind": "datum_plane", "axis": "x", "offset": 0},
+                "offset": 5,
+            },
+            {
+                "op": "surface_trim",
+                "label": "trimmed",
+                "target": {"kind": "quilt_feature", "label": "patch"},
+                "tool": {"kind": "datum_plane", "label": "cut_plane"},
+                "keep_side": "one",
+            },
+        ],
+    },
+    {
+        "name": "thicken_existing_quilt",
+        "goal": "thicken an existing quilt by 2 mm on an owned model",
+        "operations": [
+            {
+                "op": "thicken",
+                "label": "wall",
+                "reference": {"kind": "quilt", "id": 12},
+                "thickness": 2.0,
+            }
+        ],
+    },
+    {
+        "name": "through_hole",
+        "goal": "6 mm hole through an existing solid on two datum planes",
+        "operations": [
+            {
+                "op": "hole",
+                "label": "h6",
+                "placement": {"type": "point", "x": 10, "y": 10, "z": 0},
+                "reference1": {"type": "plane", "id": 3},
+                "reference2": {"type": "plane", "id": 4},
+                "diameter": 6.0,
+                "depth": 20.0,
+            }
+        ],
+    },
+    {
+        "name": "edit_dimension",
+        "goal": "change one existing dimension and regenerate",
+        "operations": [{"op": "set_dimensions", "values": [{"id": 12, "value": 30}]}],
+    },
+    {
+        "name": "assemble_component",
+        "goal": "place an existing managed part with a translation only",
+        "operations": [
+            {
+                "op": "assemble_component",
+                "label": "i001",
+                "source_model_id": "00000000000000000000000000000000",
+                "translation": [50, 0, 0],
+            }
+        ],
+    },
+)
+
+
 def families() -> dict:
     return {
         "product_rules": {
@@ -610,6 +893,10 @@ def families() -> dict:
                 "surface_trim offset_mm stays "
                 "refused; surface_offset returns the offset wall, not a standalone offset "
                 "quilt; it can add solid volume, and target_quilt_id names the source quilt; "
+                "surface_trim publishes result_quilt_id only after ProQuiltInit accepts the "
+                "retained quilt, and result_quilt_handle separates that handle from the "
+                "measurement status; consecutive trim/save-reload reuse of that handle still "
+                "needs live evidence; "
                 "trimmed quilt feature-label reuse and curved-quilt offset measurement "
                 "have no published geometric guarantee; "
                 "creo_measure_surface_group reports member seams (state closed/open/"
@@ -617,7 +904,9 @@ def families() -> dict:
                 "boundary is a shell; its overlap area is a tessellation estimate, gaps "
                 "wider than gap_search_mm are not quantified, and the join judgement is "
                 "sampled boundary geometry rather than a kernel boolean; overlap sampling "
-                "is bounded and can be unavailable for larger or finely tessellated groups; "
+                "is bounded and can be unavailable for larger or finely tessellated groups - "
+                "the status then keeps overlap_area_mm2 null while reporting the sample "
+                "budget, tests required/attempted, coverage and observed containment errors; "
                 "surface_round is one constant radius on two member faces of one quilt "
                 "(no variable radius, edge chain, transitions or solid target) and the "
                 "kernel decides whether the two faces share an edge; "
@@ -844,7 +1133,13 @@ def families() -> dict:
             "orientation_input": (
                 "XYZ Euler degrees (X then Y then Z), or exclusive nested 3x3 rotation_matrix; "
                 "row vectors local to parent, translation separately in mm; finite real numbers, "
-                "orthogonality and determinant +1 within 1e-6, without repair or transpose"
+                "orthogonality and determinant +1 within rotation_tolerance (default 1e-6), "
+                "without repair or transpose"
+            ),
+            "rotation_tolerance": (
+                "optional positive linear tolerance on rotation_matrix orthogonality and "
+                "determinant; it admits a documented rounded matrix unchanged and never "
+                "repairs or orthonormalizes the input"
             ),
             "matrix_validation": "offline production helper and MCP/schema regression; live placement/save-reload unverified",
             "native_test": "part snapshots, rigid placement, removal, 3 datum-plane align constraints and 20 mm offset",

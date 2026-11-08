@@ -45,13 +45,21 @@
 | `MCP_CREO_MechDog-0.18.1-seed-library.zip` | `8e5f512571de9ff494db3a0964f7ff00d0c49a4c5f9767f93e08f385436a640e` | 493 442 |
 | `MCP_CREO_MechDog-0.18.1-seed-library.zip.sha256` | `c2b3df7825c85203990722b51ab5e80fae589f444845f292b503e8c62bc1f937` | 107 |
 
-## v0.18.2（2026-11-08补入既有实证索引）
+## v0.18.2（2026-11-08 DEV-077 补齐四附件数据）
 
-- 发布链接：[v0.18.2](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.18.2)。标签提交 `43862f00237d1aac34bce5cc1e576e2424c3ba39`，发布时间 `2026-11-07T10:18:16Z`。
-- 历史独立核对：[2026-11-07 POSTCHECK 第1节C5与第3节](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md)：C5 `tools/check_release_assets.py --tag v0.18.2 --version 0.18.2` exit 0；四附件已下载，两个sidecar与ZIP一致，C9另核本地SHA256与API digest一致。历史窗口2026-11-07 18:50–19:00 +08:00。本批仅迁入索引，未联网重跑。
-- source.zip：8,458,979 B，`4e33ebc713be62485d932267766eb8a1092b2b01f918876848925ef1c55d673b`。
-- seed-library.zip：493,442 B，`676536ca85601d0ce7e954a000fad0af8a73b7579f02ab27f1a8f2bbac606a1a`。
-- 四件完整名称均为 `MCP_CREO_MechDog-0.18.2-{source,seed-library}.zip`及各自`.sha256`。历史原文没有列出两个sidecar文件自身摘要，保留“历史已比对通过”的证据与此数据缺口，不猜填。
+- 发布链接：[v0.18.2](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.18.2)。标签对象 `v0.18.2` → annotated tag `4c659f5e1fe24e0ff76a1142f15ea80c3bc48e08` → 提交 `43862f00237d1aac34bce5cc1e576e2424c3ba39`；发布时间 `2026-11-07T10:18:16Z`；非 Pre-release。
+- 核对结果：`tools/check_release_assets.py --tag v0.18.2 --version 0.18.2` exit 0，「v0.18.2: four assets downloaded and verified; both sidecars match」。
+- 历史独立核对：[2026-11-07 POSTCHECK 第1节C5与第3节](../validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md)：C5 同一命令 exit 0，四附件已下载、两个 sidecar 与 ZIP 一致；C9 另核本地 SHA256 与 API digest 一致。历史窗口 2026-11-07 18:50–19:00 +08:00。
+- 数据来源：本批归档的 [0.18.2 离线升级复核原件](../validation/feedback-0.18.2-2026-11-08/originals/2026-11-07CREO10.0.0.0-0.18.2-本版交付卡DEV075仍开发中与台账计数166实为165及POSTCHECK本版段未回填.md) §二.2 与 §七；报告方取值时间 `2026-11-07 18:22 +08:00`，取值方式为 `download_report.json` 的 `api_digest`（GitHub API `assets[].digest`）与本机 `local_sha256` 逐项比对一致。两个 sidecar 均为 ASCII + LF。**DEV-077 只按原件转录补齐本节，本轮未联网重跑、未重新下载重算；精确 tag 的当轮核对仍见 G12。**
+
+| 附件 | SHA256（报告方远端 digest 与本地重算一致） | 字节 |
+| --- | --- | ---: |
+| `MCP_CREO_MechDog-0.18.2-source.zip` | `4e33ebc713be62485d932267766eb8a1092b2b01f918876848925ef1c55d673b` | 8 458 979 |
+| `MCP_CREO_MechDog-0.18.2-source.zip.sha256` | `727cf550231b5fe5bc0e230b409de289adedf2a99478801e68d700c66d65e7af` | 101 |
+| `MCP_CREO_MechDog-0.18.2-seed-library.zip` | `676536ca85601d0ce7e954a000fad0af8a73b7579f02ab27f1a8f2bbac606a1a` | 493 442 |
+| `MCP_CREO_MechDog-0.18.2-seed-library.zip.sha256` | `6d76cbee146f68ad2200343c382d07177532688b17f3aa83298f21b120d98c7d` | 107 |
+
+四件名称逐个列出，未用通配；两份 sidecar 内容分别是对应 ZIP 的摘要。`docs/validation/RELEASE-0.18.2.md` 是发布前历史原件，按既有策略保持字节不变，其「发布后记录 / 结果补记」两行由本节与统一入口收口，不回写旧文件。
 
 ## v0.18.3 / v0.18.4（2026-11-08离线整合，非本轮远端实测）
 
@@ -73,7 +81,39 @@
 
 两个sidecar的101/107字节来自所给报告第2节表格（JSON摘要未列大小）。
 
-0.18.3完整四附件数据、两个版本本轮精确tag重下/重算、当前main包含关系与Release body仍待后续联网核对；不能把这两节判定为本轮发布后验收通过。
+2026-11-08T07:41Z 前后补齐精确 tag 重下重算：`tools/check_release_assets.py --tag v0.18.2/v0.18.3/v0.18.4` 三条均 exit 0（「four assets downloaded and verified; both sidecars match」）。0.18.3 与 0.18.4 的 API `assets[].digest` 与本地重算一致：
+
+| 版本 | 附件 | 字节 | SHA256 |
+| --- | --- | ---: | --- |
+| 0.18.3 | `MCP_CREO_MechDog-0.18.3-source.zip` | 8 650 655 | `042959b54dab8de15044b9991f7defc3abce476c0cee8228997f7f00979b45bb` |
+| 0.18.3 | `MCP_CREO_MechDog-0.18.3-source.zip.sha256` | 101 | `de4e08b40a4127d483fb4f93d93d62d726c7a2d7f5d8644ebaee1af0678df657` |
+| 0.18.3 | `MCP_CREO_MechDog-0.18.3-seed-library.zip` | 493 442 | `7325485f26201c0242a315e7aa0291714a3de81e852eccbba6e60f6288831102` |
+| 0.18.3 | `MCP_CREO_MechDog-0.18.3-seed-library.zip.sha256` | 107 | `06b9ba48b97a240ce4d784e22ee69851f0305b8ac835642a8b77867de165ba6b` |
+| 0.18.4 | `MCP_CREO_MechDog-0.18.4-source.zip` | 8 752 689 | `81ff64939c9b14ae94635bb49928664526d8fd4b64bda25836381320eb0f8f4f` |
+| 0.18.4 | `MCP_CREO_MechDog-0.18.4-source.zip.sha256` | 101 | `be337e203d0a0e9e2edfc9d7eeeaa0fa074df8be0eb1ed7f8fe1f3636704e0e5` |
+| 0.18.4 | `MCP_CREO_MechDog-0.18.4-seed-library.zip` | 493 442 | `1a030983c448d1f76cf5b74d878abce653e5d389ff939468b5cd314b43eb8647` |
+| 0.18.4 | `MCP_CREO_MechDog-0.18.4-seed-library.zip.sha256` | 107 | `168f7f4a277ad8b92d6b039839ed73626bb2af5ef66d85bcacbceeff27623aca` |
+
+0.18.3 / 0.18.4 均为非 draft、非 prerelease，`published_at` 分别为 `2026-11-07T15:45:17Z`、`2026-11-07T17:41:40Z`。0.18.2 的四附件数据仍以本节上方报告方转录为准，本轮 `--tag` 命令同样 exit 0，但未逐项重列摘要。
+
+0.18.3/0.18.4 的精确 tag 重下重算已于 2026-11-08T07:41Z 补记；Release body 原文未逐字比对，当前 main 的包含关系见 v0.19.0 段。
+
+## v0.19.0（2026-11-08 本轮联网实测）
+
+- 核对时间：`2026-11-08T07:41:05Z` / `2026-11-08 15:41:05 +08:00`。
+- 标签对象：`v0.19.0` → annotated tag `3f17e887de89e8c7f655908371ef04e86ed1258d` → 提交 `86020e71397137600f748b3433de2f9a75383b22`；tagger 时间 `2026-11-08T06:40:44Z`。
+- Release：[v0.19.0](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.0)，id `438079516`，非 draft、非 prerelease；`created_at=2026-11-08T06:40:44Z`，`published_at=2026-11-08T06:40:55Z`，`target_commitish=main`。
+- 核对命令：`tools/check_release_assets.py --tag v0.19.0 --version 0.19.0` → exit 0，「v0.19.0: four assets downloaded and verified; both sidecars match」。
+- 四附件逐个列出（未用通配）；API `assets[].digest`、下载后本地实算 SHA256 与 sidecar 内容三者一致：
+
+| 附件 | 字节 | SHA256 | API 创建时间 |
+| --- | ---: | --- | --- |
+| `MCP_CREO_MechDog-0.19.0-source.zip` | 8 908 094 | `9caa479041c2303e5e923faf48d0e5406de516e39050d71495ea3ec8c00a9878` | 2026-11-08T06:40:50Z |
+| `MCP_CREO_MechDog-0.19.0-source.zip.sha256` | 101 | `0eb2615c836a8b96655e12c3fc6f5d443e2e9b5d8e209040d79be9cb3c9a2d9e` | 2026-11-08T06:40:50Z |
+| `MCP_CREO_MechDog-0.19.0-seed-library.zip` | 493 442 | `05859ac1ae89d0c0455f6b4aa8a02a34b232588c4d1b4da74d6842f21041a072` | 2026-11-08T06:40:50Z |
+| `MCP_CREO_MechDog-0.19.0-seed-library.zip.sha256` | 107 | `9cce3894e4ebd5ae2f3cfe650334becf83e0f398a62bb5234e179c0ffc7d506b` | 2026-11-08T06:40:50Z |
+
+- 本记录只证明远端附件、两个 sidecar 与对应 ZIP 摘要一致；不重新验证包内功能、Creo 实机或安装结果，也不回写 `RELEASE-0.19.0.md` 历史原件。v0.18.2/0.18.3/0.18.4 的精确 tag 重下重算仍待补。
 
 ## 未覆盖
 
