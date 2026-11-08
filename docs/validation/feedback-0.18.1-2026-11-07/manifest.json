@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-07",
+  "work_item": "DEV-075",
+  "files": [
+    {
+      "id": "F01",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.1\\2026-11-07_CREO_0.18.0_参数校验倾倒pydantic联合类型与装配质量属性静默按均质计算_origin非零resize连续两版未修.md",
+      "archived_path": "originals/2026-11-07_CREO_0.18.0_参数校验倾倒pydantic联合类型与装配质量属性静默按均质计算_origin非零resize连续两版未修.md",
+      "bytes": 19046,
+      "sha256": "1bfce1a1d228bf496fc5384d52a7fb7e1a752b9d40d54bbe98dc52860e0c5d16"
+    },
+    {
+      "id": "F02",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.1\\2026-11-07_CREO_0.18.1_钣金体拒绝与实体合并_new_body增料只能停留为独立body且负bodyID被布尔校验拒绝.md",
+      "archived_path": "originals/2026-11-07_CREO_0.18.1_钣金体拒绝与实体合并_new_body增料只能停留为独立body且负bodyID被布尔校验拒绝.md",
+      "bytes": 9492,
+      "sha256": "fbb76fb3ab6abdd55c1e8e2fcdf7591e3a94a95cf9e1f327a90b42e9d9457b9e"
+    },
+    {
+      "id": "F03",
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.1\\2026-11-07CREO10.0.0.0-0.18.0-当前版本入口滞后与FEAT057卡仍开发中及源码包单测13项因git报错.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.18.0-当前版本入口滞后与FEAT057卡仍开发中及源码包单测13项因git报错.md",
+      "bytes": 17196,
+      "sha256": "8f523f62cb106255e4341d5e30fe1e377ac917e330f139bc8d6dbefeffa58f81"
+    }
+  ]
+}

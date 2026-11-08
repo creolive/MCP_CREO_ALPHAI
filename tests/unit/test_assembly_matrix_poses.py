@@ -237,6 +237,26 @@ class RowVectorPoseTest(unittest.TestCase):
             # Admission rejects before any job exists; nothing is repaired.
             validate_operations([assemble_operation(rotation)])
 
+    def test_explicit_tolerance_admits_a_documented_rounded_pose_unchanged(self):
+        rotation = z_rotation(digits=4)
+        for operation, model in (
+            (assemble_operation(rotation), AssembleOp),
+            (placement_operation(rotation), ComponentPlacementOp),
+        ):
+            operation["rotation_tolerance"] = 1e-3
+            admitted = model(**operation)
+            # The echo is still the caller's rounded matrix; no repair.
+            self.assertEqual(admitted.rotation_matrix, rotation)
+            self.assertEqual(admitted.rotation_tolerance, 1e-3)
+            validate_operations([operation])
+
+    def test_tolerance_must_be_positive_and_cannot_admit_a_reflection(self):
+        with self.assertRaises(ValidationError):
+            AssembleOp(**{**assemble_operation(z_rotation()), "rotation_tolerance": 0})
+        reflection = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]]
+        with self.assertRaises(ValidationError):
+            AssembleOp(**{**assemble_operation(reflection), "rotation_tolerance": 1.0})
+
     def test_a_reflection_and_a_second_orientation_are_rejected(self):
         with self.assertRaises(ValidationError):
             AssembleOp(**assemble_operation([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]]))

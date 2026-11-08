@@ -1,5 +1,7 @@
 # 开发入口
 
+2026-11-08 [DEV-076](work-items/DEV-076.md)：本地v0.18.4合入当前开发分支，保留DEV-066/075后续离线修复。新增缺头编译与独立包导入回归，发布资料勘误见[统一核对台账](development/RELEASE-POSTCHECK-2026-11-07.md)。本批未连接Creo、未合main、未发布。
+
 从 [统一台账](BACKLOG.md) 定位 ID，读取工作卡的当前摘要，再查相关源码；历史证据按需打开。根级 [AGENTS.md](../AGENTS.md) 是仓库约束，架构与入口分工见 [ARCHITECTURE](development/ARCHITECTURE.md)，编码规则见 [CODING_STANDARD](development/CODING_STANDARD.md)。当前版本以 [version.py](../version.py) 为准，本节不再重复逐版记录。
 
 ## 准入与日常维护

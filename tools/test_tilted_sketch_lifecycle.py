@@ -8,10 +8,8 @@ the historical profile report. ``--live`` deliberately refuses in this phase.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
-import platform
 import sys
 import uuid
 from pathlib import Path
@@ -20,9 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from test_dev049_tilted_cut import TILTED_FIXTURE, setup_operations, tilted_normal
-
 from creo_mechdog.schema import validate_operations
+from tools.test_dev049_tilted_cut import TILTED_FIXTURE, setup_operations, tilted_normal
 
 SIDES = 30
 RADIUS_MM = 5.0
@@ -476,33 +473,18 @@ def validate_cases(cases: list[dict]) -> None:
 
 
 def provenance() -> dict:
-    from creo_mechdog.git_evidence import git_facts, source_paths
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    names, _mode = source_paths(ROOT)
-    names = set(names)
-    facts = git_facts(ROOT)
-    names.update(
-        {"tools/test_tilted_sketch_lifecycle.py", "tests/unit/test_tilted_sketch_lifecycle.py"}
+    evidence = collect(
+        ROOT,
+        {"tools/test_tilted_sketch_lifecycle.py", "tests/unit/test_tilted_sketch_lifecycle.py"},
     )
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "commit": facts["commit"],
-        "branch": facts["branch"],
-        "dirty": facts["dirty"],
-        "provenance_mode": facts["provenance_mode"],
-        "git_unavailable": facts["git_unavailable"],
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-    }
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 def offline_report(run_tag: str) -> dict:

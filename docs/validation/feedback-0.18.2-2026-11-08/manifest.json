@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-08",
+  "report_date": "2026-11-07",
+  "source_folder": "C:\\Users\\Administrator\\Downloads\\0.18.2",
+  "work_items": [
+    "DEV-077"
+  ],
+  "files": [
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.2\\2026-11-07CREO10.0.0.0-0.18.2-本版交付卡DEV075仍开发中与台账计数166实为165及POSTCHECK本版段未回填.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.18.2-本版交付卡DEV075仍开发中与台账计数166实为165及POSTCHECK本版段未回填.md",
+      "bytes": 23531,
+      "sha256": "bd0b50d8383af96a6700fb87c3b3401525756f7b11df4df4bef4d24bf43a6e2e"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.2\\2026-11-07CREO10.0.0.0-0.18.2quilt_merge门禁与Creo10实测相反及曲面放样闭合仍缺.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.18.2quilt_merge门禁与Creo10实测相反及曲面放样闭合仍缺.md",
+      "bytes": 22902,
+      "sha256": "7f580d8db9170d67572e1c09325a39437dcb9336b582e632ddb46e66824bdb56"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.2\\2026-11-07CREO10.0.0.0-0.18.2显式密度质量属性被归一化守卫拒绝与全程曲面反馈跨版未登记.md",
+      "archived_path": "originals/2026-11-07CREO10.0.0.0-0.18.2显式密度质量属性被归一化守卫拒绝与全程曲面反馈跨版未登记.md",
+      "bytes": 19334,
+      "sha256": "696fee5aa3e1a1e096274c6fe6ad031d3ca79ed46c40ae608e6432fc14bb7f34"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.2\\2026-11-07_CREO_v0.18.2_草图容差链与装配矩阵精度阻断.md",
+      "archived_path": "originals/2026-11-07_CREO_v0.18.2_草图容差链与装配矩阵精度阻断.md",
+      "bytes": 21270,
+      "sha256": "536b33774250317b2b17b8a27cf5c61145bf3ed2b6fcc01216d0e00902408545"
+    }
+  ]
+}

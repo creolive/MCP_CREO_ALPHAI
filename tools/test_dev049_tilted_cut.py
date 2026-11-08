@@ -27,7 +27,6 @@ import copy
 import hashlib
 import json
 import math
-import platform
 import sys
 import time
 import uuid
@@ -374,37 +373,17 @@ def resolve_output(output: Path | None, run_id: str) -> Path:
 
 
 def local_provenance() -> dict:
-    """Record source evidence without recording config, license or session IDs."""
-    from creo_mechdog.git_evidence import git_facts, source_paths
-    from version import VERSION
+    from creo_mechdog.source_provenance import local_provenance as collect
 
-    names, _mode = source_paths(ROOT)
-    names = set(names)
-    facts = git_facts(ROOT)
-    names.update(("tools/test_dev049_tilted_cut.py", "tests/unit/test_dev049_tilted_cut.py"))
-    hashes = {
-        name: hashlib.sha256((ROOT / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
-    return {
-        "version": VERSION,
-        "commit": facts["commit"],
-        "branch": facts["branch"],
-        "dirty": facts["dirty"],
-        "provenance_mode": facts["provenance_mode"],
-        "git_unavailable": facts["git_unavailable"],
-        "source_sha256": hashes,
-        "source_fingerprint": hashlib.sha256(
-            json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
-        "environment": {
-            "system": platform.system(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "auto_start_creo": False,
-        "human_session_confirmation": True,
-    }
+    evidence = collect(
+        ROOT, ("tools/test_dev049_tilted_cut.py", "tests/unit/test_dev049_tilted_cut.py")
+    )
+    # Preserve the released report aliases while sharing source completeness checks.
+    evidence["provenance_mode"] = "git" if evidence["git_status"] == "available" else "filesystem"
+    evidence["git_unavailable"] = evidence["git_status"] != "available"
+    evidence["commit"] = evidence["commit"] or ""
+    evidence["branch"] = evidence["branch"] or ""
+    return evidence
 
 
 def geometry_basis() -> dict:

@@ -130,6 +130,19 @@ class InstallConfigTests(unittest.TestCase):
                 self.assertFalse(bridge.check_environment()["ready_to_build"])
         self.assertIn('call "', compiler_setup_script(value))
 
+    def test_missing_git_is_only_an_optional_development_diagnostic(self):
+        self.sdk()
+        self.settings.pop("vcvars64")
+        self.config()
+        with (
+            patch.object(bridge, "ROOT", self.root),
+            patch.object(bridge.shutil, "which", return_value=None),
+        ):
+            result = bridge.check_environment()
+        self.assertTrue(result["ready_to_build"])
+        self.assertFalse(result["development_tools"]["git_available"])
+        self.assertFalse(result["development_tools"]["git_required_for_mcp"])
+
     def test_build_uses_explicit_env_preflight_and_includes_failure_summary(self):
         self.sdk()
         (self.root / "native").mkdir()

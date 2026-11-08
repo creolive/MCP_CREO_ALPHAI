@@ -88,11 +88,14 @@ def git_identity() -> dict:
     from creo_mechdog.source_provenance import local_provenance
 
     evidence = local_provenance(SOURCE_PATHS.resource_root)
-    return {
+    identity = {
         "commit": evidence["commit"],
         "dirty": evidence["dirty"],
         "git_status": evidence["git_status"],
     }
+    if evidence["git_status"] != "available":
+        identity["error"] = "Git identity unavailable; directory source hashes remain available"
+    return identity
 
 
 def main(argv: list[str] | None = None) -> int:

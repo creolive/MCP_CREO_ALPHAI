@@ -29,6 +29,8 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     """Return the public receipt for one native ``mass_properties`` block."""
     if not isinstance(raw, dict):
         raise ValueError("Mass properties reading is missing")
+    if raw.get("mass_value_unit", "g") != "g":
+        raise ValueError("mass_value_unit must be g for mass_g")
 
     volume = _number_or_none(raw.get("volume_mm3"), "volume_mm3")
     mass = _number_or_none(raw.get("mass_g"), "mass_g")
@@ -36,11 +38,30 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     source = raw.get("density_source")
     if source not in DENSITY_SOURCES:
         raise ValueError(f"Unknown density source: {source!r}")
+    mass_source = raw.get("mass_source")
+    if mass_source is None:
+        mass_source = {
+            "request": "computed_from_density",
+            "model_material": "native",
+            "none": "none",
+        }[source]
+    expected_mass_source = {
+        "request": "computed_from_density",
+        "model_material": "native",
+        "none": "none",
+    }[source]
+    if mass_source != expected_mass_source:
+        raise ValueError("mass_source disagrees with density_source")
     reason = raw.get("mass_unavailable_reason")
     if reason is not None and reason not in MASS_UNAVAILABLE_REASONS:
         raise ValueError(f"Unknown mass unavailable reason: {reason!r}")
     if source != "none" and reason is not None:
-        raise ValueError("A mass reading with a density source cannot carry an unavailable reason")
+        raise ValueError(
+            "A mass reading with a density source cannot carry an unavailable reason "
+            f"(density_source={source}, mass_unavailable_reason={reason}, "
+            f"mass_g={mass}, volume_mm3={volume}, "
+            f"hint_present={raw.get('hint') is not None})"
+        )
 
     if source == "none":
         if mass is not None or density is not None:
@@ -63,12 +84,15 @@ def normalize_mass_properties(raw: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "volume_mm3": volume,
         "mass_g": mass,
+        "mass_value_unit": "g",
+        "mass_source": mass_source,
         "density_g_cm3": density,
         "density_source": source,
         "mass_unavailable_reason": reason,
         "center_of_mass_mm": _triple_or_none(raw.get("center_of_mass_mm")),
         "material_assigned": bool(raw.get("material_assigned")),
         "mass_unit": raw.get("mass_unit"),
+        "native_mass_unit": raw.get("mass_unit"),
         "hint": raw.get("hint"),
         "query_codes": {
             "volume": raw.get("volume_query_code"),

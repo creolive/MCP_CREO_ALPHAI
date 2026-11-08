@@ -38,7 +38,7 @@ async def run(output: Path, rounds: int, resume_jobs: list[str]) -> dict:
         "version": VERSION,
         "mode": "real MCP and Creo",
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "source_commit": identity["commit"],
+        "source_commit": identity["source_commit"],
         "dirty": identity["dirty"],
         "git_status": identity["git_status"],
         "source_fingerprints": {

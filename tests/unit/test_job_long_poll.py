@@ -129,7 +129,7 @@ class JobLongPollTests(unittest.TestCase):
 
     def test_invalid_wait_seconds_is_rejected_before_reading_the_job(self):
         self.write_job("running")
-        for value in (1.0, 0.0, -1, 31, True, "5", None):
+        for value in (1.0, 0.0, -1, 301, True, "5", None):
             with self.subTest(value=value):
                 with patch.object(bridge, "job_path", side_effect=AssertionError("job read")):
                     with self.assertRaises(ValueError) as caught:

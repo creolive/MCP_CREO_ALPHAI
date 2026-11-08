@@ -531,6 +531,11 @@ struct SurfaceGroupMeasurement {
     bool overlap_detected = false;
     int face_pairs_tested = 0;
     long long overlap_samples = 0;
+    long long overlap_sample_tests_required = 0;
+    long long overlap_sample_tests_attempted = 0;
+    int overlap_faces_sampled = 0;
+    int overlap_faces_total = 0;
+    bool overlap_budget_exceeded = false;
     int containment_inside = 0;
     int containment_errors = 0;
     int containment_off_surface = 0;
@@ -690,6 +695,7 @@ static void group_measure_overlap(ProSolid solid, SurfaceGroupAccumulator &acc, 
         out.overlap_reason = "group_has_fewer_than_two_faces";
         return;
     }
+    out.overlap_faces_total = (int)acc.faces.size();
     std::vector<std::vector<GroupFaceSample>> samples(acc.faces.size());
     for (size_t index = 0; index < acc.faces.size(); index++) {
         ProError code = PRO_TK_NO_ERROR;
@@ -698,7 +704,15 @@ static void group_measure_overlap(ProSolid solid, SurfaceGroupAccumulator &acc, 
             out.overlap_reason = "face_tessellation_failed";
             return;
         }
+        out.overlap_faces_sampled++;
     }
+    // H15: publish the budget arithmetic even when the measurement cannot
+    // finish, so a large or finely tessellated group says how much sampling was
+    // required and how far it got. The area itself stays null on failure.
+    for (size_t first = 0; first < acc.faces.size(); first++)
+        for (size_t second = 0; second < acc.faces.size(); second++)
+            if (first != second)
+                out.overlap_sample_tests_required += (long long)samples[first].size();
     long long sample_tests = 0;
     double overlap_area = 0.0;
     int pairs = 0;
@@ -711,6 +725,8 @@ static void group_measure_overlap(ProSolid solid, SurfaceGroupAccumulator &acc, 
                 SURFACE_GROUP_OVERLAP_SAMPLE_BUDGET) {
                 out.overlap_code = PRO_TK_GENERAL_ERROR;
                 out.overlap_reason = "overlap_sample_budget_exceeded";
+                out.overlap_budget_exceeded = true;
+                out.overlap_sample_tests_attempted = sample_tests;
                 return;
             }
             double area = 0.0;
@@ -769,6 +785,7 @@ static void group_measure_overlap(ProSolid solid, SurfaceGroupAccumulator &acc, 
     out.overlap_pairs = pairs;
     out.overlap_detected = pairs > 0 || out.buried_boundary_edges > 0;
     out.overlap_samples = sample_tests;
+    out.overlap_sample_tests_attempted = sample_tests;
     out.overlap_pair_records = records;
 }
 
@@ -807,8 +824,9 @@ static void group_state_decide(const SurfaceGroupMeasurement &measurement, doubl
         return;
     }
     out.state = "open";
-    out.state_reason =
-        measurement.gap_available ? "no_member_seam_candidate" : "boundary_edges_unavailable";
+    // Boundary traversal succeeded. A missing inter-member gap candidate does
+    // not make the measured open boundary unavailable.
+    out.state_reason = "open_edges_present";
 }
 
 // Project the measurement into the §4.4.1 status shape. Every value carries its
@@ -927,6 +945,35 @@ static J surface_group_receipt(const std::vector<int> &quilt_ids, double toleran
         measurement.overlap_available && scaled
             ? J(measurement.sample_resolution * scale.scale * scale.scale)
             : J(nullptr);
+    // H15: sampling coverage and budget arithmetic stay observable when the
+    // estimate cannot be produced. `overlap_area_mm2` remains null; none of
+    // these diagnostics is ever substituted for an area.
+    const bool sampling_map_complete =
+        measurement.overlap_faces_total > 0 &&
+        measurement.overlap_faces_sampled == measurement.overlap_faces_total;
+    const bool sampling_attempted = sampling_map_complete || measurement.overlap_budget_exceeded;
+    overlap_status["sample_budget"] = (long long)SURFACE_GROUP_OVERLAP_SAMPLE_BUDGET;
+    overlap_status["faces_total"] = J(measurement.overlap_faces_total);
+    overlap_status["faces_sampled"] = J(measurement.overlap_faces_sampled);
+    overlap_status["budget_exceeded"] = J(measurement.overlap_budget_exceeded);
+    overlap_status["partial"] = measurement.overlap_available
+                                    ? J(false)
+                                    : (measurement.overlap_budget_exceeded ? J(true) : J(nullptr));
+    overlap_status["sample_tests_required"] =
+        sampling_map_complete ? J(measurement.overlap_sample_tests_required) : J(nullptr);
+    overlap_status["sample_tests_attempted"] =
+        sampling_attempted ? J(measurement.overlap_sample_tests_attempted) : J(nullptr);
+    overlap_status["sample_test_coverage"] =
+        sampling_map_complete && measurement.overlap_sample_tests_required > 0
+            ? J((double)measurement.overlap_sample_tests_attempted /
+                (double)measurement.overlap_sample_tests_required)
+            : J(nullptr);
+    overlap_status["containment_errors_observed"] =
+        sampling_attempted ? J(measurement.containment_errors) : J(nullptr);
+    overlap_status["containment_off_surface_observed"] =
+        sampling_attempted ? J(measurement.containment_off_surface) : J(nullptr);
+    overlap_status["containment_outside_observed"] =
+        sampling_attempted ? J(measurement.containment_outside) : J(nullptr);
     overlap_status["detected"] =
         measurement.overlap_available ? J(measurement.overlap_detected) : J(nullptr);
     overlap_status["area_is_estimate"] = measurement.overlap_available ? J(true) : J(nullptr);

@@ -94,11 +94,11 @@ def solid_add_on_sheetmetal_problem(operations: list[dict[str, Any]]) -> str | N
         f"{SOLID_ADD_UNSUPPORTED}: Creo rejects an extrude add that merges solid material "
         "into a sheetmetal body (ProFeatureWithoptionsCreate returns -1, measured on Creo "
         "12.4.0.0 with and without overlap). Add material with sheetmetal_wall or "
-        "sheetmetal_flange, or request new_body=true to create a separate solid body; that "
-        "body cannot be merged back on Creo 12.4 (union into the sheetmetal body also returns "
-        "-1, and the reverse union consumes the sheetmetal body: wall contours answer -8 and "
-        "unbend fails). Creo 10 is untested. "
-        f"cut, surface and thin extrudes are unaffected. Blocked operations: {labels}"
+        "sheetmetal_flange, or request new_body=true to create a separate solid body "
+        "(not fused with the sheetmetal body). On Creo 12.4, union into the sheetmetal body returns -1, and reverse union consumes the sheetmetal body (wall contours -8, unbend fails). Creo 10 is untested for these fusion paths. Cut and surface extrudes are outside "
+        "this rule; thin extrude add and revolve add are not blocked here, but their "
+        "target body and merge behavior are not verified. "
+        f"Blocked operations: {labels}"
     )
 
 

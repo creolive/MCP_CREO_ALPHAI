@@ -1,8 +1,8 @@
-# MCP_CREO_MechDog 0.19.0
+# MCP_CREO_MechDog 0.19.1
 
-![version](https://img.shields.io/badge/version-0.19.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
+![version](https://img.shields.io/badge/version-0.19.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey) ![python](https://img.shields.io/badge/python-3.12%2B-blue) ![Creo](https://img.shields.io/badge/Creo-9%20%2F%2010%20%2F%2012-orange) ![MCP](https://img.shields.io/badge/MCP-stdio-purple)
 
-当前正式版 **0.19.0**（MINOR——DEV-074 曲面与整链批：新增公开工具 `creo_surface_round`（曲面边圆角）与只读 `creo_measure_surface_curvature`（数值曲率/G1），解除门禁并公开 `creo_quilt_merge`（quilt 合并），公开工具 **104→107**；五爪整瓶整链 46 个作业、63 项实机检查通过；钣金成形类、独立 quilt 偏置、任意非平面边界填充仍不可用，门禁保持） · [版本说明](docs/RELEASE_NOTES_0.19.0.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
+当前正式版 **0.19.1**（PATCH——DEV-076/DEV-077 反馈补漏：worker 构建身份驱动的 `surface_loft` 动态准入、overlap 预算/覆盖诊断、trim 结果句柄与连续 trim 实机、可配 `rotation_tolerance`、`creo_get_job` 长轮询 300 s、结构化 `known_limitations`/`plan_examples`；公开工具仍 107） · [版本说明](docs/RELEASE_NOTES_0.19.1.md) · [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)
 
 > 让 AI 客户端通过 MCP，直接在 Creo Parametric 里创建**原生可编辑的参数化特征**——不是导出网格，也不是脚本模拟。
 
@@ -105,7 +105,7 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 | 确认哪些功能已实测 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
 | 种子库 / 换电脑换 Agent | [docs/SEED_LIBRARY.md](docs/SEED_LIBRARY.md)、[docs/MIGRATION.md](docs/MIGRATION.md) |
 | 直接混合的一次性回调 | [docs/CALLBACK_LIFECYCLE.md](docs/CALLBACK_LIFECYCLE.md) |
-| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.19.0 版本说明](docs/RELEASE_NOTES_0.19.0.md) |
+| 查看版本变更 | [Releases](https://github.com/wudahua/MCP_CREO_MechDog/releases)、[0.19.1 版本说明](docs/RELEASE_NOTES_0.19.1.md) |
 | 参与开发 / 看台账 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)、[docs/BACKLOG.md](docs/BACKLOG.md) |
 
 ## 已知限制
@@ -125,6 +125,11 @@ Creo 软件、SDK、模板与许可需自行取得；MIT 只覆盖本项目原�
 .\.venv\Scripts\python.exe tools\dev_check.py
 .\.venv\Scripts\python.exe tools\test_general.py
 ```
+
+
+Git仅用于补充commit/branch/dirty，不是MCP服务、原生编译或离线单测的必需条件。源码ZIP没有`.git`或PATH中没有Git时，证据工具使用分发目录源码SHA256，Git身份明确为null；目录哈希不代表Git提交。`creo_check_environment.development_tools.git_available`只作开发提示，不影响ready_to_build。
+
+全量单测依机器和夹具耗时而变，已有实测约6–18分钟；用`build/unit_test_report.json`的`duration_seconds`、`skipped`和`skipped_tests`核对本次耗时与跳过项。较慢机器可执行`python tools/dev_check.py --unit-timeout-seconds 1800`。移除Git时请保留PowerShell等系统工具；不要把精简PATH造成的命令缺失当作产品故障。离线重建editable包需提前缓存`pyproject.toml`指定的构建wheel，使用`PIP_NO_INDEX=1`和`PIP_FIND_LINKS`指向本地wheel目录；本项目不要求单测时下载依赖。
 
 `tools/test_general.py` 等集成测试会真实连接 Creo 并创建测试模型；语言／单元检查与 Creo 实机验收分别记录证据。
 

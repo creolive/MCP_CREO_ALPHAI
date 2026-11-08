@@ -54,11 +54,7 @@ def source_files():
         "docs/validation/track-feedback-2026-10-16/track-modeling-rev2.txt",
         "docs/validation/bug-001-repro-2026-10-16/g0_driver.py",
         "tools/test_callback_payload.cpp",
-        "tests/native/test_assembly_pose.cpp",
-        "tests/native/test_adoption_source.cpp",
-        "tests/native/test_constraint_names.cpp",
-        "tests/native/test_constraint_compare.cpp",
-        "tests/native/test_dev072_geometry.cpp",
+        "docs/validation/feedback-0.18.4-2026-11-08/originals/surface_loft.local.patch.diff",
     )
     files = [ROOT / name for name in names]
     for directory, extensions in {
@@ -75,6 +71,11 @@ def source_files():
             if p.is_file() and p.suffix in extensions and "__pycache__" not in p.parts
         )
     files.append(ROOT / "native/third_party/LICENSE.nlohmann-json")
+    files.extend(
+        path
+        for path in (ROOT / "tests/native").glob("test_*")
+        if path.is_file() and path.suffix in {".cpp", ".h", ".hpp"}
+    )
     files.extend(
         p
         for p in (ROOT / ".github").rglob("*")

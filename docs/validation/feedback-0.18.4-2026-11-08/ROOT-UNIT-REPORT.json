@@ -1,0 +1,22 @@
+{
+  "version": "0.18.4",
+  "timestamp": 1794103777.1068811,
+  "tests_run": 2976,
+  "success": true,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "skipped_tests": [],
+  "duration_seconds": 501.1090000000004,
+  "source": {
+    "commit": "95d52c95894e43ef0494fceeb8d1c3a58d2332d7",
+    "branch": "codex/DEV-075-feedback0181-offline",
+    "dirty": true,
+    "git_status": "available",
+    "source_fingerprint": "f30418024ef44c40b46af8502666863ac3d0406a522af15ffdb8f4a42f2ff009",
+    "source_scope": "git_tracked_source",
+    "source_status": "complete",
+    "source_file_count": 473,
+    "source_errors": []
+  }
+}

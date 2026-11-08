@@ -1,6 +1,6 @@
 # 源码安装与接入
 
-当前目标服务／源码版本为 0.8.0（DEV-051），以 [version.py](../version.py) 为准；新增接口和未测范围见[版本说明](RELEASE_NOTES_0.8.0.md)，发布记录见[验收记录](validation/RELEASE-0.8.0.md)。安装或升级后请按下文「升级与部署核对」确认实际路径、启动身份和 94 个工具。0.6.1 验收中出现的通道断连（[BUG-085](work-items/BUG-085.md)）根因未定。
+当前源码版本以 [version.py](../version.py) 和 [README当前版本](../README.md) 为准；公开工具数以 `creo_capabilities` 为准。安装或升级后按下文“升级与部署核对”确认实际路径与运行源码身份。
 
 ## 需要的环境
 
@@ -24,6 +24,14 @@
 ```
 
 仅指定工作负载默认只安装 Required 组件；推荐组件包含 C++ 编译工具和 Windows SDK，具体随安装器版本变化。遗漏 `--includeRecommended` 时，可能出现安装器退出码为 0，但找不到 `cl.exe`、`vcvars64.bat` 或缺少 `stdio.h` / `kernel32.lib` 的“静默假成功”。检查实际组件并补装；退出码本身不能证明编译环境完整。参数及组件来源：[微软安装参数](https://learn.microsoft.com/en-us/visualstudio/install/use-command-line-parameters-to-install-visual-studio?view=vs-2022)、[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022)。
+
+## 开发与离线证据
+
+Git仅用于补充commit/branch/dirty，不是MCP服务、原生编译或离线单测的必需条件。源码ZIP没有`.git`或PATH中没有Git时，证据工具使用分发目录源码SHA256，Git身份明确为null；目录哈希不代表Git提交。`creo_check_environment.development_tools.git_available`只作开发提示，不影响ready_to_build。
+
+全量单测依机器和夹具耗时而变，已有实测约6–18分钟；用`build/unit_test_report.json`的`duration_seconds`、`skipped`和`skipped_tests`核对本次耗时与跳过项。较慢机器可执行`python tools/dev_check.py --unit-timeout-seconds 1800`。移除Git时请保留PowerShell等系统工具；不要把精简PATH造成的命令缺失当作产品故障。离线重建editable包需提前缓存`pyproject.toml`指定的构建wheel，使用`PIP_NO_INDEX=1`和`PIP_FIND_LINKS`指向本地wheel目录；本项目不要求单测时下载依赖。
+
+服务会话记录`session_activity.json`是本机运行数据，不随新提交或源码包分发，实际路径保持不变。升级仍跟踪此文件的旧版本前先备份本机记录；不要删除当前会话文件来完成升级。
 
 ## 安装步骤
 

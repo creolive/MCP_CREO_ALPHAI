@@ -10,6 +10,8 @@ jobs/
 models/
 config.json
 seed_registry.json
+# DEV-066: runtime session history remains local; preserve its existing path.
+/session_activity.json
 client-config.json
 native/constants.inc
 *.zip

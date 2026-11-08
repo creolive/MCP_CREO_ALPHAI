@@ -22,6 +22,53 @@ def reading(**overrides):
 
 
 class NormalizeMassPropertiesTest(unittest.TestCase):
+    def test_non_gram_value_unit_is_not_silently_relabelled(self):
+        with self.assertRaisesRegex(ValueError, "mass_value_unit"):
+            normalize_mass_properties(reading(mass_value_unit="kg"))
+
+    def test_request_density_reports_computed_grams_and_native_unit(self):
+        result = normalize_mass_properties(
+            reading(mass_unit="tonne", mass_query_code=-1, mass_source="computed_from_density")
+        )
+        self.assertEqual(result["mass_g"], 47.1)
+        self.assertEqual(result["mass_value_unit"], "g")
+        self.assertEqual(result["native_mass_unit"], "tonne")
+        self.assertEqual(result["mass_source"], "computed_from_density")
+
+    def test_request_fallback_cannot_keep_unavailable_reason(self):
+        with self.assertRaises(ValueError):
+            normalize_mass_properties(
+                reading(
+                    mass_source="computed_from_density",
+                    mass_unavailable_reason="material_query_failed",
+                )
+            )
+
+    def test_conflicting_receipt_error_names_the_bounded_raw_fields(self):
+        with self.assertRaises(ValueError) as caught:
+            normalize_mass_properties(
+                reading(
+                    mass_source="computed_from_density",
+                    mass_unavailable_reason="material_query_failed",
+                    hint="The model material could not be measured; mass is unavailable",
+                )
+            )
+        message = str(caught.exception)
+        self.assertIn("density_source=request", message)
+        self.assertIn("mass_unavailable_reason=material_query_failed", message)
+        self.assertIn("mass_g=47.1", message)
+        self.assertNotIn("The model material could not be measured", message)
+
+    def test_native_mass_source_matches_material_density(self):
+        result = normalize_mass_properties(
+            reading(density_source="model_material", mass_source="native")
+        )
+        self.assertEqual(result["mass_source"], "native")
+
+    def test_inconsistent_mass_source_is_refused(self):
+        with self.assertRaises(ValueError):
+            normalize_mass_properties(reading(mass_source="native"))
+
     def test_request_density_receipt(self):
         result = normalize_mass_properties(reading())
         self.assertEqual(result["volume_mm3"], 6000.0)

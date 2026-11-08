@@ -310,6 +310,15 @@ class SeedPackagingGateTests(SeedArchiveFixture):
 
 
 class SeedPackagerAllowlistTests(unittest.TestCase):
+    def test_feedback0184_manifest_members_are_distributed_intact(self):
+        base = ROOT / "docs/validation/feedback-0.18.4-2026-11-08"
+        packaged = set(package.source_files())
+        manifest = json.loads((base / "manifest.json").read_text(encoding="utf-8"))
+        for item in manifest["files"]:
+            path = base / item["archived_path"]
+            self.assertIn(path, packaged)
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), item["sha256"])
+
     def test_seed_packager_and_release_gate_share_one_member_set(self):
         members = {
             path.relative_to(ROOT / "seed_library").as_posix()
@@ -325,6 +334,17 @@ class SeedPackagerAllowlistTests(unittest.TestCase):
         packaged = {path.relative_to(ROOT).as_posix() for path in package.source_files()}
         for path in release_integrity.seed_library_files(ROOT):
             self.assertIn(path.relative_to(ROOT).as_posix(), packaged)
+
+    def test_source_package_includes_native_test_sources_only(self):
+        packaged = {path.relative_to(ROOT).as_posix() for path in package.source_files()}
+        fixtures = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "tests/native").rglob("*")
+            if path.is_file() and path.suffix in {".cpp", ".h", ".hpp"}
+        }
+        self.assertIn("tests/native/test_axis_geometry.cpp", fixtures)
+        self.assertIn("tests/native/test_surface_measure_guard.cpp", fixtures)
+        self.assertEqual({name for name in packaged if name.startswith("tests/native/")}, fixtures)
 
     def test_seeds_module_exposes_the_trusted_digest_entry_point(self):
         self.assertEqual(

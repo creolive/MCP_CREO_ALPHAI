@@ -49,16 +49,19 @@ class ProductRulesDriverTests(unittest.TestCase):
 
     def test_git_identity_known_and_unavailable(self):
         root = driver.SOURCE_PATHS.resource_root
-        with patch.object(
-            subprocess,
-            "run",
-            side_effect=[
-                subprocess.CompletedProcess([], 0, str(root) + "\n"),
-                subprocess.CompletedProcess([], 0, "version.py\n"),
-                subprocess.CompletedProcess([], 0, "a" * 40 + "\n"),
-                subprocess.CompletedProcess([], 0, "main\n"),
-                subprocess.CompletedProcess([], 0, " M server.py\n"),
-            ],
+        with (
+            patch("shutil.which", return_value="git"),
+            patch.object(
+                subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 0, str(root) + "\n"),
+                    subprocess.CompletedProcess([], 0, "version.py\n"),
+                    subprocess.CompletedProcess([], 0, "a" * 40 + "\n"),
+                    subprocess.CompletedProcess([], 0, "main\n"),
+                    subprocess.CompletedProcess([], 0, " M server.py\n"),
+                ],
+            ),
         ):
             self.assertEqual(
                 driver.git_identity(),

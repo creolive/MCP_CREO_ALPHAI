@@ -13,7 +13,11 @@ from pathlib import Path
 
 import bridge
 from creo_mechdog import component_changes, feature_state, model_registry, operation_results
-from creo_mechdog.capabilities import require_available
+from creo_mechdog.capabilities import (
+    WORKER_CONDITIONAL_OPERATIONS,
+    require_available,
+    require_worker_availability,
+)
 from creo_mechdog.model_queries import inspect_page, list_page, model_summary
 from creo_mechdog.schema import Assertions, LoftOp, validate_operations
 
@@ -76,6 +80,13 @@ def get_mass_properties(model_id: str, density_g_cm3: float | None = None) -> di
     explicit fallback, and the receipt always says which one was used.
     """
     from creo_mechdog.mass_properties import normalize_mass_properties
+
+    if model_info(model_id).get("model_type", "part") == "assembly":
+        raise ValueError(
+            "Mass properties for assemblies are unsupported; query managed parts individually. "
+            "use_tool: creo_inspect_model (read-only component and model inspection); "
+            "no revision or source file was changed"
+        )
 
     operation: dict = {"op": "mass_properties"}
     if density_g_cm3 is not None:
@@ -352,6 +363,8 @@ def submit(
 ) -> dict:
     operations = validate_operations(operations)
     require_available(operations)
+    if any(op["op"] in WORKER_CONDITIONAL_OPERATIONS for op in operations):
+        require_worker_availability(operations, bridge.worker_build_identity())
     assertions = Assertions.model_validate(assertions or {}).model_dump(exclude_none=True)
     if loft_seed and (model_id is not None or readonly or model_type != "part"):
         raise ValueError("Native loft seed initialization is only available for a new part")
@@ -424,6 +437,10 @@ def submit(
 
                 validate_baseline(model)
         actual_type = model.get("model_type", "part")
+        if actual_type == "assembly" and any(op["op"] == "mass_properties" for op in operations):
+            raise ValueError(
+                "Mass properties for assemblies are unsupported; query managed parts individually"
+            )
         assembly_ops = {
             "assemble_component",
             "component_placement",

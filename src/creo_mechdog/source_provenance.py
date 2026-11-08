@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Iterable
@@ -27,6 +28,8 @@ def local_provenance(root: Path, extra_names: Iterable[str] = ()) -> dict[str, A
         ).stdout.strip()
 
     try:
+        if shutil.which("git") is None:
+            raise FileNotFoundError("Git is unavailable")
         if Path(git("rev-parse", "--show-toplevel")).resolve() != root.resolve():
             raise ValueError("source directory is not the Git root")
         names = set(
@@ -54,20 +57,32 @@ def local_provenance(root: Path, extra_names: Iterable[str] = ()) -> dict[str, A
         commit = branch = dirty = None
         git_status = "unavailable"
     names.update(extra_names)
-    hashes = {
-        name: hashlib.sha256((root / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        for name in sorted(names)
-    }
+    hashes = {}
+    source_errors = []
+    for name in sorted(names):
+        try:
+            content = (root / name).read_bytes()
+        except OSError as error:
+            source_errors.append({"path": name, "error_type": type(error).__name__})
+        else:
+            hashes[name] = hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()
+    source_status = "incomplete" if source_errors else "complete" if hashes else "unavailable"
     return {
         "version": VERSION,
         "commit": commit,
         "branch": branch,
         "dirty": dirty,
         "git_status": git_status,
+        "source_scope": "git_tracked_source" if git_status == "available" else "distributed_source",
+        "source_status": source_status,
+        "source_file_count": len(hashes),
+        "source_errors": source_errors,
         "source_sha256": hashes,
         "source_fingerprint": hashlib.sha256(
             json.dumps(hashes, sort_keys=True).encode()
-        ).hexdigest(),
+        ).hexdigest()
+        if source_status == "complete"
+        else None,
         "environment": {
             "system": platform.system(),
             "machine": platform.machine(),

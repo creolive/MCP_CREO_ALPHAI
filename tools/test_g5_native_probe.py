@@ -718,6 +718,10 @@ def local_provenance() -> dict:
         "branch": evidence["branch"],
         "dirty": evidence["dirty"],
         "git_status": evidence["git_status"],
+        **{
+            key: evidence[key]
+            for key in ("source_scope", "source_status", "source_errors", "source_file_count")
+        },
         "source_sha256": evidence["source_sha256"],
         "source_fingerprint": evidence["source_fingerprint"],
         "environment": evidence["environment"],

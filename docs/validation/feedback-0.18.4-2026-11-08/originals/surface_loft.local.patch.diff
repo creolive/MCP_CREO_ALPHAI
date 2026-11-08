@@ -1,0 +1,33 @@
+--- _creo_update_tmp/0.18.4/surface_loft.upstream.cpp	2026-11-08 07:04:31.868434400 +0800
++++ _creo_update_tmp/0.18.4/surface_loft.local.patched.cpp	2026-11-08 07:04:31.869436300 +0800
+@@ -12,6 +12,18 @@
+ // This file is included by generic.cpp after the shared element-tree,
+ // selection, quilt and measurement helpers are visible; it defines no entry
+ // point of its own beyond generic_surface_loft.
++// LOCAL PATCH (Creo 10 SDK): Probbl.h is absent on this SDK generation. BUG-107
++// taught the generated constants.inc to drop missing headers, but this hand-written
++// translation unit still included it unconditionally, so the whole worker failed with
++// C1083 before any feature compiled. Guard the include and compile the body only when
++// the SDK actually ships the boundary-blend tree; otherwise expose the op as an
++// explicit unavailable error instead of fabricating geometry.
++#if defined(__has_include)
++#  if __has_include(<Probbl.h>)
++#    define MECHDOG_LOCAL_HAS_PROBBL 1
++#  endif
++#endif
++#ifdef MECHDOG_LOCAL_HAS_PROBBL
+ #include <Probbl.h>
+ 
+ // Bounded element-tree readback. The extracted tree is the only honest source
+@@ -318,3 +330,11 @@
+         op, feature,
+         {{"quilt_id", quilt_id}, {"section_curve_ids", J::array({first_curve, second_curve})}});
+ }
++#else  // no Probbl.h on this SDK generation (Creo 10)
++static void generic_surface_loft(const J &op) {
++    (void)op;
++    throw std::runtime_error(
++        "surface_loft requires Probbl.h, which this Creo Toolkit SDK does not ship; "
++        "the boundary-blend element tree is unavailable on this SDK generation");
++}
++#endif  // MECHDOG_LOCAL_HAS_PROBBL

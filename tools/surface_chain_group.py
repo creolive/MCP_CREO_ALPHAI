@@ -311,6 +311,29 @@ async def case_group_live(wait_ready) -> dict:
                     "buried": overlap_status.get("buried_boundary_edges"),
                 },
             )
+            check(
+                f"{name}_overlap_budget_diagnostics",
+                overlap_status.get("sample_budget") == 20000
+                and isinstance(overlap_status.get("faces_total"), int)
+                and isinstance(overlap_status.get("sample_tests_required"), int)
+                and isinstance(overlap_status.get("sample_tests_attempted"), int)
+                and overlap_status.get("budget_exceeded") is False
+                and overlap_status.get("partial") is False
+                and isinstance(overlap_status.get("sample_test_coverage"), (int, float))
+                and abs(float(overlap_status["sample_test_coverage"]) - 1.0) <= 1e-9,
+                {
+                    "sample_budget": overlap_status.get("sample_budget"),
+                    "faces": [
+                        overlap_status.get("faces_sampled"),
+                        overlap_status.get("faces_total"),
+                    ],
+                    "tests": [
+                        overlap_status.get("sample_tests_attempted"),
+                        overlap_status.get("sample_tests_required"),
+                    ],
+                    "coverage": overlap_status.get("sample_test_coverage"),
+                },
+            )
             if expected_overlap:
                 area = group.get("overlap_area_mm2")
                 check(

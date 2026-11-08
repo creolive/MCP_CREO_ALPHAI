@@ -380,7 +380,7 @@ async def run(args) -> dict:
         "work_item": "BUG-008",
         "version": VERSION,
         "started_at": bridge.now(),
-        "source_commit": identity["commit"],
+        "source_commit": identity["source_commit"],
         "dirty": identity["dirty"],
         "git_status": identity["git_status"],
         "environment": {

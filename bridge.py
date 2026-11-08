@@ -57,7 +57,7 @@ JOB_ID = re.compile(r"[a-f0-9]{32}\Z")
 MODEL_NAME = re.compile(r"[a-z0-9][a-z0-9_]{0,30}\Z")
 #: FEAT-007: a job is final in these states; a long poll returns immediately.
 TERMINAL_JOB_STATUSES = ("succeeded", "failed", "cancelled", "aborted", "unknown_outcome")
-MAX_JOB_WAIT_SECONDS = 30
+MAX_JOB_WAIT_SECONDS = 300
 JOB_WAIT_POLL_SECONDS = 0.25
 MODEL_NAME_RULE = (
     "model_name must be 1-31 characters of lowercase letters, digits and "
@@ -692,6 +692,11 @@ def check_environment() -> dict:
         "license_diagnostics": license_diagnostics,
         "license_usable": "unverified_here; only successful native feature creation proves it",
         "transport": "stdio",
+        "development_tools": {
+            "git_available": shutil.which("git") is not None,
+            "git_required_for_mcp": False,
+            "scope": "Optional Git provenance only; extracted releases use directory source hashes",
+        },
         "supported_features": [
             op for op in REGISTERED_OPERATIONS if op not in UNAVAILABLE_OPERATIONS
         ],
@@ -920,7 +925,7 @@ setlocal DisableDelayedExpansion
 {compiler_setup_script(c)}
 "{sys.executable}" "{ROOT / "tools/compiler_preflight.py"}"
 if errorlevel 1 exit /b 4
-cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
+cl /nologo /MD /EHsc /std:c++17 /bigobj /W3 /we4552 /DPRO_MACHINE=36 /DPRO_OS=4 /DPRO_USE_VAR_ARGS /DMECHDOG_BUILD_SOURCE_DIGEST=\\"{fingerprint}\\" /I"{sdk / "includes"}" /c "{ROOT / "native/worker.cpp"}" /Fo"{build / "worker.obj"}"
 if errorlevel 1 exit /b 2
 link /nologo /MACHINE:X64 /SUBSYSTEM:CONSOLE /OUT:"{exe}" "{build / "worker.obj"}" {libs} bcrypt.lib kernel32.lib user32.lib wsock32.lib advapi32.lib mpr.lib winspool.lib netapi32.lib psapi.lib gdi32.lib shell32.lib comdlg32.lib ole32.lib ws2_32.lib
 if errorlevel 1 exit /b 3
@@ -972,6 +977,103 @@ def channel_health() -> dict:
         return read_json(ROOT / "build/toolkit_health.json")
     except (OSError, ValueError):
         return {}
+
+
+_WORKER_IDENTITY_CACHE: dict[tuple[str, int, int], dict] = {}
+_SOURCE_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def _parse_worker_build_info(payload: object, worker_sha256: str) -> dict | None:
+    """Validate the executor's own build-info projection (H13)."""
+    if not isinstance(payload, dict) or payload.get("identity_schema") != 1:
+        return None
+    digest = payload.get("source_digest")
+    features = payload.get("features")
+    if not isinstance(digest, str) or not _SOURCE_DIGEST.fullmatch(digest):
+        return None
+    loft = features.get("surface_loft") if isinstance(features, dict) else None
+    if not isinstance(loft, dict) or not isinstance(loft.get("available"), bool):
+        return None
+    requirements = loft.get("sdk_requirements")
+    missing = loft.get("missing_sdk_requirements")
+    return {
+        "identity_status": "verified",
+        "identity_schema": payload["identity_schema"],
+        "source_digest": digest,
+        "worker_sha256": worker_sha256,
+        "identity_source": "worker_self_report",
+        "features": {
+            "surface_loft": {
+                "available": loft["available"],
+                "state": loft.get("state"),
+                "sdk_requirements": (
+                    list(requirements) if isinstance(requirements, list) else ["Probbl.h"]
+                ),
+                "missing_sdk_requirements": (list(missing) if isinstance(missing, list) else []),
+            }
+        },
+    }
+
+
+def worker_build_identity(*, refresh: bool = False) -> dict:
+    """Read build facts from the built executor itself; never infer its SDK.
+
+    The probe reads only compile-time constants embedded in ``creo_worker.exe``.
+    It does not connect to Creo, call Toolkit or inspect this machine's SDK
+    headers, so a stale worker or a worker built against another SDK generation
+    cannot be mistaken for the current Python environment. A missing or
+    unverifiable identity stays explicit; callers must not turn it into an
+    availability claim.
+    """
+    exe = ROOT / "build/creo_worker.exe"
+    try:
+        info = exe.stat()
+    except OSError:
+        return {"identity_status": "worker_missing", "identity_source": "worker_self_report"}
+    key = (str(exe), info.st_mtime_ns, info.st_size)
+    if not refresh and key in _WORKER_IDENTITY_CACHE:
+        return _WORKER_IDENTITY_CACHE[key]
+    try:
+        env = native_environment()
+    except (OSError, ValueError, KeyError):
+        env = None
+    try:
+        result = subprocess.run(
+            [str(exe), "build-info"],
+            cwd=ROOT / "build",
+            env=env,
+            capture_output=True,
+            timeout=15,
+            creationflags=HIDDEN,
+        )
+    except subprocess.TimeoutExpired:
+        identity = {
+            "identity_status": "probe_timeout",
+            "identity_source": "worker_self_report",
+            "budget_seconds": 15,
+        }
+    except OSError as exc:
+        identity = {
+            "identity_status": "probe_failed",
+            "identity_source": "worker_self_report",
+            "message": str(exc),
+        }
+    else:
+        try:
+            payload = json.loads(result.stdout.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            payload = None
+        parsed = _parse_worker_build_info(payload, hashlib.sha256(exe.read_bytes()).hexdigest())
+        if result.returncode != 0 or parsed is None:
+            identity = {
+                "identity_status": "invalid_build_info",
+                "identity_source": "worker_self_report",
+                "worker_exit_code": result.returncode,
+            }
+        else:
+            identity = parsed
+    _WORKER_IDENTITY_CACHE[key] = identity
+    return identity
 
 
 def record_channel_health(connected: bool, **fields) -> dict:
@@ -1067,10 +1169,12 @@ def session_status(connect_timeout_seconds: int = 30, *, build_worker: bool = Tr
                 "Inspect Creo dialogs and occupying jobs; preserve unknown jobs/models, then "
                 "request creo_startup_status(retry=true). No Creo process was closed.",
             )
-        return _record_probe_result(result)
+        return _record_probe_result(result, worker_identity=worker_build_identity())
 
 
-def _record_probe_result(result: subprocess.CompletedProcess) -> dict:
+def _record_probe_result(
+    result: subprocess.CompletedProcess, *, worker_identity: dict | None = None
+) -> dict:
     try:
         value = json.loads(result.stdout.decode("utf-8"))
         if not isinstance(value, dict) or not isinstance(value.get("connected"), bool):
@@ -1087,6 +1191,8 @@ def _record_probe_result(result: subprocess.CompletedProcess) -> dict:
         value.update(connected=False, connection_state="probe_worker_failed")
     if value.get("disconnect_code") not in (None, 0):
         value.update(connected=False, connection_state="disconnect_failed")
+    if worker_identity is not None:
+        value["worker_build_identity"] = worker_identity
     record_channel_health(
         bool(value.get("connected")), **{k: v for k, v in value.items() if k != "connected"}
     )
@@ -1361,7 +1467,7 @@ def _run_job_dispatch(job_id: str) -> None:
 
 
 def _validate_wait_seconds(value: object) -> int:
-    """FEAT-007: wait_seconds is an explicit integer in 0..30 (no floats/bools)."""
+    """FEAT-007: wait_seconds is an explicit integer in 0..300 (no floats/bools)."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"wait_seconds must be an integer between 0 and {MAX_JOB_WAIT_SECONDS}")
     if not 0 <= value <= MAX_JOB_WAIT_SECONDS:
@@ -1483,7 +1589,11 @@ def _read_job(
             # infers a timing that the log does not contain.
             from creo_mechdog.native_stage import stall_report
 
-            manifest["native_progress"] = stall_report(directory)
+            job_result = manifest.get("result")
+            verify_stages = (
+                job_result.get("verify_stages") if isinstance(job_result, dict) else None
+            )
+            manifest["native_progress"] = stall_report(directory, verify_stages=verify_stages)
     apply_terminal_stage(manifest)
     if manifest["status"] in ("queued", "running"):
         age = (

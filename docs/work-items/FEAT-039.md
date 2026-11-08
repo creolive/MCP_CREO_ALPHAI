@@ -837,3 +837,13 @@ build` 退出 0，公开工具仍 107）。几何：R20×40 圆筒（`extrude{mo
   `6CBC278E…4656DEC`，46 作业）。驱动：`tools/test_five_claw_bottle.py`。
 
 
+
+## 2026-11-08 曲面反馈追加
+
+新增Creo10外部ProMerge直创正证、trim形心/单片加厚正证与trim/句柄/预算负证；已修state_reason，交线/引用/预算/直创等仍按H14—H18验收，门禁不解除。外部资料及本次范围见[映射](../validation/feedback-0.18.4-surface-2026-11-08/MAPPING.md)，具体动作见DEV-075-HANDOFF H13—H19；本轮不连接Creo。
+
+### 2026-11-08 H15/H16 实现与实机验证
+
+- **H15**：`surface_group_measure` 的 overlap 预算耗尽时 `overlap_area_mm2` 仍为 null，`overlap_status` 新增 `sample_budget`、`faces_sampled/faces_total`、`budget_exceeded`、`partial`、`sample_tests_required/attempted`、`sample_test_coverage`、`containment_*_observed`。Creo12.4 四态组实机均返回 `sample_budget=20000`、`faces 2/2`、`tests 220/220`、`coverage=1.0`；大面真实 `budget_exceeded` 复现仍缺样本。
+- **H16**：`surface_trim` 在 `ProQuiltInit` 接受保留 quilt 后发布 `result_quilt_id` 和 `result_quilt_handle`（含 `available/id/source/visit_code/basis/reusable_as`），把判据可用与句柄可用分开。Creo12.4 四个 trim 均 `visit_code=-4`、句柄 available=true；同一模型第二次 trim 直接以 `result_quilt_id=82` 为目标，面积 600 mm²、保存重载 true、revision 1→2。
+- 证据：`build/surface_chain/20261108-072026-146300/report.json`（trim，7 作业，passed=true）与 `build/surface_chain/20261108-072241-881700/report.json`（group，passed=true）；本机未提交日志，上述值来自当次运行。

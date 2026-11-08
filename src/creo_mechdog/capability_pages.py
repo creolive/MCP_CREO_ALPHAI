@@ -19,7 +19,17 @@ from creo_mechdog.model_queries import decode_cursor, encode_cursor, fingerprint
 SNAPSHOT_SECONDS = 600
 PAGE_BYTES = 32 * 1024
 ENTRY_BUDGET = PAGE_BYTES - 2048
-SECTIONS = ("overview", "tools", "families", "references", "seeds", "evidence", "runtime")
+SECTIONS = (
+    "overview",
+    "tools",
+    "families",
+    "references",
+    "seeds",
+    "evidence",
+    "runtime",
+    "known_limitations",
+    "plan_examples",
+)
 _CURSOR_KIND = "capabilities"
 
 _SECTION_BY_KEY = {
@@ -29,6 +39,8 @@ _SECTION_BY_KEY = {
     "verified_evidence": "evidence",
     "runtime": "runtime",
     "tools": "tools",
+    "known_limitations": "known_limitations",
+    "plan_examples": "plan_examples",
 }
 _SECTION_DESCRIPTIONS = {
     "overview": "top-level contract fields (units, scheduling, workflow, support status, operations)",
@@ -38,6 +50,8 @@ _SECTION_DESCRIPTIONS = {
     "seeds": "bundled seed library listing",
     "evidence": "validation evidence summaries",
     "runtime": "runtime identity and source fingerprints",
+    "known_limitations": "structured limitation entries with condition, release, evidence and configurability",
+    "plan_examples": "small validated operation lists for common plans",
 }
 
 _lock = threading.Lock()
@@ -105,10 +119,32 @@ def _metadata(snapshot: dict) -> dict:
 
 def _compact(snapshot: dict) -> dict:
     overview = dict(_section_entries(snapshot["payload"], "overview"))
+    limitations = snapshot["payload"].get("known_limitations")
+    examples = snapshot["payload"].get("plan_examples")
+    limitation_hint = (
+        {
+            "count": len(limitations),
+            "section": "known_limitations",
+            "hint": "detail=full with section=known_limitations pages the structured entries",
+        }
+        if isinstance(limitations, list)
+        else None
+    )
+    example_hint = (
+        {
+            "count": len(examples),
+            "section": "plan_examples",
+            "hint": "detail=full with section=plan_examples pages validated examples",
+        }
+        if isinstance(examples, list)
+        else None
+    )
     overview.update(
         {
             "detail": "compact",
             "families": _section_summary(snapshot["payload"]),
+            **({"known_limitations": limitation_hint} if limitation_hint else {}),
+            **({"plan_examples": example_hint} if example_hint else {}),
             "pagination": {
                 "default": "this single compact summary page",
                 "detail_sections": "call detail=full with section=<name> and follow next_cursor",

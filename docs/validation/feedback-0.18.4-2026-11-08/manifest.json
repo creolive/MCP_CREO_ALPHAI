@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-08",
+  "work_items": [
+    "DEV-076",
+    "BUG-107"
+  ],
+  "files": [
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.4\\surface_loft.local.patch.diff",
+      "archived_path": "originals/surface_loft.local.patch.diff",
+      "bytes": 1654,
+      "sha256": "d28158c853f930d1e78d3b3a9acc54100e92888468fb9eb946199bd21811374e"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.4\\2026-11-08CREO10.0.0.0-0.18.4-Creo10SDK因Probblh硬包含编译阻断与两版发布记录仍准备发布及源码包单测裸名导入报错.md",
+      "archived_path": "originals/2026-11-08CREO10.0.0.0-0.18.4-Creo10SDK因Probblh硬包含编译阻断与两版发布记录仍准备发布及源码包单测裸名导入报错.md",
+      "bytes": 27189,
+      "sha256": "a1c28abc5ced1b95cb25ee68afc82a4cde9bc53748e5316a14f4adebe6350f30"
+    },
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\0.18.4\\release_meta.json",
+      "archived_path": "originals/release_meta.json",
+      "bytes": 9246,
+      "sha256": "635e6f899a418fd69925681f025f8213c7563f0e2bc9d419e408eb89a465c743"
+    }
+  ]
+}

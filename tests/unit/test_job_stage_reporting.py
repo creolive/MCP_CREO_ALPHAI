@@ -99,6 +99,29 @@ class JobStageReporting(unittest.TestCase):
         self.assertEqual(full["native_progress"]["reason"], "no_stage_timing")
         self.assertIsNone(full["native_progress"]["sub_stage"])
 
+    def test_failed_job_uses_verify_stages_when_log_is_truncated(self):
+        job_id = self.job(
+            "failed",
+            "execute_boolean_bodies",
+            {
+                "failed_stage": "execute_boolean_bodies",
+                "verify_stages": [
+                    {"name": "connect", "elapsed_ms": 68, "since_start_ms": 68},
+                    {"name": "connected", "elapsed_ms": 4710, "since_start_ms": 4778},
+                ],
+            },
+            log=(
+                b"PHASE=failed\n"
+                + b"diagnostic filler\n" * 1000
+                + b"PHASE=execute_boolean_bodies\n"
+            ),
+        )
+        progress = bridge.get_job(job_id, "full")["native_progress"]
+        self.assertTrue(progress["truncated"])
+        self.assertNotEqual(progress["reason"], "no_stage_timing")
+        self.assertEqual(progress["connect_timing"]["connect"]["elapsed_ms"], 68)
+        self.assertEqual(progress["timing_source"], "verify_stages")
+
     def test_finished_jobs_keep_the_polling_payload_small(self):
         job_id = self.job(
             "succeeded",

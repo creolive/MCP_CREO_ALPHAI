@@ -12,6 +12,30 @@
 // This file is included by generic.cpp after the shared element-tree,
 // selection, quilt and measurement helpers are visible; it defines no entry
 // point of its own beyond generic_surface_loft.
+// BUG-107 / DEV-076: the generator gates constants.inc, but this handwritten
+// include must also tolerate SDK generations that omit the boundary-blend tree.
+// SDK-free compilation also exercises the automatic missing-header detection.
+#ifndef MECHDOG_HAS_PROBBL_HEADER
+#if defined(__has_include)
+#if __has_include(<Probbl.h>)
+#define MECHDOG_HAS_PROBBL_HEADER 1
+#endif
+#endif
+#ifndef MECHDOG_HAS_PROBBL_HEADER
+#define MECHDOG_HAS_PROBBL_HEADER 0
+#endif
+#endif
+
+// H13 / BUG-107: the running executor, not the Python build environment, owns
+// the answer to "did this binary compile the boundary-blend route". The worker
+// reports this state in its build-info probe so admission can reject the
+// operation before a job exists instead of inferring the loaded worker's SDK
+// from this machine's headers or from release_numeric.
+const char *mechdog_surface_loft_sdk_state() {
+    return MECHDOG_HAS_PROBBL_HEADER ? "compiled" : "sdk_header_missing";
+}
+
+#if MECHDOG_HAS_PROBBL_HEADER
 #include <Probbl.h>
 
 // Bounded element-tree readback. The extracted tree is the only honest source
@@ -318,3 +342,11 @@ static void generic_surface_loft(const J &op) {
         op, feature,
         {{"quilt_id", quilt_id}, {"section_curve_ids", J::array({first_curve, second_curve})}});
 }
+#else
+static void generic_surface_loft(const J &op) {
+    (void)op;
+    throw std::runtime_error(
+        "SURFACE_LOFT_SDK_UNAVAILABLE: surface_loft requires Probbl.h; this Creo Toolkit "
+        "SDK does not provide the boundary-blend element tree. No feature was created");
+}
+#endif

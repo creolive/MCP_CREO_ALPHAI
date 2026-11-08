@@ -11,7 +11,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,7 +23,14 @@ from creo_mechdog.adoption import adopt
 from creo_mechdog.appearance import preview_recolor, submit_recolor
 from creo_mechdog.assembly_replay import plan_assembly_rebuild
 from creo_mechdog.blend_callback import callback_setup_status, unknown_readiness
-from creo_mechdog.capabilities import REGISTERED_OPERATIONS, UNAVAILABLE_OPERATIONS, families
+from creo_mechdog.capabilities import (
+    KNOWN_LIMITATIONS,
+    PLAN_EXAMPLES,
+    REGISTERED_OPERATIONS,
+    UNAVAILABLE_OPERATIONS,
+    families,
+    project_worker_availability,
+)
 from creo_mechdog.capability_pages import capabilities_response
 from creo_mechdog.capability_summary import release_status, support_status
 from creo_mechdog.file_adoption import adopt_file
@@ -59,6 +65,7 @@ from creo_mechdog.session_erase import erase_session_models
 from creo_mechdog.session_health import snapshot as session_health
 from creo_mechdog.session_models import list_session_models
 from creo_mechdog.sheetmetal import project_wall_contour
+from creo_mechdog.validation_errors import ValidationMCPServer
 from version import VERSION
 
 logging.basicConfig(level=logging.WARNING)
@@ -77,6 +84,7 @@ _SOURCE_NAMES = (
     "creo_startup.py",
     "src/creo_mechdog/__init__.py",
     "src/creo_mechdog/paths.py",
+    "src/creo_mechdog/validation_errors.py",
     "src/creo_mechdog/product_rules.py",
     "examples/product_rules/box_frame.json",
     "src/creo_mechdog/references.py",
@@ -198,7 +206,7 @@ async def server_lifespan(app):
         startup.stop()
 
 
-mcp = MCPServer(
+mcp = ValidationMCPServer(
     "MCP_CREO_MechDog",
     version=VERSION,
     lifespan=server_lifespan,
@@ -417,10 +425,10 @@ async def creo_get_job(
         int,
         Field(
             ge=0,
-            le=30,
+            le=300,
             strict=True,
             description=(
-                "FEAT-007 long poll: 0 returns immediately; 1-30 waits at most that many seconds "
+                "FEAT-007 long poll: 0 returns immediately; 1-300 waits at most that many seconds "
                 "for a terminal status. The wait reads only the job record, holds no Toolkit channel "
                 "lock, creates no job, changes no timeout and resubmits nothing. On expiry the current "
                 "status returns with wait_expired=true; an interruption ends only the wait."
@@ -428,7 +436,7 @@ async def creo_get_job(
         ),
     ] = 0,
 ) -> dict[str, Any]:
-    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Compact keeps the measured surface-chain criteria (surface_trim area_before/area_after with their status and kept_side_basis, surface_offset source_area/measured_offset_distance/direction/offset_method, project_curve length/endpoints/curve/helper/route and the solidify closure) but omits raw log text; full_detail_hint names the paginated full read (detail="full", section="operations_result", limit, cursor). Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job. wait_seconds (0-30, default 0) long-polls the persisted job record only: terminal statuses return immediately, expiry returns the current status with wait_seconds/waited_seconds/wait_expired, and the wait never creates a job, holds the Toolkit channel lock, changes a timeout, resubmits or cancels the job when interrupted."""
+    """Read modeling progress/result. Use detail=compact for polling: status/revision/files/hash/volume/counts/operation outcomes held to a 32 KiB response budget (bounded samples keep total/truncated markers; failure reasons, revision, rollback and save/reload evidence are never cut); full includes complete geometry, aliases and validation. Each operation result carries a zero-based index plus execution_status and effect_status, which separate whether the operation ran from whether the plan committed. Compact keeps the measured surface-chain criteria (surface_trim area_before/area_after with their status and kept_side_basis, surface_offset source_area/measured_offset_distance/direction/offset_method, project_curve length/endpoints/curve/helper/route and the solidify closure) but omits raw log text; full_detail_hint names the paginated full read (detail="full", section="operations_result", limit, cursor). Full remains the compatibility default: small jobs return the whole view inline, large jobs return one page of section records (operations_input/operations_result/result_entries) with complete and next_cursor - repeat with the same section, limit and cursor to fetch remaining pages; a terminal job's pages stay retrievable. section/cursor require detail=full. Recovery failures may include reason, failure_phase and recovery_pending_released; success normally omits failure_phase, so use status and the public server version to interpret absent fields. detail=compact accepts an optional sections array naming result blocks (operations, preview, inspection, recolor, geometry_deviation, feature_errors and per-operation blocks such as extrude_depth, profile, parameters); only named blocks remain, outcome/revision/rollback/save-reload evidence and operation identity always stay, and the response reports sections_applied plus omitted_sections. An empty array keeps only that evidence. sections require detail=compact; an unknown block name is rejected with isError listing every known name, without reading or changing the job. wait_seconds (0-300, default 0) long-polls the persisted job record only: terminal statuses return immediately, expiry returns the current status with wait_seconds/waited_seconds/wait_expired, and the wait never creates a job, holds the Toolkit channel lock, changes a timeout, resubmits or cancels the job when interrupted."""
     return await invoke(
         bridge.get_job, job_id, detail, section, limit, cursor, sections, wait_seconds
     )
@@ -739,7 +747,9 @@ def _capabilities_payload(tool_entries: list[dict[str, Any]]) -> dict[str, Any]:
         "seed_library": seeds.list_seeds(),
         "direct_blend_callback": callback_setup_status(bridge.ROOT / "build"),
         "release_status": release_status(VERSION),
-        "families": families(),
+        "families": project_worker_availability(families(), bridge.worker_build_identity()),
+        "known_limitations": list(KNOWN_LIMITATIONS),
+        "plan_examples": list(PLAN_EXAMPLES),
         "unavailable_operations": UNAVAILABLE_OPERATIONS,
         "evidence_directory": str(bridge.ROOT / "build"),
         "verified_evidence": verified,
@@ -2301,8 +2311,11 @@ async def creo_get_mass_properties(
     otherwise pass density_g_cm3 for an explicit what-if and the receipt reports
     density_source=request. With neither, mass is null with a hint - it is never
     filled in from an assumed density. mass_g is grams and density_g_cm3 is
-    g/cm3; mass_unit is the model's own mass unit and only g/kg/tonne are
-    converted. When mass is null, mass_unavailable_reason names the broken link
+    g/cm3; mass_value_unit is always g. native_mass_unit and the compatibility
+    mass_unit field name the model unit; only g/kg/tonne are converted.
+    mass_source is native, computed_from_density or none. The returned job_id
+    identifies the finished execution record; this synchronous call needs no polling.
+    When mass is null, mass_unavailable_reason names the broken link
     (no_density, unsupported_mass_unit, material_density_unavailable,
     material_query_failed, volume_unavailable). Parts only: assemblies are
     refused until their own query path is verified.
@@ -2830,6 +2843,9 @@ async def creo_surface_loft(
 ) -> dict[str, Any]:
     """Create a native boundary-blend surface quilt from exactly two sketch sections.
 
+    Requires a Toolkit SDK with Probbl.h. Missing boundary-blend support returns
+    SURFACE_LOFT_SDK_UNAVAILABLE and creates no loft feature.
+
     sections accepts sketch labels or integer feature IDs in loft order (index 0 is
     the start section); each sketch must own exactly one non-composite curve, and the
     two sections must be distinct. interpolation is 'straight' only. The result is one
@@ -3003,7 +3019,12 @@ async def creo_boolean_bodies(
     tools: list[dict[str, Any]],
     keep_tools: bool = False,
 ) -> dict[str, Any]:
-    """Create a parametric multi-body Boolean feature. Inspect explicit body IDs; all references use {kind:'body',id:...}."""
+    """Create a parametric multi-body Boolean feature using {kind:'body',id:...}.
+
+    Negative IDs reported by inspection are not supported by this feature path.
+    Sheetmetal-to-solid fusion is unverified even with positive IDs; separate
+    new_body solids are not a promise of a later union into the sheetmetal body.
+    """
     return await invoke(
         general.submit,
         [

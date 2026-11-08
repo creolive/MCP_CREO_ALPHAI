@@ -230,6 +230,10 @@ def source_identity() -> dict:
         "branch": evidence["branch"],
         "dirty": evidence["dirty"],
         "git_status": evidence["git_status"],
+        **{
+            key: evidence[key]
+            for key in ("source_scope", "source_status", "source_errors", "source_file_count")
+        },
         "source_sha256": evidence["source_sha256"],
         "source_fingerprint": evidence["source_fingerprint"],
         "worker_sha256": hashlib.sha256(worker.read_bytes()).hexdigest()

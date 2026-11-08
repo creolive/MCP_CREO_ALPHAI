@@ -709,6 +709,9 @@ static bool assembly_model() {
 // of inventing a material. Nothing is summed across components here: an
 // assembly is refused until its own query path is verified.
 static J mass_properties_json(const J &op) {
+    if (assembly_model())
+        throw std::runtime_error(
+            "Mass properties for assemblies are unsupported; query managed parts individually");
     J out = {{"volume_mm3", nullptr},
              {"mass_g", nullptr},
              {"density_g_cm3", nullptr},
@@ -718,6 +721,9 @@ static J mass_properties_json(const J &op) {
              {"center_of_mass_model_units", nullptr},
              {"material_assigned", false},
              {"mass_unit", nullptr},
+             {"native_mass_unit", nullptr},
+             {"mass_value_unit", "g"},
+             {"mass_source", "none"},
              {"volume_query_code", nullptr},
              {"mass_query_code", nullptr},
              {"units_query_code", nullptr},
@@ -727,34 +733,23 @@ static J mass_properties_json(const J &op) {
              {"source", "ProSolidMassPropertyWithDensityGet"}};
     auto length_units = inspect_length_units(board);
     out["length_unit"] = preview_utf8(std::wstring(length_units.length.name));
+    auto length_scale = length_scale_to_mm(board, length_units);
     ProMassProperty unit_density{};
     ProError volume_code = PRO_TK_NO_ERROR;
-    if (assembly_model()) {
-        // FEAT-057: an assembly is measured by its own query, not by summing
-        // components in Python. The assembly call wants a coordinate-system
-        // selection; a null one is refused with -1 on this build, so the plain
-        // solid query is the documented fallback and both codes are reported.
-        out["source"] = "ProAssemblySolidMassPropertyGet";
-        volume_code = ProAssemblySolidMassPropertyGet((ProSolid)board, nullptr, &unit_density);
-        out["assembly_query_code"] = (int)volume_code;
-        if (volume_code != PRO_TK_NO_ERROR) {
-            volume_code = ProSolidMassPropertyWithDensityGet(
-                (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
-            out["source"] = "ProSolidMassPropertyWithDensityGet";
-        }
-        out["volume_query_code"] = (int)volume_code;
-    } else {
-        volume_code = ProSolidMassPropertyWithDensityGet(
-            (ProSolid)board, nullptr, PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
-        out["volume_query_code"] = (int)volume_code;
-    }
+    volume_code = ProSolidMassPropertyWithDensityGet((ProSolid)board, nullptr,
+                                                     PRO_MP_DENS_USE_ALWAYS, 1.0, &unit_density);
+    out["volume_query_code"] = (int)volume_code;
     double volume_mm3 = 0.0;
     if (!volume_code) {
         out["center_of_mass_model_units"] = xyz(unit_density.center_of_gravity);
         if (auto mm3 = length_units.volume_mm3(unit_density.volume)) {
             volume_mm3 = *mm3;
             out["volume_mm3"] = volume_mm3;
-            out["center_of_mass_mm"] = xyz(unit_density.center_of_gravity);
+            if (length_scale.known)
+                out["center_of_mass_mm"] =
+                    J::array({unit_density.center_of_gravity[0] * length_scale.scale,
+                              unit_density.center_of_gravity[1] * length_scale.scale,
+                              unit_density.center_of_gravity[2] * length_scale.scale});
         }
     }
     // The model's own material first: it is the only density that describes the
@@ -770,6 +765,7 @@ static J mass_properties_json(const J &op) {
         auto mass_unit = inspect_mass_unit(board);
         out["units_query_code"] = (int)mass_unit.code;
         out["mass_unit"] = preview_utf8(std::wstring(mass_unit.unit.name));
+        out["native_mass_unit"] = out["mass_unit"];
         auto grams_per_unit = grams_per_mass_unit(mass_unit.unit.name);
         if (!mass_code && grams_per_unit) {
             double grams = material_density.mass * *grams_per_unit;
@@ -780,6 +776,7 @@ static J mass_properties_json(const J &op) {
                 out["density_model_units"] = material_density.density;
                 out["mass_model_units"] = material_density.mass;
                 out["density_source"] = "model_material";
+                out["mass_source"] = "native";
                 return out;
             }
         }
@@ -805,12 +802,17 @@ static J mass_properties_json(const J &op) {
             out["mass_g"] = volume_mm3 * density / 1000.0;
             out["density_g_cm3"] = density;
             out["density_source"] = "request";
+            out["mass_source"] = "computed_from_density";
+            out["mass_unavailable_reason"] = nullptr;
+            out["hint"] = nullptr;
             return out;
         }
         out["mass_unavailable_reason"] = "volume_unavailable";
         out["hint"] = "Volume is unknown, so a supplied density cannot yield a mass";
         return out;
     }
+    if (!out["mass_unavailable_reason"].is_null())
+        return out;
     out["mass_unavailable_reason"] = "no_density";
     out["hint"] = "Assign a material with a density, or pass density_g_cm3, to get mass";
     return out;

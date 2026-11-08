@@ -315,6 +315,29 @@ static std::wstring create_plate() {
 #include "generic.cpp"
 #include "drawing.cpp"
 int wmain(int argc, wchar_t *argv[]) {
+    // H13: a no-Toolkit build identity probe. The digest and every feature flag
+    // below are compile-time facts of this executable; nothing is read from the
+    // machine's SDK headers or from the Creo release at run time.
+    if (argc == 2 && !wcscmp(argv[1], L"build-info")) {
+        const char *loft_state = mechdog_surface_loft_sdk_state();
+        J info = {
+            {"identity_schema", 1},
+#ifdef MECHDOG_BUILD_SOURCE_DIGEST
+            {"source_digest", MECHDOG_BUILD_SOURCE_DIGEST},
+#else
+            {"source_digest", nullptr},
+#endif
+            {"features",
+             {{"surface_loft",
+               {{"available", std::string(loft_state) == "compiled"},
+                {"state", loft_state},
+                {"sdk_requirements", J::array({"Probbl.h"})},
+                {"missing_sdk_requirements",
+                 std::string(loft_state) == "compiled" ? J::array() : J::array({"Probbl.h"})}}}}},
+        };
+        printf("%s\n", info.dump().c_str());
+        return 0;
+    }
     if (argc == 3 && !wcscmp(argv[1], L"generic")) {
         std::ifstream f(std::wstring(argv[2]) + L"\\request.json");
         J request;

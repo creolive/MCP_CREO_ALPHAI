@@ -1,0 +1,112 @@
+{
+  "date": "2026-11-08",
+  "local_path": "0.18.2 -> 0.18.4 (crossing v0.18.3)",
+  "release_type": "PATCH x2 (0.18.3: DEV-074 H01/H02/H04/H06/H13 + 2 new public tools, user-specified version number; 0.18.4: DEV-074 H05/H07/H08/H09/H10/H12)",
+  "final_version": "0.18.4",
+  "version_determination": {
+    "method": "curl raw JSON (releases list + /releases/latest + /releases/tags/v0.18.4)",
+    "releases_latest": "v0.18.4",
+    "tag_detail": "v0.18.4",
+    "tag_commit": "04927a9 (PR #24 merge), commit date 2026-11-07T17:41:17Z",
+    "created_at": "2026-11-07T17:41:25Z",
+    "published_at": "2026-11-07T17:41:40Z",
+    "updated_at": "2026-11-07T17:42:11Z",
+    "prerelease": false,
+    "draft": false,
+    "asset_count": 4,
+    "crossed_version": "v0.18.3 (5cf7c11, PR #23, published 2026-11-07T15:45:17Z)"
+  },
+  "assets": {
+    "source_zip": "81ff64939c9b14ae94635bb49928664526d8fd4b64bda25836381320eb0f8f4f",
+    "source_zip_bytes": 8752689,
+    "source_sidecar": "be337e203d0a0e9e2edfc9d7eeeaa0fa074df8be0eb1ed7f8fe1f3636704e0e5",
+    "seed_zip": "1a030983c448d1f76cf5b74d878abce653e5d389ff939468b5cd314b43eb8647",
+    "seed_zip_bytes": 493442,
+    "seed_sidecar": "168f7f4a277ad8b92d6b039839ed73626bb2af5ef66d85bcacbceeff27623aca",
+    "four_way": "local sha256 = sidecar = release body = github asset digest (4/4)",
+    "sidecars": "ASCII + LF; standard sha256sum -c exit 0 for both",
+    "no_post_publish_replacement": true
+  },
+  "build": {
+    "first_attempt_exit": 1,
+    "first_attempt_error": "native/surface_loft.cpp(15): fatal error C1083: cannot open include file 'Probbl.h' (Creo 10 SDK ships no Probbl.h)",
+    "blocker_class": "P1 - header gating only covered the generated constants.inc (BUG-107), not the new hand-written translation unit added in 0.18.3",
+    "local_patch": "native/surface_loft.cpp: #if defined(__has_include) / __has_include(<Probbl.h>) guard, body compiled only when the header exists, otherwise an explicit unavailable runtime_error stub",
+    "local_patch_diff": "evidence/surface_loft.local.patch.diff (33 lines, the only non-upstream change)",
+    "after_patch_exit": 0,
+    "errors": 0,
+    "lnk_errors": 0,
+    "c4552": 0,
+    "c4819": 16,
+    "c3861": 0,
+    "c2039": 0,
+    "c1083": 0,
+    "generate_constants": "MISSING_SDK_HEADER=Probbl.h / 6261",
+    "worker_before_bytes": 10351104,
+    "worker_after_bytes": 10458112,
+    "worker_sha256": "39ec6f6d347377adf7d6de9e75ea396d70f93368ff876c6ebd980656be380ed3",
+    "source_sha256_before": "d3cd94938747611f",
+    "source_sha256_after": "d8638b486840f6cdaf40c6126b5474556e716a1d594e3cbf436abdd6189ab1d1",
+    "eol_normalization_note": "local patch file rewritten to LF; sha256-repo-lf-v1 fingerprint unchanged (d8638b48...) before/after the EOL fix, which confirms the fingerprint normalizes line endings"
+  },
+  "diff": {
+    "old_files": 1484,
+    "new_files": 1549,
+    "added": 65,
+    "removed": 0,
+    "modified_real": 87,
+    "eol_only": 2,
+    "native_added": ["native/surface_loft.cpp", "native/surface_group.cpp"],
+    "native_real": ["native/advanced.cpp", "native/generic.cpp", "native/planar_wall.cpp", "native/preview.h", "native/surface_measure.h", "native/surface_trim.cpp"]
+  },
+  "package_parity": {
+    "files": 1549,
+    "identical": 1548,
+    "eol_only": 0,
+    "real_diff": ["native/surface_loft.cpp"],
+    "missing": [],
+    "zero_local_patches": false,
+    "reason": "one documented local patch to get past the Creo 10 SDK compile blocker"
+  },
+  "registration": "8/8 SAME (protk.dat fc62f1548f4a1895, command MechDogBlend_07c, loader fp cf5ab07ebedf46bb, loader sha 350d68a5982f984b, payload fp 3e686885606b6f71, payload sha 07c5e5c5d7538a94, algorithm sha256-repo-lf-v1) + dir counts 2/7 SAME",
+  "tool_surface": {"tool_decorators": 105, "public_tools": 104, "gated": ["creo_quilt_merge"], "new_in_0_18_3": ["creo_surface_loft", "creo_measure_surface_group"]},
+  "seeds": "9/9 SHA256 vs seed_manifest.json; seed_package.json 0.18.4 / 1a030983...; seed files themselves unchanged (declared)",
+  "gates": {"dir_positive": 0, "dir_negative": 1, "tag_remote": "exit 0: v0.18.4 four assets downloaded and verified; both sidecars match"},
+  "unit_subset": {
+    "test_gated_headers": "4 tests OK (but only covers the generated constants.inc, not hand-written TUs)",
+    "test_t07_preview + test_t07_provenance": "64 tests, 1 ERROR (bare-name import), 1 skipped",
+    "full_suite": "NOT RUN on this host (safe-delete guard hang); author-side 2916/2943 claims not reproduced locally"
+  },
+  "previous_feedback_recheck": {
+    "p1_dev_075_card_still_in_progress": "NOT FIXED: docs/work-items/DEV-075.md:3 still '状态：开发中（离线实现，未连接 Creo）。目标版本：0.18.2。'; DEV-074.md:3 uses the correct '已交付 ... 目标版本：0.18.4（子项已交付）' pattern",
+    "p2_backlog_count_off_by_one": "NOT FIXED, shifted: text says 167 (BUG 75 / FEAT 61 / DEV 31); two regexes + 9-row category table all give 166 / 75 / 61 / 30",
+    "p2_postcheck_v0_18_2_section": "PARTIAL: substance delivered in docs/validation/feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md (12722 B, 14 digests, C5 exit 0), but the RELEASING-designated ledger docs/development/RELEASE-POSTCHECK-2026-11-07.md still has the 110-byte placeholder; that file also does not cover 0.18.3/0.18.4"
+  },
+  "new_findings": [
+    "P1: Creo 10 SDK compile blocker - native/surface_loft.cpp:15 unconditional #include <Probbl.h>; the whole worker fails with fatal error C1083. BUG-107 header gating only covered generate_constants.py output; no contract test inspects hand-written native TUs, so tests/unit/test_gated_headers stays green while the package cannot compile",
+    "P1: both release records are still pre-publish templates - RELEASE-0.18.4.md has 17 '待回填' in section 4 (native build, full gate, both packaging steps, source.zip extracted full suite, four-asset table) plus 3 '____' in sections 10-12 (merge commit, tag target, Release link); RELEASE-0.18.3.md has section 4 filled but the same 3 '____'; both state '本记录为准备发布时点 / 不得把本记录当作已发布事实' although both versions are published and the Release bodies carry the full numbers",
+    "P1: previous P1 unfixed - DEV-075 work card still says 开发中 / target 0.18.2 after 0.18.2 shipped",
+    "P2: BACKLOG.md count off-by-one persists and shifted to 167/DEV31 vs actual 166/DEV30; the '本轮移入完成档案 23 项（…DEV-073、DEV-075…）' sentence is stale text carried from the 0.18.2 round",
+    "P2: designated POSTCHECK ledger still lacks v0.18.2 data; the data exists in a different path (feedback-0.17.4-2026-11-07/POSTCHECK-RELEASE.md) and does not cover 0.18.3/0.18.4",
+    "P2: published source package fails tests.unit.test_t07_provenance with 1 ERROR - tools/test_tilted_sketch_lifecycle.py:23 uses a script-style bare import ('from test_dev049_tilted_cut import ...') that cannot resolve when imported as tools.<module>; contradicts the claimed 2943 tests / 0 errors for the extracted package; two more bare-import residues exist in tools/test_guards.py and tools/summarize_multisection.py (not currently referenced)",
+    "P3: the 0.18.4 Release body's '交付与发布后核对（2026-11-08 00:5x +08:00）' section predates the Release object itself (created_at 17:41:25Z, assets 17:41:37Z, published 17:41:40Z = 2026-11-08 01:41 +08:00), so the claimed '--tag v0.18.4 -> exit 0' could not have run at that timestamp"
+  ],
+  "not_reported_as_defects": [
+    "0.18.3 adds public tools but ships as PATCH - author explicitly declared it as a user-specified version-number exception",
+    "gate numbers 2744/2762/2835/2916/2943 co-existing - 2744/2762 already labeled as historical snapshots, 2916/2943 are the current per-version values",
+    "seed ZIP byte-identical to earlier versions - author declared the seed files themselves are unchanged",
+    "H03/H05/H07 recorded as unavailable - correct behavior, counter-evidence reported honestly with gates kept",
+    "empty feedback-0.18.0/0.18.1/0.18.2 archives - timing gap; feedback-0.17.4 now has 7 files",
+    "105 registered / 104 public tools - creo_quilt_merge gated, consistent with the Release body"
+  ],
+  "unverified": [
+    "No Creo connection, no Toolkit channel, no Creo session start/stop, no fault injection (long-term freeze since 2026-10-17)",
+    "All 0.18.3/0.18.4 live behaviors: surface_loft quilt/area/trim/thicken, surface_group_measure four states, surface_trim kept-side centroid/bbox, H01 non-zero origin resize, H05/H07 counter-evidence, H09 revolved sphere, H10 multi-quilt group, H12 receipts",
+    "Runtime behavior of the local patch on Creo 10 (surface_loft now fails with an explicit reason; the path is derived from source only)",
+    "Creo 9 (no SDK on this host), WorkBuddy resident-process stdio handshake (requires restart)",
+    "Full tools/test_unit.py (host safe-delete guard); only test_gated_headers, test_t07_preview and test_t07_provenance were executed"
+  ],
+  "feedback_document": "2026-11-08CREO10.0.0.0-0.18.4-Creo10SDK因Probblh硬包含编译阻断与两版发布记录仍准备发布及源码包单测裸名导入报错.md",
+  "archive": "_local/update-0.18.4/",
+  "restart_workbuddy_required": true
+}

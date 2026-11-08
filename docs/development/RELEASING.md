@@ -36,7 +36,7 @@
 5. 使用 `tools/package.py` 与 `tools/package_seeds.py` 制作源码和种子附件；检查分发白名单、第三方许可、配置模板、开发配置、种子及 SHA256。两个打包脚本各自在 ZIP 同目录生成 `<zip>.sha256`（内容为 `<完整 SHA256>  <文件名>` 一行），该文件是发布附件的一部分，不是本地临时产物。种子附件与源码包必须成对发布，顺序固定：先用 `tools/package_seeds.py --output <new-seed.zip>` 确定性构建种子包，把实测 SHA256 显式回填到 `docs/seed_package.json` 的 `seed_archive_sha256`（同时写 `compatible_server_version`），再重建一次确认哈希不变，最后用 `tools/package.py --seed-archive <new-seed.zip> --output <new-source.zip>` 制作源码包。**DEV-061 起 `tools/package_seeds.py` 构包后默认校验 `docs/seed_package.json`**：未回填或版本不符时保留归档、打印应回填的摘要并以非零退出（`--allow-record-mismatch` 只能用于准备回填，不得用于发布）；`tests/unit/test_seed_record_gate.py` 也在单元阶段守同一件事。`tools/package.py` 的 `--seed-archive` 是必填项：缺参、摘要不符、版本不符、两份种子清单不一致或 README 当前版本段滞后都在写出任何源码包或 stage 文件之前失败（exit 非零）。旧调用不静默猜选父目录 ZIP，须补该显式参数；从新目录解压并运行适用检查，随后在具备 SDK 的环境验收安装和建模。**DEV-075 起把「官方 `source.zip` 解压后跑全量单测」作为独立门禁**：解压目录没有 `.git/`，`local_provenance()` 等工作树来源记录允许降级为目录遍历并标记 `git_unavailable`，但测试结论必须与 git 工作树结果分开记录，不能用工作树的通过数代替源码包结论。
 6. 核对实际验收源码与本次变更对应的 `main` 提交一致，从该提交建立版本标签并发布 GitHub Release，附版本说明、验收摘要、环境与范围限制。核对附件及校验和，并回填 Release 链接。发布平台标记 Pre-release 与项目成熟度一致。
 7. **Release body 必须直接列出源码包与种子包的文件名及完整 SHA256，Release 附件必须固定为四个文件**（DEV-045：0.4.1～0.4.3 的好做法在 0.4.4 漏写，升级者只能去主干 `docs/validation/RELEASE-*.md` 另找一步；DEV-045/C01：0.11.7 与 0.12.0 只上传两个 ZIP，漏传两个 `.zip.sha256` sidecar）。四个附件是 `MCP_CREO_MechDog-<版本>-source.zip`、同名的 `.zip.sha256`、`MCP_CREO_MechDog-<版本>-seed-library.zip` 与同名的 `.zip.sha256`；sidecar 由打包脚本生成，文件名必须是 `<zip 文件名>.sha256`。上传命令须逐个列出四个文件，例如 `gh release create v<版本> <source.zip> <source.zip.sha256> <seed-library.zip> <seed-library.zip.sha256> --title ... --notes-file ...`；不要用 `*.zip` 通配代替清单（通配会漏掉 sidecar）。发布后用 `gh release view <tag> --json assets` 或 `tools/check_release_assets.py --tag <tag>` 核对远端恰有这四个附件、两个 sidecar 的哈希与对应远端 ZIP 摘要一致，再报告交付完成；核对结果写入发布记录。已发布 Release 与附件保持原样，不回填旧版本。
-8. 文档与状态一致性逐 ID 核对：`version.py`、当前版本说明的标题与正文、[docs/DEVELOPMENT.md 当前入口](../DEVELOPMENT.md)、本文件「版本约定」段的「当前版本为 X」行、主台账（含完成档案）、本版交付 ID 的工作卡首页及远端 GitHub Release（已发布／草稿／不存在）必须一致。**“本版交付 ID”同时包含功能/接口卡（FEAT）**：本版新增或扩展的能力，其 FEAT 卡首页状态与目标版本必须与 `capabilities.py`、README 和版本说明一致；能力已发布而卡仍写“开发中/未排期”视为本项未通过（DEV-062，对应 0.11.0 反馈 F02 §4）。合入前按候选状态核对一次，发布后按实际状态再核对一次；不允许旧版本遗留的"未发布"描述继续出现在当前入口、主台账或版本说明首部。核对时对本版交付的每个 ID 分别记录：技术状态、实际交付版本、仍开放范围，以及卡首页／主台账／版本说明／开发入口／实际 Release 五处链接。本项为手动清单核对，不为此编写新发布工具、不联网代替人工确认。
+8. 文档与状态一致性逐 ID 核对：`version.py`、当前版本说明的标题与正文、[docs/DEVELOPMENT.md 当前入口](../DEVELOPMENT.md)、本文件「版本约定」段的「当前版本为 X」行、主台账（含完成档案）、本版交付 ID 的工作卡首页及远端 GitHub Release（已发布／草稿／不存在）必须一致。**“本版交付 ID”同时包含功能/接口卡（FEAT）、工程整理卡（DEV）与缺陷修复卡（BUG）**（DEV-077，对应 0.18.2 反馈 P1-1）：本版新增或扩展的能力，其 FEAT 卡首页状态与目标版本必须与 `capabilities.py`、README 和版本说明一致；DEV/工程卡与 BUG 卡同样按本版实际交付范围核对，能力已发布而卡仍写“开发中/未排期”或逐 ID 表写“无开放项 / 一致”却保留“开发中”均视为本项未通过（DEV-062，对应 0.11.0 反馈 F02 §4）。合入前按候选状态核对一次，发布后按实际状态再核对一次；不允许旧版本遗留的"未发布"描述继续出现在当前入口、主台账或版本说明首部。核对时对本版交付的每个 ID 分别记录：技术状态、实际交付版本、仍开放范围，以及卡首页／主台账／版本说明／开发入口／实际 Release 五处链接。本项为手动清单核对，不为此编写新发布工具、不联网代替人工确认；`tools/check_backlog_counts.py` 只自检台账声明/表行/分类表计数一致，不替代逐 ID 人工核对（DEV-077）。
 9. 相对上一正式包的身份核对：以最近一个已发布版本的正式源码包为基准，比较 `native/third_party/**` 原字节（至少含 `json.hpp` 与第三方许可）、回调指纹（沿用 `sha256-repo-lf-v1` 的 CRLF→LF 归一化算法，不因比较而改算法）、DLL 身份（loader／callback／worker 的 SHA256）与注册路径（`protk.dat`、实际注册表项及安装目录）。哈希相同只说明字节未变；内容确有变更时，按实际影响说明是否需要重新注册、迁移或重启，不以"所有哈希必须永远相同"阻止合理更新。本项同样为人工核对，不新增发布工具，不把外部报告中的字节数当作本机受测指纹。
 
 本地构建或检查不等于已发布。GitHub 操作和附件示例见 [原发布说明](../PUBLISH_GITHUB.md)；其 0.2.5 文件名为历史示例，未来按实际新版本生成，不重新发布相同版本的修改内容。
@@ -47,7 +47,7 @@
 
 | ID | 主台账状态 / 目标版本 | 卡首页状态 / 目标版本 | 本版实际交付 | 仍开放范围 | 一致 / 待修正 |
 | --- | --- | --- | --- | --- | --- |
-| [DEV-075](../work-items/DEV-075.md) | 开发中 / 0.18.2 | 开发中（离线实现，未连接 Creo）/ 0.18.2 | t07 provenance 无 git 降级、附件 asset API 二级通道、发布规范与逐 ID/POSTCHECK 回填、FEAT-059 措辞 | 无（本卡离线项全部关闭） | 一致 |
+| [DEV-075](../work-items/DEV-075.md) | 已交付 0.18.2 子项；本分支后续修复未发布 / 0.18.2（已发布子项） | 已交付 0.18.2 子项（离线门禁及来源降级）；本分支后续离线修复已完成、未发布 / 0.18.2（已发布子项）；后续未排期 | t07 provenance 无 git 降级、附件 asset API 二级通道、发布规范与逐 ID/POSTCHECK 回填、FEAT-059 措辞 | 本分支后续离线修复未发布；Creo 实机与远端余项开放 | 一致（DEV-077 回填） |
 | [DEV-066](../work-items/DEV-066.md) | 部分交付，剩余待规划 / 未排期 | 部分交付 / t07 子项 0.18.2，剩余未排期 | `tools/test_t07_preview.py` 降级与源码包解压全量门禁 | 其余 `tools/` 离线驱动的 git 依赖、负例输出与前置说明 | 一致 |
 | [FEAT-059](../work-items/FEAT-059.md) | 其它 agent 处理范围（已交付 0.18.0 子项）/ 未排期（剩余范围） | 已交付 0.18.0 子项 / 0.18.0（已发布）；剩余未排期 | 多模型事务日志底座（0.18.0） | 原生骨架创建、受管身份/依赖、完整多模型事务 | 一致 |
 
@@ -101,3 +101,9 @@ GitHub Release 链接与发布状态：
 | protk.dat / 注册表路径 | | | |
 | 实际注册影响（未变 / 需重新注册 / 需迁移 / 需重启） | — | — | |
 ```
+
+## DEV-076：唯一发布后核对入口与收尾
+
+发布后核对唯一入口为[RELEASE-POSTCHECK-2026-11-07.md](RELEASE-POSTCHECK-2026-11-07.md)。分散在validation的旧核对原件保持字节不变，在入口逐版链接实证；不能只留“见发布记录/待回填”。每版分别记录来源和实际检查时间（UTC及+08:00）、本地/远端标签与提交、四件名称/大小/API digest/实算SHA256/sidecar/body、命令和退出码；本地标签与报告方陈述不能充当本轮远端核对。
+
+交付ID核对同时包含FEAT能力卡、DEV工程卡和BUG修复卡，逐卡检查首页状态/已交付版本/开放余项与完成档案。核对时间未知时明确unknown，不把准备时间或近似00:5x改写成虚构的发布后时刻。exit0后必须将结果和来源加入上述入口并消除当前收尾记录占位，才能报告交付完成。历史发布前模板保留原貌，用入口所链的新勘误补记，不回写已发布tag或附件。

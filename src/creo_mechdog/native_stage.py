@@ -48,11 +48,12 @@ def _empty() -> dict[str, Any]:
         "idle_seconds": None,
         "stages_seen": 0,
         "connect_timing": {},
+        "timing_source": "native_log",
         "reason": None,
     }
 
 
-def _integer(text: str | None) -> int | None:
+def _integer(text: Any) -> int | None:
     if text is None:
         return None
     try:
@@ -118,6 +119,29 @@ def _connect_timing(path: Path) -> dict[str, dict[str, int | None]]:
     return result
 
 
+def _verify_timing(stages: Any) -> dict[str, dict[str, int | None]]:
+    """Project the job's own ``result.verify_stages`` connect markers.
+
+    These entries carry elapsed/since-start timings but no worker timestamp, so
+    ``ts`` stays null and ``idle_seconds`` is never inferred from them.
+    """
+    if not isinstance(stages, (list, tuple)):
+        return {}
+    result: dict[str, dict[str, int | None]] = {}
+    for stage in stages:
+        if not isinstance(stage, dict):
+            continue
+        name = stage.get("name")
+        if name not in ("connect", "connected"):
+            continue
+        result[name] = {
+            "elapsed_ms": _integer(stage.get("elapsed_ms")),
+            "since_start_ms": _integer(stage.get("since_start_ms")),
+            "ts": None,
+        }
+    return result
+
+
 def _lines(raw: bytes) -> list[str]:
     text = raw.decode("utf-8", errors="replace")
     lines = text.splitlines()
@@ -131,13 +155,16 @@ def stall_report(
     directory: Path | str,
     *,
     tail_bytes: int = TAIL_BYTES,
+    verify_stages: Any = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Summarise the last phase/sub-stage of ``<directory>/native.log``.
 
     Returns a bounded, read-only projection. Missing or unreadable logs are
-    reported explicitly (``readable=False`` plus ``reason``); nothing is
-    inferred from job metadata.
+    reported explicitly (``readable=False`` plus ``reason``). When the log is
+    truncated and its tail has no sub-stage, ``verify_stages`` from the job's
+    own result supplies connect/connected timing instead of reporting
+    ``no_stage_timing``; ``timing_source`` names which evidence was used.
     """
     report = _empty()
     report["tail_bytes"] = tail_bytes
@@ -151,6 +178,7 @@ def stall_report(
     report["connect_timing"] = _connect_timing(log_path)
     if size is not None:
         report["truncated"] = size > tail_bytes
+    fallback = _verify_timing(verify_stages) if report["truncated"] else {}
 
     stage = None
     sub_stage = None
@@ -179,6 +207,12 @@ def stall_report(
     report["sub_stage"] = sub_stage
     report["stages_seen"] = seen
     if sub_stage is None:
+        if fallback:
+            for name, timing in fallback.items():
+                report["connect_timing"].setdefault(name, timing)
+            if seen == 0:
+                report["stages_seen"] = len(fallback)
+            report["timing_source"] = "verify_stages"
         report["reason"] = (
             "no_phase_lines"
             if stage is None

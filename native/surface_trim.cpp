@@ -203,6 +203,7 @@ static void generic_surface_trim(const J &op) {
     const char *kept_source = nullptr;
     ProError kept_visit_code = PRO_TK_NO_ERROR;
     int kept_id = surface_trim_kept_quilt(feature, target_id, kept_source, kept_visit_code);
+    bool kept_handle_available = false;
     MeasurementOutcome area_after;
     RegionGeometry kept_geometry;
     if (kept_id < 0) {
@@ -214,6 +215,7 @@ static void generic_surface_trim(const J &op) {
             area_after.reason = "kept_quilt_init_failed";
             kept_geometry.reason = "kept_quilt_init_failed";
         } else {
+            kept_handle_available = true;
             area_after = quilt_area_native(kept_quilt);
             kept_geometry = quilt_region_geometry(kept_quilt);
         }
@@ -232,6 +234,26 @@ static void generic_surface_trim(const J &op) {
     // Where the retained id came from, and what the direct visit said. F03's
     // -4 stays visible instead of being hidden behind a fallback.
     details["kept_quilt_visit_code"] = (int)kept_visit_code;
+    // H16: separate "the measurement could read this region" from "the id is a
+    // handle a later operation can reference". `result_quilt_id` is only set
+    // after ProQuiltInit accepted it, so a successful receipt carries a usable
+    // reference for consecutive trims, thicken and group measurement.
+    details["result_quilt_id"] = kept_handle_available ? J(kept_id) : J(nullptr);
+    details["result_quilt_handle"] = {
+        {"available", kept_handle_available},
+        {"id", kept_handle_available ? J(kept_id) : J(nullptr)},
+        {"source", kept_source ? J(kept_source) : J(nullptr)},
+        {"visit_code", (int)kept_visit_code},
+        {"basis", kept_handle_available
+                      ? J(kept_source && std::string(kept_source) == "feature_quilt_geomitem"
+                              ? "owned_quilt_geometry_item"
+                              : "retrimmed_target_quilt")
+                      : J(nullptr)},
+        {"reusable_as",
+         kept_handle_available
+             ? J("quilt reference for surface_trim.target, thicken or surface_group_measure")
+             : J(nullptr)},
+    };
     // §4.5 kept_side_basis. Every value below is measured: the centroids, bounds
     // and directions come from the sampled tessellation of the target and the
     // retained quilt (quilt_region_geometry), and tool_normal is either the
@@ -345,7 +367,10 @@ static void generic_surface_trim(const J &op) {
             "Surface trim regeneration failed (feature_status=" + std::to_string((int)status) +
             ", feature_id=" + std::to_string(feature.id) + ", target_quilt_id=" +
             std::to_string(target_id) + ", tool=" + tool.kind + ", keep_side=" + keep_side +
-            "); check that the tool actually intersects the target quilt");
+            "); check that the tool actually intersects the target quilt and partitions a "
+            "removable region. Intersection alone may be insufficient: an open intersection "
+            "arc may need a closed loop or connections to target boundaries. Intersection "
+            "curves were not measured; this is troubleshooting guidance, not a detected cause");
     }
     stage_operation_result(details);
     // Honest success test: a trim that removes nothing is a failure, not a
@@ -383,5 +408,6 @@ static void generic_surface_trim(const J &op) {
     }
     remember(op, feature,
              {{"quilt_id", kept_id < 0 ? J(nullptr) : J(kept_id)},
+              {"result_quilt_id", kept_handle_available ? J(kept_id) : J(nullptr)},
               {"kept_quilt_source", kept_source ? J(kept_source) : J(nullptr)}});
 }

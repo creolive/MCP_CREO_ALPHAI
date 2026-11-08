@@ -133,6 +133,32 @@ def write_files(root: Path, names) -> None:
 
 
 class LocalProvenanceTests(unittest.TestCase):
+    def test_missing_git_does_not_start_a_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_files(root, ("tools/driver.py",))
+            with (
+                patch.object(source_provenance.shutil, "which", return_value=None),
+                patch.object(source_provenance.subprocess, "run") as process,
+            ):
+                evidence = source_provenance.local_provenance(root)
+        process.assert_not_called()
+        self.assertEqual(evidence["git_status"], "unavailable")
+        self.assertEqual(evidence["source_scope"], "distributed_source")
+
+    def test_missing_source_does_not_invent_a_complete_fingerprint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_files(root, ("tools/driver.py",))
+            with patch.object(
+                source_provenance.subprocess, "run", side_effect=FileNotFoundError("git")
+            ):
+                evidence = source_provenance.local_provenance(root, ("missing.py",))
+        self.assertEqual(evidence["source_status"], "incomplete")
+        self.assertIsNone(evidence["source_fingerprint"])
+        self.assertEqual(evidence["source_errors"][0]["path"], "missing.py")
+        self.assertIn("tools/driver.py", evidence["source_sha256"])
+
     def test_git_executable_missing_falls_back_to_directory_hashes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -166,16 +192,19 @@ class LocalProvenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_files(root, ("tools/driver.py",))
-            with patch.object(
-                source_provenance.subprocess,
-                "run",
-                side_effect=[
-                    subprocess.CompletedProcess([], 0, str(root) + "\n"),
-                    subprocess.CompletedProcess([], 0, "tools/driver.py\n"),
-                    subprocess.CompletedProcess([], 0, "b" * 40 + "\n"),
-                    subprocess.CompletedProcess([], 0, "main\n"),
-                    subprocess.CompletedProcess([], 0, " M tools/driver.py\n"),
-                ],
+            with (
+                patch.object(source_provenance.shutil, "which", return_value="git"),
+                patch.object(
+                    source_provenance.subprocess,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, str(root) + "\n"),
+                        subprocess.CompletedProcess([], 0, "tools/driver.py\n"),
+                        subprocess.CompletedProcess([], 0, "b" * 40 + "\n"),
+                        subprocess.CompletedProcess([], 0, "main\n"),
+                        subprocess.CompletedProcess([], 0, " M tools/driver.py\n"),
+                    ],
+                ),
             ):
                 evidence = source_provenance.local_provenance(root)
         self.assertEqual(evidence["git_status"], "available")
@@ -235,7 +264,10 @@ class DriverFallbackTests(unittest.TestCase):
                 ),
             ):
                 identity = test_adoption_product_rules.git_identity()
-        self.assertEqual(identity, {"commit": None, "dirty": None, "git_status": "unavailable"})
+        self.assertIsNone(identity["commit"])
+        self.assertIsNone(identity["dirty"])
+        self.assertEqual(identity["git_status"], "unavailable")
+        self.assertTrue(identity["error"])
 
 
 if __name__ == "__main__":
