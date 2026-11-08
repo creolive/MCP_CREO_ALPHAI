@@ -8,7 +8,7 @@
 
 2026-11-08：DEV-076/DEV-077 的 0.19.1 子项已合入 main 并发布 [v0.19.1](validation/RELEASE-0.19.1.md)：worker 构建身份/`surface_loft` 动态准入、overlap 预算/覆盖诊断、trim 结果句柄与连续 trim、`rotation_tolerance`、`get_job` 300 s、`known_limitations`/`plan_examples`；公开工具仍 107。R01—R08 剩余项与未测范围见[DEV-077-HANDOFF](development/DEV-077-HANDOFF.md)。
 
-2026-11-08：[DEV-079](work-items/DEV-079.md)归档下载目录0.19.0的三份Creo 10反馈并完成离线补漏：quilt_merge公开描述、曲率默认摘要/`include_samples`、surface_group结构化失败回执、`profile.method`与POSTCHECK旧句；新增本卡后当前表行为170。未合main、未发布，Creo 10原生能力与钣金余项见[对照表](validation/feedback-0.19.0-2026-11-08/MAPPING.md)。
+2026-11-08：[DEV-079](work-items/DEV-079.md)归档下载目录0.19.0的三份Creo 10反馈并完成离线补漏：quilt_merge公开描述、曲率默认摘要/`include_samples`、surface_group结构化失败回执、`profile.method`与POSTCHECK旧句；新增本卡后当前表行为170。随 0.19.2 发布（提交`df8e178`，[Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.2)），四附件核对 exit 0；Creo 10原生能力与钣金余项见[对照表](validation/feedback-0.19.0-2026-11-08/MAPPING.md)。
 
 建立：2026-10-13；最近复核：2026-11-08（[DEV-074](work-items/DEV-074.md) 0.19.0 发布准备；本分支叠加 DEV-076/DEV-077）。本文件是唯一当前台账，按“开发入口 → 本表 ID → 工作卡当前摘要 → 相关源码”读取，历史证据按需打开。当前源码版本以 [version.py](../version.py) 为准；逐版交付记录见 [版本说明目录](../README.md) 与 `docs/validation/RELEASE-*.md`，不在本表重复回填。
 

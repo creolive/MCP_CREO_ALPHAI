@@ -30,15 +30,16 @@
 ## 附件（发布后回填）
 
 | 文件 | 字节 | SHA256 |
-| --- | --- | --- |
-| `MCP_CREO_MechDog-0.19.2-source.zip` | 待回填 | 待回填 |
-| `MCP_CREO_MechDog-0.19.2-source.zip.sha256` | 待回填 | 待回填 |
-| `MCP_CREO_MechDog-0.19.2-seed-library.zip` | 待回填 | 待回填 |
-| `MCP_CREO_MechDog-0.19.2-seed-library.zip.sha256` | 待回填 | 待回填 |
+| --- | ---: | --- |
+| `MCP_CREO_MechDog-0.19.2-source.zip` | 9,259,802 | `922fb7fdaf8d514f6cdc13b3b71984d1275213047f80afd5032aa495e447b7b5` |
+| `MCP_CREO_MechDog-0.19.2-source.zip.sha256` | 101 | `ec17e070ef9cc696893855db77a5b551f568365496a46916291040ff66903279` |
+| `MCP_CREO_MechDog-0.19.2-seed-library.zip` | 493,442 | `22a7a32d7636d6babf7b68b9526b6b935f4d97386ff06ba9c2487002f4e71558` |
+| `MCP_CREO_MechDog-0.19.2-seed-library.zip.sha256` | 107 | `aeec87c4c01dbb91466253754cfa05c4210c13e1cd097d425c1fc9adb8bd434d` |
 
 ## 远端核对
 
-- 提交：待回填
-- 标签：`v0.19.2`（待创建）
-- Release：待回填
-- `tools/check_release_assets.py --tag v0.19.2`：待回填
+- 提交：`df8e178553348fc1f438559a2d506ae6bfd5a9e0`（`main`，已推送 `origin/main`）
+- 标签：`v0.19.2`，annotated tag `fd8159cd5644d5e57f14cd0b80b35e0d5b7a1be0`，指向上述提交
+- Release：[v0.19.2](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.2)，id `438226979`，非 draft、非 prerelease；`published_at=2026-11-08T12:19:48Z`
+- `tools/check_release_assets.py --tag v0.19.2`：exit 0，「four assets downloaded and verified; both sidecars match」
+- 本文件在发布源码包内保留发布前占位；上表为发布后回填，发布后核对原文见 [RELEASE-POSTCHECK-2026-11-07](../development/RELEASE-POSTCHECK-2026-11-07.md#v01922026-11-08-本轮联网实测)。
