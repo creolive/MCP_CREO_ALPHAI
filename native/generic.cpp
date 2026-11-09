@@ -2736,6 +2736,135 @@ static J revolve_axis_report(const J &op, ProFeature &created, ProFeature &sketc
     return report;
 }
 static J extrude_depth_report(ProFeature &f, const J &op);
+// B2/F11: a zero-material cut publishes the geometry it actually used instead
+// of asking the caller to guess it. The frame is read from the sketch alias
+// (the same frame sketch() built), the depth from the created feature's own
+// element tree, and the volumes from the regeneration comparison. Nothing is
+// echoed from the request as a measurement; when the alias or the effective
+// depth is unreadable the interval stays explicitly unavailable rather than
+// being backfilled from op["depth"]. through_all has no finite interval.
+static J cut_geometry_context(const J &op, bool revolve, int direction_sign, double before_volume,
+                              double after_volume, double removed, double threshold,
+                              const J &depth_report) {
+    J context = {{"status", "no_material_removed"},
+                 {"operation", revolve ? "revolve" : "extrude"},
+                 {"mode", "cut"},
+                 {"sketch", op.at("sketch")},
+                 {"direction", op.value("direction", "positive")},
+                 {"direction_sign", direction_sign},
+                 {"volume_mm3",
+                  {{"before", before_volume},
+                   {"after", after_volume},
+                   {"removed", removed},
+                   {"zero_material_threshold", threshold}}},
+                 {"note", "The frame is read from the sketch alias and the effective depth from "
+                          "the created feature's element tree; the interval is derived from "
+                          "those readings, not measured as a swept volume."}};
+    const J *entry =
+        op["sketch"].is_string() ? alias_entry(op["sketch"].get<std::string>()) : nullptr;
+    J frame = {{"available", false}, {"source", "unavailable"}, {"reason", nullptr}};
+    V origin = {}, normal = {};
+    // vec() reads three doubles without guarding its indices; a malformed alias
+    // must degrade to an unavailable frame, never replace the cut failure with
+    // an unrelated JSON exception.
+    auto frame_vector = [](const J &value) {
+        return value.is_array() && value.size() == 3 && value[0].is_number() &&
+               value[1].is_number() && value[2].is_number();
+    };
+    if (entry && entry->is_object() && entry->contains("origin") && entry->contains("normal") &&
+        frame_vector((*entry)["origin"]) && frame_vector((*entry)["normal"])) {
+        origin = vec((*entry)["origin"]);
+        normal = vec((*entry)["normal"]);
+        frame = {{"available", true},
+                 {"source", "sketch_alias"},
+                 {"reason", nullptr},
+                 {"origin_mm", (*entry)["origin"]},
+                 {"normal", (*entry)["normal"]}};
+        for (const char *key : {"u_axis", "v_axis", "surface_id", "section_normal_sign"})
+            frame[key] = entry->contains(key) ? (*entry)[key] : J(nullptr);
+    } else
+        frame["reason"] = op["sketch"].is_string() ? "sketch_alias_unavailable"
+                                                   : "sketch_reference_is_not_a_label";
+    context["sketch_frame"] = frame;
+    context["extrude_depth"] = revolve ? J(nullptr) : depth_report;
+    context["revolve_angle_deg"] = revolve ? J(op.value("angle", 360.0)) : J(nullptr);
+    J interval = {{"available", false},
+                  {"source", "unavailable"},
+                  {"reason", nullptr},
+                  {"axis", nullptr},
+                  {"origin_mm", nullptr},
+                  {"start_offset_mm", nullptr},
+                  {"end_offset_mm", nullptr},
+                  {"start_point_mm", nullptr},
+                  {"end_point_mm", nullptr},
+                  {"effective_depth_type", nullptr},
+                  {"effective_depth_mm", nullptr},
+                  {"direction_sign", direction_sign}};
+    const J effective_type = depth_report.value("effective_depth_type", J(nullptr));
+    const J effective_depth = depth_report.value("effective_depth_mm", J(nullptr));
+    if (effective_type.is_string())
+        interval["effective_depth_type"] = effective_type;
+    if (effective_depth.is_number())
+        interval["effective_depth_mm"] = effective_depth;
+    if (revolve)
+        interval["reason"] = "revolve_cut_has_no_linear_depth";
+    else if (!frame["available"].get<bool>())
+        interval["reason"] = "sketch_frame_unavailable";
+    else if (!effective_depth.is_number() || effective_depth.get<double>() <= 0.0)
+        interval["reason"] =
+            effective_type.is_string() && effective_type.get<std::string>() == "through_all"
+                ? "through_all_has_no_finite_depth"
+                : "effective_depth_unreadable";
+    else {
+        double depth = effective_depth.get<double>();
+        bool symmetric =
+            effective_type.is_string() && effective_type.get<std::string>() == "symmetric";
+        double start = symmetric ? -depth / 2 : 0.0, end = symmetric ? depth / 2 : depth;
+        V axis = scale(normal, (double)direction_sign);
+        V start_point = add(origin, scale(axis, start));
+        V end_point = add(origin, scale(axis, end));
+        interval = {{"available", true},           {"source", "feature_tree_and_sketch_alias"},
+                    {"reason", nullptr},           {"axis", axis},
+                    {"origin_mm", origin},         {"start_offset_mm", start},
+                    {"end_offset_mm", end},        {"start_point_mm", start_point},
+                    {"end_point_mm", end_point},   {"effective_depth_type", effective_type},
+                    {"effective_depth_mm", depth}, {"direction_sign", direction_sign}};
+    }
+    context["depth_interval_mm"] = interval;
+    return context;
+}
+// The text stays a readable summary; the structured block is the receipt.
+static std::string cut_no_material_failure(bool revolve, const J &context) {
+    std::string message = std::string(revolve ? "Revolve" : "Extrude") +
+                          " cut removes no material; check the sketch position, direction and "
+                          "depth against existing geometry";
+    const J &frame = context["sketch_frame"];
+    if (frame.value("available", false)) {
+        const J &origin = frame["origin_mm"], &normal = frame["normal"];
+        char numbers[256];
+        std::snprintf(numbers, sizeof(numbers),
+                      " Sketch origin (mm) = (%.6g, %.6g, %.6g); normal = (%.6g, %.6g, %.6g); "
+                      "direction sign = %d.",
+                      origin[0].get<double>(), origin[1].get<double>(), origin[2].get<double>(),
+                      normal[0].get<double>(), normal[1].get<double>(), normal[2].get<double>(),
+                      context["direction_sign"].get<int>());
+        message += numbers;
+    }
+    const J &interval = context["depth_interval_mm"];
+    if (interval.value("available", false)) {
+        char numbers[192];
+        std::snprintf(numbers, sizeof(numbers),
+                      " Effective depth %.6g mm spans [%.6g, %.6g] mm along the reported axis.",
+                      interval["effective_depth_mm"].get<double>(),
+                      interval["start_offset_mm"].get<double>(),
+                      interval["end_offset_mm"].get<double>());
+        message += numbers;
+    } else
+        message += " Effective depth interval is unavailable (" +
+                   interval["reason"].get<std::string>() + ").";
+    message += " See cut_geometry_context in the operation result for the structured receipt.";
+    return message;
+}
 static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         validate_revolve_axis(op);
@@ -2840,13 +2969,19 @@ static J extrude_or_revolve(const J &op, bool revolve) {
         details["extrude_depth"] = extrude_depth_report(f, op);
     if (cut) {
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
-        double removed = before_volume - volume();
+        double after_volume = volume();
+        double removed = before_volume - after_volume;
         log("CUT_MATERIAL_REMOVED_MM3=%.12f\n", removed);
-        if (removed <= std::max(1e-9, fabs(before_volume) * 1e-12))
-            throw std::runtime_error(
-                std::string(revolve ? "Revolve" : "Extrude") +
-                " cut removes no material; check the sketch position, direction and depth "
-                "against existing geometry");
+        double threshold = std::max(1e-9, fabs(before_volume) * 1e-12);
+        if (removed <= threshold) {
+            J depth_report = revolve ? J::object() : details["extrude_depth"];
+            J context = cut_geometry_context(op, revolve, sign, before_volume, after_volume,
+                                             removed, threshold, depth_report);
+            J staged = has_staged_operation_result ? staged_operation_result : J::object();
+            staged["cut_geometry_context"] = context;
+            stage_operation_result(staged);
+            throw std::runtime_error(cut_no_material_failure(revolve, context));
+        }
         details["material_removed_mm3"] = removed;
     }
     J state = inspection();

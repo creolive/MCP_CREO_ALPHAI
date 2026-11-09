@@ -73,6 +73,78 @@ class CutMaterialContract(unittest.TestCase):
         self.assertEqual(after["revision"], revision)
         self.assertEqual(after["part_file"], before["part_file"])
 
+    def test_failed_cut_publishes_the_structured_geometry_receipt(self):
+        baseline = self.establish_checkpoint()
+        cut = self.submit(model_id=baseline["model_id"], expected_revision=1)
+        origin = [0.0, 10.0, 0.0]
+        normal = [0.0, -1.0, 0.0]
+        axis = [0.0, 1.0, 0.0]
+        receipt = {
+            "status": "no_material_removed",
+            "operation": "extrude",
+            "mode": "cut",
+            "direction": "negative",
+            "direction_sign": -1,
+            "sketch_frame": {
+                "available": True,
+                "source": "sketch_alias",
+                "origin_mm": origin,
+                "normal": normal,
+            },
+            "depth_interval_mm": {
+                "available": True,
+                "source": "feature_tree_and_sketch_alias",
+                "axis": axis,
+                "origin_mm": origin,
+                "start_offset_mm": 0.0,
+                "end_offset_mm": 5.0,
+                "start_point_mm": origin,
+                "end_point_mm": [0.0, 15.0, 0.0],
+                "effective_depth_type": "blind",
+                "effective_depth_mm": 5.0,
+                "direction_sign": -1,
+            },
+            "volume_mm3": {
+                "before": 23497.34,
+                "after": 23497.34,
+                "removed": 0.0,
+                "zero_material_threshold": 2.349734e-8,
+            },
+        }
+        self.run_job(
+            cut,
+            success=False,
+            saved_file_reloaded_and_verified=False,
+            rollback_succeeded=True,
+            inspection=None,
+            message="Extrude cut removes no material; check the sketch position, direction "
+            "and depth against existing geometry. Sketch origin (mm) = (0, 10, 0); "
+            "normal = (0, -1, 0); direction sign = -1. See cut_geometry_context in "
+            "the operation result for the structured receipt.",
+            operations=[
+                {
+                    "op": "extrude",
+                    "index": 1,
+                    "label": "cut_in",
+                    "succeeded": False,
+                    "cut_geometry_context": receipt,
+                }
+            ],
+        )
+
+        job = bridge.get_job(cut["job_id"], detail="full")
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("removes no material", job["message"])
+        operation = job["result"]["operations"][-1]
+        context = operation["cut_geometry_context"]
+        self.assertTrue(context["available"])
+        self.assertEqual(context["sketch_frame"]["normal"], normal)
+        self.assertEqual(context["depth_interval_mm"]["end_point_mm"], [0.0, 15.0, 0.0])
+        self.assertEqual(context["volume_mm3"]["before"], 23497.34)
+        compact = bridge.get_job(cut["job_id"], detail="compact")
+        self.assertIn("cut_geometry_context", compact["result"]["operations"][-1])
+        self.assertEqual(general.model_info(baseline["model_id"])["revision"], 1)
+
     def test_successful_cut_reports_removed_material(self):
         created = self.establish_checkpoint()
         model_id = created["model_id"]

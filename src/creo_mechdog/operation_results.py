@@ -15,6 +15,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from creo_mechdog.cut_geometry_context import annotate_cut_geometry_context
+
 EXECUTION_STATUSES = ("succeeded", "failed", "not_executed", "unknown")
 EFFECT_STATUSES = ("committed", "rolled_back", "no_effect", "unknown")
 
@@ -344,12 +346,15 @@ PROTECTED_OPERATION_KEYS = (
 
 #: Failure diagnostics kept in full on the failed record itself. A per-record
 #: ``failed_operation`` block is failure evidence too (FEAT-012/FEAT-008).
+#: B2/F11: the zero-material-cut geometry receipt is failure evidence as well,
+#: so a polling compact view keeps it instead of falling back to text only.
 FAILED_EVIDENCE_KEYS = (
     "feature_errors",
     "edge_geometry_diagnostic",
     "failed_stage",
     "failed_toolkit_call",
     "failed_operation",
+    "cut_geometry_context",
 )
 
 
@@ -679,6 +684,7 @@ def annotate_native_result(
     annotate_surface_curvature(result)
     annotate_sketch_origin_diagnostics(result)
     annotate_sketch_shifted(result)
+    annotate_cut_geometry_context(result)
     if inputs is not None:
         annotate_profiles(result, inputs)
         annotate_arc_geometry(result, inputs)

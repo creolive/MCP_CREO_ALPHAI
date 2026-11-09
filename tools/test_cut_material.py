@@ -117,6 +117,48 @@ def removed_of(result, label):
     return None
 
 
+def cut_context_of(result, label):
+    """B2/F11: the structured zero-material-cut receipt on one operation."""
+    for op in (result.get("result") or {}).get("operations") or []:
+        if op.get("label") == label:
+            return op.get("cut_geometry_context")
+    return None
+
+
+def recomputable(context):
+    """Recompute the interval from the receipt's own frame and effective depth."""
+    if not isinstance(context, dict) or not context.get("available"):
+        return False
+    frame = context.get("sketch_frame") or {}
+    interval = context.get("depth_interval_mm") or {}
+    if not frame.get("available") or not interval.get("available"):
+        return False
+    origin, normal, axis = (
+        frame.get("origin_mm"),
+        frame.get("normal"),
+        interval.get("axis"),
+    )
+    sign = interval.get("direction_sign")
+    start = interval.get("start_offset_mm")
+    end = interval.get("end_offset_mm")
+    depth = interval.get("effective_depth_mm")
+    if not all(isinstance(value, list) and len(value) == 3 for value in (origin, normal, axis)):
+        return False
+    if sign not in (1, -1) or any(value is None for value in (start, end, depth)):
+        return False
+    if abs((end - start) - depth) > 1e-6:
+        return False
+    if any(abs(axis[i] - normal[i] * sign) > 1e-6 for i in range(3)):
+        return False
+    for offset, key in ((start, "start_point_mm"), (end, "end_point_mm")):
+        point = interval.get(key)
+        if not isinstance(point, list) or len(point) != 3:
+            return False
+        if any(abs(point[i] - (origin[i] + axis[i] * offset)) > 1e-6 for i in range(3)):
+            return False
+    return True
+
+
 async def model_state(client, model_id):
     state = await call(client, "creo_inspect_model", {"model_id": model_id, "detail": "compact"})
     aliases = await call(
@@ -163,6 +205,7 @@ async def t01_valid_cut(client):
         "volume_mm3": volume,
         "material_removed_mm3": removed_of(result, "cut_c4"),
         "saved_reloaded": (result.get("result") or {}).get("saved_file_reloaded_and_verified"),
+        "cut_geometry_context": cut_context_of(result, "cut_c4"),
     }
     case("T01", data)
     check(result["status"] == "succeeded", "T01 job must succeed")
@@ -170,6 +213,7 @@ async def t01_valid_cut(client):
     check(close(volume, 24000 - 200 * math.pi), "T01 volume 24000-200*pi")
     check(data["saved_reloaded"] is True, "T01 saved and reloaded")
     check(result.get("revision") == revision + 1, "T01 revision advances once")
+    check(data["cut_geometry_context"] is None, "T01 successful cut has no failure context")
 
 
 async def t02_disjoint_cut_rolls_back(client):
@@ -211,14 +255,29 @@ async def t02_disjoint_cut_rolls_back(client):
         "before_revision": before["revision"],
         "after_revision": after["revision"],
         "aliases_absent": all(k not in after["aliases"] for k in ("sk_out", "cut_out")),
+        "cut_geometry_context": cut_context_of(result, "cut_out"),
     }
     case("T02", data)
     check(result["status"] == "failed", "T02 must fail")
     check("removes no material" in (result.get("message") or ""), "T02 identifiable message")
+    check("cut_geometry_context" in (result.get("message") or ""), "T02 message names receipt")
     check(data["rollback_succeeded"] is True, "T02 rolled back to checkpoint")
     check(data["after_volume"] == data["before_volume"], "T02 volume unchanged")
     check(data["after_revision"] == data["before_revision"], "T02 revision unchanged")
     check(data["aliases_absent"], "T02 no leftover aliases")
+    context = data["cut_geometry_context"] or {}
+    check(context.get("status") == "no_material_removed", "T02 structured status")
+    check(recomputable(context), "T02 origin/normal/depth interval recomputable")
+    check((context.get("sketch_frame") or {}).get("source") == "sketch_alias", "T02 frame source")
+    interval = context.get("depth_interval_mm") or {}
+    check(interval.get("source") == "feature_tree_and_sketch_alias", "T02 interval source is tree")
+    check(close(interval.get("effective_depth_mm"), 10), "T02 effective depth is the 10 mm cut")
+    volume = context.get("volume_mm3") or {}
+    check(
+        close(volume.get("before"), before["volume"])
+        and close(volume.get("after"), before["volume"]),
+        "T02 measured volumes match the unchanged model",
+    )
 
     resume = await job(
         client,
@@ -280,11 +339,13 @@ async def t03_repeat_cut(client):
         "job_status": result["status"],
         "message": result.get("message"),
         "after_revision": after.get("revision"),
+        "cut_geometry_context": cut_context_of(result, "cut_dup"),
     }
     case("T03", data)
     check(result["status"] == "failed", "T03 repeated cut must fail")
     check("removes no material" in (result.get("message") or ""), "T03 same contract as T02")
     check(after.get("revision") == revision, "T03 revision unchanged")
+    check(recomputable(data["cut_geometry_context"]), "T03 context recomputable too")
 
 
 async def t04_boundary_and_small_cut(client):
@@ -626,9 +687,28 @@ async def t08_revolve_cut(client):
             ],
         },
     )
-    case("T08b", {"job_status": disjoint["status"], "message": disjoint.get("message")})
+    context = cut_context_of(disjoint, "cut_ring2") or {}
+    case(
+        "T08b",
+        {
+            "job_status": disjoint["status"],
+            "message": disjoint.get("message"),
+            "cut_geometry_context": context,
+        },
+    )
     check(disjoint["status"] == "failed", "T08b disjoint revolve cut fails")
     check("removes no material" in (disjoint.get("message") or ""), "T08b same contract")
+    check(context.get("status") == "no_material_removed", "T08b structured revolve context")
+    frame = context.get("sketch_frame") or {}
+    normal = frame.get("normal") or []
+    check(
+        len(normal) == 3 and close(normal[1], -1.0),
+        "T08b XZ normal stays negative Y (A-batch three-plane contract)",
+    )
+    check(
+        (context.get("depth_interval_mm") or {}).get("reason") == "revolve_cut_has_no_linear_depth",
+        "T08b revolve never gains a fabricated linear depth interval",
+    )
 
 
 async def main():
