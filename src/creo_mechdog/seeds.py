@@ -25,6 +25,17 @@ REGISTRY_NAME = "seed_registry.json"
 NO_NATIVE_PROBE = (
     "not_performed; listing and validation never connect to Creo and never trial-load a seed"
 )
+CALLBACK_FREE_ROUTE = {
+    "tool": "creo_new_loft_part",
+    "callback_required": False,
+    "preflight_tools": ["creo_list_seeds", "creo_validate_seed"],
+    "scope": "native_blend_seed_rebinding",
+    "note": (
+        "Direct creo_loft requires a resident DLL callback; the seed route "
+        "creates a new part without one. Seed bytes must still match the plan's "
+        "section count and interpolation before submission."
+    ),
+}
 
 
 def expected_archive_sha256() -> str:
@@ -122,6 +133,7 @@ def list_seeds() -> dict:
         "available_scope": AVAILABLE_SCOPE,
         "native_load_probe": NO_NATIVE_PROBE,
         "compatibility_evidence": COMPATIBILITY_EVIDENCE,
+        "callback_free_route": CALLBACK_FREE_ROUTE,
     }
 
 

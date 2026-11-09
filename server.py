@@ -1636,7 +1636,12 @@ async def creo_loft(
     loader/SDK generation and start it manually under every loader policy. Payload
     upgrades normally require restarting Creo and starting the same registration.
     Missing, mismatched or unverified callbacks reject before model mutation with
-    BLEND_CALLBACK_SETUP_REQUIRED. MCP never loads DLLs or changes security policy.
+    BLEND_CALLBACK_SETUP_REQUIRED, whose callback_free_route field names the
+    callback-free alternative: creo_new_loft_part creates a NEW part from a
+    published seed instead. Query creo_list_seeds for that route and for the
+    section_count/interpolation/seed_feature_id each seed requires; explicit
+    seed_file plus seed_feature_id are checked for compatibility before a job
+    is submitted. MCP never loads DLLs or changes security policy.
     sections accepts sketch labels or integer feature IDs; digit-only strings are
     normalized to feature IDs for public-client compatibility. References must be distinct.
     """

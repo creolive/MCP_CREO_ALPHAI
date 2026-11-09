@@ -354,6 +354,13 @@ async def run(args: argparse.Namespace) -> dict:
                 if direct["status"] == "failed":
                     if args.expect_setup_required:
                         assert "BLEND_CALLBACK_SETUP_REQUIRED" in direct.get("message", ""), direct
+                        # B1/F01: the rejection itself must advertise the seed route.
+                        for hint in (
+                            "creo_new_loft_part",
+                            "creo_list_seeds",
+                            "callback_free_route",
+                        ):
+                            assert hint in direct.get("message", ""), (hint, direct)
                         assert report["jobs"][-1]["elapsed_seconds"] < 30, report["jobs"][-1]
                         assert "TK_CALL_BEGIN name=blend_dll_load" not in report["jobs"][-1].get(
                             "developer_native_log", ""

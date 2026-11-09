@@ -6,13 +6,32 @@
 #include <ProUtil.h>
 #include "callback_runtime.h"
 
+// F01/B1: a client rejected by the resident-callback preflight must be able to
+// discover the callback-free seed route at the point of failure. This is guidance
+// only; it never loads a DLL and never changes Creo security settings.
+static const char *const SEED_ROUTE_NOTE =
+    "Callback-free alternative: creo_new_loft_part creates a NEW part by rebinding a "
+    "published native Blend seed and does not need a resident DLL callback. Call "
+    "creo_list_seeds to read callback_free_route and compare section_count, "
+    "interpolation and seed_feature_id with the plan before submitting; "
+    "creo_validate_seed checks the installed bytes. This route cannot append a Blend "
+    "to an existing model, and available seeds do not prove the current Creo session "
+    "can load them.";
+
 static ProToolkitDllHandle resident_blend_callback(const std::filesystem::path &build,
                                                    std::string &command) {
     ProToolkitDllHandle module = nullptr;
     J status = callback_runtime_status(build, module, command);
     log("BLEND_CALLBACK_PREFLIGHT=%s\n", status.dump().c_str());
-    if (!module)
+    if (!module) {
+        J route = J::object();
+        route["tool"] = "creo_new_loft_part";
+        route["callback_required"] = false;
+        route["preflight_tools"] = J::array({"creo_list_seeds", "creo_validate_seed"});
+        route["note"] = SEED_ROUTE_NOTE;
+        status["callback_free_route"] = route;
         throw std::runtime_error("BLEND_CALLBACK_SETUP_REQUIRED: " + status.dump());
+    }
     return module;
 }
 
@@ -35,7 +54,8 @@ static ProToolkitDllHandle resident_blend_callback(const std::filesystem::path &
         "start the callback using Creo Auxiliary Applications and " +
         utf8((build / L"blend_callback_setup.json").wstring()) +
         " (registry_file), review its DLL prompt before modeling, then retry a new "
-        "confirmed request. MCP never changes Creo security settings.");
+        "confirmed request. MCP never changes Creo security settings. " +
+        std::string(SEED_ROUTE_NOTE));
 }
 
 static void resident_blend_task(ProToolkitDllHandle module, const char *function,

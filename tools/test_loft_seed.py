@@ -229,28 +229,40 @@ async def main(seed_file, feature_id, interpolation="straight"):
                 report["cases"][shape]["edited_and_cut_volume_mm3"] = p["result"]["inspection"][
                     "volume_mm3"
                 ]
-        await job(
-            "creo_new_loft_part",
+
+        async def rejected(args, expected):
+            """B1: an incompatible explicit seed is refused before any job is queued."""
+            response = await client.call_tool("creo_new_loft_part", args)
+            assert response.is_error, response.structured_content
+            message = " ".join(
+                item.text for item in response.content if getattr(item, "text", None)
+            )
+            assert "Seed preflight rejected before any job was submitted" in message, message
+            assert expected in message, message
+            assert "job_id" not in (response.structured_content or {}), response.structured_content
+            report.setdefault("preflight_rejections", []).append(
+                {"input": args, "is_error": True, "message": message}
+            )
+            output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            return message
+
+        await rejected(
             {
                 "seed_file": str(source),
                 "seed_feature_id": 2147483647,
                 "sections": sections("rectangle"),
                 "interpolation": interpolation,
             },
-            fail=True,
+            "seed_feature_id 2147483647 does not match the manifest id",
         )
-        mismatch = await job(
-            "creo_new_loft_part",
+        await rejected(
             {
                 "seed_file": str(source),
                 "seed_feature_id": feature_id,
                 "sections": sections("rectangle"),
                 "interpolation": "straight" if interpolation == "smooth" else "smooth",
             },
-            fail=True,
-        )
-        assert "does not match requested interpolation" in mismatch.get("message", ""), (
-            mismatch.get("message")
+            "Seed interpolation is",
         )
         report["mismatched_seed_rejected"] = True
         report["source_file_unchanged"] = hashlib.sha256(source.read_bytes()).hexdigest() == digest

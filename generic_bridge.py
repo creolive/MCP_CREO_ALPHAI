@@ -391,7 +391,20 @@ def new_loft_part(
         "source_file": str(source.resolve()),
         "interpolation": binding["interpolation"],
     }
-    return submit(sections, model_name=model_name, assertions=assertions, loft_seed=binding)
+    from creo_mechdog import seed_preflight
+
+    preflight = seed_preflight.preflight(
+        len(sections), binding["interpolation"], binding["source_file"], seed_feature_id
+    )
+    if preflight["verdict"] == "incompatible":
+        raise ValueError(
+            "Seed preflight rejected before any job was submitted: "
+            + "; ".join(preflight["reasons"])
+        )
+    result = submit(sections, model_name=model_name, assertions=assertions, loft_seed=binding)
+    if isinstance(result, dict):
+        return {**result, "seed_preflight": preflight}
+    return result
 
 
 def submit(
