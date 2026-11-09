@@ -87,6 +87,21 @@ class JobStageReporting(unittest.TestCase):
         compact = bridge.get_job(job_id, "compact")
         self.assertEqual(compact["native_progress"]["sub_stage"], "verify_model_save")
 
+    def test_running_job_compact_progress_exposes_index_and_total(self):
+        job_id = self.job(
+            "running",
+            "executing_feature_plan",
+            log=(
+                b"PHASE=execute_extrude\n"
+                b"PROGRESS index=3 total=20 op=extrude label=deck_cut state=start "
+                b"elapsed_ms=1200 since_start_ms=3400 ts=1700000000000\n"
+            ),
+        )
+        progress = bridge.get_job(job_id, "compact")["native_progress"]
+        self.assertEqual(progress["operation_index"], 3)
+        self.assertEqual(progress["operation_total"], 20)
+        self.assertEqual(progress["progress_text"], "3/20 extrude:deck_cut start")
+
     def test_failed_job_without_stage_lines_states_the_reason(self):
         job_id = self.job(
             "failed",

@@ -162,6 +162,34 @@ static void generic_substage(const std::string &name) {
         verify_stages.push_back(
             {{"name", name}, {"elapsed_ms", elapsed}, {"since_start_ms", since_start}});
 }
+// B3/F06: one bounded line at the start and end of each requested operation is
+// the "per-feature log summary" the 0.19.0 report asked for. A polling client
+// reads index/total/label/elapsed from the 8192 B tail even when the log grows
+// to 3-7.7 MB; this does not make the log itself smaller. It never changes the
+// job budget, the operation order, the PHASE lines or the terminal result, and
+// it keeps its own clock so STAGE timings stay untouched. Terminal
+// BUILD_FAILED/BUILD_SUCCESS lines are never suppressed. Operations without a
+// label keep an explicit "-" placeholder instead of an empty field.
+static auto generic_progress_last_at = generic_started_at;
+static void generic_progress(int index, int total, const J &op, const char *state) {
+    const auto point = std::chrono::steady_clock::now();
+    const long long elapsed = static_cast<long long>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(point - generic_progress_last_at)
+            .count());
+    generic_progress_last_at = point;
+    const long long since_start = milliseconds_between(generic_started_at);
+    const long long wall =
+        static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::system_clock::now().time_since_epoch())
+                                   .count());
+    const std::string kind = op.value("op", std::string()),
+                      label = op.value("label", std::string());
+    const char *kind_text = kind.empty() ? "-" : kind.c_str();
+    const char *label_text = label.empty() ? "-" : label.c_str();
+    log("PROGRESS index=%d total=%d op=%s label=%s state=%s elapsed_ms=%lld "
+        "since_start_ms=%lld ts=%lld\n",
+        index, total, kind_text, label_text, state, elapsed, since_start, wall);
+}
 static V vec(const J &j) {
     return {j.at(0).get<double>(), j.at(1).get<double>(), j.at(2).get<double>()};
 }
@@ -7495,6 +7523,7 @@ static int run_generic(const std::wstring &job) {
                 seed_profiles = validate_loft_seed(request["loft_seed"]);
                 suppress_seed_for_profiles(request["loft_seed"]["feature_id"], true);
             }
+            int operation_total = static_cast<int>(request["operations"].size());
             for (auto op : request["operations"]) {
                 last_sketch_solver_info = nullptr;
                 ++operation_index;
@@ -7502,12 +7531,14 @@ static int run_generic(const std::wstring &job) {
                 operation_in_flight = op;
                 executing_operation = true;
                 generic_stage("execute_" + op["op"].get<std::string>());
+                generic_progress(operation_index + 1, operation_total, op, "start");
                 log("OPERATION_INDEX=%d INPUT=%s\n", operation_index, op.dump().c_str());
                 if (!request.value("readonly", false)) {
                     mutated = true;
                     new_model_evidence.ops_mutated = true;
                 }
                 execute_operation(op);
+                generic_progress(operation_index + 1, operation_total, op, "done");
                 executing_operation = false;
             }
             generic_stage("verify_model");

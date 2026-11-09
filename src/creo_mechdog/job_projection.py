@@ -293,6 +293,7 @@ PROGRESS_KEYS = (
     "log_bytes",
     "tail_bytes",
     "truncated",
+    "log_over_soft_limit",
     "stage",
     "sub_stage",
     "elapsed_ms",
@@ -300,6 +301,12 @@ PROGRESS_KEYS = (
     "idle_seconds",
     "stages_seen",
     "reason",
+    "operation_index",
+    "operation_total",
+    "operation_label",
+    "operation_state",
+    "progress_elapsed_ms",
+    "progress_text",
 )
 
 #: List-view identity and state. ``job_id`` is the detail entry: the caller

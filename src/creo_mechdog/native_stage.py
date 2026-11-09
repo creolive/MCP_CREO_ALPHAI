@@ -29,10 +29,18 @@ TAIL_BYTES = 8192
 HEAD_BYTES = 4096
 #: Hard bound on parsed lines even if a log line is extremely long.
 MAX_SCAN_LINES = 200
+#: B3/F06: the 0.19.0 report measured 3-7.7 MB native logs. This is a
+#: reporting threshold only: the reader never truncates or rewrites the
+#: worker's log, and terminal errors stay in it. The per-operation PROGRESS
+#: line is the bounded "per-feature log summary" that report asked for as an
+#: alternative to limiting the log itself.
+LOG_SOFT_LIMIT_BYTES = 1 << 20
 
 _PHASE = re.compile(r"^PHASE=(.+)$")
 _STAGE = re.compile(r"^STAGE\s+(.+)$")
+_PROGRESS = re.compile(r"^PROGRESS\s+(.+)$")
 _FIELD = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(\S+)")
+_PROGRESS_STATES = ("start", "done")
 
 
 def _empty() -> dict[str, Any]:
@@ -41,6 +49,7 @@ def _empty() -> dict[str, Any]:
         "log_bytes": None,
         "tail_bytes": TAIL_BYTES,
         "truncated": False,
+        "log_over_soft_limit": False,
         "stage": None,
         "sub_stage": None,
         "elapsed_ms": None,
@@ -50,6 +59,12 @@ def _empty() -> dict[str, Any]:
         "connect_timing": {},
         "timing_source": "native_log",
         "reason": None,
+        "operation_index": None,
+        "operation_total": None,
+        "operation_label": None,
+        "operation_state": None,
+        "progress_elapsed_ms": None,
+        "progress_text": None,
     }
 
 
@@ -60,6 +75,36 @@ def _integer(text: Any) -> int | None:
         return int(text)
     except (TypeError, ValueError):
         return None
+
+
+def _progress_fields(line: str) -> dict[str, Any] | None:
+    """Validate one PROGRESS marker; a malformed line never becomes progress."""
+    fields = dict(_FIELD.findall(line))
+    index = _integer(fields.get("index"))
+    total = _integer(fields.get("total"))
+    state = fields.get("state")
+    op, label = fields.get("op"), fields.get("label")
+    if (
+        index is None
+        or total is None
+        or total <= 0
+        or not 1 <= index <= total
+        or state not in _PROGRESS_STATES
+        or not op
+        or not label
+    ):
+        return None
+    # The worker writes "-" for operations whose schema has no label. That is
+    # an explicit absence, not a value to echo back as if it were measured.
+    text_label = op if label == "-" else f"{op}:{label}"
+    return {
+        "operation_index": index,
+        "operation_total": total,
+        "operation_label": None if label == "-" else label,
+        "operation_state": state,
+        "progress_elapsed_ms": _integer(fields.get("elapsed_ms")),
+        "progress_text": f"{index}/{total} {text_label} {state}",
+    }
 
 
 def _now_ms(now: datetime | None) -> int:
@@ -178,12 +223,14 @@ def stall_report(
     report["connect_timing"] = _connect_timing(log_path)
     if size is not None:
         report["truncated"] = size > tail_bytes
+        report["log_over_soft_limit"] = size > LOG_SOFT_LIMIT_BYTES
     fallback = _verify_timing(verify_stages) if report["truncated"] else {}
 
     stage = None
     sub_stage = None
     timing: dict[str, str] = {}
     seen = 0
+    progress: dict[str, Any] | None = None
     for line in _lines(raw or b""):
         phase = _PHASE.match(line)
         if phase:
@@ -192,6 +239,12 @@ def stall_report(
                 stage = next_stage
                 sub_stage = None
                 timing = {}
+            continue
+        progress_match = _PROGRESS.match(line)
+        if progress_match:
+            parsed = _progress_fields(progress_match.group(1))
+            if parsed:
+                progress = parsed
             continue
         staged = _STAGE.match(line)
         if not staged:
@@ -203,6 +256,8 @@ def stall_report(
             sub_stage = name
             timing = fields
 
+    if progress:
+        report.update(progress)
     report["stage"] = stage
     report["sub_stage"] = sub_stage
     report["stages_seen"] = seen
