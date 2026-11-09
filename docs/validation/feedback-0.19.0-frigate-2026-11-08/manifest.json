@@ -1,0 +1,18 @@
+{
+  "work_item": "DEV-081",
+  "scope": "2026-11-08 0.19.0 frigate reconstruction feedback (fourth report, separate from feedback-0.19.0-2026-11-08)",
+  "source_directory": "C:\\Users\\Administrator\\Downloads",
+  "baseline": {
+    "version": "0.19.2",
+    "head": "f1c0a94",
+    "branch": "codex/DEV-080-feedback-0190-followup"
+  },
+  "files": [
+    {
+      "original_path": "C:\\Users\\Administrator\\Downloads\\2026-11-08+CREO+0.19.0+原生放样不可用与草图圆弧预检误拒 (1).md",
+      "archived_path": "originals/2026-11-08+CREO+0.19.0+原生放样不可用与草图圆弧预检误拒 (1).md",
+      "bytes": 20571,
+      "sha256": "67a6dad0df3ef6c1b03fa634f86e8e9a20946eaf644a9963d2989a4221e65173"
+    }
+  ]
+}
