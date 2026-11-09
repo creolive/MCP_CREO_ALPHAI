@@ -31,6 +31,11 @@ SECTIONS = (
     "plan_examples",
 )
 _CURSOR_KIND = "capabilities"
+# DEV-081/F05: compact clients otherwise cannot see a family's limits before
+# choosing a modeling route. Keep this to the families that need it so the
+# single compact page stays well inside PAGE_BYTES.
+COMPACT_LIMITS = ("surface_loft",)
+COMPACT_LIMITS_CHARS = 160
 
 _SECTION_BY_KEY = {
     "families": "families",
@@ -96,13 +101,22 @@ def _section_entries(payload: dict, section: str) -> list[tuple[str, object]]:
 
 def _section_summary(payload: dict) -> dict:
     families = payload.get("families", {})
-    return {
+    summary = {
         name: {
             "enabled": family.get("enabled") if isinstance(family, dict) else None,
             **({"tool": family["tool"]} if isinstance(family, dict) and "tool" in family else {}),
         }
         for name, family in families.items()
     }
+    for name in COMPACT_LIMITS:
+        family = families.get(name)
+        if (
+            name in summary
+            and isinstance(family, dict)
+            and isinstance(family.get("limits"), str)
+        ):
+            summary[name]["limits_note"] = family["limits"][:COMPACT_LIMITS_CHARS]
+    return summary
 
 
 def _metadata(snapshot: dict) -> dict:
