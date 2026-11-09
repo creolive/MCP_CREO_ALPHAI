@@ -110,11 +110,7 @@ def _section_summary(payload: dict) -> dict:
     }
     for name in COMPACT_LIMITS:
         family = families.get(name)
-        if (
-            name in summary
-            and isinstance(family, dict)
-            and isinstance(family.get("limits"), str)
-        ):
+        if name in summary and isinstance(family, dict) and isinstance(family.get("limits"), str):
             summary[name]["limits_note"] = family["limits"][:COMPACT_LIMITS_CHARS]
     return summary
 

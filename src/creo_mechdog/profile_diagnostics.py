@@ -710,9 +710,7 @@ def validate_solid_profile(
         and all(item["gap_mm"] <= tolerance * RESIDUAL_RATIO for item in near["items"])
     )
     if dimensioning == "coordinates" and not (
-        residual_only
-        and report["closed_contour_count"] >= 1
-        and report["open_contour_count"] == 0
+        residual_only and report["closed_contour_count"] >= 1 and report["open_contour_count"] == 0
     ):
         # Coordinate dimensioning solves with a 1e-9 mm epsilon. Only a profile
         # that resolves to closed contours with no open ones, whose every join

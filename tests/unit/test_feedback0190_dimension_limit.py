@@ -28,9 +28,7 @@ class DimensionLimitTests(unittest.TestCase):
         ellipse = Ellipse(
             type="ellipse", name="e1", center=[0, 0], x_radius=105000, y_radius=105000
         )
-        dimension = SketchDimension(
-            name="d1", type="radius", refs=[{"entity": "a"}], value=105000
-        )
+        dimension = SketchDimension(name="d1", type="radius", refs=[{"entity": "a"}], value=105000)
         self.assertEqual(ellipse.x_radius, 105000)
         self.assertEqual(dimension.value, 105000)
 
