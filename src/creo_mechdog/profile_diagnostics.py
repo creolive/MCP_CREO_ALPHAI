@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 
 CLOSURE_TOLERANCE_MM = 1e-4
 EXACT_TOLERANCE_MM = 1e-9
+# DEV-081/F02: a join gap this small relative to the requested closure scale
+# is an input floating-point residual, not a kernel-visible open profile.
+RESIDUAL_RATIO = 1e-3
 ZERO_AREA_MM2 = 1e-9
 _INTERSECTION_EPS = 1e-9
 _TANGENT_EPS = 1e-8
@@ -700,9 +703,21 @@ def validate_solid_profile(
     if report["analysis"] != "complete":
         return report
     fatal = ["open", "branched", "self_intersecting", "intersecting", "tangent", "zero_area"]
-    if dimensioning == "coordinates":
-        # Coordinate dimensioning solves with a 1e-9 mm epsilon; a contour that
-        # closes only at 1e-4 would reach the kernel as an open profile.
+    near = report["categories"]["near_tolerance"]
+    residual_only = (
+        bool(near["items"])
+        and not near["truncated"]
+        and all(item["gap_mm"] <= tolerance * RESIDUAL_RATIO for item in near["items"])
+    )
+    if dimensioning == "coordinates" and not (
+        residual_only
+        and report["closed_contour_count"] >= 1
+        and report["open_contour_count"] == 0
+    ):
+        # Coordinate dimensioning solves with a 1e-9 mm epsilon. Only a profile
+        # that resolves to closed contours with no open ones, whose every join
+        # gap is a residual next to the requested closure scale, is admitted
+        # (DEV-081/F02); larger gaps keep the original kernel-openness guard.
         fatal.append("near_tolerance")
     problems = [name for name in fatal if report["categories"][name]["count"]]
     if not report["closed_contour_count"] and "no_closed_contour" not in problems:
@@ -727,5 +742,7 @@ def validate_solid_profile(
         f"{report['entity_count']} curve entities; "
         + "; ".join(details)
         + ". Supply disjoint or nested closed loops; the native solver remains authoritative "
-        "for anything this check cannot confirm."
+        "for anything this check cannot confirm. Remediation: set closure_tolerance_mm, "
+        "merge the arcs into one polyline, or use snap_endpoints / endpoint_policy=weld; "
+        "weld is applied at submission time, not during plan validation."
     )
