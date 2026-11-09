@@ -410,7 +410,13 @@ def _worker_fact(root: Path, now: datetime) -> dict:
     }
 
 
-def _next_steps(status: str, reason: str, busy: bool) -> list[dict]:
+def _next_steps(
+    status: str,
+    reason: str,
+    busy: bool,
+    toolkit_code: int | None = None,
+    connected: bool | None = None,
+) -> list[dict]:
     steps: list[dict] = []
     if busy:
         steps.append(
@@ -442,6 +448,20 @@ def _next_steps(status: str, reason: str, busy: bool) -> list[dict]:
             "session."
         ),
     }
+    if toolkit_code == -4 and connected is False:
+        steps.append(
+            {
+                "step": "retry_startup",
+                "action": "Request an explicit startup retry for connect -4",
+                "tool": "creo_startup_status",
+                "detail": (
+                    "The last recorded connection failed with toolkit_code -4 before any "
+                    "geometry was created. An explicit retry=true may start a new Creo "
+                    "session; this service never restarts Creo automatically, never "
+                    "resubmits the plan and clears no unknown protection."
+                ),
+            }
+        )
     if status == DAMAGE:
         steps += [
             preserve,
@@ -643,6 +663,7 @@ def snapshot(
     historic_saves = [r for r in all_saves if r is not newest_save][:HISTORIC_SAVE_LIMIT]
     sessions = sorted({r["session"] for r in records if r["session"]})
     observed_at = records[0]["at"] if records else None
+    connection_fact = _connection_fact(records, moment)
     return {
         "status": decision["status"],
         "reason": decision["reason"],
@@ -668,7 +689,7 @@ def snapshot(
         },
         "warnings": list(decision.get("warnings", [])),
         "facts": {
-            "last_connection": _connection_fact(records, moment),
+            "last_connection": connection_fact,
             "last_save": _save_fact(newest_save, moment, current)
             if newest_save is not None
             else None,
@@ -686,7 +707,13 @@ def snapshot(
         "historic_damage_signals": [
             _damage_signal(r, moment, r["session"] == current) for r in historic[:DAMAGE_LIMIT]
         ],
-        "next_steps": _next_steps(decision["status"], decision["reason"], channel["busy"]),
+        "next_steps": _next_steps(
+            decision["status"],
+            decision["reason"],
+            channel["busy"],
+            toolkit_code=connection_fact.get("toolkit_code") if connection_fact else None,
+            connected=(connection_fact or {}).get("outcome") == "connected",
+        ),
         "caveats": _caveats(decision["status"], decision),
         "evidence": {
             "jobs_scanned": stats["jobs_scanned"],
