@@ -265,7 +265,8 @@ class UpdateChecker:
         except (TimeoutError, httpx2.TimeoutException):
             selected = {
                 "status": "failed",
-                "error": f"GitHub 更新检查超过 {self.network_timeout_seconds:g} 秒网络预算。",
+                "error": f"GitHub 更新检查超过 {self.network_timeout_seconds:g} 秒网络预算；"
+                "可设置 MECHDOG_UPDATE_TIMEOUT_SECONDS（1—30 秒）后重试。",
             }
         except UpdateFailure as exc:
             selected = {"status": "failed", "error": str(exc)}
@@ -294,6 +295,10 @@ class UpdateChecker:
                 self._result["message"] = (
                     "未取得最新版本信息：本次更新检查失败，不代表已是最新版本；普通检查 15 分钟后可重试；force=true 可立即重试。"
                 )
+            self._result["message"] += (
+                "可设置 MECHDOG_UPDATE_TIMEOUT_SECONDS（1—30 秒）后重试；"
+                "也可用 creo_check_update(force=true) 立即重试。"
+            )
             self._expires = self._completed_at + RETRY_SECONDS
             return
         self._result.update(
