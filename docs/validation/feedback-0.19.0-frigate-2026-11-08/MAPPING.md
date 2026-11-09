@@ -3,7 +3,7 @@
 工作卡：[DEV-081](../../work-items/DEV-081.md)。原件逐字节归档于 [originals](originals/)，身份见 [manifest.json](manifest.json)。本报告是**第四份** 0.19.0 反馈，与 [DEV-079 三份报告](../feedback-0.19.0-2026-11-08/MAPPING.md)不是同一批，编号体系也不同：本卡把报告的 P1—P11 映射为 **F01—F11**，避免与 DEV-079 的 P1-1 / P-A / H01—H09 混淆。
 
 - 报告方环境：Windows / Creo Parametric 10.0.0.0（`release_numeric=42`）/ MCP_CREO_MechDog 0.19.0 / 107 个启用工具；任务为仅凭一份 1571 行自然语言 TXT 重建简易护卫舰，全程只用 MCP，未导入外部模型。`creo_capabilities.update.status=failed`（5 秒网络预算），因此报告方**无法确认 0.19.0 是否最新**。
-- 本轮基线：本地 `v0.19.2`（`f1c0a94`），分支 `codex/DEV-080-feedback-0190-followup`，工作树含 DEV-080 未提交改动。**本轮只做只读核对、归档与计划，未连接 Creo、未编译原生执行器、未改产品代码、未联网、未发布。**
+- 本轮基线：本地 `v0.19.2`（`f1c0a94`），分支 `codex/DEV-080-feedback-0190-followup`，工作树含 DEV-080 未提交改动。**接手核对阶段只做只读核对、归档与计划；随后 A 批离线交付 6 个 Python 模块、6 个新单测模块与文档（见第五节）。两批均未连接 Creo、未编译原生执行器、未联网、未发布。**
 - 证据强度：报告方的 Creo 10 实测结论只作为报告方证据，不外推为本轮实机验收；本卡的「当前核对」均为本地源码静态核对。
 
 ## 一、逐项对照
