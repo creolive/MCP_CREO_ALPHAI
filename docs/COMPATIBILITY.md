@@ -4,6 +4,8 @@
 
 2026-11-08 DEV-076开发分支补步：0.18.3/0.18.4的手写surface_loft曾无条件包含Probbl.h，报告方Creo10 SDK因此构建失败。本分支增加头存在性门控；缺头时该操作明确SURFACE_LOFT_SDK_UNAVAILABLE，不生成特征，有头保留原实现。缺头分支以SDK无关C++夹具验证；完整Creo9/10 SDK构建及运行时不据此判通过。本批不修改已发布标签/附件。
 
+2026-11-08 DEV-080补充：`creo_surface_boundary_fill` 与 `creo_surface_loft` 同源于 `Probbl.h` 的边界混合元素树；不含该头的 Toolkit SDK（已观测：Creo 10.0.0.0）上两者均不可用。执行器在 `creo_worker.exe build-info` 自报头条件状态，Python 侧按已验证的 worker 身份在提交作业前拒绝，给出 `SURFACE_LOFT_SDK_UNAVAILABLE` 一类明确降级回执，不伪造几何，也不应被误判为安装失败；`surface_boundary_fill` 另保持能力面 GATED。缺头 SDK 的整包编译还受 `native/surface_boundary_fill.cpp` 复用 `surface_loft.cpp` 内部符号影响，根因、抽头方案与不依赖 `Probbl.h` 的等价元素树见 [DEV-080](work-items/DEV-080.md) H01；需 Creo 10 SDK 编译与实机几何验收，本机未验，不据门控夹具外推为通过。
+
 > **版本归属说明（2026-11-08）：** 当前**已发布**版本为 **0.19.0**（DEV-074 曲面与整链批：FEAT-055/H08 新增 `creo_surface_round` 与只读 `creo_measure_surface_curvature`，FEAT-039/H03 重新公开 `creo_quilt_merge`，H10 五爪整瓶整链实机；公开工具 104→107；钣金成形类、独立 quilt 偏置与任意非平面 fill 仍不可用，门禁保持，见[发布记录](validation/RELEASE-0.19.0.md)）；下文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-07 补记）：** 当时**已发布**版本为 **0.18.4**（DEV-074 0.18.3 后续实机批：FEAT-039/H09 旋转球面替代、H10 多 quilt 整链、H07 独立 quilt 偏置反证，FEAT-055/H08 曲面边圆角可行性，FEAT-014/H05 钣金附着增料反证，BUG-115/H12 回执复验；公开工具仍 104，无新增能力，见[发布记录](validation/RELEASE-0.18.4.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。
 > **版本归属说明（2026-11-07 补记）：** 当时**已发布**版本为 **0.18.3**（DEV-074 0.17.4 反馈批：FEAT-058/H01 非零 origin 大跨度 resize 修复、FEAT-009/H02 `creo_surface_loft`、FEAT-039/H04 `creo_measure_surface_group` 与 H06 保留侧几何，公开工具 102→104，见[发布记录](validation/RELEASE-0.18.3.md)）；上文分节按写作时点保留各自结论，**章节顺序不代表版本顺序**；"当前"字样属于该节的写作时点，不作为今天的交付状态。

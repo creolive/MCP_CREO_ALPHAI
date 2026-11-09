@@ -10,6 +10,10 @@
 
 2026-11-08：[DEV-079](work-items/DEV-079.md)归档下载目录0.19.0的三份Creo 10反馈并完成离线补漏：quilt_merge公开描述、曲率默认摘要/`include_samples`、surface_group结构化失败回执、`profile.method`与POSTCHECK旧句；新增本卡后当前表行为170。随 0.19.2 发布（提交`df8e178`，[Release](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.2)），四附件核对 exit 0；Creo 10原生能力与钣金余项见[对照表](validation/feedback-0.19.0-2026-11-08/MAPPING.md)。
 
+2026-11-08：[DEV-080](work-items/DEV-080.md)接手上述三份报告复核后仍未闭环的H01—H09及未编号缺口；首批离线收口为手写TU头门控契约测试、COMPATIBILITY缺头降级说明、台账计数自检进CI；新增本卡后当前表行为171。开发分支`codex/DEV-080-feedback-0190-followup`，未合main、未发布；原生/实机项按依赖留卡。
+
+2026-11-09：[DEV-081](work-items/DEV-081.md)归档第四份0.19.0反馈（护卫舰重建，报告P1—P11映射F01—F11），建立[MAPPING](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)与[离线批次实施计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)；A批离线六项（F02/F03/F07/F04回执/F11文档契约/F05限制说明）已交付并逐任务独立审查，统一dev_check通过，B/C批留卡待实机与黑盒。新增本卡后当前表行为172；本批不改公开工具签名、未连Creo、未编译原生、未合main、未发布。
+
 建立：2026-10-13；最近复核：2026-11-08（[DEV-074](work-items/DEV-074.md) 0.19.0 发布准备；本分支叠加 DEV-076/DEV-077）。本文件是唯一当前台账，按“开发入口 → 本表 ID → 工作卡当前摘要 → 相关源码”读取，历史证据按需打开。当前源码版本以 [version.py](../version.py) 为准；逐版交付记录见 [版本说明目录](../README.md) 与 `docs/validation/RELEASE-*.md`，不在本表重复回填。
 
 DEV-073 以 `1cf9d3f` 为基点整理台账，随后并入 0.18.0 发布提交（[RELEASE-0.18.0](validation/RELEASE-0.18.0.md)）。0.18.0 已发布的结论以该发布记录与远端 Release 核对为准。DEV-074 的 0.18.3 子项交付以 [0.18.3 发布记录](validation/RELEASE-0.18.3.md)为准，0.18.4 子项以 [0.18.4 发布记录](validation/RELEASE-0.18.4.md)为准，0.19.0 子项以 [0.19.0 发布记录](validation/RELEASE-0.19.0.md)为准；两版发布状态来源和空白字段勘误以[统一POSTCHECK](development/RELEASE-POSTCHECK-2026-11-07.md)及其所链新勘误为准。
@@ -20,7 +24,7 @@ DEV-073 以 `1cf9d3f` 为基点整理台账，随后并入 0.18.0 发布提交�
 
 诊断交付不等于根因修复；部分交付不关整卡；缺其他版本证据不自动判未修。观察项等自然新现场，不制造故障。已完成且无保留范围的行移入 [完成档案](BACKLOG_COMPLETED.md#2026-11-07dev-073-归档与历史进展)。原进展/证据保留日期，不再回填第二份待办。小修复沿用卡与证据，复杂跨模块任务才另建完整计划。
 
-当前唯一 ID **170**（BUG **75**、FEAT **61**、DEV **34**）；2026-11-07整理时移入完成档案23项（含DEV-073、DEV-075），该句为历史时点，归档项不计入当前行数。DEV-077起运行 `python tools/check_backlog_counts.py` 自检声明行、表行与分类表三方计数，不一致exit 1；该脚本只校验计数，不替代逐ID人工核对。
+当前唯一 ID **172**（BUG **75**、FEAT **61**、DEV **36**）；2026-11-07整理时移入完成档案23项（含DEV-073、DEV-075），该句为历史时点，归档项不计入当前行数。DEV-077起运行 `python tools/check_backlog_counts.py` 自检声明行、表行与分类表三方计数，不一致exit 1；该脚本只校验计数，不替代逐ID人工核对。
 
 | 当前分类 | 唯一 ID 数 |
 | --- | --- |
@@ -29,10 +33,10 @@ DEV-073 以 `1cf9d3f` 为基点整理台账，随后并入 0.18.0 发布提交�
 | 已有修复但待验收 | 27 |
 | 观察中 | 3 |
 | 其它 agent 处理范围 | 20 |
-| 开发中 | 5 |
+| 开发中 | 6 |
 | 部分交付，剩余待验收 | 37 |
 | 部分交付，剩余待规划 | 2 |
-| 待规划 | 41 |
+| 待规划 | 42 |
 
 BUG 分类是互斥主分类；“其它 agent”行仍写明已完成子项与真实缺口，勿重复派工。
 
@@ -157,6 +161,7 @@ BUG 分类是互斥主分类；“其它 agent”行仍写明已完成子项与�
 | [FEAT-010](work-items/FEAT-010.md) | P2 | 开发中 | 未排期 | Right ±Z 已验；倾斜 frame、保真/原53mm输入、编辑重载和投影驱动仍开放。 |
 | [DEV-077](work-items/DEV-077.md) | P1 | R01—R04 已随 0.19.2 交付；实机/黑盒/远端余项待接手 | 0.19.2 | 0.18.2四份反馈对比归档、RELEASING/POSTCHECK回填、台账计数门禁、质量属性诊断与阶段计时回退；R01可配rotation_tolerance、R02质量属性提示/get_job 300s/known_limitations/plan_examples已在0.19.1交付；0.19.2新增草图closure_tolerance/snap_endpoints/偏差断言、mirror feature引用与回执、session_health降级策略、quilt_merge消耗回执；余项见DEV-077-HANDOFF R01—R08。 |
 | [DEV-079](work-items/DEV-079.md) | P1 | 离线子项已随 0.19.2 交付；Creo 10/钣金/黑盒待接手 | 0.19.2 | 0.19.0三份Creo 10反馈归档与对照；quilt_merge描述同步、曲率默认摘要/`include_samples`、surface_group结构化失败回执、`profile.method`、POSTCHECK旧句已修；`state_reason`与裸名导入等0.19.1已修项不重复；H01—H09（Probbl.h替代、开放弧trim、残留quilt、原生截面面积、大作业compact、连续顶边选边、entities_file、native_bundle、负origin resize）待实机。 |
+| [DEV-080](work-items/DEV-080.md) | P1 | 开发中；首批离线收口已提交，未合main、未发布 | 未排期 | 接手0.19.0三份报告复核后仍未闭环的H01—H09及未编号缺口；首批交付手写TU头门控契约测试、COMPATIBILITY缺头降级说明、计数自检进CI；原生解耦/等价元素树、开放弧trim、残留quilt、原生截面面积、大作业compact、连续顶边选边、entities_file、native_bundle、负origin resize待Creo10 SDK或实机；解压单测发布前阻断与verify_stages优先留后续。 |
 
 ## 部分交付，剩余待验收
 
@@ -227,6 +232,7 @@ BUG 分类是互斥主分类；“其它 agent”行仍写明已完成子项与�
 | [DEV-058](work-items/DEV-058.md) | P3 | 待规划 | 未排期 | WorkBuddy 提示词需按当前契约更新，公开 MCP 黑盒尚未执行；不以开发者证据替代。 |
 | [DEV-059](work-items/DEV-059.md) | P3 | 待规划 | 未排期 | 核实旧 22 项环境 errors 是否仍存在；余下统计校验与计划状态规范，历史清理已完成。 |
 | [DEV-063](work-items/DEV-063.md) | P3 | 待规划 | 未排期 | compact erase 摘要和预览矩阵 false 的说明待补；full 字段不裁剪。 |
+| [DEV-081](work-items/DEV-081.md) | P1 | A批离线六项已交付并逐任务独立审查；B/C批待规划 | 未排期 | 第四份0.19.0反馈（护卫舰）F01—F11；A批F02圆弧闭合误拒/F03半径上限/F07更新提示/F04 connect −4回执/F11平面语义文档/F05限制说明已离线交付，六个提交与统一dev_check证据见[MAPPING第五节](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)；B批无callback放样、着色预览、阶段进度、选择性布尔、锥台需实机，C批公开契约需黑盒；A批仅「离线已交付、实机未验」，计划见[离线批次计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)。 |
 | [FEAT-001](work-items/FEAT-001.md) | P1 | 待规划 | 未排期 | 启动/重连/多会话状态检测及普通 retry、损坏通道恢复完整验收仍开放。 |
 | [FEAT-002](BACKLOG_COMPLETED.md#legacy-feat-002) | P2 | 待规划 | 未排期 | 遇到 DLL 提示等需要人工处理的情况时，说明正在等什么。测试等待超时后，任务上下文是否保留、相关模块能否清理。 |
 | [FEAT-003](BACKLOG_COMPLETED.md#legacy-feat-003) | P2 | 待规划 | 未排期 | 支持并测试带单位的关系式，例如 `8[mm]`。确认它能真实驱动尺寸、带动相关参数变化，并保留用户对单位的检查设置。 |

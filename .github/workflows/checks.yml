@@ -24,6 +24,8 @@ jobs:
             requirements-dev.txt
       - name: Install locked runtime and development dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Check backlog ID counts
+        run: python tools/check_backlog_counts.py
       - name: Check style regressions and run unit validation
         run: python tools/dev_check.py
       - name: Upload development evidence
