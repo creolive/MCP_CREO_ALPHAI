@@ -326,7 +326,14 @@ class SketchOp(StrictModel):
     op: Literal["sketch"]
     label: Label
     plane: Literal["XY", "XZ", "YZ"] | dict[str, Any] = "XY"
-    offset: float = 0
+    offset: float = Field(
+        default=0,
+        description=(
+            "plane_coordinate: a global model coordinate on the plane's own axis "
+            "(XY -> Z, YZ -> X, XZ -> Y), not a displacement along the plane normal. "
+            "Extrude/revolve direction is relative to that normal instead."
+        ),
+    )
     entities: Annotated[list[Entity], Field(min_length=1, max_length=500)]
     # FEAT-039/W01: the endpoint weld policy. The create and the update
     # entry share one definition, so the same request means the same thing

@@ -869,6 +869,13 @@ async def creo_execute_plan(
     Sketch/extrude/revolve and later features reference earlier feature labels.
     Existing models require expected_revision. Stops at first error; existing models
     roll back to their saved checkpoint. assertions supports require_solid and volume_mm3.
+
+    Main-plane offset is a plane_coordinate: XY -> origin [0,0,offset], normal [0,0,1];
+    YZ -> origin [offset,0,0], normal [1,0,0]; XZ -> origin [0,offset,0], normal
+    [0,-1,0] (negative Y). Extrude/revolve direction ("positive"/"negative") is
+    relative to that normal, so on XZ "positive" moves toward smaller Y. The plane
+    offset is a global model coordinate on the plane's own axis, not a distance
+    along the normal.
     Each accepted input yields one result with a zero-based index, execution_status
     (succeeded/failed/not_executed/unknown) and effect_status
     (committed/rolled_back/no_effect/unknown); succeeded only reports execution, not

@@ -176,6 +176,18 @@
 | round/chamfer 尺寸字段 | 独立工具 `creo_round.radius`、`creo_chamfer.distance` 与计划操作 `size` 是同一数值（mm）：round 计划也接受 `radius`、chamfer 计划也接受 `distance` 作为 `size` 别名；别名与 `size` 同现或用于另一种操作时明确拒绝。任务提交回显 `operations[].size`，终态 `result.operations[].size` 回显原生应用值（compact 返回同样保留） |
 | create_sketch.plane | 主平面字符串 `XY/XZ/YZ`；字典形式为 `{"reference":{"kind":"datum_plane","id":N},"origin":[x,y,z],"u_axis":[x,y,z]}`，reference 也可取已验证平面 `plane`/`surface` 几何 ID 或 `datum_feature` 标签；origin/u_axis 可省略，reference 容器必需 |
 
+### 主平面 offset 与切除方向（DEV-081/F11）
+
+`offset` 是 `plane_coordinate`：主平面在自身轴上的**全局坐标值，不是沿法向的位移**；`direction`（extrude/revolve）才是相对该法向的 `positive`/`negative`。
+
+| plane | origin | normal | offset 所在的全局轴 |
+| --- | --- | --- | --- |
+| XY | `[0, 0, offset]` | `[0, 0, 1]` | Z |
+| YZ | `[offset, 0, 0]` | `[1, 0, 0]` | X |
+| XZ | `[0, offset, 0]` | `[0, -1, 0]` | Y（negative Y） |
+
+XZ 的法向是 negative Y，因此 `direction="positive"` 会让实体向更小的 Y 增长；切料方向与草图全局位置必须同时核对。字典引用内部的 `offset`（平面筛选条件，见上文）与本表的 `plane_coordinate` 不是同一个字段。
+
 这些集合和坐标包装承载不同的参数含义，不能简单地给所有裸引用增加同一层包装。此修复兼容报告中的轴标签、补齐引用契约，不更改原生执行器或创建额外几何。
 
 实现与当前验收范围见 [BUG-006](work-items/BUG-006.md) 和 [本次证据](validation/BUG-006.md)。
