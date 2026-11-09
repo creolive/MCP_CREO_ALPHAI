@@ -12,7 +12,7 @@
 
 2026-11-08：[DEV-080](work-items/DEV-080.md)接手上述三份报告复核后仍未闭环的H01—H09及未编号缺口；首批离线收口为手写TU头门控契约测试、COMPATIBILITY缺头降级说明、台账计数自检进CI；新增本卡后当前表行为171。开发分支`codex/DEV-080-feedback-0190-followup`，未合main、未发布；原生/实机项按依赖留卡。
 
-2026-11-09：[DEV-081](work-items/DEV-081.md)归档第四份0.19.0反馈（护卫舰重建，报告P1—P11映射F01—F11），建立[MAPPING](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)与[离线批次实施计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)；A批离线六项（F02/F03/F07/F04回执/F11文档契约/F05限制说明）已交付并逐任务独立审查，统一dev_check通过，B/C批留卡待实机与黑盒。新增本卡后当前表行为172；本批不改公开工具签名、未连Creo、未编译原生、未合main、未发布。
+2026-11-09：[DEV-081](work-items/DEV-081.md)归档第四份0.19.0反馈（护卫舰重建，报告P1—P11映射F01—F11），建立[MAPPING](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)与[离线批次实施计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)；A批离线六项（F02/F03/F07/F04回执/F11文档契约/F05限制说明）已交付并逐任务独立审查，统一dev_check通过。同日补[B/C批子计划](superpowers/plans/2026-11-09-feedback0190-frigate-bc-batches.md)与 WorkBuddy 黑盒提示词，实机/黑盒仍未执行；[DEV-080](work-items/DEV-080.md)首批离线收口与台账一并提交。新增本卡后当前表行为172；本批不改公开工具签名、未连Creo、未编译原生、未合main、未发布。
 
 建立：2026-10-13；最近复核：2026-11-08（[DEV-074](work-items/DEV-074.md) 0.19.0 发布准备；本分支叠加 DEV-076/DEV-077）。本文件是唯一当前台账，按“开发入口 → 本表 ID → 工作卡当前摘要 → 相关源码”读取，历史证据按需打开。当前源码版本以 [version.py](../version.py) 为准；逐版交付记录见 [版本说明目录](../README.md) 与 `docs/validation/RELEASE-*.md`，不在本表重复回填。
 
@@ -232,7 +232,7 @@ BUG 分类是互斥主分类；“其它 agent”行仍写明已完成子项与�
 | [DEV-058](work-items/DEV-058.md) | P3 | 待规划 | 未排期 | WorkBuddy 提示词需按当前契约更新，公开 MCP 黑盒尚未执行；不以开发者证据替代。 |
 | [DEV-059](work-items/DEV-059.md) | P3 | 待规划 | 未排期 | 核实旧 22 项环境 errors 是否仍存在；余下统计校验与计划状态规范，历史清理已完成。 |
 | [DEV-063](work-items/DEV-063.md) | P3 | 待规划 | 未排期 | compact erase 摘要和预览矩阵 false 的说明待补；full 字段不裁剪。 |
-| [DEV-081](work-items/DEV-081.md) | P1 | A批离线六项已交付并逐任务独立审查；B/C批待规划 | 未排期 | 第四份0.19.0反馈（护卫舰）F01—F11；A批F02圆弧闭合误拒/F03半径上限/F07更新提示/F04 connect −4回执/F11平面语义文档/F05限制说明已离线交付，六个提交与统一dev_check证据见[MAPPING第五节](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)；B批无callback放样、着色预览、阶段进度、选择性布尔、锥台需实机，C批公开契约需黑盒；A批仅「离线已交付、实机未验」，计划见[离线批次计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)。 |
+| [DEV-081](work-items/DEV-081.md) | P1 | A批离线六项已交付并逐任务独立审查；B/C批规划已建立，实机/黑盒未执行 | 未排期 | 第四份0.19.0反馈（护卫舰）F01—F11；A批F02圆弧闭合误拒/F03半径上限/F07更新提示/F04 connect −4回执/F11平面语义文档/F05限制说明已离线交付，六个提交与统一dev_check证据见[MAPPING第五节](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)；A批仅「离线已交付、实机未验」，计划见[离线批次计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)；B1—B6原生/实机与C0—C5黑盒拆项、前置条件见[B/C批子计划](superpowers/plans/2026-11-09-feedback0190-frigate-bc-batches.md)，[WorkBuddy提示词](validation/feedback-0.19.0-frigate-2026-11-08/workbuddy-blackbox-prompt.md)仅阶段0/1可试、建模与并发留卡，未连Creo未做黑盒。 |
 | [FEAT-001](work-items/FEAT-001.md) | P1 | 待规划 | 未排期 | 启动/重连/多会话状态检测及普通 retry、损坏通道恢复完整验收仍开放。 |
 | [FEAT-002](BACKLOG_COMPLETED.md#legacy-feat-002) | P2 | 待规划 | 未排期 | 遇到 DLL 提示等需要人工处理的情况时，说明正在等什么。测试等待超时后，任务上下文是否保留、相关模块能否清理。 |
 | [FEAT-003](BACKLOG_COMPLETED.md#legacy-feat-003) | P2 | 待规划 | 未排期 | 支持并测试带单位的关系式，例如 `8[mm]`。确认它能真实驱动尺寸、带动相关参数变化，并保留用户对单位的检查设置。 |
