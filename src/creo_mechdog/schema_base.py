@@ -11,6 +11,7 @@ from typing import Annotated, Any
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     ValidationError,
@@ -43,5 +44,31 @@ def _explain_label_pattern(value: Any, handler: ValidatorFunctionWrapHandler) ->
         raise
 
 
+def _reject_bool(value: Any) -> Any:
+    if isinstance(value, bool):
+        raise ValueError("radius/dimension must be a finite number, not a boolean")
+    return value
+
+
+def _explain_dimension_limit(value: Any, handler: ValidatorFunctionWrapHandler) -> float:
+    try:
+        return handler(value)
+    except ValidationError as exc:
+        if any(error["type"] == "less_than_equal" for error in exc.errors()):
+            raise PydanticCustomError(
+                "less_than_equal",
+                "radius/dimension API limit is 1000000 mm; this is a service schema limit, "
+                "not a Creo kernel limit",
+                {"le": 1000000},
+            ) from None
+        raise
+
+
 Label = Annotated[str, Field(pattern=_LABEL_PATTERN), WrapValidator(_explain_label_pattern)]
 Positive = Annotated[float, Field(gt=0, le=100000)]
+Dimension = Annotated[
+    float,
+    BeforeValidator(_reject_bool),
+    Field(gt=0, le=1000000),
+    WrapValidator(_explain_dimension_limit),
+]

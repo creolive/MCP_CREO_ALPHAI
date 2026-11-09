@@ -30,7 +30,7 @@ from creo_mechdog.references import (
     validate_sketch_plane_frame,
 )
 from creo_mechdog.rotation_admission import ADMISSION_TOLERANCE, admission_status
-from creo_mechdog.schema_base import Label, Point2, Point3, Positive, StrictModel
+from creo_mechdog.schema_base import Dimension, Label, Point2, Point3, Positive, StrictModel
 from creo_mechdog.sheetmetal import first_wall_section_problem
 from creo_mechdog.sheetmetal_candidates import SheetmetalCornerReliefOp, SheetmetalQuiltFormOp
 from creo_mechdog.surface_ops import (
@@ -191,7 +191,7 @@ class Circle(StrictModel):
     type: Literal["circle"]
     name: Label
     center: Point2
-    radius: Positive
+    radius: Dimension
     construction: bool = False
 
 
@@ -271,8 +271,8 @@ class Ellipse(StrictModel):
     type: Literal["ellipse"]
     name: Label
     center: Point2
-    x_radius: Positive
-    y_radius: Positive
+    x_radius: Dimension
+    y_radius: Dimension
     construction: bool = False
 
 
@@ -302,7 +302,7 @@ class SketchDimension(StrictModel):
         "ellipse_y_radius",
     ]
     refs: Annotated[list[EntityRef], Field(min_length=1, max_length=3)]
-    value: Positive
+    value: Dimension
     position: Point2 = [0, 0]
 
 
