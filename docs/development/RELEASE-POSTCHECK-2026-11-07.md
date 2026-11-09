@@ -145,6 +145,22 @@
 | `MCP_CREO_MechDog-0.19.2-seed-library.zip` | 493 442 | `22a7a32d7636d6babf7b68b9526b6b935f4d97386ff06ba9c2487002f4e71558` |
 | `MCP_CREO_MechDog-0.19.2-seed-library.zip.sha256` | 107 | `aeec87c4c01dbb91466253754cfa05c4210c13e1cd097d425c1fc9adb8bd434d` |
 
+## v0.19.3（2026-11-09）
+
+- 记录时间：2026-11-09。`main` 提交 `096e86a2a6d9a73c4716ca2e6758e03e9fcfab31`（`f1c0a94..096e86a` fast-forward），`origin/main` 同值；附注标签对象 `61d1d2b64fd2490853f2b5ec0bfb6ec74085e1d0`（`v0.19.3`，指向上述提交）。
+- Release：[v0.19.3](https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.19.3)，id `RE_kwDOU_ueTM4aLAs8`，非 draft（`isDraft=false`）、非 prerelease；`published_at=2026-11-09T12:15:07Z`。
+- 核对命令：`tools/check_release_assets.py --tag v0.19.3` → exit 0，「v0.19.3: four assets downloaded and verified; both sidecars match」。
+- 四附件逐个列出（未用通配）；下载后本地实算 SHA256 与 sidecar 内容一致：
+
+| 附件 | 字节 | SHA256 |
+| --- | ---: | --- |
+| `MCP_CREO_MechDog-0.19.3-source.zip` | 9 333 252 | `aed3b422acd815dcf624423d1c9d43640c7fabb28c8a631c2eb2b0d0380df463` |
+| `MCP_CREO_MechDog-0.19.3-source.zip.sha256` | 101 | `ddcc3a651173ef293974ffec35eabbb214559a3d7c4c19d56b032dad7f21470e` |
+| `MCP_CREO_MechDog-0.19.3-seed-library.zip` | 493 442 | `bc85958afbf8f3da0affde7144c13a145ebdd95eb04df529015595c59ab1e64a` |
+| `MCP_CREO_MechDog-0.19.3-seed-library.zip.sha256` | 107 | `8c1299fbb8066d3aefedeb6c3b98b4274a4d594a6a4d0266be4c90847b29f1d5` |
+
+- 本版未改 `native/*.cpp`、未连 Creo、未编译执行器；验收与未测范围以 `docs/validation/RELEASE-0.19.3.md` 与 Release 正文为准。本段只做远端附件核对，不重新验证包内功能。
+
 ## 未覆盖
 
 - 本核对只证明**远端附件与 sidecar、摘要三者一致**，不重新验证包内功能、Creo 实机或安装结果；这些结论分别属于各版 `docs/validation/RELEASE-*.md` 的实际范围。
