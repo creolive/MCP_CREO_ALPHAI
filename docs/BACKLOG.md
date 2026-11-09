@@ -12,6 +12,8 @@
 
 2026-11-08：[DEV-080](work-items/DEV-080.md)接手上述三份报告复核后仍未闭环的H01—H09及未编号缺口；首批离线收口为手写TU头门控契约测试、COMPATIBILITY缺头降级说明、台账计数自检进CI；新增本卡后当前表行为171。开发分支`codex/DEV-080-feedback-0190-followup`，未合main、未发布；原生/实机项按依赖留卡。
 
+2026-11-09：按用户决定修订本机实机测试放行条件，[BUG-001/FEAT-018 工作卡](work-items/BUG-001-FEAT-018-RECOVERY.md)追加「用户明确确认后即可用 Creo 进行实机测试」，不再以卡死根因核对/事前会话可操作判定为阻断前置；根因未定、历史失败与恢复原件仍逐字节保留，安全底线（不擅自结束Creo/清锁或unknown保护、故障注入需单独授权）不变，确认按次生效。当前规则见 [AGENTS.md](../AGENTS.md) 与 [DEVELOPMENT.md](DEVELOPMENT.md)。本条为规则修订，不新增ID、不改计数（仍172），未合main、未发布；本轮未据此执行任何 Creo 实机测试。
+
 2026-11-09：[DEV-081](work-items/DEV-081.md)归档第四份0.19.0反馈（护卫舰重建，报告P1—P11映射F01—F11），建立[MAPPING](validation/feedback-0.19.0-frigate-2026-11-08/MAPPING.md)与[离线批次实施计划](superpowers/plans/2026-11-09-feedback0190-frigate-offline.md)；A批离线六项（F02/F03/F07/F04回执/F11文档契约/F05限制说明）已交付并逐任务独立审查，统一dev_check通过。同日补[B/C批子计划](superpowers/plans/2026-11-09-feedback0190-frigate-bc-batches.md)与 WorkBuddy 黑盒提示词，实机/黑盒仍未执行；[DEV-080](work-items/DEV-080.md)首批离线收口与台账一并提交。新增本卡后当前表行为172；本批不改公开工具签名、未连Creo、未编译原生、未合main、未发布。
 
 建立：2026-10-13；最近复核：2026-11-08（[DEV-074](work-items/DEV-074.md) 0.19.0 发布准备；本分支叠加 DEV-076/DEV-077）。本文件是唯一当前台账，按“开发入口 → 本表 ID → 工作卡当前摘要 → 相关源码”读取，历史证据按需打开。当前源码版本以 [version.py](../version.py) 为准；逐版交付记录见 [版本说明目录](../README.md) 与 `docs/validation/RELEASE-*.md`，不在本表重复回填。

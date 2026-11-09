@@ -22,7 +22,7 @@ MCP stdio → `server.py` 工具注册 → `bridge.py` 单通道调度/保护 �
 
 开发环境为 Windows x64 / Python 3.12+。语言与单元检查不需要 Creo SDK。建模需 Creo 9/10/12、匹配 SDK、许可和 MSVC x64；当前本机原生验收环境为 Creo 12.4.0.0。Creo 9 编译探测已有修复，本机无 SDK，实机编译/运行未验；其他环境范围见[兼容矩阵](COMPATIBILITY.md)。不要求全项目 Creo 10 独立复测或双版本发布门槛，也不把本机成功外推至其他环境。
 
-本机联调只启用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。BUG-001 关闭不代表事故会话根因已解决；新 Toolkit 连接、故障注入前须核对会话条件，不能擅自结束 Creo/nmsd、清锁或 unknown 保护，见 [2026-10-17 恢复记录](validation/BUG-001-recovery-2026-10-17.md)。
+本机联调只启用指向 E 盘项目的 `MCP_CREO_MechDog_dev`。BUG-001 关闭不代表事故会话根因已解决，历史失败与 [2026-10-17 恢复记录](validation/BUG-001-recovery-2026-10-17.md) 按原件保留；按 2026-11-09 用户决定，**用户明确确认后即可用 Creo 进行实机测试**（含新建 Toolkit 连接与建模），不再以根因核对或事前会话可操作判定作为阻断前置，确认按次生效。未获确认时默认不主动连接 Toolkit、不启动 Creo；任何情况下不擅自结束 Creo/nmsd、清锁或 unknown 保护，故障注入与进程/保护状态清理需单独明确授权。单通道、busy 立即拒绝、保存重载与证据边界不变，完整规则见 [AGENTS.md](../AGENTS.md)。
 
 ## 命令与检查
 

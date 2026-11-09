@@ -6,7 +6,7 @@
 
 ## 0. 本文件的性质与边界
 
-**这是一份留卡子计划，不是实施记录。** 本轮只交付 B/C 批的任务拆分、前置条件、验收口径与黑盒提示词；**不改任何 `native/*.cpp`、公开 MCP 签名、`capabilities.py` 门禁、`version.py`，不连接 Creo、不编译执行器、不做故障注入、不启动/结束会话、不清 unknown 保护、不联网、不发布**。
+**这是一份留卡子计划，不是实施记录。** 本轮只交付 B/C 批的任务拆分、前置条件、验收口径与黑盒提示词；**不改任何 `native/*.cpp`、公开 MCP 签名、`capabilities.py` 门禁、`version.py`**，且本轮未获用户明确确认，故不连接 Creo、不编译执行器、不做故障注入、不启动/结束会话、不清 unknown 保护、不联网、不发布。按 2026-11-09 用户决定，用户明确确认后即可开展实机测试，见第 1 节前置表。
 
 - 编号沿用 MAPPING 的 F01—F11，工作卡沿用 DEV-081，**不新增台账 ID、不改变 `docs/BACKLOG.md` 的 172 / BUG 75 / FEAT 61 / DEV 36 计数**；B/C 批是 DEV-081 内部的子批次，不是新工作项。
 - 源码位置来自 2026-11-09 对 0.19.2 的静态核对（见 MAPPING 第一节）。A 批改过 `schema.py` / `server.py` 的文本层，**行号仅作定位参考，每个任务实施前必须重新定位**。
@@ -18,13 +18,13 @@
 
 | 前置 | 判定方式 | 缺失时 |
 | --- | --- | --- |
-| BUG-001 实机回归卡死根因已核对，且确认会话可操作 | 按 `docs/validation/BUG-001-recovery-2026-10-17.md` 与现场确认；不由本计划代判 | **停止**，不建立新的 Toolkit 连接、不做故障注入、不启动/结束 Creo、不清 unknown 保护 |
+| 用户明确确认可用 Creo 进行实机测试（2026-11-09 规则，见 [AGENTS.md](../../../AGENTS.md)） | 用户当次明确确认及其授权范围；不由本计划代判。卡死根因未定仍是事实，须在证据中如实记录，但**不再作为阻断前置** | **保持留卡**：不主动建立新的 Toolkit 连接、不启动 Creo、不做故障注入；任何情况下不擅自结束/重启 Creo 或 nmsd、清 `toolkit.lock` 或 unknown 保护、删改用户模型与历史证据；故障注入、结束进程、清保护状态需单独明确授权 |
 | 本机 Creo 12.4.0.0 + 匹配 Toolkit SDK + 可用许可 + MSVC x64 | `.\setup.ps1 -CreoRoot <实际路径>` 与 `bridge.py build` | 停止；不交付未编译的原生分支 |
 | `native/constants.inc` 按本机 SDK 重新生成 | `tools/generate_constants.py` | 停止；该生成物不提交、不从别处复制、不进发布附件 |
 | 本机联调只启用 `MCP_CREO_MechDog_dev` 并指向 `E:\Projects\MCP_CREO_MechDog` | 客户端配置（本机约定） | 停止；旧 C 盘副本与 test 项保持禁用 |
 | WorkBuddy 会话可用且已连接上述服务 | 由 MCP 公开接口确认，不读本机配置 | C 批只交付提示词，不报黑盒通过 |
 
-任何建模任务只在**确认会话可操作之后**提交；已接受的任务只轮询 `creo_get_job`，通道忙时立即接受 `status="busy"` 拒绝，不重试、不排队、不假设 FIFO（BUG-009 边界）。
+任何建模任务只在**用户当次明确确认并给出授权范围之后**提交；未获确认时保持留卡。已接受的任务只轮询 `creo_get_job`，通道忙时立即接受 `status="busy"` 拒绝，不重试、不排队、不假设 FIFO（BUG-009 边界）。卡死根因未定、历史失败与恢复记录按原件保留，并在实机证据中如实标注，不因规则放宽而改写。
 
 ## 2. B 批（原生 / 实机）任务拆分
 
@@ -85,8 +85,8 @@
 | C1 契约设计 | F08 `targets`/`scope`、F09 `preview_mode`/`view`/`fit_all`、F10 `draft_angle`/`top_scale` 的字段、默认值、向后兼容、错误回执，以及 `known_limitations` / compact 预算同步 | B4/B5/B6 的实现方案草拟后 | 公开工具数与能力说明一致；compact/full 不丢关键限制 |
 | C2 限制标注 | 黑盒确认 A 批 F05 的 compact `families.surface_loft.limits_note` 可被客户端消费，full 仍是完整 `limits`，`surface_boundary_fill` 仍不可用 | C0 通过 | 以 `creo_capabilities` 实际返回为准，不以单测断言代替 |
 | C3 版本可确认性 | 黑盒确认 F07 失败文案给出 `MECHDOG_UPDATE_TIMEOUT_SECONDS` 与 `creo_check_update(force=true)`，且 `update.status=failed` 不被表述为「已是最新」 | C0 通过 | 记录原始返回；无法由 MCP 观察的内部重试/预算记「未验证」 |
-| C4 A 批补证 | F02 精确圆弧闭合轮廓、F03 `R<=1e6` mm、F04 connect `-4` 回执、F11 三平面 offset/direction 的公开可见效果 | **BUG-001 根因核对完成且会话确认可操作** | 记录工具调用、输入、`job_id`/`model_id`、终态、几何/参数、保存重载、revision、回滚与原始错误 |
-| C5 并发 | 仅当真实实施并发调用时才报告通过 | 会话可操作 + 明确的两客户端场景 | 未真实并发则写「未验证」，不推测 FIFO 或容量 |
+| C4 A 批补证 | F02 精确圆弧闭合轮廓、F03 `R<=1e6` mm、F04 connect `-4` 回执、F11 三平面 offset/direction 的公开可见效果 | **用户当次明确确认可用 Creo 建模测试** | 记录工具调用、输入、`job_id`/`model_id`、终态、几何/参数、保存重载、revision、回滚与原始错误 |
+| C5 并发 | 仅当真实实施并发调用时才报告通过 | 用户明确确认 + 明确的两客户端场景 | 未真实并发则写「未验证」，不推测 FIFO 或容量 |
 
 报告要求：只有真实调用了并发才能写并发通过；文件占用注入、重试次数/预算、临时文件清理等只能靠源码或本地脚本观察的机制一律记「未验证」；开发者证据与 WorkBuddy 黑盒结论分别记录，不互相替代。
 
@@ -101,7 +101,7 @@
 
 ## 5. 自审
 
-- **Spec 覆盖**：MAPPING 第三节 B 批的 F01/F09/F06/F08/F10/F11 原生部分分别落到 B1—B6，C 批的公开契约/黑盒落到 C0—C5；A 批六项不重复认领；F05/F10 的未实测推断与 BUG-001 约束作为边界保留。
+- **Spec 覆盖**：MAPPING 第三节 B 批的 F01/F09/F06/F08/F10/F11 原生部分分别落到 B1—B6，C 批的公开契约/黑盒落到 C0—C5；A 批六项不重复认领；F05/F10 的未实测推断与 2026-11-09 用户确认制作为边界保留。
 - **证据强度**：本文件是规划，不含任何实机/黑盒结论；所有通过判据都要求真实返回或实机几何，`native_validation` 在本轮仍为 `not_run`。
 - **计数与范围**：不新增台账 ID、不改计数；不改 `native/`、公开签名、`version.py`、能力说明、生成物与已发布附件。
 - **可追溯**：F 编号、工作卡、A 批提交与 WorkBuddy 提示词均给出链接；实施时需另建逐任务 brief/report/review package 并按 Subagent-driven 审查 gate 推进。
