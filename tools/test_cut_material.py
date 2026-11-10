@@ -172,6 +172,17 @@ async def model_state(client, model_id):
     }
 
 
+async def volume_of(client, model_id):
+    """Current volume from creo_inspect_model.
+
+    Plan job results carry no ``inspection`` block (verified in jobs/*/job.json),
+    so a volume assertion has to read the model, which is also the post-save
+    state this driver means to assert.
+    """
+    state = await call(client, "creo_inspect_model", {"model_id": model_id, "detail": "compact"})
+    return (state.get("inspection") or {}).get("volume_mm3")
+
+
 async def t01_valid_cut(client):
     model_id, revision = await new_model(client, "bug054_t01_" + RUN_TAG, PLATE + HOLE8)
     result = await job(
@@ -198,7 +209,7 @@ async def t01_valid_cut(client):
             ],
         },
     )
-    volume = (result.get("result") or {}).get("inspection", {}).get("volume_mm3")
+    volume = await volume_of(client, model_id)
     data = {
         "job_status": result["status"],
         "revision": result.get("revision"),
@@ -405,7 +416,7 @@ async def t04_boundary_and_small_cut(client):
         },
     )
     expected = 10 * (25 * math.acos(0.8) - 12)
-    volume = (small.get("result") or {}).get("inspection", {}).get("volume_mm3")
+    volume = await volume_of(client, model_id)
     data = {
         "job_status": small["status"],
         "material_removed_mm3": removed_of(small, "cut_small"),
@@ -574,7 +585,7 @@ async def t07_legacy_regression(client):
             ],
         },
     )
-    volume = (add.get("result") or {}).get("inspection", {}).get("volume_mm3")
+    volume = await volume_of(client, model2)
     check(add["status"] == "succeeded", "T07 add still succeeds")
     check(removed_of(add, "boss") is None, "T07 add has no material_removed field")
     check(close(volume, 24000 + 125), "T07 add volume")
@@ -604,7 +615,7 @@ async def t07_legacy_regression(client):
             ],
         },
     )
-    svolume = (surface.get("result") or {}).get("inspection", {}).get("volume_mm3")
+    svolume = await volume_of(client, model3)
     check(surface["status"] == "succeeded", "T07 surface still succeeds")
     check(close(svolume, 24000), "T07 surface does not change volume")
     case(
@@ -647,7 +658,7 @@ async def t08_revolve_cut(client):
             ],
         },
     )
-    volume = (revolve.get("result") or {}).get("inspection", {}).get("volume_mm3")
+    volume = await volume_of(client, model_id)
     data = {
         "job_status": revolve["status"],
         "message": revolve.get("message"),
