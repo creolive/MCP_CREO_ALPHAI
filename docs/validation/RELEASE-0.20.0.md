@@ -32,17 +32,25 @@
 3. `tools/package.py --seed-archive <seed.zip> --output <source.zip>` 生成源码包与两个 sidecar。
 4. 以本次合入 `main` 后的实际提交建立 `v0.20.0` 标签，逐个上传四个附件（禁止通配），发布后运行 `tools/check_release_assets.py --tag v0.20.0` 核对。
 
-## 附件（发布后回填）
+## 附件
 
 | 文件 | 字节 | SHA256 |
 | --- | ---: | --- |
-| `MCP_CREO_MechDog-0.20.0-source.zip` | 待回填 | 待回填 |
-| `MCP_CREO_MechDog-0.20.0-source.zip.sha256` | 待回填 | 待回填 |
-| `MCP_CREO_MechDog-0.20.0-seed-library.zip` | 待回填 | `6cde6888e80cf9dd9df1d8d86dec33eb308c193d3c5ca8c1e17af98f41ca0697` |
-| `MCP_CREO_MechDog-0.20.0-seed-library.zip.sha256` | 待回填 | 待回填 |
+| `MCP_CREO_MechDog-0.20.0-source.zip` | 9 398 084 | `896e03ffbdfa08c4c270e899c672b3812c98a88106cb575097d6f8da44d9c83d` |
+| `MCP_CREO_MechDog-0.20.0-source.zip.sha256` | 101 | `091c580a1dbf0001a807802a72923e1e7c3aa5a4f1985b9b25e665299fa8a1ed` |
+| `MCP_CREO_MechDog-0.20.0-seed-library.zip` | 493 442 | `6cde6888e80cf9dd9df1d8d86dec33eb308c193d3c5ca8c1e17af98f41ca0697` |
+| `MCP_CREO_MechDog-0.20.0-seed-library.zip.sha256` | 107 | `3692847566796970abe5dbc8ca545b0f74458fcb3a134d03657a010f7368d23c` |
 
-## 远端核对（发布后回填）
+两个 sidecar 内容为「SHA256 + 两空格 + ZIP 文件名」一行，与远端 `sha256:` 摘要逐一致；附件由标签 `v0.20.0` 指向的主干提交 `2d7b498` 源码生成。
 
-- `main` 提交、`origin/main`、标签对象：待回填。
-- Release 链接、id、draft/prerelease 状态、发布时间：待回填。
-- `tools/check_release_assets.py --tag v0.20.0` 结论：待回填。
+## 源码包解压后单测（独立门禁）
+
+- 解压到 `C:\md0200\MCP_CREO_MechDog`，临时把本机可编辑安装指向该目录后运行 `python -m unittest discover -s tests`：`Ran 3263 tests in 295.151s`、`OK (skipped=5)`、exit 0。运行前后 `pip show MCP_CREO_MechDog` 分别显示 0.19.3（工作树）与 0.20.0（解压目录），测试结束后已恢复指向 `E:\Projects\MCP_CREO_MechDog`（0.20.0）。
+- 该目录已删除，临时安装未留在环境中。
+
+## 远端核对（2026-11-10 17:57 +08:00）
+
+- `main` = `origin/main` = `2d7b498cd793a3f4693a561df6ae0df8f809d0f7`（`git push origin main`：`2c78aaa..2d7b498`）。
+- 标签 `v0.20.0` 为 annotated 对象 `3f4ed82589536f572f7265b718d96970ecebe715`，指向提交 `2d7b498`，标签已推送。
+- Release：<https://github.com/wudahua/MCP_CREO_MechDog/releases/tag/v0.20.0>，id `RE_kwDOU_ueTM4aPLew`，`isDraft=false`、`isPrerelease=false`，发布时间 `2026-11-10T09:56:06Z`，target `main`；远端四附件名称、字节与摘要见上表。
+- `tools/check_release_assets.py --tag v0.20.0`：exit 0，四附件齐全，两个 sidecar 与对应 ZIP 摘要一致。
