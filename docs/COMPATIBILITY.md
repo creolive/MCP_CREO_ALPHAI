@@ -307,3 +307,13 @@ FEAT-042无盘prepare/apply、FEAT-043会话枚举及BUG-071预检收尾已实�
 无任何可靠读数时：首壁（`sheetmetal_wall`）**明确失败**并保留原始错误语义，未校验板厚不得静默通过；仅 `flange_relief_record` 的信息性字段（`part_thickness_mm`/`width_at_least_thickness`）可降级为 `null`。0.9.0 的首壁板厚硬校验（SMT_THICKNESS 驱动 + 同步后回读比对）不退化；本机 Creo 12.4（两宏均命中）走原 `ProSmtPartThicknessValueGet` 读值路径，行为与 0.9.0 一致。
 
 **Creo 10 编译状态**：0.8.x 在 Creo 10 SDK 上**无法编译**（缺 `ProSmtPartThicknessValueGet` 声明，见上）；N01 离线兼容实现已入开发分支，但**本机无 Creo 10 SDK，Creo 10 定向编译与实机建模均未验收**（见 [BUG-090](work-items/BUG-090.md) 的外部复验输入与实机命令）。本机 Windows x64 / Creo 12.4.0.0 / 匹配 SDK 下 `bridge.py build` 通过（2026-10-30，1505 项单元、dev_check 通过），不外推为 Creo 10 已通过。2026-10-31（DEV-053/P12）：外部 Creo 10 构建日志及源码身份仍未到位，维持「离线实现已交付；Creo 10 实机编译未验」，两者到位前不做定向编译、不安装假定环境。Creo 9 状态不变：编译探测已支持，本机无 SDK，实机编译与运行时未验收。
+
+## 2026-11-10：选择性切除作用域（DEV-081/F08，0.20.0）
+
+**支持**：多实体零件的 blind `cut` 只作用于一个实体（`extrude(..., scope={"kind": "bodies", "body_ids": [N]})`）。本机 Creo 12.4.0.0 实机：两实体（60×40×10 板 body 52、40×40×10 块 body 90）只切 body 52 的 ⌀10 深 10 孔，body 52 面数 6→8、body 90 面数与包围盒不变、总体积 39214.6018 mm³ = 40000 − 250π，`saved_file_reloaded_and_verified=true`；回执 `scope_applied` 的 `applied_body_ids` 由创建后的特征树回读，`non_target_bodies_unchanged=true`。
+
+**准入拒绝（提交前，不产生作业）**：多个实体 ID、`kind` 不是 `bodies`、非 `cut`、`depth_type="through_all"`、`new_body=true`、`revolve` 带 scope。
+
+**运行期失败并回滚**：实体不存在或无料、特征未携带所请求作用域 → `F08_SCOPE_RESOLVE_FAILED`；非目标实体面数或包围盒变化 → `F08_SCOPE_NON_TARGET_CHANGED`。
+
+**未验证**：装配内切除、三个以上实体、非目标实体新增或消失、查询不完整导致 `non_target_bodies_unchanged=null` 的真实路径、回读不匹配路径，以及 compact 32 KiB 预算下 `scope_applied` 是否被裁；Creo 9/10 未复测。证据见 [DEV-081](work-items/DEV-081.md)。

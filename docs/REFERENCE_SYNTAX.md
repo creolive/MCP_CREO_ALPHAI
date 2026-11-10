@@ -192,6 +192,21 @@ XZ 的法向是 negative Y，因此 `direction="positive"` 会让实体向更小
 
 实现与当前验收范围见 [BUG-006](work-items/BUG-006.md) 和 [本次证据](validation/BUG-006.md)。
 
+## 选择性切除作用域（DEV-081/F08）
+
+多实体零件的 `extrude` 切除可以只作用于一个实体：
+
+| 字段 | 取值 |
+| --- | --- |
+| `scope.kind` | 只接受 `"bodies"` |
+| `scope.body_ids` | 一个正整数实体 ID，取自 `creo_inspect_model` 的 `bodies[].id` |
+
+省略 `scope` 时行为不变，切除对全部实体生效。以下组合在提交前拒绝，不产生作业：多个实体 ID、`kind` 不是 `bodies`、非 `cut` 模式、`depth_type="through_all"`、`new_body=true`、`revolve` 带 scope。
+
+成功作业的该操作结果带 `scope_applied`：`requested_body_ids`、`applied_body_ids`（从创建后的特征树回读）、`source`、`query_code`、`non_target_bodies_unchanged`。`non_target_bodies_unchanged` 比较其余实体的面数与包围盒；任一侧查询无法完成时为 `null`，不会填 `true`。回读到的实体与请求不一致或特征中没有该选择时作业失败并回滚，错误码 `F08_SCOPE_RESOLVE_FAILED`；非目标实体发生变化时为 `F08_SCOPE_NON_TARGET_CHANGED`。
+
+本机实机验收（Creo 12.4.0.0）：两实体零件只切 body 52，body 90 的面数与包围盒不变，总体积 39214.6018 mm³（40000 − 250π），保存重载通过。装配内切除、三个以上实体与回读不匹配路径尚未实机验证，见 [DEV-081](work-items/DEV-081.md)。
+
 ## 回转轴回显（revolve_axis）
 
 `revolve` 操作结果带 `revolve_axis` 块（只增不改；旧作业与失败作业没有该块，不补）。字段与语义：
