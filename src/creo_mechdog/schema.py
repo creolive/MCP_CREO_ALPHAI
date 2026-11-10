@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from creo_mechdog import f08_contract
 from creo_mechdog import schema_base as _schema_base
 from creo_mechdog.flange_profile import FlangeProfile
 from creo_mechdog.geometry_deviation import validate_tolerance_mm
@@ -653,6 +654,13 @@ class TransformUpdateOp(StrictModel):
         return self
 
 
+class ExtrudeScope(StrictModel):
+    """B4/F08: optional cut scope. Shape only; ``f08_contract`` owns the rules."""
+
+    kind: Literal["bodies"]
+    body_ids: Annotated[list[int], Field(min_length=1, max_length=100)]
+
+
 class ExtrudeOp(StrictModel):
     op: Literal["extrude"]
     label: Label
@@ -663,6 +671,7 @@ class ExtrudeOp(StrictModel):
     depth_type: Literal["blind", "through_all"] = "blind"
     new_body: bool = False
     thin: float | None = Field(default=None, gt=0)
+    scope: ExtrudeScope | None = None
 
     @model_validator(mode="after")
     def through_cut(self):
@@ -2236,6 +2245,17 @@ def validate_operations(operations: list[dict]) -> list[dict]:
     dumped = [x.model_dump(exclude_none=True) for x in result]
     for index, missing in defaulted_extrude_fields.items():
         dumped[index]["defaulted_fields"] = missing
+    # B4/F08: the contract owns the scope rules (single positive body, cut only,
+    # no through_all/new_body), so the plan path and creo_extrude share one
+    # authority instead of two schema-level approximations.
+    for index, operation in enumerate(dumped):
+        if operation.get("op") != "extrude":
+            continue
+        verdict = f08_contract.validate_scope(operation)
+        if not verdict["accepted"]:
+            raise ValueError(
+                f"operations[{index}].scope: {f08_contract.error_message(verdict['code'])}"
+            )
 
     def finite(x):
         if isinstance(x, float) and not math.isfinite(x):
@@ -2398,6 +2418,11 @@ def validate_operations(operations: list[dict]) -> list[dict]:
                     # endpoints. Shape and bounds are enforced by
                     # SheetmetalFlangeOp.edge_is_a_current_reference; every other
                     # operation rejects the kind in its own field validator.
+                    pass
+                elif k == "bodies":
+                    # B4/F08: scope.kind names a body set, not a model reference.
+                    # f08_contract owns its shape (kind + body_ids) and the
+                    # plan-level check above already rejected invalid scopes.
                     pass
                 elif k not in ("body", "part", "default_csys"):
                     raise ValueError(f"Unsupported model reference kind: {k}")

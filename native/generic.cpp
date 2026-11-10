@@ -1277,12 +1277,139 @@ static void mark_sketch_geometry_stale() {
         if (it.value().contains("entity_ids"))
             it.value()["geometry_stale"] = true;
 }
+// B4/F08: per-body material evidence for a scoped cut. Only active bodies are
+// fingerprinted; a body whose surfaces cannot be visited keeps a null
+// surface_count so a comparison can answer "unknown" instead of "equal".
+static ProError count_body_surface(ProSurface surface, ProError status, ProAppData data) {
+    (void)surface;
+    if (status == PRO_TK_NO_ERROR)
+        (*(int *)data)++;
+    return PRO_TK_NO_ERROR;
+}
+static J body_fingerprints() {
+    if (assembly_model())
+        return nullptr;
+    ProSolidBody *list = nullptr;
+    ProError collect = ProSolidBodiesCollect((ProSolid)board, &list);
+    if (collect != PRO_TK_NO_ERROR) {
+        if (list)
+            ProArrayFree((ProArray *)&list);
+        return nullptr;
+    }
+    int n = 0;
+    CK(ProArraySizeGet((ProArray)list, &n));
+    J out = J::object();
+    for (int i = 0; i < n; i++) {
+        ProSolidBodyState state;
+        CK(ProSolidBodyStateGet(&list[i], &state));
+        if (state != PRO_BODY_STATE_ACTIVE)
+            continue;
+        int surfaces = 0;
+        ProError visit = ProSolidBodySurfaceVisit(&list[i], count_body_surface, &surfaces);
+        Pro3dPnt bounds[2];
+        ProError outline = ProSolidBodyOutlineGet(&list[i], bounds);
+        out[std::to_string(list[i].id)] = {
+            {"surface_count", visit == PRO_TK_NO_ERROR ? J(surfaces) : J(nullptr)},
+            {"visit_code", visit},
+            {"bbox_query_code", outline},
+            {"bbox",
+             outline == PRO_TK_NO_ERROR ? J::array({xyz(bounds[0]), xyz(bounds[1])}) : J(nullptr)}};
+    }
+    if (list)
+        ProArrayFree((ProArray *)&list);
+    return out;
+}
+static bool same_point(const J &a, const J &b) {
+    if (!a.is_array() || !b.is_array() || a.size() != b.size())
+        return false;
+    for (size_t i = 0; i < a.size(); i++)
+        if (fabs(a[i].get<double>() - b[i].get<double>()) > 1e-6)
+            return false;
+    return true;
+}
+static bool same_bbox(const J &a, const J &b) {
+    if (!a.is_array() || !b.is_array() || a.size() != 2 || b.size() != 2)
+        return false;
+    return same_point(a[0], b[0]) && same_point(a[1], b[1]);
+}
+// True when every body outside the requested scope kept its surface count and
+// bounding box. null means the comparison could not be made; it is never
+// reported as true on missing evidence, and a half-known pair (one side's
+// query failed) is unknown rather than "changed" or "equal".
+static J non_target_bodies_unchanged(const J &before, const J &after, const J &requested) {
+    if (!before.is_object() || !after.is_object())
+        return nullptr;
+    std::set<std::string> targets;
+    for (const auto &id : requested)
+        targets.insert(std::to_string(id.get<int>()));
+    bool unknown = false;
+    for (auto it = before.begin(); it != before.end(); ++it) {
+        if (targets.count(it.key()))
+            continue;
+        if (!after.contains(it.key()))
+            return false;
+        const J &was = it.value(), &now = after[it.key()];
+        const J &was_surfaces = was.value("surface_count", J(nullptr));
+        const J &now_surfaces = now.value("surface_count", J(nullptr));
+        const J &was_bbox = was.value("bbox", J(nullptr));
+        const J &now_bbox = now.value("bbox", J(nullptr));
+        if (!was_surfaces.is_number() || !now_surfaces.is_number() || !was_bbox.is_array() ||
+            !now_bbox.is_array()) {
+            unknown = true;
+            continue;
+        }
+        if (was_surfaces != now_surfaces || !same_bbox(was_bbox, now_bbox))
+            return false;
+    }
+    // A body that appeared outside the scope is also a change: a scoped cut
+    // cannot create one, so claiming the rest stayed put would hide it.
+    for (auto it = after.begin(); it != after.end(); ++it)
+        if (!before.contains(it.key()) && !targets.count(it.key()))
+            return false;
+    return unknown ? J(nullptr) : J(true);
+}
+static int scope_body_id(const J &op) {
+    return op.at("scope").at("body_ids").at(0).get<int>();
+}
+// The requested body must exist and hold material before the feature is built;
+// otherwise the feature would report success while removing nothing.
+static void require_scopable_body(int id) {
+    ProSolidBody *list = nullptr;
+    int n = 0;
+    CK(ProSolidBodiesCollect((ProSolid)board, &list));
+    CK(ProArraySizeGet((ProArray)list, &n));
+    bool found = false;
+    ProSolidBodyState found_state = PRO_BODY_STATE_NONE;
+    for (int i = 0; i < n; i++)
+        if (list[i].id == id) {
+            found = true;
+            CK(ProSolidBodyStateGet(&list[i], &found_state));
+            break;
+        }
+    if (list)
+        ProArrayFree((ProArray *)&list);
+    if (!found)
+        throw std::runtime_error(
+            "F08_SCOPE_RESOLVE_FAILED: scope.body_ids names a body id that this part does not "
+            "contain; inspect bodies[].id and retry");
+    if (found_state != PRO_BODY_STATE_ACTIVE)
+        throw std::runtime_error(
+            "F08_SCOPE_RESOLVE_FAILED: scope.body_ids names a body without active material");
+}
 static void body_options(ProElement root, const J &op) {
     std::string mode = op.value("mode", "add");
     bool new_body = op.value("new_body", false);
     ProElement b = node(root, PRO_E_BODY);
     if (mode == "cut") {
-        integer(b, PRO_E_BODY_USE, PRO_BODY_USE_ALL);
+        if (op.contains("scope")) {
+            int target = scope_body_id(op);
+            require_scopable_body(target);
+            integer(b, PRO_E_BODY_USE, PRO_BODY_USE_SELECTED);
+            ProSelection s = resolve({{"kind", "body"}, {"id", target}});
+            ref(b, PRO_E_BODY_SELECT, s);
+            ProSelectionFree(&s);
+        } else
+            integer(b, PRO_E_BODY_USE, PRO_BODY_USE_ALL);
         return;
     }
     J state = inspection();
@@ -2893,12 +3020,79 @@ static std::string cut_no_material_failure(bool revolve, const J &context) {
     message += " See cut_geometry_context in the operation result for the structured receipt.";
     return message;
 }
+// advanced.cpp (included further down this file) defines get_path; the scope
+// readback below needs it before that include point.
+static ProElement get_path(ProElement root, const J &ids);
+// B4/F08: read the applied scope back from the created feature tree. The
+// request is never echoed as the applied value: every unreadable step keeps
+// applied_body_ids null and stores its own query code, and a receipt whose
+// source cannot be read is not labelled "feature_tree".
+static J scope_applied_report(const J &op, ProFeature f, const J &before) {
+    J requested = op.at("scope").at("body_ids");
+    J report = {{"requested_body_ids", requested},
+                {"applied_body_ids", nullptr},
+                {"source", "feature_tree"},
+                {"query_code", nullptr},
+                {"non_target_bodies_unchanged", nullptr}};
+    ProElement tree = nullptr;
+    ProError code = ProFeatureElemtreeExtract(&f, nullptr, PRO_FEAT_EXTRACT_NO_OPTS, &tree);
+    if (code == PRO_TK_NO_ERROR) {
+        try {
+            ProElement body = get_path(tree, J::array({PRO_E_BODY}));
+            ProElement use_element = get_path(body, J::array({PRO_E_BODY_USE}));
+            int use = PRO_BODY_USE_ALL;
+            ProError use_code = ProElementIntegerGet(use_element, nullptr, &use);
+            // A cut whose element no longer says "selected body" did not apply
+            // the requested scope; success would claim geometry never scoped.
+            if (use_code != PRO_TK_NO_ERROR)
+                code = use_code;
+            else if (use != PRO_BODY_USE_SELECTED)
+                code = PRO_TK_BAD_INPUTS;
+            else {
+                ProElement select = get_path(body, J::array({PRO_E_BODY_SELECT}));
+                ProReference reference = nullptr;
+                code = ProElementReferenceGet(select, nullptr, &reference);
+                if (code == PRO_TK_NO_ERROR && reference) {
+                    ProType type = PRO_TYPE_UNUSED;
+                    int id = -1;
+                    ProError type_code = ProReferenceTypeGet(reference, &type);
+                    ProError id_code = ProReferenceIdGet(reference, &id);
+                    code = type_code ? type_code : id_code;
+                    // A same-numbered reference of another kind is not the body.
+                    if (code == PRO_TK_NO_ERROR && type != PRO_BODY)
+                        code = PRO_TK_BAD_INPUTS;
+                    if (code == PRO_TK_NO_ERROR)
+                        report["applied_body_ids"] = J::array({id});
+                } else if (code == PRO_TK_NO_ERROR)
+                    code = PRO_TK_BAD_INPUTS;
+                if (reference)
+                    ProReferenceFree(reference);
+            }
+        } catch (ProError missing) {
+            // get_path throws when the created feature has no such element;
+            // that is an unreadable receipt, not a crash.
+            code = missing;
+        }
+    }
+    report["query_code"] = code;
+    if (code != PRO_TK_NO_ERROR)
+        report["source"] = "feature_tree_unreadable";
+    if (tree)
+        CK(ProFeatureElemtreeFree(&f, tree));
+    if (report["applied_body_ids"].is_array())
+        report["non_target_bodies_unchanged"] =
+            non_target_bodies_unchanged(before, body_fingerprints(), requested);
+    return report;
+}
 static J extrude_or_revolve(const J &op, bool revolve) {
     if (revolve)
         validate_revolve_axis(op);
     ProFeature sketch_f = feature(op.at("sketch"));
     bool cut = op.value("mode", "add") == "cut";
     double before_volume = cut ? volume() : 0.0;
+    // B4/F08: the non-target comparison needs the state before the feature
+    // exists; captured only for a scoped cut so unscoped plans pay nothing.
+    J bodies_before = cut && op.contains("scope") ? body_fingerprints() : J(nullptr);
     ProSelection s = selection(sketch_f.id, PRO_FEATURE);
     std::string mode = op.value("mode", "add"), direction = op.value("direction", "positive");
     ProElement root = node(nullptr, PRO_E_FEATURE_TREE);
@@ -2995,6 +3189,34 @@ static J extrude_or_revolve(const J &op, bool revolve) {
             revolve_axis_report(op, f, sketch_f, revolve_axis_id, revolve_axis_code);
     else
         details["extrude_depth"] = extrude_depth_report(f, op);
+    if (!revolve && op.contains("scope")) {
+        details["scope_applied"] = scope_applied_report(op, f, bodies_before);
+        const J &applied = details["scope_applied"];
+        // The receipt is evidence, not a formality: a scope the created feature
+        // does not carry (unreadable element, "all bodies", or a different id)
+        // must fail instead of reporting success for geometry it never scoped.
+        bool resolved = applied["query_code"] == PRO_TK_NO_ERROR &&
+                        applied["applied_body_ids"].is_array() &&
+                        applied["applied_body_ids"] == op.at("scope").at("body_ids");
+        if (!resolved) {
+            J staged = has_staged_operation_result ? staged_operation_result : J::object();
+            staged["scope_applied"] = applied;
+            stage_operation_result(staged);
+            throw std::runtime_error(
+                "F08_SCOPE_RESOLVE_FAILED: the created feature does not carry the requested "
+                "scope.body_ids; see scope_applied in the operation result and "
+                "creo_capabilities known_limitations.cut_scope");
+        }
+        const J &unchanged = applied["non_target_bodies_unchanged"];
+        if (unchanged.is_boolean() && !unchanged.get<bool>()) {
+            J staged = has_staged_operation_result ? staged_operation_result : J::object();
+            staged["scope_applied"] = applied;
+            stage_operation_result(staged);
+            throw std::runtime_error(
+                "F08_SCOPE_NON_TARGET_CHANGED: a body outside scope.body_ids changed; the cut "
+                "touched geometry it was told to leave alone");
+        }
+    }
     if (cut) {
         CK(ProSolidRegenerate((ProSolid)board, PRO_REGEN_NO_FLAGS));
         double after_volume = volume();

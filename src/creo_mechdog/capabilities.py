@@ -261,6 +261,14 @@ def project_worker_availability(families_doc: dict, identity: object) -> dict:
 
 KNOWN_LIMITATIONS = (
     {
+        "id": "cut_scope",
+        "condition": "extrude cut scope requested for several bodies, a revolve cut, through_all or with new_body",
+        "release": "Creo 12.4 native body branch exposes one PRO_E_BODY_SELECT",
+        "evidence": "B4/F08 real-model acceptance 2026-11-10",
+        "configurable": False,
+        "effect": "shape limits are refused before the job (one target body per cut, split the rest into further cuts); a body id the part does not hold, or a created feature that does not carry the requested scope, fails the job with F08_SCOPE_RESOLVE_FAILED and rolls back; a non-target body that changed fails with F08_SCOPE_NON_TARGET_CHANGED",
+    },
+    {
         "id": "surface_loft_sdk_header",
         "condition": "worker built against a Toolkit SDK without Probbl.h",
         "release": "external Creo 10 report; local Creo 12.4 has the header",

@@ -194,6 +194,8 @@ OPERATION_KEYS = (
     "material_measurement",
     "draft_geometry",
     "extrude_depth",
+    "scope_applied",
+    "scope_rejection",
     "reference_application",
     "surface_id",
     "origin",

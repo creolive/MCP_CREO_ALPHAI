@@ -36,7 +36,7 @@ def scope(*ids, kind="bodies"):
 
 class F08ContractShape(unittest.TestCase):
     def test_contract_is_explicitly_design_only(self):
-        self.assertEqual(f08_contract.STATUS, "designed_not_implemented")
+        self.assertEqual(f08_contract.STATUS, "implemented")
         self.assertEqual(f08_contract.FIELD, "scope")
         self.assertIsNone(f08_contract.DEFAULT)
         self.assertEqual(f08_contract.OPERATIONS, ("extrude",))
@@ -58,8 +58,10 @@ class F08ContractShape(unittest.TestCase):
     def test_limit_note_fits_the_compact_page_and_is_a_single_source(self):
         self.assertLessEqual(len(f08_contract.LIMITATION_NOTE), 160)
         self.assertEqual(f08_contract.LIMITATION_ID, "cut_scope")
-        self.assertIn("body IDs", f08_contract.LIMITATION_NOTE)
-        self.assertIn("unverified", f08_contract.LIMITATION_NOTE)
+        self.assertIn("body ID", f08_contract.LIMITATION_NOTE)
+        # B4 turned the design-stage "unverified" wording into an evidenced
+        # refusal: one body per cut, the rest split into further operations.
+        self.assertIn("unsupported", f08_contract.LIMITATION_NOTE)
 
     def test_compact_and_applied_receipt_fields_are_frozen(self):
         self.assertEqual(
@@ -88,12 +90,13 @@ class F08BackwardCompatibility(unittest.TestCase):
         self.assertEqual(normalized[0]["defaulted_fields"], ["depth_type"])
 
     def test_explicit_scope_returns_normalized_ids_without_mutating_the_input(self):
-        operation = cut_op(scope=scope(12, 13))
+        operation = cut_op(scope=scope(12))
         verdict = f08_contract.validate_scope(operation)
         self.assertTrue(verdict["accepted"])
         self.assertFalse(verdict["defaulted"])
-        self.assertEqual(verdict["body_ids"], [12, 13])
-        self.assertEqual(operation["scope"], {"kind": "bodies", "body_ids": [12, 13]})
+        self.assertEqual(verdict["body_ids"], [12])
+        self.assertEqual(operation["scope"], {"kind": "bodies", "body_ids": [12]})
+        self.assertEqual(f08_contract.MAX_BODY_IDS, 1)
 
     def test_contract_does_not_reuse_boolean_targets(self):
         boolean_fields = schema.BooleanOp.model_json_schema()["properties"]
@@ -168,20 +171,130 @@ class F08StructuredRejections(unittest.TestCase):
         self.assertNotIn("F08_SCOPE_RESOLVE_FAILED", f08_contract.SUBMISSION_ERROR_CODES)
 
 
-class F08NoPublicSignatureChange(unittest.TestCase):
-    """Sentinels: B4 implementation replaces these with enabled-contract tests."""
+class F08PublicSurfaceEnabled(unittest.TestCase):
+    """B4 replaced the design sentinels: the field, the tool parameter and the
+    plan path are live, and one target body per cut is enforced by the contract."""
 
-    def test_extrude_schema_still_has_no_scope_field(self):
-        self.assertNotIn("scope", schema.ExtrudeOp.model_json_schema()["properties"])
+    def test_extrude_schema_carries_scope(self):
+        properties = schema.ExtrudeOp.model_json_schema()["properties"]
+        self.assertIn("scope", properties)
+        self.assertEqual(
+            schema.ExtrudeScope.model_json_schema()["properties"]["kind"]["const"], "bodies"
+        )
 
-    def test_creo_extrude_still_has_no_scope_parameter(self):
+    def test_creo_extrude_exposes_scope(self):
         if server is None:  # pragma: no cover
             self.skipTest("server import unavailable")
-        self.assertNotIn("scope", inspect.signature(server.creo_extrude).parameters)
+        self.assertIn("scope", inspect.signature(server.creo_extrude).parameters)
 
-    def test_validate_operations_still_rejects_an_unknown_scope_key(self):
-        with self.assertRaises(Exception):
-            validate_operations([cut_op(scope=scope(12))])
+    def test_plan_path_accepts_one_body_and_keeps_it(self):
+        dumped = validate_operations([cut_op(scope=scope(7))])
+        self.assertEqual(dumped[0]["scope"], {"kind": "bodies", "body_ids": [7]})
+
+    def test_plan_path_rejects_several_bodies_before_any_job(self):
+        with self.assertRaises(ValueError) as caught:
+            validate_operations([cut_op(scope=scope(7, 8))])
+        self.assertIn("exactly one target body", str(caught.exception))
+
+    def test_plan_path_rejects_scope_outside_cut(self):
+        with self.assertRaises(ValueError) as caught:
+            validate_operations([cut_op(mode="add", scope=scope(7))])
+        self.assertIn("only to extrude cuts", str(caught.exception))
+
+    def test_plan_path_rejects_scope_with_through_all(self):
+        with self.assertRaises(ValueError) as caught:
+            validate_operations([cut_op(depth_type="through_all", scope=scope(7))])
+        self.assertIn("through_all", str(caught.exception))
+
+    def test_plan_path_rejects_scope_on_a_surface_extrude(self):
+        with self.assertRaises(ValueError) as caught:
+            validate_operations([cut_op(mode="surface", scope=scope(7))])
+        self.assertIn("only to extrude cuts", str(caught.exception))
+
+    def test_plan_path_refuses_a_scope_list_beyond_the_shape_limit(self):
+        # The schema bound refuses absurd lists before the contract counts them;
+        # either way nothing reaches a job, which is what the boundary promises.
+        with self.assertRaises(ValueError):
+            validate_operations([cut_op(scope=scope(*range(1, 102)))])
+
+    def test_plan_without_scope_is_unchanged(self):
+        dumped = validate_operations([cut_op()])
+        self.assertNotIn("scope", dumped[0])
+
+
+class F08NativeWiring(unittest.TestCase):
+    """The native executor owns the applied evidence; these are source sentinels
+    that fail if the cut branch silently drops the scope or the readback."""
+
+    def setUp(self):
+        from pathlib import Path
+
+        self.source = (Path(__file__).resolve().parents[2] / "native" / "generic.cpp").read_text(
+            encoding="utf-8", errors="replace"
+        )
+
+    def test_unscoped_cut_keeps_the_global_body(self):
+        self.assertIn("integer(b, PRO_E_BODY_USE, PRO_BODY_USE_ALL);", self.source)
+
+    def test_scoped_cut_selects_the_requested_body(self):
+        self.assertIn("integer(b, PRO_E_BODY_USE, PRO_BODY_USE_SELECTED);", self.source)
+        self.assertIn("PRO_E_BODY_SELECT", self.source)
+        self.assertIn("require_scopable_body(target)", self.source)
+
+    def test_applied_scope_is_read_from_the_feature_tree(self):
+        self.assertIn("scope_applied_report", self.source)
+        self.assertIn('{"source", "feature_tree"}', self.source)
+        self.assertIn("ProElementReferenceGet", self.source)
+        self.assertIn("ProReferenceIdGet", self.source)
+
+    def test_non_target_change_aborts_the_cut(self):
+        self.assertIn("F08_SCOPE_NON_TARGET_CHANGED", self.source)
+        self.assertIn("non_target_bodies_unchanged", self.source)
+        self.assertIn("stage_operation_result(staged)", self.source)
+
+    def test_unresolved_body_is_a_structured_failure(self):
+        self.assertIn("F08_SCOPE_RESOLVE_FAILED", self.source)
+
+    def test_a_scope_the_feature_does_not_carry_fails_the_job(self):
+        # Readback is evidence: an element that reads as "all bodies", a
+        # different id, an unreadable reference or a same-numbered reference of
+        # another kind must not report success.
+        self.assertIn('applied["applied_body_ids"] == op.at("scope").at("body_ids")', self.source)
+        self.assertIn('applied["query_code"] == PRO_TK_NO_ERROR', self.source)
+        self.assertIn("if (!resolved)", self.source)
+        self.assertIn("feature_tree_unreadable", self.source)
+        self.assertIn("use != PRO_BODY_USE_SELECTED", self.source)
+        self.assertIn("type != PRO_BODY", self.source)
+
+    def test_an_unreadable_element_keeps_its_query_code(self):
+        # get_path throws on a missing element; the receipt must record that
+        # code instead of escaping without evidence.
+        self.assertIn('report["query_code"] = code;', self.source)
+        self.assertIn("catch (ProError missing)", self.source)
+
+    def test_a_half_known_fingerprint_is_unknown_not_equal(self):
+        self.assertIn("!was_surfaces.is_number()", self.source)
+        self.assertIn("!now_surfaces.is_number()", self.source)
+        self.assertIn("!was_bbox.is_array()", self.source)
+        self.assertIn("!now_bbox.is_array()", self.source)
+        self.assertIn("unknown ? J(nullptr) : J(true)", self.source)
+        self.assertIn("!before.contains(it.key())", self.source)
+
+    def test_creo_extrude_forwards_the_scope_into_the_operation(self):
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[2] / "server.py").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        self.assertIn('op["scope"] = scope', source)
+
+    def test_compact_and_capabilities_publish_the_scope_evidence(self):
+        from creo_mechdog import capabilities, compact_sections
+
+        self.assertIn("scope_applied", compact_sections.OPERATION_KEYS)
+        self.assertIn("scope_rejection", compact_sections.OPERATION_KEYS)
+        ids = {entry["id"] for entry in capabilities.KNOWN_LIMITATIONS}
+        self.assertIn("cut_scope", ids)
 
 
 if __name__ == "__main__":

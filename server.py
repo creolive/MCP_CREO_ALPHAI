@@ -1219,6 +1219,7 @@ async def creo_extrude(
     depth_type: Literal["blind", "through_all"] | None = None,
     new_body: bool = False,
     thin: float | None = None,
+    scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create native extrusion from a sketch label/ID. Supports protrusion, pocket, through cut, symmetric, surface and thin modes.
     depth_type is "blind" (depth in mm, any mode) or "through_all" (cut mode only; depth is ignored);
@@ -1233,7 +1234,15 @@ async def creo_extrude(
     a successful cut reports material_removed_mm3 in its operation details. The profile block's
     material_area_mm2 is the analytic input-sketch area (method=analytic-input), not a kernel-measured
     removed section; compare it with material_removed_mm3 only as a sanity check, because a partly
-    circular multi-contour profile can differ by about 2% (2026-11-08 Creo 10 feedback)."""
+    circular multi-contour profile can differ by about 2% (2026-11-08 Creo 10 feedback).
+    scope limits a cut to one target body in a multi-body part: {kind:'bodies', body_ids:[N]} with
+    the positive body id from creo_inspect_model. It applies only to mode='cut' with blind depth and
+    no new_body; feature-label scope, several targets per cut, revolve cuts and through_all are
+    refused before a job is dispatched. The successful operation reports scope_applied with the
+    requested/applied body ids read back from the feature tree plus non_target_bodies_unchanged,
+    which covers the other bodies' surface counts and bounding boxes (null when a query could not
+    complete, never true on missing evidence). A created feature that does not carry the requested
+    scope fails the job with F08_SCOPE_RESOLVE_FAILED and rolls back."""
     op = {
         "op": "extrude",
         "label": label,
@@ -1242,6 +1251,8 @@ async def creo_extrude(
         "direction": direction,
         "new_body": new_body,
     }
+    if scope is not None:
+        op["scope"] = scope
     if depth is not None:
         op["depth"] = depth
     if depth_type is not None:

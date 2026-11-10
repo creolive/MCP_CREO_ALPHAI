@@ -1,9 +1,9 @@
 """C1/F08: frozen design contract for a selective extrusion cut scope.
 
-Status: ``designed_not_implemented``. Nothing in the public MCP surface reads
-this module yet. B4 must import these constants as its single source of truth
-instead of redefining field names, error codes or the limitation text; only
-then may ``ExtrudeOp`` / ``creo_extrude`` / the native executor change.
+Status: ``implemented`` for the first native pass (B4, 2026-11-10). The
+namespace, error codes and limitation text below are the single source of
+truth for ``ExtrudeOp.scope``, ``creo_extrude(scope=...)`` and the native
+executor.
 
 Design decisions (see the SDD C1 contract note for the full rationale):
 
@@ -13,6 +13,10 @@ Design decisions (see the SDD C1 contract note for the full rationale):
   ``PRO_BODY_USE_ALL`` behaviour when omitted.
 * Only positive body IDs are supported. Feature labels, surface references and
   negative IDs from inspection are out of scope for the first native pass.
+* One target body per cut: the Creo 12 Toolkit extrude body branch has a single
+  ``PRO_E_BODY_SELECT`` selection element (``ProBodyOpts.h``), so ``body_ids``
+  is limited to one entry and several targets become several cut operations.
+  This is the 2026-11-10 amendment to the original 100-body design.
 * ``through_all`` and ``new_body`` combinations are refused until a real-model
   test proves the selected-body element tree interacts correctly with them.
 * Applied scope evidence must come from the created feature's element tree,
@@ -25,8 +29,8 @@ from __future__ import annotations
 
 from typing import Any
 
-CONTRACT_VERSION = "C1.F08.design-1"
-STATUS = "designed_not_implemented"
+CONTRACT_VERSION = "C1.F08.design-2"
+STATUS = "implemented"
 
 FIELD = "scope"
 DEFAULT = None
@@ -35,7 +39,12 @@ MODE = "cut"
 SUPPORTED_KIND = "bodies"
 SCOPE_ALLOWED_KEYS = ("kind", "body_ids")
 MIN_BODY_ID = 1
-MAX_BODY_IDS = 100
+#: B4 pre-implementation check (2026-11-10): the Creo 12 Toolkit extrude body
+#: branch exposes only ``PRO_E_BODY_USE`` + ``PRO_E_BODY_SELECT``, and that
+#: element is a single ``PRO_VALUE_TYPE_SELECTION`` (``ProBodyOpts.h``). A cut
+#: therefore names exactly one target body; several targets need several cut
+#: operations. The list shape is kept for forward compatibility.
+MAX_BODY_IDS = 1
 
 SUBMISSION_ERROR_CODES = (
     "F08_SCOPE_INVALID_SHAPE",
@@ -47,7 +56,10 @@ SUBMISSION_ERROR_CODES = (
     "F08_SCOPE_THROUGH_ALL_UNSUPPORTED",
     "F08_SCOPE_NEW_BODY_UNSUPPORTED",
 )
-NATIVE_ERROR_CODES = ("F08_SCOPE_RESOLVE_FAILED",)
+NATIVE_ERROR_CODES = (
+    "F08_SCOPE_RESOLVE_FAILED",
+    "F08_SCOPE_NON_TARGET_CHANGED",
+)
 ERROR_CODES = SUBMISSION_ERROR_CODES + NATIVE_ERROR_CODES
 MAX_ERROR_MESSAGE_CHARS = 600
 
@@ -69,7 +81,8 @@ ERROR_MESSAGES = {
         "scope.body_ids must not repeat a body ID; submit each target body once"
     ),
     "F08_SCOPE_TOO_MANY_BODIES": (
-        "scope.body_ids supports at most 100 bodies; split the cut into separate operations"
+        "scope.body_ids names exactly one target body per cut; the native body branch "
+        "has a single body selection, so split several targets into separate cut operations"
     ),
     "F08_SCOPE_MODE_UNSUPPORTED": (
         "scope applies only to extrude cuts; remove scope from other operations "
@@ -86,12 +99,16 @@ ERROR_MESSAGES = {
         "the native executor could not resolve the requested scope body IDs from "
         "the created feature; no geometry claim is made"
     ),
+    "F08_SCOPE_NON_TARGET_CHANGED": (
+        "a body outside scope.body_ids changed; the cut was rolled back because it "
+        "touched geometry it was told to leave alone"
+    ),
 }
 
 LIMITATION_ID = "cut_scope"
 LIMITATION_NOTE = (
-    "extrude cut scope takes positive body IDs only; feature-label scope, revolve "
-    "cuts and through_all are unverified; non-target bodies need native proof"
+    "extrude cut scope takes one positive body ID per cut; feature-label scope, "
+    "revolve cuts, through_all and several targets per cut are unsupported"
 )
 
 APPLIED_RECEIPT_FIELDS = (
@@ -102,6 +119,9 @@ APPLIED_RECEIPT_FIELDS = (
     "non_target_bodies_unchanged",
 )
 APPLIED_RECEIPT_SOURCE = "feature_tree"
+#: ``scope_rejection`` is reserved for an operation record that carries its own
+#: refusal. Shape rejections happen before a job exists, so they surface as
+#: tool errors today and no operation record produces this key yet.
 COMPACT_OPERATION_KEYS = ("scope_applied", "scope_rejection")
 PUBLIC_DOCUMENTATION_TARGETS = (
     "scope",
@@ -163,12 +183,14 @@ def validate_scope(operation: dict[str, Any]) -> dict[str, Any]:
     body_ids = scope.get("body_ids")
     if not isinstance(body_ids, list) or not body_ids:
         return _reject("F08_SCOPE_INVALID_SHAPE")
-    if len(body_ids) > MAX_BODY_IDS:
-        return _reject("F08_SCOPE_TOO_MANY_BODIES")
     if any(type(value) is not int or value < MIN_BODY_ID for value in body_ids):
         return _reject("F08_SCOPE_INVALID_BODY_ID")
+    # Duplicates are reported before the count rule so [12, 12] explains the
+    # repeat instead of only complaining about two entries.
     if len(set(body_ids)) != len(body_ids):
         return _reject("F08_SCOPE_DUPLICATE_BODY_ID")
+    if len(body_ids) > MAX_BODY_IDS:
+        return _reject("F08_SCOPE_TOO_MANY_BODIES")
     if operation.get("depth_type") == "through_all":
         return _reject("F08_SCOPE_THROUGH_ALL_UNSUPPORTED")
     if operation.get("new_body") is True:
